@@ -12,6 +12,7 @@ pub struct StructType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Integer,
+    Float,
     Bool,
     String,
     Struct(StructType),
@@ -33,6 +34,7 @@ impl Type {
         match type_name {
             TypeName::Builtin(b) => match b {
                 BuiltinType::Integer => Type::Integer,
+                BuiltinType::Float => Type::Float,
                 BuiltinType::Bool => Type::Bool,
                 BuiltinType::String => Type::String,
                 BuiltinType::Struct => Type::Struct(StructType {
@@ -55,7 +57,15 @@ impl Type {
 
     #[allow(unused)]
     pub fn is_numeric(&self) -> bool {
+        matches!(self, Type::Integer | Type::Float)
+    }
+
+    pub fn is_integer(&self) -> bool {
         matches!(self, Type::Integer)
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, Type::Float)
     }
 
     #[allow(unused)]

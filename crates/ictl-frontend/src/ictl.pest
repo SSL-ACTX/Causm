@@ -20,6 +20,7 @@ statement = {
     | merge_stmt
     | split_map_stmt
     | for_stmt
+    | lease_stmt
     | inspect_stmt
     | print_stmt
     | debug_stmt
@@ -83,6 +84,7 @@ break_stmt = { "break" }
 for_mode = { "consume" | "clone" }
 for_stmt = { "for" ~ identifier ~ for_mode ~ identifier ~ pacing_opt? ~ max_opt? ~ "{" ~ statement* ~ "}" }
 inspect_stmt = { "inspect" ~ "(" ~ identifier ~ ")" ~ "{" ~ statement* ~ "}" }
+lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ "for" ~ amount ~ "ms" ~ statement_block }
 split_map_stmt = { "split_map" ~ identifier ~ for_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ "reconcile" ~ "(" ~ resolution_rules ~ ")" }
 
 pacing_opt = { "pacing" ~ amount ~ "ms" }
@@ -139,7 +141,7 @@ type_annotation = { ":" ~ type_name }
 type_name = { union_type }
 union_type = { optional_type ~ ("|" ~ optional_type)* }
 optional_type = { base_type ~ "?"? }
-base_type = { identifier | "int" | "bool" | "string" | "struct" | "topology" | "array" }
+base_type = { identifier | "int" | "float" | "bool" | "string" | "struct" | "topology" | "array" }
 
 open_chan_stmt = { "open_chan" ~ identifier ~ "(" ~ amount ~ ")" }
 chan_send_stmt = { "chan_send" ~ identifier ~ "(" ~ identifier ~ ")" }
@@ -167,7 +169,7 @@ primary_expr = { base_expr ~ (index_access | field_access_tail)* }
 field_access_tail = { "." ~ identifier }
 field_update_stmt = { primary_expr ~ "=" ~ expression }
 null = { "null" }
-base_expr = { defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | clone_op | integer_literal | bool_literal | identifier_expr | string_literal | null | "(" ~ expression ~ ")" }
+base_expr = { defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | clone_op | float_literal | integer_literal | bool_literal | identifier_expr | string_literal | null | "(" ~ expression ~ ")" }
 index_access = { "[" ~ expression ~ "]" }
 bool_literal = { "true" | "false" }
 call_expr = { "call" ~ identifier ~ "(" ~ expression_list? ~ ")" }
@@ -176,6 +178,7 @@ expression_list = { expression ~ ("," ~ expression)* }
 array_lit = { "[" ~ expression ~ ("," ~ expression)* ~ "]" }
 
 integer_literal = @{ "-"? ~ ASCII_DIGIT+ }
+float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 struct_lit = { "struct" ~ "{" ~ param_list ~ "}" }
 topology_lit = { "topology" ~ "{" ~ param_list ~ "}" }
 clone_op   = { "clone" ~ "(" ~ identifier ~ ")" }

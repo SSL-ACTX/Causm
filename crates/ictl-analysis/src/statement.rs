@@ -88,6 +88,7 @@ pub fn estimate_statement_cost(
         }
         Statement::Isolate(block) => estimate_block_cost(analyzer, &block.body),
         Statement::Inspect { body, .. } => estimate_block_cost(analyzer, body),
+        Statement::Lease { duration_ms, .. } => *duration_ms,
         Statement::Watchdog { recovery, .. } => {
             estimate_block_cost(analyzer, recovery)
         }

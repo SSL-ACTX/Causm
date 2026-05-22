@@ -129,4 +129,65 @@ impl EntropicAnalyzer {
         }
         Ok(())
     }
+
+    pub(crate) fn Lease(
+        &mut self,
+        binding: &String,
+        source: &String,
+        duration_ms: &u64,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        self.check_available(source)?;
+
+        {
+            let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+            if branch.leased.contains(source) {
+                return Err(
+                    self.annotate(SemanticErrorKind::NestedLeasing(source.clone()))
+                );
+            }
+        }
+
+        let source_type = self
+            .get_variable_type(source)
+            .unwrap_or(ictl_core::types::Type::Unknown);
+
+        // Mark source as leased
+        {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.leased.insert(source.clone());
+            branch.lease_bindings.insert(binding.clone());
+        }
+
+        // Set binding type
+        self.set_variable_type(binding, source_type);
+
+        // Analyze block
+        let block_wcet = crate::statement::estimate_block_cost(self, body);
+        if block_wcet > *duration_ms {
+            return Err(self.annotate(SemanticErrorKind::LeaseDurationExceeded(
+                block_wcet,
+                *duration_ms,
+            )));
+        }
+
+        for inner_stmt in body {
+            if matches!(inner_stmt.stmt, Statement::Break | Statement::Return(_)) {
+                return Err(
+                    self.annotate(SemanticErrorKind::IllegalLeaseControlFlow)
+                );
+            }
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        // Relinquish lease
+        {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.leased.remove(source);
+            branch.lease_bindings.remove(binding);
+            branch.accumulated_cost += *duration_ms; // Jump to end of lease duration
+        }
+
+        Ok(())
+    }
 }

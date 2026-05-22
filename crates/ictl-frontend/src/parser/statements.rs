@@ -39,6 +39,7 @@ fn parse_type_name(pair: Pair<Rule>) -> TypeName {
             let text = pair.as_str();
             match text {
                 "int" => TypeName::Builtin(BuiltinType::Integer),
+                "float" => TypeName::Builtin(BuiltinType::Float),
                 "bool" => TypeName::Builtin(BuiltinType::Bool),
                 "string" => TypeName::Builtin(BuiltinType::String),
                 "struct" => TypeName::Builtin(BuiltinType::Struct),
@@ -829,6 +830,35 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
                 }
             }
             Statement::Inspect { target, body }
+        }
+        Rule::lease_stmt => {
+            let mut inner = pair.into_inner();
+            let binding = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let source = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let duration_ms = inner
+                .next()
+                .and_then(|p| p.as_str().parse::<u64>().ok())
+                .unwrap_or(0);
+            let mut body = Vec::new();
+            if let Some(block) = inner.next() {
+                for stmt_pair in block.into_inner() {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
+                }
+            }
+            Statement::Lease {
+                binding,
+                source,
+                duration_ms,
+                body,
+            }
         }
         Rule::for_stmt => {
             let mut inner = pair.into_inner();

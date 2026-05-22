@@ -159,6 +159,12 @@ macro_rules! statements {
                 target: String,
                 body: Vec<SpannedStatement>
             },
+            Lease {
+                binding: String,
+                source: String,
+                duration_ms: u64,
+                body: Vec<SpannedStatement>
+            },
             Loop {
                 max_ms: u64,
                 body: Vec<SpannedStatement>
@@ -246,6 +252,7 @@ macro_rules! expressions {
             ArrayLiteral(Vec<Expression>),
             ChannelReceive(String),
             Integer(i64),
+            Float(u64), // Using u64 bits to preserve Eq
             Boolean(bool),
             BinaryOp {
                 left: Box<Expression>,
@@ -344,9 +351,10 @@ pub enum TypeName {
     Union(Vec<TypeName>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltinType {
     Integer,
+    Float,
     Bool,
     String,
     Struct,

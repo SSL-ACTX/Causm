@@ -137,6 +137,10 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
         Rule::integer_literal => {
             Expression::Integer(pair.as_str().parse::<i64>().unwrap_or(0))
         }
+        Rule::float_literal => {
+            let val = pair.as_str().parse::<f64>().unwrap_or(0.0);
+            Expression::Float(val.to_bits())
+        }
         Rule::bool_literal => Expression::Boolean(pair.as_str() == "true"),
         Rule::string_literal => Expression::Literal(pair.as_str().replace("\"", "")),
         Rule::identifier_expr | Rule::identifier => {

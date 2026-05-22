@@ -43,6 +43,18 @@ pub enum SemanticErrorKind {
     TemporalAssertionViolation(u64, u64),
     #[error("Chaos Mode enabled: Rewinds and anchors are disabled because non-deterministic entropy was requested.")]
     ChaosModePreventsRewind,
+    #[error(
+        "Lease Violation: Attempted to mutate or transmit leased variable '{0}'"
+    )]
+    LeaseViolation(String),
+    #[error("Lease Duration Exceeded: WCET of lease block ({0}ms) exceeds requested duration ({1}ms)")]
+    LeaseDurationExceeded(u64, u64),
+    #[error(
+        "Nested Leasing: Cannot lease a variable '{0}' that is already leased."
+    )]
+    NestedLeasing(String),
+    #[error("Illegal Control Flow: Lease blocks cannot contain 'break' or 'return' statements.")]
+    IllegalLeaseControlFlow,
 }
 
 #[derive(Debug)]
@@ -90,6 +102,8 @@ pub struct BranchState {
     pub decayed: HashSet<String>,
     pub yields: HashSet<String>,
     pub produced: HashSet<String>,
+    pub leased: HashSet<String>,
+    pub lease_bindings: HashSet<String>,
     pub mutables: HashSet<String>,
     pub types: HashMap<String, Type>,
     pub custom_types: HashMap<String, Type>,
@@ -326,6 +340,16 @@ impl EntropicAnalyzer {
                 .union(&else_end_state.produced)
                 .cloned()
                 .collect(),
+            leased: then_end_state
+                .leased
+                .union(&else_end_state.leased)
+                .cloned()
+                .collect(),
+            lease_bindings: then_end_state
+                .lease_bindings
+                .union(&else_end_state.lease_bindings)
+                .cloned()
+                .collect(),
             types: merged_types,
             custom_types: then_end_state.custom_types.clone(),
             accumulated_cost: then_end_state
@@ -343,6 +367,11 @@ impl EntropicAnalyzer {
 
     pub(crate) fn mark_consumed(&mut self, name: &str) -> Result<(), SemanticError> {
         let state = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        if state.leased.contains(name) || state.lease_bindings.contains(name) {
+            return Err(
+                self.annotate(SemanticErrorKind::LeaseViolation(name.to_string()))
+            );
+        }
         if state.consumed.contains(name) || state.decayed.contains(name) {
             return Err(
                 self.annotate(SemanticErrorKind::UseAfterConsume(name.to_string()))
@@ -617,6 +646,7 @@ impl EntropicAnalyzer {
                 format!("[{}]", parts.join(","))
             }
             Expression::Integer(v) => format!("{}", v),
+            Expression::Float(bits) => format!("{}", f64::from_bits(*bits)),
             Expression::Deferred { capability, .. } => {
                 format!("defer {}(...)", capability)
             }

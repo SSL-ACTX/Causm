@@ -263,4 +263,98 @@ impl Vm {
             ictl_core::value::EntropicState::Valid(ictl_core::value::Payload::Null),
         )
     }
+
+    pub(crate) fn Lease(
+        &mut self,
+        branch_id: &str,
+        target_reg: Reg,
+        source_reg: Reg,
+        duration_ms: u64,
+    ) -> Result<(), TemporalError> {
+        let source_state = self.peek_state(branch_id, source_reg.0)?;
+
+        if matches!(source_state, ictl_core::value::EntropicState::Leased { .. }) {
+            return Err(TemporalError::LeaseViolation(format!(
+                "register R{} is already leased",
+                source_reg.0
+            )));
+        }
+
+        if matches!(source_state, ictl_core::value::EntropicState::Consumed) {
+            return Err(TemporalError::MemoryFault(
+                ictl_core::value::MemoryError::AlreadyConsumed,
+            ));
+        }
+
+        let expiration_ms = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock + duration_ms
+        };
+
+        // Clone the original state to the target register (the lease view)
+        let lease_view = source_state.clone();
+        self.insert_reg(branch_id, target_reg.0, lease_view)?;
+
+        // Transition source to Leased state
+        let original = Box::new(source_state);
+        self.insert_reg(
+            branch_id,
+            source_reg.0,
+            ictl_core::value::EntropicState::Leased {
+                original,
+                expiration_ms,
+            },
+        )?;
+
+        Ok(())
+    }
+
+    pub(crate) fn EndLease(
+        &mut self,
+        branch_id: &str,
+        source_reg: Reg,
+        _duration_ms: u64,
+    ) -> Result<(), TemporalError> {
+        let current_clock = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock
+        };
+
+        let (original, expiration_ms) = {
+            let state = self.peek_state(branch_id, source_reg.0)?;
+            match state {
+                ictl_core::value::EntropicState::Leased {
+                    original,
+                    expiration_ms,
+                } => (*original, expiration_ms),
+                _ => {
+                    return Err(TemporalError::LeaseViolation(format!(
+                        "register R{} is not leased",
+                        source_reg.0
+                    )))
+                }
+            }
+        };
+
+        if current_clock > expiration_ms {
+            return Err(TemporalError::LeaseViolation(format!(
+                "Lease on R{} exceeded duration by {}ms",
+                source_reg.0,
+                current_clock - expiration_ms
+            )));
+        }
+
+        // Apply padding
+        if current_clock < expiration_ms {
+            let padding = expiration_ms - current_clock;
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock = expiration_ms;
+            branch.consume_budget(padding)?;
+        }
+
+        // Restore original state
+        self.insert_reg(branch_id, source_reg.0, original)?;
+
+        Ok(())
+    }
 }

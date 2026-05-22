@@ -10,6 +10,7 @@ pub(crate) fn infer_expression_type(
         Expression::Null => Ok(Type::Unknown),
         Expression::Boolean(_) => Ok(Type::Bool),
         Expression::Integer(_) => Ok(Type::Integer),
+        Expression::Float(_) => Ok(Type::Float),
         Expression::Literal(_) => Ok(Type::String),
         Expression::Identifier(name) => match analyzer.get_variable_type(name) {
             Some(typ) => {
@@ -121,7 +122,11 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::IndexAccess { .. } => Ok(Type::Unknown),
-        Expression::CloneOp(_) => Ok(Type::Unknown),
+        Expression::CloneOp(name) => match analyzer.get_variable_type(name) {
+            Some(typ) => Ok(typ),
+            None => Err(analyzer
+                .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
+        },
         Expression::BinaryOp { left, op, right } => {
             let left_type = infer_expression_type(analyzer, left)?;
             let right_type = infer_expression_type(analyzer, right)?;
@@ -132,6 +137,8 @@ pub(crate) fn infer_expression_type(
                 | ictl_core::BinaryOperator::Div => {
                     if left_type == Type::Integer && right_type == Type::Integer {
                         Ok(Type::Integer)
+                    } else if left_type.is_numeric() && right_type.is_numeric() {
+                        Ok(Type::Float)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                             format!(
@@ -157,7 +164,7 @@ pub(crate) fn infer_expression_type(
                 | ictl_core::BinaryOperator::Gt
                 | ictl_core::BinaryOperator::Le
                 | ictl_core::BinaryOperator::Ge => {
-                    if left_type == Type::Integer && right_type == Type::Integer {
+                    if left_type.is_numeric() && right_type.is_numeric() {
                         Ok(Type::Bool)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
@@ -295,6 +302,7 @@ pub(crate) fn analyze_expression(
         Expression::ChannelReceive(_)
         | Expression::Literal(_)
         | Expression::Integer(_)
+        | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArrayLiteral(_) => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
@@ -358,6 +366,7 @@ pub(crate) fn analyze_expression_nonconsuming(
         Expression::ChannelReceive(_)
         | Expression::Literal(_)
         | Expression::Integer(_)
+        | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::Null => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
@@ -411,6 +420,7 @@ pub fn estimate_expression_cost(
         | Expression::Identifier(_)
         | Expression::Literal(_)
         | Expression::Integer(_)
+        | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::Null
         | Expression::Deferred { .. } => 1,

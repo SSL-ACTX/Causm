@@ -25,6 +25,8 @@ impl EntropicAnalyzer {
                     decayed: parent_state.decayed.clone(),
                     yields: HashSet::new(),
                     produced: HashSet::new(),
+                    leased: parent_state.leased.clone(),
+                    lease_bindings: parent_state.lease_bindings.clone(),
                     mutables: parent_state.mutables.clone(),
                     types: parent_state.types.clone(),
                     custom_types: parent_state.custom_types.clone(),

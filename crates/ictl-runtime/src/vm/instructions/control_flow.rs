@@ -201,8 +201,17 @@ impl Vm {
         consumed_target: Option<usize>,
     ) -> Result<(), TemporalError> {
         let state = self.peek_state(branch_id, target.0)?;
-        let maybe_jump = match state {
+        let maybe_jump = match &state {
             ictl_core::value::EntropicState::Valid(_) => valid_target,
+            ictl_core::value::EntropicState::Leased { original, .. } => {
+                match &**original {
+                    ictl_core::value::EntropicState::Valid(_) => valid_target,
+                    ictl_core::value::EntropicState::Decayed(_) => decayed_target,
+                    ictl_core::value::EntropicState::Pending(_) => pending_target,
+                    ictl_core::value::EntropicState::Consumed => consumed_target,
+                    ictl_core::value::EntropicState::Leased { .. } => valid_target, // Should not happen due to analysis
+                }
+            }
             ictl_core::value::EntropicState::Decayed(_) => decayed_target,
             ictl_core::value::EntropicState::Pending(_) => pending_target,
             ictl_core::value::EntropicState::Consumed => consumed_target,

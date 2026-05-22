@@ -41,4 +41,6 @@ pub enum TemporalError {
     SpeculationCollapsed,
     #[error("Temporal assertion failed: {0}")]
     AssertionFailed(String),
+    #[error("Lease violation: {0}")]
+    LeaseViolation(String),
 }

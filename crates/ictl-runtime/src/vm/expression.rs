@@ -18,9 +18,7 @@ impl Vm {
                 BinaryOperator::Mul => Payload::Integer(l * r),
                 BinaryOperator::Div => {
                     if r == 0 {
-                        return Err(TemporalError::EvalError(
-                            "Division by zero".into(),
-                        ));
+                        return Err(TemporalError::EvalError("Division by zero".into()));
                     }
                     Payload::Integer(l / r)
                 }
@@ -31,6 +29,28 @@ impl Vm {
                 BinaryOperator::Le => Payload::Bool(l <= r),
                 BinaryOperator::Ge => Payload::Bool(l >= r),
             },
+            (l, r) if l.is_numeric() && r.is_numeric() => {
+                let lf = l.as_float().unwrap();
+                let rf = r.as_float().unwrap();
+                println!("[DEBUG] VM: Numeric operation {} {:?} {}", lf, op, rf);
+                match op {
+                    BinaryOperator::Add => Payload::Float((lf + rf).to_bits()),
+                    BinaryOperator::Sub => Payload::Float((lf - rf).to_bits()),
+                    BinaryOperator::Mul => Payload::Float((lf * rf).to_bits()),
+                    BinaryOperator::Div => {
+                        if rf == 0.0 {
+                            return Err(TemporalError::EvalError("Division by zero".into()));
+                        }
+                        Payload::Float((lf / rf).to_bits())
+                    }
+                    BinaryOperator::Eq => Payload::Bool(lf == rf),
+                    BinaryOperator::Neq => Payload::Bool(lf != rf),
+                    BinaryOperator::Lt => Payload::Bool(lf < rf),
+                    BinaryOperator::Gt => Payload::Bool(lf > rf),
+                    BinaryOperator::Le => Payload::Bool(lf <= rf),
+                    BinaryOperator::Ge => Payload::Bool(lf >= rf),
+                }
+            }
             (Payload::Bool(l), Payload::Bool(r)) => match op {
                 BinaryOperator::Eq => Payload::Bool(l == r),
                 BinaryOperator::Neq => Payload::Bool(l != r),
@@ -41,6 +61,7 @@ impl Vm {
                 }
             },
             (Payload::String(l), Payload::String(r)) => match op {
+                BinaryOperator::Add => Payload::String(format!("{}{}", l, r)),
                 BinaryOperator::Eq => Payload::Bool(l == r),
                 BinaryOperator::Neq => Payload::Bool(l != r),
                 _ => {
@@ -114,6 +135,7 @@ impl Vm {
         match expr {
             Expression::Literal(val) => Ok(Payload::String(val.clone())),
             Expression::Integer(v) => Ok(Payload::Integer(*v)),
+            Expression::Float(v) => Ok(Payload::Float(*v)),
             Expression::Boolean(v) => Ok(Payload::Bool(*v)),
             Expression::Null => Ok(Payload::Null),
             Expression::Identifier(name) => {

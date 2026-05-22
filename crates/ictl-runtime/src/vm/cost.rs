@@ -110,6 +110,7 @@ impl Vm {
             Statement::Collapse => 0,
             Statement::SplitMap { .. } => 1,
             Statement::Inspect { body, .. } => self.estimate_block_cost(body),
+            Statement::Lease { duration_ms, .. } => *duration_ms,
             Statement::Yield(_) => 0,
             Statement::RoutineDef { taking_ms, .. } => taking_ms.unwrap_or(0),
             Statement::Loop { max_ms, .. } => *max_ms,

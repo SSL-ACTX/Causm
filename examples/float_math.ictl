@@ -1,0 +1,27 @@
+@0ms: {
+    let a = 10.5
+    let b = 2
+    
+    // Mixed math: Float op Integer -> Float
+    let c = clone(a) + b
+    print("10.5 + 2 =")
+    debug(c)
+    
+    // Float op Float -> Float
+    let d = clone(a) * 1.5
+    print("10.5 * 1.5 =")
+    debug(d)
+    
+    // Mixed comparison: Float op Integer -> Bool
+    let is_greater = a > 2
+    print("10.5 > 2 is")
+    debug(is_greater)
+    
+    // Float comparison
+    let is_equal = (1.0 + 1.0) == 2.0
+    print("(1.0 + 1.0) == 2.0 is")
+    debug(is_equal)
+    
+    // Division by zero (Float)
+    // let err = 1.0 / 0.0 // This should trigger a runtime error
+}

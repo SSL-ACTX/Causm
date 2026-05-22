@@ -34,6 +34,10 @@ macro_rules! instructions {
                 dest: $crate::ir::Reg,
                 value: i64
             },
+            LoadFloat {
+                dest: $crate::ir::Reg,
+                value: u64
+            },
             LoadBool {
                 dest: $crate::ir::Reg,
                 value: bool
@@ -94,6 +98,15 @@ macro_rules! instructions {
                 manifest: ictl_core::Manifest
             },
             EndIsolate,
+            Lease {
+                target_reg: $crate::ir::Reg,
+                source_reg: $crate::ir::Reg,
+                duration_ms: u64
+            },
+            EndLease {
+                source_reg: $crate::ir::Reg,
+                duration_ms: u64
+            },
             Split {
                 parent: String,
                 branches: Vec<String>
@@ -881,6 +894,30 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             ctx.push(Instruction::EndLoopTick);
         }
+        Statement::Lease {
+            binding,
+            source,
+            duration_ms,
+            body,
+        } => {
+            let source_reg = ctx.get_reg(source);
+            let target_reg = ctx.get_reg(binding);
+
+            ctx.push(Instruction::Lease {
+                target_reg,
+                source_reg,
+                duration_ms: *duration_ms,
+            });
+
+            for s in body {
+                lower_statement(ctx, &s.stmt);
+            }
+
+            ctx.push(Instruction::EndLease {
+                source_reg,
+                duration_ms: *duration_ms,
+            });
+        }
         Statement::Loop { max_ms, body } => {
             ctx.push(Instruction::Loop { max_ms: *max_ms });
             for s in body {
@@ -1038,14 +1075,19 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
 fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
     match expr {
-        Expression::Integer(i) => {
+        Expression::Integer(v) => {
             let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadInt { dest, value: *i });
+            ctx.push(Instruction::LoadInt { dest, value: *v });
             dest
         }
-        Expression::Boolean(b) => {
+        Expression::Float(v) => {
             let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadBool { dest, value: *b });
+            ctx.push(Instruction::LoadFloat { dest, value: *v });
+            dest
+        }
+        Expression::Boolean(v) => {
+            let dest = ctx.alloc_reg();
+            ctx.push(Instruction::LoadBool { dest, value: *v });
             dest
         }
         Expression::Literal(s) => {

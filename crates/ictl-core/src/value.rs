@@ -16,6 +16,8 @@ pub enum MemoryError {
     CloneBudgetExceeded,
     #[error("Key not found in topology: {0}")]
     KeyNotFound(String),
+    #[error("Value is currently leased and cannot be modified or moved until the lease expires")]
+    Leased,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +32,10 @@ pub struct PendingPromise {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntropicState {
     Valid(Payload),
+    Leased {
+        original: Box<EntropicState>,
+        expiration_ms: u64,
+    },
     Decayed(HashMap<String, EntropicState>),
     Pending(PendingPromise),
     Consumed,
@@ -39,6 +45,7 @@ pub enum EntropicState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Payload {
     Integer(i64),
+    Float(u64), // Using bits for Eq
     Bool(bool),
     String(String),
     Struct(HashMap<String, EntropicState>),
@@ -51,6 +58,7 @@ impl std::fmt::Display for Payload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Payload::Integer(i) => write!(f, "{}", i),
+            Payload::Float(bits) => write!(f, "{}", f64::from_bits(*bits)),
             Payload::Bool(b) => write!(f, "{}", b),
             Payload::String(s) => write!(f, "{}", s),
             Payload::Struct(fields) => {
@@ -71,6 +79,7 @@ impl std::fmt::Display for Payload {
                             format!("{}: {{ {} }}", k, fields.join(", "))
                         }
                         EntropicState::Pending(_) => format!("{}: <pending>", k),
+                        EntropicState::Leased { .. } => format!("{}: <leased>", k),
                         EntropicState::Consumed => format!("{}: <consumed>", k),
                     };
                     pairs.push(s);
@@ -82,6 +91,7 @@ impl std::fmt::Display for Payload {
                 for (k, v) in fields {
                     let s = match v {
                         EntropicState::Valid(p) => format!("{}: {}", k, p),
+                        EntropicState::Leased { .. } => format!("{}: Leased", k),
                         EntropicState::Decayed(_map) => format!("{}: Decayed", k),
                         EntropicState::Pending(_) => format!("{}: Pending", k),
                         EntropicState::Consumed => format!("{}: Consumed", k),
@@ -101,6 +111,18 @@ impl std::fmt::Display for Payload {
 }
 
 impl Payload {
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Payload::Integer(_) | Payload::Float(_))
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Payload::Integer(i) => Some(*i as f64),
+            Payload::Float(bits) => Some(f64::from_bits(*bits)),
+            _ => None,
+        }
+    }
+
     pub fn render_decay(&self, depth: usize) -> String {
         let indent = "  ".repeat(depth);
         match self {
@@ -142,6 +164,7 @@ impl Payload {
     pub fn weight(&self) -> u64 {
         match self {
             Payload::Integer(_) => 8,
+            Payload::Float(_) => 8,
             Payload::Bool(_) => 1,
             Payload::String(s) => s.len() as u64 + 24, // 24 bytes for String struct overhead
             Payload::Struct(fields) => {
@@ -170,6 +193,16 @@ impl EntropicState {
             }
             EntropicState::Consumed => "\x1b[1;31m[Consumed]\x1b[0m".to_string(),
             EntropicState::Pending(_) => "\x1b[1;34m[Pending]\x1b[0m".to_string(),
+            EntropicState::Leased {
+                expiration_ms,
+                original,
+            } => {
+                format!(
+                    "\x1b[1;35m[Leased until {}ms]\x1b[0m {}",
+                    expiration_ms,
+                    original.render_decay(depth)
+                )
+            }
             EntropicState::Decayed(fields) => {
                 let mut s = "\x1b[1;33m[Decayed]\x1b[0m {".to_string();
                 let mut keys: Vec<_> = fields.keys().collect();
@@ -192,6 +225,7 @@ impl EntropicState {
     pub fn weight(&self) -> u64 {
         match self {
             EntropicState::Valid(p) => p.weight() + 16,
+            EntropicState::Leased { original, .. } => original.weight() + 24,
             EntropicState::Decayed(fields) => {
                 let fields_weight: u64 = fields.values().map(|s| s.weight()).sum();
                 fields_weight + 32
@@ -309,6 +343,7 @@ impl Arena {
                 Ok(payload)
             }
             EntropicState::Decayed(_) => Err(MemoryError::StructurallyDecayed),
+            EntropicState::Leased { .. } => Err(MemoryError::Leased),
             _ => Err(MemoryError::AlreadyConsumed),
         }
     }
@@ -320,6 +355,11 @@ impl Arena {
     ) -> Result<EntropicState, MemoryError> {
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
 
@@ -346,6 +386,7 @@ impl Arena {
         match self.consume_field_entropic(reg, field)? {
             EntropicState::Valid(p) => Ok(p),
             EntropicState::Decayed(_) => Err(MemoryError::StructurallyDecayed),
+            EntropicState::Leased { .. } => Err(MemoryError::Leased),
             _ => Err(MemoryError::AlreadyConsumed),
         }
     }
@@ -357,6 +398,11 @@ impl Arena {
     ) -> Result<EntropicState, MemoryError> {
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
 
@@ -406,6 +452,14 @@ impl Arena {
                 // Return as a Struct payload; some internal fields may be Consumed
                 Some(Payload::Struct(fields.clone()))
             }
+            EntropicState::Leased { original, .. } => {
+                // Return payload from original state
+                match &**original {
+                    EntropicState::Valid(p) => Some(p.clone()),
+                    EntropicState::Decayed(f) => Some(Payload::Struct(f.clone())),
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
@@ -414,6 +468,11 @@ impl Arena {
         self.ensure_register(reg);
         let idx = reg as usize;
         let state = &self.registers[idx];
+
+        if let EntropicState::Leased { .. } = state {
+            return Err(MemoryError::Leased);
+        }
+
         let old_weight = state.weight();
         let new_state = EntropicState::Consumed;
         let new_weight = new_state.weight();
@@ -428,6 +487,11 @@ impl Arena {
     pub fn decay(&mut self, reg: u32) -> Result<(), MemoryError> {
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
         let old_weight = state.weight();
@@ -467,6 +531,11 @@ impl Arena {
     ) -> Result<(), MemoryError> {
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
 
@@ -528,6 +597,11 @@ impl Arena {
         println!("[DEBUG] Arena::update_index_field reg={}, index={}, field={}, value={:?}", reg, index, field, new_value);
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
 
@@ -598,6 +672,11 @@ impl Arena {
 
         self.ensure_register(reg);
         let idx = reg as usize;
+
+        if let EntropicState::Leased { .. } = &self.registers[idx] {
+            return Err(MemoryError::Leased);
+        }
+
         let state =
             std::mem::replace(&mut self.registers[idx], EntropicState::Consumed);
 

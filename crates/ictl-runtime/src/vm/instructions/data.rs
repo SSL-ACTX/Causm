@@ -18,6 +18,19 @@ impl Vm {
         )
     }
 
+    pub(crate) fn LoadFloat(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: u64,
+    ) -> Result<(), TemporalError> {
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            EntropicState::Valid(Payload::Float(value)),
+        )
+    }
+
     pub(crate) fn LoadBool(
         &mut self,
         branch_id: &str,

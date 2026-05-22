@@ -11,6 +11,16 @@ impl EntropicAnalyzer {
         var_type: &Option<TypeName>,
         expr: &Expression,
     ) -> Result<(), SemanticError> {
+        {
+            let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+            if branch.leased.contains(target)
+                || branch.lease_bindings.contains(target)
+            {
+                return Err(
+                    self.annotate(SemanticErrorKind::LeaseViolation(target.clone()))
+                );
+            }
+        }
         analyze_expression(self, expr)?;
         let inferred_type = crate::expression::infer_expression_type(self, expr)?;
 
@@ -57,6 +67,11 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         if let Expression::Identifier(name) = target {
             let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+            if branch.leased.contains(name) || branch.lease_bindings.contains(name) {
+                return Err(
+                    self.annotate(SemanticErrorKind::LeaseViolation(name.clone()))
+                );
+            }
             if branch.consumed.contains(name) {
                 return Err(self.annotate(SemanticErrorKind::CrossBranchViolation(
                     name.clone(),

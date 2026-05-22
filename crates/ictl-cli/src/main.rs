@@ -22,6 +22,9 @@ fn usage(program: &str) {
 fn format_entropic_state(state: &EntropicState) -> String {
     match state {
         EntropicState::Valid(p) => format!("{}", p),
+        EntropicState::Leased { expiration_ms, .. } => {
+            format!("<leased until {}ms>", expiration_ms)
+        }
         EntropicState::Decayed(_) => "<decayed>".to_string(),
         EntropicState::Pending(_) => "<pending>".to_string(),
         EntropicState::Consumed => "Consumed".to_string(),
