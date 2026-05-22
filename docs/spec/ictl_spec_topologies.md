@@ -125,7 +125,7 @@ merge [alpha, beta] into main resolving (
 
 ## Implementation Architecture
 
-The Stack-based Temporal Virtual Machine (STVM) utilizes a deterministic arena-based memory model:
+The Register-based Temporal Virtual Machine (TVM) utilizes a deterministic arena-based memory model:
 1. **Consumption**: A `Valid` state transitions to `Consumed` upon movement.
 2. **Decay**: A `Valid` structure or topology transitions to `Decayed` when a constituent field is extracted. 
 3. **State Propagation**: Entanglement facilitates asynchronous state updates across parallel timelines, ensuring that temporal dependencies are reconciled during the merge phase.

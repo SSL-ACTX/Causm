@@ -369,6 +369,12 @@ impl Vm {
         op: &BinaryOperator,
     ) -> Result<Payload, TemporalError> {
         let result = match (left_value, right_value) {
+            (Payload::String(l), r) if op == &BinaryOperator::Add => {
+                Payload::String(format!("{}{}", l, r))
+            }
+            (l, Payload::String(r)) if op == &BinaryOperator::Add => {
+                Payload::String(format!("{}{}", l, r))
+            }
             (Payload::Integer(l), Payload::Integer(r)) => match op {
                 BinaryOperator::Add => Payload::Integer(l + r),
                 BinaryOperator::Sub => Payload::Integer(l - r),

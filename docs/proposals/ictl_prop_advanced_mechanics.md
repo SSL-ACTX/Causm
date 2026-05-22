@@ -35,7 +35,7 @@ Data structures can implement "Bound Traits" that define the Worst-Case Executio
 - **`ConstantAccess<T, Time>`**: Guarantees O(1) temporal cost for field access.
 
 ### 2.2 Compile-Time Verification
-The static analyzer verifies that any routine consuming a contract-bound type does not violate the specified temporal invariants. This allows the compiler to reject code that might cause non-deterministic jitter before it ever reaches the STVM.
+The static analyzer verifies that any routine consuming a contract-bound type does not violate the specified temporal invariants. This allows the compiler to reject code that might cause non-deterministic jitter before it ever reaches the TVM.
 
 ```ictl
 // The compiler enforces that this routine never exceeds 10ms 
@@ -51,7 +51,7 @@ routine process_batch(data: PacedIterable<LogEntry, 2ms>) -> Result {
 
 ## 3. Acausal Debugging Protocols: Time-Travel Diagnostics
 
-Leveraging the STVM's `anchor` and `reset` primitives, the **Acausal Debugger** provides a mechanism for stepping backward through the execution history and visualizing the entropic decay graph.
+Leveraging the TVM's `anchor` and `reset` primitives, the **Acausal Debugger** provides a mechanism for stepping backward through the execution history and visualizing the entropic decay graph.
 
 ### 3.1 Trace Retention and Replay
 In Debug Mode, the VM maintains a **Causal Trace Log**—a compressed history of arena snapshots and temporal transitions. 

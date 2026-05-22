@@ -15,7 +15,7 @@ if (<condition>) <statement_block> [else <statement_block>] [reconcile (<resolut
 
 ### Execution Semantics
 - **Predicate Evaluation**: Values are evaluated as truthy if they represent non-zero integers or non-empty string literals.
-- **Deterministic Temporal Padding**: If the execution duration is less than the calculated maximum cost across all possible paths, the Stack-based Temporal Virtual Machine (STVM) performs deterministic padding to maintain time-invariance.
+- **Deterministic Temporal Padding**: If the execution duration is less than the calculated maximum cost across all possible paths, the Register-based Temporal Virtual Machine (TVM) performs deterministic padding to maintain time-invariance.
 - **Static Semantic Analysis**: The analyzer evaluates both the `if` and `else` blocks to ensure entropic consistency across all execution branches.
 - **State Reconciliation**: Variables consumed in one path but not the other result in a semantic error unless a formal `reconcile` protocol is specified.
 
@@ -93,5 +93,5 @@ select (max <amount>ms) {
 The `speculate` block provides an isolated environment for execution paths that may require reversion.
 
 - **Isolation Invariants**: Modifications within a `speculate` block are committed only upon reaching a formal `commit` point.
-- **Surgical State Reversion**: Upon failure or explicit `collapse`, the STVM performs a surgical rollback of all memory arena modifications and causal effects (e.g., channel operations) initiated within the block.
+- **Surgical State Reversion**: Upon failure or explicit `collapse`, the TVM performs a surgical rollback of all memory arena modifications and causal effects (e.g., channel operations) initiated within the block.
 - **Causal Consistency Enforcement**: A speculative execution cannot be reverted if it has influenced an external timeline (e.g., transmission of a message consumed by another branch). This prevents systemic timeline corruption.

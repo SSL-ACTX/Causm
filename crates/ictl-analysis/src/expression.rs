@@ -131,8 +131,29 @@ pub(crate) fn infer_expression_type(
             let left_type = infer_expression_type(analyzer, left)?;
             let right_type = infer_expression_type(analyzer, right)?;
             match op {
-                ictl_core::BinaryOperator::Add
-                | ictl_core::BinaryOperator::Sub
+                ictl_core::BinaryOperator::Add => {
+                    if left_type == Type::String || right_type == Type::String {
+                        Ok(Type::String)
+                    } else if left_type == Type::Integer
+                        && right_type == Type::Integer
+                    {
+                        Ok(Type::Integer)
+                    } else if left_type.is_numeric() && right_type.is_numeric() {
+                        Ok(Type::Float)
+                    } else if left_type == Type::Unknown
+                        || right_type == Type::Unknown
+                    {
+                        Ok(Type::Unknown)
+                    } else {
+                        Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            format!(
+                                "cannot apply '{:?}' to {:?} and {:?}",
+                                op, left_type, right_type
+                            ),
+                        )))
+                    }
+                }
+                ictl_core::BinaryOperator::Sub
                 | ictl_core::BinaryOperator::Mul
                 | ictl_core::BinaryOperator::Div
                 | ictl_core::BinaryOperator::Rem

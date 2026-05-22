@@ -8,7 +8,7 @@ Within the ICTL framework, temporal resources are strictly governed. Conventiona
 * **Architectural Requirement**: The execution duration of an `if/else` block is invariant and equal to the **Worst-Case Execution Time (WCET)** of all possible execution paths.
 * **Execution Logic**: Given an `if` path with duration $t_{if}$ and an `else` path with duration $t_{else}$, the total temporal cost $T$ is defined as:
     $$T = \max(t_{if}, t_{else}) + t_{overhead}$$
-* **Technical Implementation**: The analyzer calculates instruction costs prior to block entry. Upon completion of the shorter execution path, the Stack-based Temporal Virtual Machine (STVM) injects "Temporal No-Ops" to stall the `local_clock` until parity is achieved. This ensures that the `global_clock` advances identically regardless of the selected logical path.
+* **Technical Implementation**: The analyzer calculates instruction costs prior to block entry. Upon completion of the shorter execution path, the Register-based Temporal Virtual Machine (TVM) injects "Temporal No-Ops" to stall the `local_clock` until parity is achieved. This ensures that the `global_clock` advances identically regardless of the selected logical path.
 
 ---
 
@@ -29,7 +29,7 @@ Infinite iterative execution is prohibited to prevent "Temporal Black Holes," wh
 
 * **Temporal Fuel Allocation**: Every iterative construct must specify a maximum "Fuel" limit, measured in milliseconds (`ms`). 
 * **Entropic Cost Analysis**: The analyzer calculates the entropic cost per iteration during the compilation phase.
-* **Explicit Termination (`break`)**: The `break` keyword facilitates a formal temporal exit. Upon a `break` event, the STVM must account for the "Remaining Fuel" to maintain deterministic timing, or the loop must be encapsulated within a `watchdog` primitive for asynchronous termination.
+* **Explicit Termination (`break`)**: The `break` keyword facilitates a formal temporal exit. Upon a `break` event, the TVM must account for the "Remaining Fuel" to maintain deterministic timing, or the loop must be encapsulated within a `watchdog` primitive for asynchronous termination.
 
 ```ictl
 // Technical Implementation Example

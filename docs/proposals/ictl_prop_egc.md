@@ -17,7 +17,7 @@ As the `EntropicAnalyzer` monitors every consumption, split, and merge operation
 
 ### I. Static Deallocation Injection
 Memory is reclaimed immediately upon variable consumption within a standard execution block. 
-* **The Regulation**: A `consume` operation (e.g., transmission via a channel or passing to a destructive routine) serves as an implicit, safe deallocation trigger. The Stack-based Temporal Virtual Machine (STVM) removes the payload from the local `Arena` with a deterministic temporal cost of 1ms.
+* **The Regulation**: A `consume` operation (e.g., transmission via a channel or passing to a destructive routine) serves as an implicit, safe deallocation trigger. The Register-based Temporal Virtual Machine (TVM) removes the payload from the local `Arena` with a deterministic temporal cost of 1ms.
 * **Decay Management**: When a structure undergoes `Structural Decay`, the parent container is logically invalidated, but physical memory remains allocated until the final constituent field is consumed.
 
 ### II. Arena-Level Bulk Reclamation
@@ -28,7 +28,7 @@ Upon the termination of a micro-timeline or parallel execution branch, individua
 ### III. Commit-Horizon Snapshot Pruning
 The `anchor` keyword introduces complexity by creating acausal snapshots; memory cannot be reclaimed if it is `Consumed` in the active timeline if the VM requires the ability to `reset` to a previous state.
 * **The Regulation**: Memory associated with an `anchor` enters a **Suspended Entropic State**.
-* **The Horizon**: Upon execution passing a `commit { ... }` block, all preceding anchors within that timeline are invalidated. At this precise temporal coordinate, the STVM bulk-reclaims the snapshots, freeing host memory resources.
+* **The Horizon**: Upon execution passing a `commit { ... }` block, all preceding anchors within that timeline are invalidated. At this precise temporal coordinate, the TVM bulk-reclaims the snapshots, freeing host memory resources.
 
 ---
 
@@ -59,7 +59,7 @@ The following demonstrates the mapping of source code to implicit EGC operations
 }
 ```
 
-### STVM Execution Path (Implicit Operations)
+### TVM Execution Path (Implicit Operations)
 1. **`@0ms`**: `large_dataset` is allocated within the Primary Arena.
 2. **`speculate`**: A Micro-Arena is initialized.
 3. **`anchor`**: The Primary Arena is snapshotted (entering a Suspended State).

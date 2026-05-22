@@ -32,7 +32,7 @@ ICTL enforces rigorous, predictable execution durations for all computational op
 
 ### Pacing and Deterministic Padding
 - Iterative constructs (e.g., `for` loops) and routine invocations enforce temporal contracts.
-- **Deterministic Padding**: If an execution block completes prior to its contracted duration (e.g., `taking 20ms`), the Stack-based Temporal Virtual Machine (STVM) automatically pads the `local_clock` to satisfy the contract, ensuring that execution duration is independent of the source environment.
+- **Deterministic Padding**: If an execution block completes prior to its contracted duration (e.g., `taking 20ms`), the Register-based Temporal Virtual Machine (TVM) automatically pads the `local_clock` to satisfy the contract, ensuring that execution duration is independent of the source environment.
 - **Temporal Watchdogs**: If an execution block exceeds its allocated duration, a `WatchdogBite` is triggered, facilitating the execution of recovery logic.
 
 ---
@@ -65,7 +65,25 @@ ICTL facilitates high-assurance state recovery through the `anchor` and `rewind_
 - **State Restoration**: The memory arena is restored to the exact snapshot recorded at the anchor point.
 
 ### Paradox Prevention Mechanisms
-To maintain temporal consistency, the STVM prevents the occurrence of **Causal Paradoxes**:
+To maintain temporal consistency, the TVM prevents the occurrence of **Causal Paradoxes**:
 1. **Unconsumed Side Effects**: A branch may rewind past a `chan_send` only if the transmitted message hasn't been consumed by another branch. The VM facilitates an automated "un-send" operation.
 2. **Causal Outflow Locking**: If a transmitted message has already been consumed by another branch, the source branch is "causally locked" to that event. Any attempt to rewind past this point triggers a `Causal Paradox` error.
 3. **Automated Reception Reversal**: If a branch rewinds past a `chan_recv`, the message is automatically restored to the channel buffer to preserve systemic data integrity.
+
+---
+
+## 6. Expression Evaluation and Coercion
+
+### Binary Addition and Concatenation
+The `+` operator exhibits polymorphic behavior based on the inferred types of its operands:
+1. **Numeric Addition**: If both operands are numeric (Integer or Float), standard arithmetic addition is performed.
+2. **String Concatenation**: If either operand is a **String**, the other operand is coerced into its string representation (using the internal `Display` implementation), and the two are concatenated.
+
+### Operator Semantics
+- **Modulo (`%`)**: Returns the remainder of division. For floats, this follows IEEE 754 remainder semantics.
+- **Power (`^`)**: Performs exponentiation. Negative exponents for integers result in a transition to **Float** types to preserve precision.
+- **Logical NOT (`!`)**: Strictly operates on **Bool** types.
+
+### Index Access and Type Decay
+- Accessing a field via index access (e.g., `top[idx]`) triggers **Structural Decay** on the target if it is an entropic structure or topology, similar to static field access.
+- Since the index is dynamic, the static analyzer may assign an `Unknown` type to the result if the specific field type cannot be determined at compile time.

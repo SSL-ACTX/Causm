@@ -54,7 +54,7 @@ To maintain the ICTL principle of deterministic temporal execution, the `specula
 
 * **Temporal Cost Equation**: The total duration $T$ is the sum of the maximum speculative duration and the Worst-Case Execution Time (WCET) of the fallback:
   $$T = T_{max\_duration} + T_{fallback\_wcet}$$
-* **Implementation Logic**: The Stack-based Temporal Virtual Machine (STVM) automatically pads the `global_clock` upon exiting the construct to ensure absolute predictability.
+* **Implementation Logic**: The Register-based Temporal Virtual Machine (TVM) automatically pads the `global_clock` upon exiting the construct to ensure absolute predictability.
 
 ## 4. Technical Implementation: Structured State Decay
 
@@ -82,7 +82,7 @@ To maintain the ICTL principle of deterministic temporal execution, the `specula
 
 ## 5. Runtime Operational Modes
 
-To facilitate diverse commit semantics, the STVM supports the following configuration options:
+To facilitate diverse commit semantics, the TVM supports the following configuration options:
 
 - `SpeculationCommitMode::Selective` (Default): Only variables explicitly designated within the `commit` block are integrated into the parent timeline.
 - `SpeculationCommitMode::Full`: The comprehensive state of the successful speculative timeline is integrated into the parent.

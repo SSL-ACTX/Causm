@@ -99,6 +99,7 @@ impl EntropicAnalyzer {
             target_state.types.insert(var.clone(), typ);
             target_state.consumed.remove(&var);
         }
+        target_state.consumed.remove(target);
         Ok(())
     }
 

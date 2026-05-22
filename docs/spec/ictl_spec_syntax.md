@@ -92,7 +92,7 @@ assert_time(elapsed <relop> <amount>ms) [else <statement_block>]
 
 **Semantics:**
 - **Static Analysis**: The analyzer calculates the Worst-Case Execution Time (WCET). If the limit is statically exceeded, a `Temporal Assertion Violation` occurs.
-- **Dynamic Verification**: The Stack-based Temporal Virtual Machine (STVM) verifies the local clock during runtime. If the assertion fails, the `else` block is executed; otherwise, a runtime fault is triggered.
+- **Dynamic Verification**: The Register-based Temporal Virtual Machine (TVM) verifies the local clock during runtime. If the assertion fails, the `else` block is executed; otherwise, a runtime fault is triggered.
 
 ### Conditional Execution (`if`)
 Facilitates speculative path evaluation followed by deterministic state reconciliation.
@@ -143,6 +143,16 @@ A scatter-gather construct that initializes independent timelines for each eleme
 ```ictl
 split_map <item> <mode> <source> { <statements> } reconcile (<resolution_rules>)
 ```
+
+### Temporal Leases (`lease`)
+Provides transient, read-only access to an entropic structure for a fixed duration.
+
+**Syntax:**
+```ictl
+lease <binding> = <source> for <amount>ms { <statements> }
+```
+
+**See also**: [Temporal Leases Specification](./ictl_spec_leases.md)
 
 ---
 
@@ -228,3 +238,36 @@ isolate [<identifier>] {
 ## 8. Low-Level System Statements
 - **`network_request <url>`**: Triggers a simulated network effect with a deterministic cost of 5ms.
 - **`collapse`**: Terminates the current speculative block immediately.
+
+---
+
+## 9. Operators and Expressions
+
+### Arithmetic Operators
+- `+` : Addition or **String Concatenation**.
+- `-` : Subtraction or Unary Negation.
+- `*` : Multiplication.
+- `/` : Division.
+- `%` : Modulo.
+- `^` : Exponentiation (Power).
+
+### Logical and Relational Operators
+- `!` : Logical NOT (Unary).
+- `==`, `!=` : Equality and Inequality.
+- `<`, `>`, `<=`, `>=` : Comparison.
+
+### Ergonomic String Concatenation
+The `+` operator supports automatic coercion to string when at least one operand is a string literal or string-typed variable.
+**Example:**
+```ictl
+let msg = "Balance: " + 1000 // Results in "Balance: 1000"
+```
+
+### Index Access
+Topologies and arrays support dynamic indexing.
+**Syntax:**
+```ictl
+let val = source[index_expression]
+```
+- For topologies, the index must evaluate to a **String** (field name).
+- For arrays, the index must evaluate to an **Integer**.

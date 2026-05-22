@@ -8,7 +8,7 @@ Within the ICTL framework, a routine must possess an invariant execution duratio
 
 * **Structural Requirement**: Every `routine` specification must incorporate a `taking Nms` clause, forming a binding temporal contract.
 * **Execution Logic**: 
-  * If the routine's logic completes in less than the contracted duration, the Stack-based Temporal Virtual Machine (STVM) applies deterministic padding until the contract is satisfied.
+  * If the routine's logic completes in less than the contracted duration, the Register-based Temporal Virtual Machine (TVM) applies deterministic padding until the contract is satisfied.
   * If the routine's logic exceeds the specified duration, the Static Analyzer rejects the code at compile-time (or triggers a `WatchdogBite` in the case of dynamic loop overruns).
 * **Technical Benefit**: The caller is guaranteed an exact advancement of the `local_clock` upon invocation, preserving systemic timeline determinism.
 
@@ -38,7 +38,7 @@ routine process_transaction(consume authentication_token, peek transaction_metad
         yield receipt
     } else {
         yield "TRANSACTION_DECLINED"
-        // STVM applies padding to satisfy the 25ms execution contract
+        // TVM applies padding to satisfy the 25ms execution contract
     } 
     reconcile (yield = first_wins)
 }

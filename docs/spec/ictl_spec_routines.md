@@ -28,7 +28,7 @@ routine <name>(<param_mode> <identifier>, ...) taking (<amount>ms | _) {
 
 The `taking` clause specifies the **Worst-Case Execution Time (WCET)** for the routine.
 
-- **Explicit Temporal Specification**: `taking 20ms`. The Stack-based Temporal Virtual Machine (STVM) guarantees the routine execution occupies exactly 20ms. If completion occurs prematurely, deterministic padding is applied. If the duration is exceeded, a `WatchdogBite` is triggered.
+- **Explicit Temporal Specification**: `taking 20ms`. The Register-based Temporal Virtual Machine (TVM) guarantees the routine execution occupies exactly 20ms. If completion occurs prematurely, deterministic padding is applied. If the duration is exceeded, a `WatchdogBite` is triggered.
 - **Inferred Temporal Specification**: `taking _`. The static analyzer computes the maximum execution cost across all code paths and establishes the contract automatically.
 
 ---

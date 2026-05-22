@@ -9,7 +9,7 @@ This document specifies the Isolate Concurrent Temporal Language (ICTL) runtime 
 Conventional garbage collection mechanisms frequently introduce non-deterministic execution pauses. EGC achieves memory safety and efficiency through the following foundational principles:
 
 1. **Deterministic Temporal Scheduling**: Memory reclamation points are formally defined by language constructs and lifecycle transitions.
-2. **Entropic State Monitoring**: The Stack-based Temporal Virtual Machine (STVM) monitors whether a value occupies the `Valid`, `Decayed`, or `Consumed` state. Memory is reclaimed precisely when a value enters the `Consumed` state.
+2. **Entropic State Monitoring**: The Register-based Temporal Virtual Machine (TVM) monitors whether a value occupies the `Valid`, `Decayed`, or `Consumed` state. Memory is reclaimed precisely when a value enters the `Consumed` state.
 3. **Branch-Localized Arenas**: Every execution timeline maintains an isolated memory arena. Upon timeline termination, the associated arena is reclaimed via a single O(1) operation.
 
 ---
@@ -57,7 +57,7 @@ Memory tracking occurs at a granular level:
 
 ## 4. Manual State Consolidation
 
-The STVM provides a `compact_consumed()` utility that may be invoked manually or triggered automatically during `commit` or `merge` events. This operation removes `Consumed` markers from the arena's internal mapping structures, optimizing lookup efficiency for long-duration timelines.
+The TVM provides a `compact_consumed()` utility that may be invoked manually or triggered automatically during `commit` or `merge` events. This operation removes `Consumed` markers from the arena's internal mapping structures, optimizing lookup efficiency for long-duration timelines.
 
 ---
 

@@ -41,9 +41,9 @@ The **Temporal Lease** establishes a mathematically bounded borrow of a variable
 ## 4. Semantics and Entropic Regulations
 
 ### 4.1 Temporal Expiration and Pacing
-Leases are governed by the **Padding Rule**. If the logic within the `lease` block executes faster than the specified lease duration, the STVM injects deterministic temporal padding to ensure the local clock advances by exactly the lease amount before restoring the parent variable's entropic state. 
+Leases are governed by the **Padding Rule**. If the logic within the `lease` block executes faster than the specified lease duration, the TVM injects deterministic temporal padding to ensure the local clock advances by exactly the lease amount before restoring the parent variable's entropic state. 
 
-If the logic attempts to exceed the lease duration, the STVM triggers a **Temporal Fault**, terminating the isolate/branch, preventing use-after-lease violations.
+If the logic attempts to exceed the lease duration, the TVM triggers a **Temporal Fault**, terminating the isolate/branch, preventing use-after-lease violations.
 
 ### 4.2 Prohibited Operations Within a Lease
 - **Mutation**: Data accessed via a lease is strictly immutable.
@@ -66,7 +66,7 @@ lease meta = network_packet for 10ms {
 1. **Entropic State Tracking**: The `EntropicState` enum is extended to include `Leased { expiration_coord: TemporalCoordinate }`.
 2. **Static Analysis (WCET)**: The static analyzer must calculate the Worst-Case Execution Time (WCET) of the `lease` block. 
    - If `WCET > Lease_Duration`, a compile-time error is emitted.
-   - If `WCET <= Lease_Duration`, the STVM schedules padding `P = Lease_Duration - Actual_Execution_Time`.
+   - If `WCET <= Lease_Duration`, the TVM schedules padding `P = Lease_Duration - Actual_Execution_Time`.
 3. **Reclamation**: Leases do not impact Garbage Collection directly, as they do not generate new memory allocations. They represent a scoped pointer accompanied by a temporal invariant.
 
 ---

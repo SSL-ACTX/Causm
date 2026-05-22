@@ -42,7 +42,7 @@ loop tick {
 
 **Operational Logic:**
 1. **Body Execution**: Statements within the `loop tick` are executed according to standard semantic rules.
-2. **Deterministic Padding**: Upon completion of the body (or execution of a `break`), the Stack-based Temporal Virtual Machine (STVM) automatically advances the `local_clock` to the comprehensive `slice_ms` duration.
+2. **Deterministic Padding**: Upon completion of the body (or execution of a `break`), the Register-based Temporal Virtual Machine (TVM) automatically advances the `local_clock` to the comprehensive `slice_ms` duration.
 3. **Phase-Committed Communication**: Channel operations within a tick utilize a **double-buffered phase** model:
    - **Transmission Phase**: `chan_send` operations write to a `pending` buffer.
    - **Boundary Commit**: At the conclusion of the tick, all `pending` buffers are committed to the active channels.

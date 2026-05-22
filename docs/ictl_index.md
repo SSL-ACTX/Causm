@@ -11,16 +11,17 @@ The following documents define the formal behavior, syntax, and semantics of ICT
 - **[Iteration & Pacing](./spec/ictl_spec_iteration.md)**: Deterministic loops and temporal pacing.
 - **[Routine Contracts](./spec/ictl_spec_routines.md)**: Procedure definitions and WCET enforcement.
 - **[Speculative Branches](./spec/ictl_spec_speculation.md)**: Micro-timelines and rollback mechanisms.
+- **[Temporal Leases](./spec/ictl_spec_leases.md)**: Transient, time-bound memory borrowing.
 - **[Type System](./spec/ictl_spec_types.md)**: Entropic types and decay constraints.
 - **[Topological Field Access](./spec/ictl_spec_topologies.md)**: Memory layout and field-level entropy.
 - **[Asynchronous Promises](./spec/ictl_spec_promises.md)**: Temporal promises and causal synchronization.
 - **[Timeline Routing](./spec/ictl_spec_temporal_routing.md)**: Advanced routing across isolated timelines.
 - **[Isochronous Scheduling](./spec/ictl_spec_isochronous_scheduling.md)**: High-precision temporal synchronization.
 
-## 2. STVM Internals (`docs/stvm/`)
-Technical documentation regarding the Stack-based Temporal Virtual Machine.
+## 2. TVM Internals (`docs/tvm/`)
+Technical documentation regarding the Register-based Temporal Virtual Machine.
 
-- **[Memory Reclamation](./stvm/ictl_stvm_memory_reclamation.md)**: Entropic Garbage Collection (EGC) and arena management.
+- **[Memory Reclamation](./tvm/ictl_tvm_memory_reclamation.md)**: Entropic Garbage Collection (EGC) and arena management.
 
 ## 3. Design Proposals & RFCs (`docs/proposals/`, `docs/rfc/`)
 Historical design documents and the standard RFC process.

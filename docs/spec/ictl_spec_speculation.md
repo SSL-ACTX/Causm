@@ -10,7 +10,7 @@ The `speculate` construct implements a transient micro-timeline designed for tri
 
 ### Architectural Objectives
 - **Zero Leakage Invariant**: No side effects or entropic modifications affect the parent timeline unless a formal `commit` operation is successfully executed.
-- **State Reversion Transparency**: The Stack-based Temporal Virtual Machine (STVM) can revert all memory arena modifications initiated within a speculative block in O(1) temporal complexity.
+- **State Reversion Transparency**: The Register-based Temporal Virtual Machine (TVM) can revert all memory arena modifications initiated within a speculative block in O(1) temporal complexity.
 - **Temporal Accountability**: Speculative execution occupies a deterministic duration, irrespective of whether the trial is committed or reverted.
 
 ---
@@ -56,7 +56,7 @@ The total temporal cost of a `speculate` block is invariant, ensuring determinis
 ```
 total_cost = 1ms (overhead) + max_ms + fallback_wcet
 ```
-The STVM consistently pads the `local_clock` to satisfy this total cost, ensuring that the parent timeline's clock remains identical regardless of the success or failure of the speculation.
+The TVM consistently pads the `local_clock` to satisfy this total cost, ensuring that the parent timeline's clock remains identical regardless of the success or failure of the speculation.
 
 ---
 
