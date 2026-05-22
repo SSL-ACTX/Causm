@@ -30,7 +30,9 @@ impl EntropicAnalyzer {
         self.capability_stack.push(cap_set);
 
         let previous_slice = self.current_slice_ms;
-        self.current_slice_ms = block.manifest.cpu_budget_ms;
+        if let Some(slice) = block.manifest.slice_ms {
+            self.current_slice_ms = Some(slice);
+        }
 
         for inner_stmt in &block.body {
             self.analyze_statement(inner_stmt)?;

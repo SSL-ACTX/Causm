@@ -131,35 +131,65 @@ impl Vm {
                 let b = self.get_branch_mut(branch_id)?;
                 if b.break_requested {
                     let target_depth = b.loop_depth;
-                    while b.pc < b.instructions.len() {
-                        let instr = &b.instructions[b.pc];
+                    b.break_requested = false;
+                    let _ = b;
+
+                    while {
+                        let b = self.get_branch_mut(branch_id)?;
+                        b.pc < b.instructions.len()
+                    } {
+                        let instr = {
+                            let b = self.get_branch_mut(branch_id)?;
+                            b.instructions[b.pc].clone()
+                        };
                         match instr {
                             ictl_frontend::ir::Instruction::Loop { .. }
                             | ictl_frontend::ir::Instruction::LoopTick => {
+                                let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth += 1;
                             }
-                            ictl_frontend::ir::Instruction::EndLoop {
-                                max_ms: _,
-                            } => {
+                            ictl_frontend::ir::Instruction::EndLoop { max_ms } => {
+                                let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth -= 1;
                                 if b.loop_depth < target_depth {
-                                    b.loop_stack.pop();
+                                    let max_ms_val = max_ms;
+                                    self.EndLoop(branch_id, max_ms_val)?;
+                                    let b = self.get_branch_mut(branch_id)?;
                                     b.pc += 1;
+                                    // Skip the following Jump if present
+                                    if b.pc < b.instructions.len() {
+                                        if let ictl_frontend::ir::Instruction::Jump { .. } =
+                                            b.instructions[b.pc]
+                                        {
+                                            b.pc += 1;
+                                        }
+                                    }
                                     break;
                                 }
                             }
                             ictl_frontend::ir::Instruction::EndLoopTick => {
+                                let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth -= 1;
                                 if b.loop_depth < target_depth {
-                                    b.pc += 1; // skip the EndLoopTick
+                                    self.EndLoopTick(branch_id)?;
+                                    let b = self.get_branch_mut(branch_id)?;
+                                    b.pc += 1;
+                                    // Skip the following Jump if present
+                                    if b.pc < b.instructions.len() {
+                                        if let ictl_frontend::ir::Instruction::Jump { .. } =
+                                            b.instructions[b.pc]
+                                        {
+                                            b.pc += 1;
+                                        }
+                                    }
                                     break;
                                 }
                             }
                             _ => {}
                         }
+                        let b = self.get_branch_mut(branch_id)?;
                         b.pc += 1;
                     }
-                    b.break_requested = false;
                 }
             }
         }
@@ -241,6 +271,7 @@ impl Vm {
         {
             let branch = self.get_branch_mut(branch_id)?;
             branch.local_clock += 1;
+            branch.consume_budget(1)?;
         }
 
         let instr = {
@@ -516,7 +547,7 @@ impl Vm {
         parent_id: &str,
         branches: Vec<&str>,
     ) -> Result<(), TemporalError> {
-        let (base_arena, cpu_budget_ms, entropy_mode, resource_budgets) = {
+        let (base_arena, cpu_budget_ms, entropy_mode, resource_budgets, slice_ms) = {
             let parent_timeline = if parent_id == "main" {
                 &self.root_timeline
             } else {
@@ -529,6 +560,7 @@ impl Vm {
                 parent_timeline.cpu_budget_ms,
                 parent_timeline.entropy_mode,
                 parent_timeline.resource_budgets.clone(),
+                parent_timeline.slice_ms,
             )
         };
 
@@ -539,7 +571,7 @@ impl Vm {
                 local_clock: 0,
                 arena: base_arena.clone(),
                 cpu_budget_ms,
-                slice_ms: None,
+                slice_ms,
                 anchors: HashMap::new(),
                 commit_horizon_passed: false,
                 manifest_stack: Vec::new(),

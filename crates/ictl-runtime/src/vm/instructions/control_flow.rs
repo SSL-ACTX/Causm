@@ -169,7 +169,7 @@ impl Vm {
     pub(crate) fn Select(
         &mut self,
         branch_id: &str,
-        _max_ms: u64,
+        max_ms: u64,
         cases: Vec<ictl_frontend::ir::IrSelectCase>,
         timeout_target: Option<usize>,
     ) -> Result<(), TemporalError> {
@@ -187,6 +187,13 @@ impl Vm {
                 found_case = Some((case.clone(), msg));
                 break;
             }
+        }
+
+        // Apply deterministic temporal padding
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock += max_ms;
+            branch.consume_budget(max_ms)?;
         }
 
         if let Some((case, msg)) = found_case {

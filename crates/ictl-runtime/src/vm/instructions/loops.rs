@@ -207,24 +207,6 @@ impl Vm {
         )
     }
 
-    pub(crate) fn LoopTick(&mut self, branch_id: &str) -> Result<(), TemporalError> {
-        self.commit_tick_buffers();
-        let branch = self.get_branch_mut(branch_id)?;
-        branch.loop_depth += 1;
-        Ok(())
-    }
-
-    pub(crate) fn EndLoopTick(
-        &mut self,
-        branch_id: &str,
-    ) -> Result<(), TemporalError> {
-        let branch = self.get_branch_mut(branch_id)?;
-        if branch.loop_depth > 0 {
-            branch.loop_depth -= 1;
-        }
-        Ok(())
-    }
-
     pub(crate) fn Loop(
         &mut self,
         branch_id: &str,
@@ -242,7 +224,48 @@ impl Vm {
         _max_ms: u64,
     ) -> Result<(), TemporalError> {
         let branch = self.get_branch_mut(branch_id)?;
-        branch.loop_stack.pop();
+        let (start, limit) = branch.loop_stack.pop().ok_or_else(|| {
+            TemporalError::EvalError("Loop stack underflow".into())
+        })?;
+
+        let total_elapsed = branch.local_clock - start;
+        if limit > 0 && total_elapsed < limit {
+            let pad = limit - total_elapsed;
+            branch.local_clock += pad;
+            branch.consume_budget(pad)?;
+        }
+
+        if branch.loop_depth > 0 {
+            branch.loop_depth -= 1;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn LoopTick(&mut self, branch_id: &str) -> Result<(), TemporalError> {
+        self.commit_tick_buffers();
+        let branch = self.get_branch_mut(branch_id)?;
+        let slice = branch.slice_ms.ok_or(TemporalError::TickLoopWithoutSlice)?;
+        branch.loop_stack.push((branch.local_clock, slice));
+        branch.loop_depth += 1;
+        Ok(())
+    }
+
+    pub(crate) fn EndLoopTick(
+        &mut self,
+        branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        let (start, slice) = branch.loop_stack.pop().ok_or_else(|| {
+            TemporalError::EvalError("Loop stack underflow".into())
+        })?;
+        let elapsed = branch.local_clock - start;
+        if elapsed > slice {
+            return Err(TemporalError::WatchdogBite(branch_id.to_string(), slice));
+        }
+        let pad = slice - elapsed;
+        branch.local_clock += pad;
+        branch.consume_budget(pad)?;
+
         if branch.loop_depth > 0 {
             branch.loop_depth -= 1;
         }

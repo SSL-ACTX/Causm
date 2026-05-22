@@ -80,8 +80,8 @@ fn ictl_temporal_loop_break_pads_to_max() -> anyhow::Result<()> {
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
-    // 1(LoopTick) + 1(load_string) + 1(move) + 1(break) = 4
-    assert_eq!(vm.root_timeline.local_clock, 4);
+    // 1(Loop) + 1(load_string) + 1(move) + 1(break) + 7(padding) = 11
+    assert_eq!(vm.root_timeline.local_clock, 11);
     Ok(())
 }
 
@@ -245,7 +245,7 @@ fn ictl_temporal_isolate_manifest_cpu_limit_reflects_in_vm() -> anyhow::Result<(
     let source = r#"
     @0ms: {
       isolate demo {
-        enable cpu(1)
+        enable cpu(10)
         let x = "bound"
       }
     }

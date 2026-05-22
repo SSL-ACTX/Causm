@@ -11,7 +11,7 @@ impl Vm {
         _name: String,
         manifest: Manifest,
     ) -> Result<(), TemporalError> {
-        let cpu_req = {
+        let (cpu_req, slice_req) = {
             let branch = self.get_branch_mut(branch_id)?;
             if let Some(limit_bytes) = manifest.memory_budget_bytes {
                 branch.arena.capacity = limit_bytes;
@@ -24,7 +24,7 @@ impl Vm {
                 branch.resource_budgets.insert(res.clone(), *amount);
             }
             branch.manifest_stack.push(manifest.clone());
-            manifest.cpu_budget_ms
+            (manifest.cpu_budget_ms, manifest.slice_ms)
         };
 
         if let Some(cpu) = cpu_req {
@@ -33,7 +33,10 @@ impl Vm {
                 return Err(TemporalError::BudgetExhausted);
             }
             branch.cpu_budget_ms = cpu;
-            branch.slice_ms = Some(cpu);
+        }
+        if let Some(slice) = slice_req {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.slice_ms = Some(slice);
         }
         Ok(())
     }
@@ -74,7 +77,6 @@ impl Vm {
         ms: u64,
     ) -> Result<(), TemporalError> {
         let branch = self.get_branch_mut(branch_id)?;
-        branch.local_clock += ms;
         branch.slice_ms = Some(ms);
         Ok(())
     }
@@ -162,9 +164,17 @@ impl Vm {
         }
 
         for i in 0..block_len {
-            let pc = self.get_branch_mut(&target_id)?.pc;
-            if pc < block_pc || pc >= block_pc + block_len {
-                println!("[VM] RelativisticBlock: PC {} out of bounds [{}, {}), stopping.", pc, block_pc, block_pc + block_len);
+            let (pc, instrs_len) = {
+                let t = self.get_branch_mut(&target_id)?;
+                (t.pc, t.instructions.len())
+            };
+            if pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len {
+                println!(
+                    "[VM] RelativisticBlock: PC {} out of bounds [{}, {}), stopping.",
+                    pc,
+                    block_pc,
+                    block_pc + block_len
+                );
                 break;
             }
             println!(
@@ -175,6 +185,73 @@ impl Vm {
                 pc
             );
             self.execute_instruction(&target_id)?;
+
+            // Handle break within the relativistic block
+            let b = self.get_branch_mut(&target_id)?;
+            if b.break_requested {
+                let target_depth = b.loop_depth;
+                b.break_requested = false;
+                let _ = b;
+
+                while {
+                    let b = self.get_branch_mut(&target_id)?;
+                    b.pc < b.instructions.len() && b.pc < block_pc + block_len
+                } {
+                    let instr = {
+                        let b = self.get_branch_mut(&target_id)?;
+                        b.instructions[b.pc].clone()
+                    };
+                    match instr {
+                        ictl_frontend::ir::Instruction::Loop { .. }
+                        | ictl_frontend::ir::Instruction::LoopTick => {
+                            let b = self.get_branch_mut(&target_id)?;
+                            b.loop_depth += 1;
+                        }
+                        ictl_frontend::ir::Instruction::EndLoop { max_ms } => {
+                            let b = self.get_branch_mut(&target_id)?;
+                            b.loop_depth -= 1;
+                            if b.loop_depth < target_depth {
+                                let max_ms_val = max_ms;
+                                self.EndLoop(&target_id, max_ms_val)?;
+                                let b = self.get_branch_mut(&target_id)?;
+                                b.pc += 1;
+                                // Skip the following Jump if present
+                                if b.pc < b.instructions.len() {
+                                    if let ictl_frontend::ir::Instruction::Jump {
+                                        ..
+                                    } = b.instructions[b.pc]
+                                    {
+                                        b.pc += 1;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        ictl_frontend::ir::Instruction::EndLoopTick => {
+                            let b = self.get_branch_mut(&target_id)?;
+                            b.loop_depth -= 1;
+                            if b.loop_depth < target_depth {
+                                self.EndLoopTick(&target_id)?;
+                                let b = self.get_branch_mut(&target_id)?;
+                                b.pc += 1;
+                                // Skip the following Jump if present
+                                if b.pc < b.instructions.len() {
+                                    if let ictl_frontend::ir::Instruction::Jump {
+                                        ..
+                                    } = b.instructions[b.pc]
+                                    {
+                                        b.pc += 1;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    let b = self.get_branch_mut(&target_id)?;
+                    b.pc += 1;
+                }
+            }
         }
 
         let t = self.get_branch_mut(&target_id)?;

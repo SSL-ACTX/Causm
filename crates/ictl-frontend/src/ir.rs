@@ -571,6 +571,14 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 _ => "main".to_string(),
             };
 
+            // Use a placeholder for the block start PC
+            let rb_instr_idx = ctx.instructions.len();
+            ctx.push(Instruction::RelativisticBlock {
+                target: target.clone(),
+                block_pc: 0,  // Placeholder
+                block_len: 0, // Placeholder
+            });
+
             let jump_over_idx = ctx.instructions.len();
             ctx.push(Instruction::Jump { target: 0 }); // Jump over body
 
@@ -580,18 +588,23 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             let len = ctx.instructions.len() - start_pc;
 
-            let end_pc = ctx.instructions.len();
+            // Fill in placeholders
+            if let Instruction::RelativisticBlock {
+                ref mut block_pc,
+                ref mut block_len,
+                ..
+            } = ctx.instructions[rb_instr_idx]
+            {
+                *block_pc = start_pc;
+                *block_len = len;
+            }
+
+            let end_idx = ctx.instructions.len();
             if let Instruction::Jump { ref mut target, .. } =
                 ctx.instructions[jump_over_idx]
             {
-                *target = end_pc;
+                *target = end_idx;
             }
-
-            ctx.push(Instruction::RelativisticBlock {
-                target,
-                block_pc: start_pc,
-                block_len: len,
-            });
         }
         Statement::MatchEntropy {
             target,
@@ -924,11 +937,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             });
         }
         Statement::Loop { max_ms, body } => {
+            let start_pc = ctx.instructions.len();
             ctx.push(Instruction::Loop { max_ms: *max_ms });
             for s in body {
                 lower_statement(ctx, &s.stmt);
             }
             ctx.push(Instruction::EndLoop { max_ms: *max_ms });
+            ctx.push(Instruction::Jump { target: start_pc });
         }
         Statement::If {
             condition,

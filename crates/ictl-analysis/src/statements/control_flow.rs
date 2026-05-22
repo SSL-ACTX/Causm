@@ -170,51 +170,25 @@ impl EntropicAnalyzer {
                 .unwrap_or_default();
             branch_results.push(end_state);
             self.branch_contexts = saved_contexts;
-        }
-
-        let merged_state = if branch_results.is_empty() {
-            original_state.clone()
         } else {
-            let mut merged = original_state.clone();
-            for st in &branch_results {
-                merged.consumed.extend(st.consumed.clone());
-                merged.yields.extend(st.yields.clone());
-            }
-            merged
-        };
-
-        let all_vars: std::collections::HashSet<_> = branch_results
-            .iter()
-            .flat_map(|s| s.consumed.iter().cloned())
-            .collect();
-
-        let mut mismatch_vars = Vec::new();
-        for var in all_vars {
-            let in_some = branch_results.iter().any(|s| s.consumed.contains(&var));
-            let in_all = branch_results.iter().all(|s| s.consumed.contains(&var));
-            if in_some && !in_all {
-                mismatch_vars.push(var.clone());
-            }
+            branch_results.push(original_state.clone());
         }
 
-        if !mismatch_vars.is_empty() && reconcile.is_none() {
-            return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
-                mismatch_vars.join(", "),
-            )));
+        if branch_results.is_empty() {
+            return Ok(());
         }
 
-        if let Some(rule) = reconcile {
-            for var in mismatch_vars {
-                if !rule.rules.contains_key(&var) {
-                    return Err(
-                        self.annotate(SemanticErrorKind::EntropyMismatch(var))
-                    );
-                }
-            }
+        let mut final_state = branch_results[0].clone();
+        for i in 1..branch_results.len() {
+            final_state = self.merge_states(
+                final_state,
+                branch_results[i].clone(),
+                reconcile,
+            )?;
         }
 
         self.branch_contexts
-            .insert(self.current_branch.clone(), merged_state);
+            .insert(self.current_branch.clone(), final_state);
         Ok(())
     }
 
@@ -499,16 +473,43 @@ impl EntropicAnalyzer {
 
     pub(crate) fn SplitMap(
         &mut self,
-        _item_name: &str,
-        _mode: &ForMode,
+        item_name: &str,
+        mode: &ForMode,
         source: &str,
         body: &[SpannedStatement],
         _reconcile: &Option<MergeResolution>,
     ) -> Result<(), SemanticError> {
-        self.mark_consumed(source)?;
+        let source_type = self
+            .get_variable_type(source)
+            .unwrap_or(ictl_core::types::Type::Unknown);
+
+        let loop_item_type = match source_type {
+            ictl_core::types::Type::Struct(_)
+            | ictl_core::types::Type::Topology(_) => {
+                let mut item_fields = std::collections::HashMap::new();
+                item_fields
+                    .insert("key".to_string(), ictl_core::types::Type::String);
+                item_fields
+                    .insert("value".to_string(), ictl_core::types::Type::Unknown);
+                ictl_core::types::Type::Struct(ictl_core::types::StructType {
+                    fields: item_fields,
+                    decay_after_ms: None,
+                    scoped_branch: None,
+                })
+            }
+            ictl_core::types::Type::Array(inner) => *inner.clone(),
+            other => other,
+        };
+        self.set_variable_type(item_name, loop_item_type);
+
+        if let ForMode::Consume = mode {
+            self.mark_consumed(source)?;
+        }
+
         for inner_stmt in body {
             self.analyze_statement(inner_stmt)?;
         }
+
         Ok(())
     }
 

@@ -162,6 +162,10 @@ pub(crate) fn infer_expression_type(
                         Ok(Type::Integer)
                     } else if left_type.is_numeric() && right_type.is_numeric() {
                         Ok(Type::Float)
+                    } else if left_type == Type::Unknown
+                        || right_type == Type::Unknown
+                    {
+                        Ok(Type::Unknown)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                             format!(
@@ -172,7 +176,9 @@ pub(crate) fn infer_expression_type(
                     }
                 }
                 ictl_core::BinaryOperator::Eq | ictl_core::BinaryOperator::Neq => {
-                    if left_type == right_type {
+                    if left_type == Type::Unknown || right_type == Type::Unknown {
+                        Ok(Type::Bool)
+                    } else if left_type == right_type {
                         Ok(Type::Bool)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
@@ -187,7 +193,9 @@ pub(crate) fn infer_expression_type(
                 | ictl_core::BinaryOperator::Gt
                 | ictl_core::BinaryOperator::Le
                 | ictl_core::BinaryOperator::Ge => {
-                    if left_type.is_numeric() && right_type.is_numeric() {
+                    if left_type == Type::Unknown || right_type == Type::Unknown {
+                        Ok(Type::Bool)
+                    } else if left_type.is_numeric() && right_type.is_numeric() {
                         Ok(Type::Bool)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(

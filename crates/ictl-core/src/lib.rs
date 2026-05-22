@@ -294,6 +294,7 @@ pub struct IsolateBlock {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Manifest {
     pub cpu_budget_ms: Option<u64>,
+    pub slice_ms: Option<u64>,
     pub memory_budget_bytes: Option<u64>,
     pub resource_budgets: std::collections::HashMap<String, u64>,
     pub capabilities: Vec<Capability>,

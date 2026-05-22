@@ -380,6 +380,13 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
                         right: Box::new(value),
                     })
                 }
+            } else if let Expression::Identifier(name) = target_expr {
+                Statement::Assignment {
+                    target: name,
+                    mutable: false,
+                    var_type: None,
+                    expr: value,
+                }
             } else {
                 Statement::Expression(Expression::BinaryOp {
                     left: Box::new(target_expr),
@@ -1152,9 +1159,9 @@ fn parse_manifest(pair: Pair<Rule>) -> Manifest {
                 let amount = item
                     .into_inner()
                     .next()
-                    .map(|p| p.as_str().parse::<u64>().unwrap_or(0))
+                    .and_then(|p| p.as_str().parse::<u64>().ok())
                     .unwrap_or(0);
-                manifest.cpu_budget_ms = Some(amount);
+                manifest.slice_ms = Some(amount);
             }
             Rule::require_decl => manifest.capabilities.push(parse_capability(item)),
             _ => {}

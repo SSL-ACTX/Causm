@@ -43,4 +43,6 @@ pub enum TemporalError {
     AssertionFailed(String),
     #[error("Lease violation: {0}")]
     LeaseViolation(String),
+    #[error("Tick loop requires a fixed slice via slice <N>ms")]
+    TickLoopWithoutSlice,
 }
