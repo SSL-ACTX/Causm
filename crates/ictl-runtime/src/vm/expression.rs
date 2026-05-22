@@ -5,6 +5,33 @@ use ictl_core::{BinaryOperator, Expression, ParamMode};
 use std::collections::HashMap;
 
 impl Vm {
+    pub(crate) fn evaluate_unary_operation(
+        &self,
+        val: Payload,
+        op: &ictl_core::UnaryOperator,
+    ) -> Result<Payload, TemporalError> {
+        match op {
+            ictl_core::UnaryOperator::Neg => match val {
+                Payload::Integer(i) => Ok(Payload::Integer(-i)),
+                Payload::Float(bits) => {
+                    let f = f64::from_bits(bits);
+                    Ok(Payload::Float((-f).to_bits()))
+                }
+                _ => Err(TemporalError::TypeMismatch(format!(
+                    "Cannot negate {:?}",
+                    val
+                ))),
+            },
+            ictl_core::UnaryOperator::Not => match val {
+                Payload::Bool(b) => Ok(Payload::Bool(!b)),
+                _ => Err(TemporalError::TypeMismatch(format!(
+                    "Cannot apply NOT to {:?}",
+                    val
+                ))),
+            },
+        }
+    }
+
     pub(crate) fn evaluate_binary_operation(
         &self,
         left_value: Payload,
@@ -18,9 +45,28 @@ impl Vm {
                 BinaryOperator::Mul => Payload::Integer(l * r),
                 BinaryOperator::Div => {
                     if r == 0 {
-                        return Err(TemporalError::EvalError("Division by zero".into()));
+                        return Err(TemporalError::EvalError(
+                            "Division by zero".into(),
+                        ));
                     }
                     Payload::Integer(l / r)
+                }
+                BinaryOperator::Rem => {
+                    if r == 0 {
+                        return Err(TemporalError::EvalError(
+                            "Modulo by zero".into(),
+                        ));
+                    }
+                    Payload::Integer(l % r)
+                }
+                BinaryOperator::Pow => {
+                    if r < 0 {
+                        let lf = l as f64;
+                        let rf = r as f64;
+                        Payload::Float(lf.powf(rf).to_bits())
+                    } else {
+                        Payload::Integer(l.pow(r as u32))
+                    }
                 }
                 BinaryOperator::Eq => Payload::Bool(l == r),
                 BinaryOperator::Neq => Payload::Bool(l != r),
@@ -39,10 +85,21 @@ impl Vm {
                     BinaryOperator::Mul => Payload::Float((lf * rf).to_bits()),
                     BinaryOperator::Div => {
                         if rf == 0.0 {
-                            return Err(TemporalError::EvalError("Division by zero".into()));
+                            return Err(TemporalError::EvalError(
+                                "Division by zero".into(),
+                            ));
                         }
                         Payload::Float((lf / rf).to_bits())
                     }
+                    BinaryOperator::Rem => {
+                        if rf == 0.0 {
+                            return Err(TemporalError::EvalError(
+                                "Modulo by zero".into(),
+                            ));
+                        }
+                        Payload::Float((lf % rf).to_bits())
+                    }
+                    BinaryOperator::Pow => Payload::Float(lf.powf(rf).to_bits()),
                     BinaryOperator::Eq => Payload::Bool(lf == rf),
                     BinaryOperator::Neq => Payload::Bool(lf != rf),
                     BinaryOperator::Lt => Payload::Bool(lf < rf),
@@ -388,6 +445,16 @@ impl Vm {
         routine: &str,
         args: &[Expression],
     ) -> Result<Payload, TemporalError> {
+        if self.is_intrinsic(routine) {
+            let mut arg_values = Vec::new();
+            for arg in args {
+                arg_values.push(
+                    self.evaluate_expression_nonconsuming(branch_id, arg)?,
+                );
+            }
+            return self.call_intrinsic(routine, arg_values);
+        }
+
         let routine_def = self
             .routines
             .get(routine)

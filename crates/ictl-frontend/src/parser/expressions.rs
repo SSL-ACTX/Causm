@@ -7,7 +7,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
         Rule::expression
         | Rule::relational_expr
         | Rule::additive_expr
-        | Rule::multiplicative_expr => {
+        | Rule::multiplicative_expr
+        | Rule::power_expr => {
             let mut inner = pair.into_inner();
             let first = inner.next().map(parse_expression);
             if first.is_none() {
@@ -20,6 +21,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     "-" => ictl_core::BinaryOperator::Sub,
                     "*" => ictl_core::BinaryOperator::Mul,
                     "/" => ictl_core::BinaryOperator::Div,
+                    "%" => ictl_core::BinaryOperator::Rem,
+                    "^" => ictl_core::BinaryOperator::Pow,
                     "==" => ictl_core::BinaryOperator::Eq,
                     "!=" => ictl_core::BinaryOperator::Neq,
                     "<" => ictl_core::BinaryOperator::Lt,
@@ -39,21 +42,19 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             }
             left
         }
-        Rule::unary_expr => {
-            let mut inner = pair.into_inner();
-            if let Some(first) = inner.next() {
-                if first.as_str() == "-" {
-                    let expr = parse_expression(inner.next().unwrap());
-                    let zero = Expression::Integer(0);
-                    return Expression::BinaryOp {
-                        left: Box::new(zero),
-                        op: ictl_core::BinaryOperator::Sub,
-                        right: Box::new(expr),
-                    };
-                }
-                parse_expression(first)
-            } else {
-                Expression::Literal("void".into())
+        Rule::unary_expr => parse_expression(pair.into_inner().next().unwrap()),
+        Rule::neg_expr => {
+            let expr = parse_expression(pair.into_inner().next().unwrap());
+            Expression::UnaryOp {
+                op: ictl_core::UnaryOperator::Neg,
+                expr: Box::new(expr),
+            }
+        }
+        Rule::not_expr => {
+            let expr = parse_expression(pair.into_inner().next().unwrap());
+            Expression::UnaryOp {
+                op: ictl_core::UnaryOperator::Not,
+                expr: Box::new(expr),
             }
         }
         Rule::primary_expr => {
@@ -135,7 +136,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             Expression::Call { routine, args }
         }
         Rule::integer_literal => {
-            Expression::Integer(pair.as_str().parse::<i64>().unwrap_or(0))
+            let val = pair.as_str().parse::<i64>().unwrap_or(0);
+            Expression::Integer(val)
         }
         Rule::float_literal => {
             let val = pair.as_str().parse::<f64>().unwrap_or(0.0);

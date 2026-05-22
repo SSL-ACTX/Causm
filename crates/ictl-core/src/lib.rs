@@ -259,6 +259,10 @@ macro_rules! expressions {
                 op: BinaryOperator,
                 right: Box<Expression>
             },
+            UnaryOp {
+                op: UnaryOperator,
+                expr: Box<Expression>
+            },
             Deferred {
                 capability: String,
                 params: std::collections::HashMap<String, String>,
@@ -377,11 +381,19 @@ pub enum ParamMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Neg,
+    Not,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     Add,
     Sub,
     Mul,
     Div,
+    Rem,
+    Pow,
     Eq,
     Neq,
     Lt,

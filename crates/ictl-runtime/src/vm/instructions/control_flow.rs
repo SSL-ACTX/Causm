@@ -49,6 +49,19 @@ impl Vm {
         args: Vec<Reg>,
         dest: Reg,
     ) -> Result<(), TemporalError> {
+        if self.is_intrinsic(&routine) {
+            let mut arg_values = Vec::new();
+            for reg in &args {
+                arg_values.push(self.peek_reg(branch_id, reg.0)?);
+            }
+            let res = self.call_intrinsic(&routine, arg_values)?;
+            return self.insert_reg(
+                branch_id,
+                dest.0,
+                ictl_core::value::EntropicState::Valid(res),
+            );
+        }
+
         let routine_def = self
             .routines
             .get(&routine)

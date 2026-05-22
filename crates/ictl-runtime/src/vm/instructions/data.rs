@@ -93,4 +93,16 @@ impl Vm {
         let result = self.evaluate_binary_operation(l_val, r_val, &op)?;
         self.insert_reg(branch_id, dest.0, EntropicState::Valid(result))
     }
+
+    pub(crate) fn UnaryOp(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        op: ictl_core::UnaryOperator,
+        src: Reg,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, src.0)?;
+        let result = self.evaluate_unary_operation(val, &op)?;
+        self.insert_reg(branch_id, dest.0, EntropicState::Valid(result))
+    }
 }

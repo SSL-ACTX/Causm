@@ -143,7 +143,7 @@ impl EntropicAnalyzer {
         let mut contexts = HashMap::new();
         contexts.insert("main".to_string(), BranchState::default());
 
-        Self {
+        let mut analyzer = Self {
             branch_contexts: contexts,
             current_branch: "main".to_string(),
             current_statement: None,
@@ -155,7 +155,9 @@ impl EntropicAnalyzer {
             capability_stack: Vec::new(),
             routines: HashMap::new(),
             span_states: HashMap::new(),
-        }
+        };
+        analyzer.register_intrinsics();
+        analyzer
     }
 
     pub fn analyze_program_with_source(
@@ -214,6 +216,35 @@ impl EntropicAnalyzer {
             .find_map(|map| map.get(cap))
     }
 
+    pub fn register_intrinsics(&mut self) {
+        let math_functions = vec![
+            ("sqrt", vec![Type::Float], Type::Float),
+            ("sin", vec![Type::Float], Type::Float),
+            ("cos", vec![Type::Float], Type::Float),
+            ("tan", vec![Type::Float], Type::Float),
+            ("exp", vec![Type::Float], Type::Float),
+            ("ln", vec![Type::Float], Type::Float),
+            ("log10", vec![Type::Float], Type::Float),
+            ("floor", vec![Type::Float], Type::Float),
+            ("ceil", vec![Type::Float], Type::Float),
+            ("round", vec![Type::Float], Type::Float),
+        ];
+
+        for (name, params, ret) in math_functions {
+            self.routines.insert(
+                name.to_string(),
+                RoutineInfo {
+                    params: params
+                        .into_iter()
+                        .map(|t| (ictl_core::ParamMode::Clone, "x".to_string(), t))
+                        .collect(),
+                    return_type: ret,
+                    taking_ms: 1,
+                },
+            );
+        }
+    }
+
     pub fn analyze_program(
         &mut self,
         program: &Program,
@@ -229,6 +260,7 @@ impl EntropicAnalyzer {
         self.current_slice_ms = None;
         self.capability_stack.clear();
         self.routines.clear();
+        self.register_intrinsics();
 
         for block in &program.timelines {
             let old_branch = self.current_branch.clone();
@@ -479,6 +511,7 @@ impl EntropicAnalyzer {
 
         match (expected, actual) {
             (Type::Integer, Type::Integer)
+            | (Type::Float, Type::Float)
             | (Type::Bool, Type::Bool)
             | (Type::String, Type::String) => true,
             (Type::Struct(exp_struct), Type::Struct(act_struct)) => {
@@ -661,6 +694,8 @@ impl EntropicAnalyzer {
                     BinaryOperator::Sub => "-",
                     BinaryOperator::Mul => "*",
                     BinaryOperator::Div => "/",
+                    BinaryOperator::Rem => "%",
+                    BinaryOperator::Pow => "^",
                     BinaryOperator::Eq => "==",
                     BinaryOperator::Neq => "!=",
                     BinaryOperator::Lt => "<",
@@ -674,6 +709,13 @@ impl EntropicAnalyzer {
                     op_str,
                     self.expr_snippet(right)
                 )
+            }
+            Expression::UnaryOp { op, expr } => {
+                let op_str = match op {
+                    ictl_core::UnaryOperator::Neg => "-",
+                    ictl_core::UnaryOperator::Not => "!",
+                };
+                format!("{}{}", op_str, self.expr_snippet(expr))
             }
         }
     }

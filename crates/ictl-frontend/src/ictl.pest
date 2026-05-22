@@ -162,9 +162,13 @@ relational_expr = {
 relop = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
 additive_expr = { multiplicative_expr ~ (addop ~ multiplicative_expr)* }
 addop = { "+" | "-" }
-multiplicative_expr = { unary_expr ~ (mulop ~ unary_expr)* }
-mulop = { "*" | "/" }
-unary_expr = { "-" ~ unary_expr | primary_expr }
+multiplicative_expr = { power_expr ~ (mulop ~ power_expr)* }
+mulop = { "*" | "/" | "%" }
+power_expr = { unary_expr ~ (powop ~ unary_expr)* }
+powop = { "^" }
+unary_expr = { neg_expr | not_expr | primary_expr }
+neg_expr = { "-" ~ unary_expr }
+not_expr = { "!" ~ unary_expr }
 primary_expr = { base_expr ~ (index_access | field_access_tail)* }
 field_access_tail = { "." ~ identifier }
 field_update_stmt = { primary_expr ~ "=" ~ expression }

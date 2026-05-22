@@ -1,0 +1,23 @@
+@0ms: {
+    let x = 16.0
+    let s = call sqrt(clone(x))
+    print("sqrt(16.0) =")
+    debug(s)
+    
+    let y = 3.14159 / 2.0
+    let sn = call sin(clone(y))
+    print("sin(PI/2) =")
+    debug(sn)
+    
+    let z = 2.7
+    let f = call floor(clone(z))
+    let c = call ceil(clone(z))
+    print("floor(2.7) =")
+    debug(f)
+    print("ceil(2.7) =")
+    debug(c)
+    
+    let complex = call sqrt(2.0 ^ 2.0 + 3.0 ^ 2.0)
+    print("sqrt(2^2 + 3^2) =")
+    debug(complex)
+}

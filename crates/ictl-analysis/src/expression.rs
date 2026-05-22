@@ -134,7 +134,9 @@ pub(crate) fn infer_expression_type(
                 ictl_core::BinaryOperator::Add
                 | ictl_core::BinaryOperator::Sub
                 | ictl_core::BinaryOperator::Mul
-                | ictl_core::BinaryOperator::Div => {
+                | ictl_core::BinaryOperator::Div
+                | ictl_core::BinaryOperator::Rem
+                | ictl_core::BinaryOperator::Pow => {
                     if left_type == Type::Integer && right_type == Type::Integer {
                         Ok(Type::Integer)
                     } else if left_type.is_numeric() && right_type.is_numeric() {
@@ -172,6 +174,29 @@ pub(crate) fn infer_expression_type(
                                 "cannot order compare {:?} and {:?}",
                                 left_type, right_type
                             ),
+                        )))
+                    }
+                }
+            }
+        }
+        Expression::UnaryOp { op, expr } => {
+            let t = infer_expression_type(analyzer, expr)?;
+            match op {
+                ictl_core::UnaryOperator::Neg => {
+                    if t.is_numeric() {
+                        Ok(t)
+                    } else {
+                        Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            format!("cannot negate {:?}", t),
+                        )))
+                    }
+                }
+                ictl_core::UnaryOperator::Not => {
+                    if t == Type::Bool {
+                        Ok(Type::Bool)
+                    } else {
+                        Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            format!("cannot apply NOT to {:?}", t),
                         )))
                     }
                 }
@@ -310,6 +335,7 @@ pub(crate) fn analyze_expression(
             analyze_expression(analyzer, right)?;
             Ok(())
         }
+        Expression::UnaryOp { expr, .. } => analyze_expression(analyzer, expr),
     }
 }
 
@@ -374,6 +400,9 @@ pub(crate) fn analyze_expression_nonconsuming(
             analyze_expression_nonconsuming(analyzer, right)?;
             Ok(())
         }
+        Expression::UnaryOp { expr, .. } => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
     }
 }
 
@@ -397,6 +426,9 @@ pub fn estimate_expression_cost(
         Expression::BinaryOp { left, right, .. } => {
             1 + estimate_expression_cost(analyzer, left)
                 + estimate_expression_cost(analyzer, right)
+        }
+        Expression::UnaryOp { expr, .. } => {
+            1 + estimate_expression_cost(analyzer, expr)
         }
         Expression::StructLit(_, fields) | Expression::TopologyLit(fields) => {
             1 + fields

@@ -28,6 +28,11 @@ macro_rules! instructions {
                 left: $crate::ir::Reg,
                 right: $crate::ir::Reg
             },
+            UnaryOp {
+                dest: $crate::ir::Reg,
+                op: ictl_core::UnaryOperator,
+                src: $crate::ir::Reg
+            },
 
             // Data Movement
             LoadInt {
@@ -1116,6 +1121,13 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::UnaryOp { op, expr } => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(Instruction::UnaryOp { dest, op: *op, src });
+            dest
+        }
+
         Expression::Call { routine, args } => {
             let mut arg_regs = Vec::new();
             for arg in args {
