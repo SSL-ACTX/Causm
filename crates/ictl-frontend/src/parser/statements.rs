@@ -362,6 +362,23 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
                     field,
                     value,
                 }
+            } else if let Expression::IndexAccess { target, index } = target_expr {
+                if let Expression::Literal(s) = *index {
+                    Statement::FieldUpdate {
+                        target: *target,
+                        field: s,
+                        value,
+                    }
+                } else {
+                    Statement::Expression(Expression::BinaryOp {
+                        left: Box::new(Expression::IndexAccess {
+                            target,
+                            index: Box::new(*index),
+                        }),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(value),
+                    })
+                }
             } else {
                 Statement::Expression(Expression::BinaryOp {
                     left: Box::new(target_expr),

@@ -4,8 +4,6 @@ use ictl_core::*;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-use crate::statement;
-
 #[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum SemanticErrorKind {
@@ -91,6 +89,7 @@ pub struct BranchState {
     pub consumed: HashSet<String>,
     pub decayed: HashSet<String>,
     pub yields: HashSet<String>,
+    pub produced: HashSet<String>,
     pub mutables: HashSet<String>,
     pub types: HashMap<String, Type>,
     pub custom_types: HashMap<String, Type>,
@@ -240,11 +239,106 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    fn analyze_statement(
-        &mut self,
-        stmt: &SpannedStatement,
-    ) -> Result<(), SemanticError> {
-        statement::analyze_statement(self, stmt)
+    pub(crate) fn check_available(&self, name: &str) -> Result<(), SemanticError> {
+        let state = self.branch_contexts.get(&self.current_branch).unwrap();
+        if state.consumed.contains(name) || state.decayed.contains(name) {
+            return Err(
+                self.annotate(SemanticErrorKind::UseAfterConsume(name.to_string()))
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn merge_states(
+        &self,
+        then_end_state: BranchState,
+        else_end_state: BranchState,
+        reconcile: &Option<MergeResolution>,
+    ) -> Result<BranchState, SemanticError> {
+        let mut mismatch_vars = Vec::new();
+        for name in then_end_state
+            .consumed
+            .union(&else_end_state.consumed)
+            .cloned()
+        {
+            let in_then = then_end_state.consumed.contains(&name);
+            let in_else = else_end_state.consumed.contains(&name);
+            if in_then != in_else {
+                mismatch_vars.push(name);
+            }
+        }
+
+        if !mismatch_vars.is_empty() {
+            if let Some(reconcile_rules) = reconcile {
+                if !reconcile_rules.auto {
+                    for name in &mismatch_vars {
+                        if !reconcile_rules.rules.contains_key(name) {
+                            return Err(self.annotate(
+                                SemanticErrorKind::EntropyMismatch(
+                                    mismatch_vars.join(", "),
+                                ),
+                            ));
+                        }
+                    }
+                }
+            } else {
+                return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
+                    mismatch_vars.join(", "),
+                )));
+            }
+        }
+
+        let mut merged_types = then_end_state.types.clone();
+        for (name, typ) in &else_end_state.types {
+            merged_types
+                .entry(name.clone())
+                .and_modify(|existing| {
+                    if existing != typ {
+                        *existing = ictl_core::types::Type::Unknown;
+                    }
+                })
+                .or_insert(typ.clone());
+        }
+
+        Ok(BranchState {
+            consumed: then_end_state
+                .consumed
+                .union(&else_end_state.consumed)
+                .cloned()
+                .collect(),
+            decayed: then_end_state
+                .decayed
+                .union(&else_end_state.decayed)
+                .cloned()
+                .collect(),
+            yields: then_end_state
+                .yields
+                .union(&else_end_state.yields)
+                .cloned()
+                .collect(),
+            mutables: then_end_state
+                .mutables
+                .union(&else_end_state.mutables)
+                .cloned()
+                .collect(),
+            produced: then_end_state
+                .produced
+                .union(&else_end_state.produced)
+                .cloned()
+                .collect(),
+            types: merged_types,
+            custom_types: then_end_state.custom_types.clone(),
+            accumulated_cost: then_end_state
+                .accumulated_cost
+                .max(else_end_state.accumulated_cost),
+            instantiated_at: {
+                let mut merged = then_end_state.instantiated_at.clone();
+                for (k, v) in else_end_state.instantiated_at {
+                    merged.entry(k).or_insert(v);
+                }
+                merged
+            },
+        })
     }
 
     pub(crate) fn mark_consumed(&mut self, name: &str) -> Result<(), SemanticError> {

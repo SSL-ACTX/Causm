@@ -2,7 +2,7 @@
   isolate hft_pipeline {
     require System.Log
     enable system_log(1)
-    enable memory(500)
+    enable memory(5KB)
     slice 20ms
     open_chan signal_bus(8)
 

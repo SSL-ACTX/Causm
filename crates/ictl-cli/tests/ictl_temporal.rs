@@ -286,3 +286,102 @@ fn ictl_temporal_for_loop_pacing_and_bounds() -> anyhow::Result<()> {
     assert!(vm.root_timeline.local_clock > 0);
     Ok(())
 }
+
+#[test]
+fn ictl_temporal_promises_example_integration() -> anyhow::Result<()> {
+    let source = r#"
+@0ms: {
+  isolate promise_worker {
+    enable cpu(100ms)
+    enable memory(50KB)
+    require System.Log
+    require System.NetworkFetch
+
+    let ds = defer System.NetworkFetch(url="api.data", latency="20") deadline 50ms
+    await(ds)
+
+    debug("pending or fetched status cannot be consumed before split")
+  }
+
+  routine process_data(peek value) taking 5ms {
+    let out = value
+    yield out
+  }
+}
+
+@10ms: {
+  split main into [w1,w2]
+}
+
+@w1: {
+  isolate worker1 {
+    require System.Log
+    match entropy(ds) {
+      Valid(v1): {
+        let w1_out = call process_data(v1)
+        print(v1)
+        require System.Log(message=w1_out)
+        yield w1_out
+      }
+      Pending(p): {
+        let w1_out = "pending"
+        require System.Log(message=w1_out)
+        yield w1_out
+      }
+      Consumed: {
+        let w1_out = "consumed"
+        require System.Log(message=w1_out)
+        yield w1_out
+      }
+    }
+  }
+}
+
+@w2: {
+  isolate worker2 {
+    require System.Log
+    match entropy(ds) {
+      Valid(v2): {
+        let w2_out = call process_data(v2)
+        print(v2)
+        require System.Log(message=w2_out)
+        yield w2_out
+      }
+      Pending(p): {
+        let w2_out = "pending"
+        require System.Log(message=w2_out)
+        yield w2_out
+      }
+      Consumed: {
+        let w2_out = "consumed"
+        require System.Log(message=w2_out)
+        yield w2_out
+      }
+    }
+  }
+}
+
+@20ms: {
+  merge [w1,w2] into main resolving(w1=w1,w2=w2)
+
+  isolate merge_logger {
+    require System.Log
+    let ready = "ok"
+    require System.Log(message=w1)
+    require System.Log(message=w2)
+  }
+}
+    "#;
+    let program = parser::parse_ictl(source)?;
+    let ir = ictl_frontend::ir::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.NetworkFetch", |_params| Ok(()));
+
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}

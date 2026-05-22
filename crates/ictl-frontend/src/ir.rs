@@ -1,4 +1,4 @@
-use ictl_core::{BinaryOperator, Expression, Program, Statement, TimeCoordinate};
+use ictl_core::{Expression, Program, Statement, TimeCoordinate};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,240 +17,256 @@ pub struct IrSelectCase {
     pub target: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Instruction {
-    // Arithmetic & Logic
-    BinaryOp {
-        dest: Reg,
-        op: BinaryOperator,
-        left: Reg,
-        right: Reg,
-    },
+#[macro_export]
+macro_rules! instructions {
+    ($macro:ident) => {
+        $macro! {
+            // Arithmetic & Logic
+            BinaryOp {
+                dest: $crate::ir::Reg,
+                op: ictl_core::BinaryOperator,
+                left: $crate::ir::Reg,
+                right: $crate::ir::Reg
+            },
 
-    // Data Movement
-    LoadInt {
-        dest: Reg,
-        value: i64,
-    },
-    LoadBool {
-        dest: Reg,
-        value: bool,
-    },
-    LoadString {
-        dest: Reg,
-        value: String,
-    },
-    LoadNull {
-        dest: Reg,
-    },
-    Move {
-        dest: Reg,
-        src: Reg,
-    },
+            // Data Movement
+            LoadInt {
+                dest: $crate::ir::Reg,
+                value: i64
+            },
+            LoadBool {
+                dest: $crate::ir::Reg,
+                value: bool
+            },
+            LoadString {
+                dest: $crate::ir::Reg,
+                value: String
+            },
+            LoadNull {
+                dest: $crate::ir::Reg
+            },
+            Move {
+                dest: $crate::ir::Reg,
+                src: $crate::ir::Reg
+            },
 
-    // Entropic Operations
-    Consume {
-        src: Reg,
-    },
-    ConsumeField {
-        src: Reg,
-        field: String,
-    },
-    ConsumeFieldDynamic {
-        target: Reg,
-        index: Reg,
-    },
-    Clone {
-        dest: Reg,
-        src: Reg,
-    },
+            // Entropic Operations
+            Consume {
+                src: $crate::ir::Reg
+            },
+            ConsumeField {
+                src: $crate::ir::Reg,
+                field: String
+            },
+            ConsumeFieldDynamic {
+                target: $crate::ir::Reg,
+                index: $crate::ir::Reg
+            },
+            Clone {
+                dest: $crate::ir::Reg,
+                src: $crate::ir::Reg
+            },
 
-    // Control Flow
-    Jump {
-        target: usize,
-    },
-    JumpIf {
-        cond: Reg,
-        target: usize,
-    },
-    JumpIfNot {
-        cond: Reg,
-        target: usize,
-    },
-    Call {
-        routine: String,
-        args: Vec<Reg>,
-        dest: Reg,
-    },
-    Return {
-        src: Option<Reg>,
-    },
+            // Control Flow
+            Jump {
+                target: usize
+            },
+            JumpIf {
+                cond: $crate::ir::Reg,
+                target: usize
+            },
+            JumpIfNot {
+                cond: $crate::ir::Reg,
+                target: usize
+            },
+            Call {
+                routine: String,
+                args: Vec<$crate::ir::Reg>,
+                dest: $crate::ir::Reg
+            },
+            Return {
+                src: Option<$crate::ir::Reg>
+            },
 
-    // ICTL Temporal & Isolated Concurrency
-    Isolate {
-        name: String,
-        manifest: ictl_core::Manifest,
-    },
-    EndIsolate,
-    Split {
-        parent: String,
-        branches: Vec<String>,
-    },
-    Merge {
-        branches: Vec<String>,
-        target: String,
-        resolution: ictl_core::MergeResolution,
-    },
-    Entangle {
-        regs: Vec<Reg>,
-    },
-    Anchor {
-        name: String,
-    },
-    Rewind {
-        target: String,
-        anchor: String,
-    },
-    Commit {
-        vars: Vec<String>,
-    }, // Variables to commit back
-    Watchdog {
-        target: String,
-        timeout_ms: u64,
-        recovery_jump: Option<usize>,
-    },
-    Speculate {
-        max_ms: u64,
-        fallback_target: usize,
-    },
-    EndSpeculate {
-        max_ms: u64,
-        fallback_target: usize,
-    },
-    Collapse,
-    Select {
-        max_ms: u64,
-        cases: Vec<IrSelectCase>,
-        timeout_target: Option<usize>,
-    },
-    MatchEntropy {
-        target: Reg,
-        valid_target: Option<usize>,
-        decayed_target: Option<usize>,
-        pending_target: Option<usize>,
-        consumed_target: Option<usize>,
-    },
-    RelativisticBlock {
-        target: String,
-        block_pc: usize,
-        block_len: usize,
-    },
-    SpeculationMode {
-        mode: ictl_core::SpeculationCommitMode,
-    },
+            // ICTL Temporal & Isolated Concurrency
+            Isolate {
+                name: String,
+                manifest: ictl_core::Manifest
+            },
+            EndIsolate,
+            Split {
+                parent: String,
+                branches: Vec<String>
+            },
+            Merge {
+                branches: Vec<String>,
+                target: String,
+                resolution: ictl_core::MergeResolution
+            },
+            Entangle {
+                regs: Vec<$crate::ir::Reg>
+            },
+            Anchor {
+                name: String
+            },
+            Rewind {
+                target: String,
+                anchor: String
+            },
+            Commit {
+                vars: Vec<String>
+            },
+            Watchdog {
+                target: String,
+                timeout_ms: u64,
+                recovery_jump: Option<usize>
+            },
+            Speculate {
+                max_ms: u64,
+                fallback_target: usize
+            },
+            EndSpeculate {
+                max_ms: u64,
+                fallback_target: usize
+            },
+            Collapse,
+            Select {
+                max_ms: u64,
+                cases: Vec<$crate::ir::IrSelectCase>,
+                timeout_target: Option<usize>
+            },
+            MatchEntropy {
+                target: $crate::ir::Reg,
+                valid_target: Option<usize>,
+                decayed_target: Option<usize>,
+                pending_target: Option<usize>,
+                consumed_target: Option<usize>
+            },
+            RelativisticBlock {
+                target: String,
+                block_pc: usize,
+                block_len: usize
+            },
+            SpeculationMode {
+                mode: ictl_core::SpeculationCommitMode
+            },
 
-    // Channels & Communication
-    OpenChan {
-        name: String,
-        capacity: usize,
-    },
-    ChanSend {
-        chan_id: String,
-        src: Reg,
-    },
-    ChanRecv {
-        dest: Reg,
-        chan_id: String,
-    },
+            // Channels & Communication
+            OpenChan {
+                name: String,
+                capacity: usize
+            },
+            ChanSend {
+                chan_id: String,
+                src: $crate::ir::Reg
+            },
+            ChanRecv {
+                dest: $crate::ir::Reg,
+                chan_id: String
+            },
 
-    // Structural Access
-    StructLit {
-        dest: Reg,
-        fields: HashMap<String, Reg>,
-        type_name: Option<String>,
-    },
-    TopologyLit {
-        dest: Reg,
-        fields: HashMap<String, Reg>,
-    },
-    ArrayLit {
-        dest: Reg,
-        elements: Vec<Reg>,
-    },
-    FieldAccess {
-        dest: Reg,
-        target: Reg,
-        field: String,
-    },
-    FieldUpdate {
-        target: Reg,
-        field: String,
-        src: Reg,
-    },
-    IndexAccess {
-        dest: Reg,
-        target: Reg,
-        index: Reg,
-    },
-    IndexFieldUpdate {
-        target: Reg,
-        index: Reg,
-        field: String,
-        src: Reg,
-    },
-    // Misc
-    Print {
-        src: Reg,
-    },
-    Debug {
-        src: Reg,
-    },
-    AssertTime {
-        op: BinaryOperator,
-        limit_ms: u64,
-    },
-    Slice {
-        ms: u64,
-    },
-    Break,
-    LoopTick,
-    EndLoopTick,
-    Capability {
-        cap: ictl_core::Capability,
-    },
-    For {
-        item_name: String,
-        mode: ictl_core::ForMode,
-        source: Reg,
-        body: Vec<Instruction>,
-        pacing_ms: Option<u64>,
-        max_ms: Option<u64>,
-    },
-    SplitMap {
-        item_name: String,
-        mode: ictl_core::ForMode,
-        source: Reg,
-        body: Vec<Instruction>,
-        reconcile: Option<ictl_core::MergeResolution>,
-    },
-    Defer {
-        dest: Reg,
-        cap: ictl_core::Capability,
-        deadline_ms: u64,
-    },
-    Await {
-        target: Reg,
-    },
-    Loop {
-        max_ms: u64,
-    },
-    EndLoop {
-        max_ms: u64,
-    },
-    NetworkRequest {
-        domain: String,
-    },
+            // Structural Access
+            StructLit {
+                dest: $crate::ir::Reg,
+                fields: std::collections::HashMap<String, $crate::ir::Reg>,
+                type_name: Option<String>
+            },
+            TopologyLit {
+                dest: $crate::ir::Reg,
+                fields: std::collections::HashMap<String, $crate::ir::Reg>
+            },
+            ArrayLit {
+                dest: $crate::ir::Reg,
+                elements: Vec<$crate::ir::Reg>
+            },
+            FieldAccess {
+                dest: $crate::ir::Reg,
+                target: $crate::ir::Reg,
+                field: String
+            },
+            FieldUpdate {
+                target: $crate::ir::Reg,
+                field: String,
+                src: $crate::ir::Reg
+            },
+            IndexAccess {
+                dest: $crate::ir::Reg,
+                target: $crate::ir::Reg,
+                index: $crate::ir::Reg
+            },
+            IndexFieldUpdate {
+                target: $crate::ir::Reg,
+                index: $crate::ir::Reg,
+                field: String,
+                src: $crate::ir::Reg
+            },
+
+            // Misc
+            Print {
+                src: $crate::ir::Reg
+            },
+            Debug {
+                src: $crate::ir::Reg
+            },
+            AssertTime {
+                op: ictl_core::BinaryOperator,
+                limit_ms: u64
+            },
+            Slice {
+                ms: u64
+            },
+            Break,
+            LoopTick,
+            EndLoopTick,
+            Capability {
+                cap: ictl_core::Capability
+            },
+            For {
+                item_name: String,
+                mode: ictl_core::ForMode,
+                source: $crate::ir::Reg,
+                body: Vec<$crate::ir::Instruction>,
+                pacing_ms: Option<u64>,
+                max_ms: Option<u64>
+            },
+            SplitMap {
+                item_name: String,
+                mode: ictl_core::ForMode,
+                source: $crate::ir::Reg,
+                body: Vec<$crate::ir::Instruction>,
+                reconcile: Option<ictl_core::MergeResolution>
+            },
+            Defer {
+                dest: $crate::ir::Reg,
+                cap: ictl_core::Capability,
+                deadline_ms: u64
+            },
+            Await {
+                target: $crate::ir::Reg
+            },
+            Loop {
+                max_ms: u64
+            },
+            EndLoop {
+                max_ms: u64
+            },
+            NetworkRequest {
+                domain: String
+            }
+        }
+    };
 }
+
+macro_rules! define_instruction_enum {
+    ($($name:ident $({ $($field:ident: $type:ty),* })?),*) => {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum Instruction {
+            $($name $({ $($field: $type),* })?),*
+        }
+    };
+}
+
+instructions!(define_instruction_enum);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrProgram {

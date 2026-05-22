@@ -1,0 +1,220 @@
+use crate::vm::error::TemporalError;
+use crate::vm::state::Vm;
+use ictl_frontend::ir::Reg;
+
+#[allow(non_snake_case)]
+impl Vm {
+    pub(crate) fn Jump(
+        &mut self,
+        branch_id: &str,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.pc = target;
+        Ok(())
+    }
+
+    pub(crate) fn JumpIf(
+        &mut self,
+        branch_id: &str,
+        cond: Reg,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, cond.0)?;
+        if let ictl_core::value::Payload::Bool(true) = val {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn JumpIfNot(
+        &mut self,
+        branch_id: &str,
+        cond: Reg,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, cond.0)?;
+        if let ictl_core::value::Payload::Bool(false) = val {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn Call(
+        &mut self,
+        branch_id: &str,
+        routine: String,
+        args: Vec<Reg>,
+        dest: Reg,
+    ) -> Result<(), TemporalError> {
+        let routine_def = self
+            .routines
+            .get(&routine)
+            .ok_or_else(|| {
+                TemporalError::EvalError(format!("unknown routine {}", routine))
+            })?
+            .clone();
+        let params = routine_def.params.clone();
+
+        if args.len() != params.len() {
+            return Err(TemporalError::EvalError(format!(
+                "routine call expects {} args, got {}",
+                params.len(),
+                args.len()
+            )));
+        }
+
+        let mut arg_values = Vec::new();
+        for reg in &args {
+            let val = self.peek_reg(branch_id, reg.0)?;
+            arg_values.push(val);
+        }
+
+        // Consume arguments if needed
+        for (i, reg) in args.iter().enumerate() {
+            let (mode, _, _) = &params[i];
+            if let ictl_core::ParamMode::Consume = mode {
+                self.consume_reg(branch_id, reg.0)?;
+            }
+        }
+
+        let child_id = format!("__routine_{}_{}", routine, self.global_clock);
+        let mut child = crate::vm::state::Timeline::new(
+            child_id.clone(),
+            1024 * 1024,
+            self.global_clock,
+        );
+        child.instructions = routine_def.instructions.clone();
+
+        for (i, (mode, _name, _)) in params.iter().enumerate() {
+            let val = arg_values[i].clone();
+            match mode {
+                ictl_core::ParamMode::Consume
+                | ictl_core::ParamMode::Clone
+                | ictl_core::ParamMode::Peek => {
+                    child.arena.insert(
+                        i as u32,
+                        ictl_core::value::EntropicState::Valid(val),
+                    )?;
+                }
+                ictl_core::ParamMode::Decay => {
+                    child.arena.insert(
+                        i as u32,
+                        ictl_core::value::EntropicState::Valid(val),
+                    )?;
+                }
+            }
+        }
+
+        self.active_branches.insert(child_id.clone(), child);
+
+        while {
+            let b = self.get_branch_mut(&child_id)?;
+            b.pc < b.instructions.len()
+        } {
+            self.execute_instruction(&child_id)?;
+        }
+
+        let child_branch = self
+            .active_branches
+            .remove(&child_id)
+            .ok_or_else(|| TemporalError::BranchNotFound(child_id.clone()))?;
+
+        let result = child_branch
+            .arena
+            .peek(0)
+            .unwrap_or(ictl_core::value::Payload::String("void".to_string()));
+
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            ictl_core::value::EntropicState::Valid(result),
+        )
+    }
+
+    pub(crate) fn Return(
+        &mut self,
+        branch_id: &str,
+        src: Option<Reg>,
+    ) -> Result<(), TemporalError> {
+        let val = if let Some(reg) = src {
+            self.peek_reg(branch_id, reg.0)
+                .unwrap_or(ictl_core::value::Payload::Null)
+        } else {
+            ictl_core::value::Payload::Null
+        };
+        let branch = self.get_branch_mut(branch_id)?;
+        branch
+            .arena
+            .insert(0, ictl_core::value::EntropicState::Valid(val))?;
+        branch.pc = branch.instructions.len();
+        Ok(())
+    }
+
+    pub(crate) fn Select(
+        &mut self,
+        branch_id: &str,
+        _max_ms: u64,
+        cases: Vec<ictl_frontend::ir::IrSelectCase>,
+        timeout_target: Option<usize>,
+    ) -> Result<(), TemporalError> {
+        let mut found_case = None;
+        for case in &cases {
+            let message = {
+                if let Some(chan) = self.channels.get_mut(&case.chan_id) {
+                    chan.pop_front()
+                } else {
+                    None
+                }
+            };
+
+            if let Some(msg) = message {
+                found_case = Some((case.clone(), msg));
+                break;
+            }
+        }
+
+        if let Some((case, msg)) = found_case {
+            self.insert_reg(
+                branch_id,
+                case.dest.0,
+                ictl_core::value::EntropicState::Valid(msg.payload),
+            )?;
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = case.target;
+        } else if let Some(target) = timeout_target {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn MatchEntropy(
+        &mut self,
+        branch_id: &str,
+        target: Reg,
+        valid_target: Option<usize>,
+        decayed_target: Option<usize>,
+        pending_target: Option<usize>,
+        consumed_target: Option<usize>,
+    ) -> Result<(), TemporalError> {
+        let state = self.peek_state(branch_id, target.0)?;
+        let maybe_jump = match state {
+            ictl_core::value::EntropicState::Valid(_) => valid_target,
+            ictl_core::value::EntropicState::Decayed(_) => decayed_target,
+            ictl_core::value::EntropicState::Pending(_) => pending_target,
+            ictl_core::value::EntropicState::Consumed => consumed_target,
+        };
+
+        if let Some(target_pc) = maybe_jump {
+            println!("[DEBUG] MatchEntropy jumping to PC {}", target_pc);
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target_pc;
+        } else {
+            println!("[DEBUG] MatchEntropy NO JUMP for state {:?}", state);
+        }
+        Ok(())
+    }
+}

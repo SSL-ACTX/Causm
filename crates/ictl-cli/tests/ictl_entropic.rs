@@ -342,3 +342,85 @@ fn ictl_entropic_topographical_merge_union_on_invalid_clause() -> anyhow::Result
 
     Ok(())
 }
+
+#[test]
+fn ictl_entropic_topology2_dynamic_index_assignment_and_rewind() -> anyhow::Result<()>
+{
+    let source = r#"
+@0ms: {
+    let account = topology { 
+        "balance": 100,
+        "status": "active" 
+    }
+    
+    split main into [thief, banker]
+}
+
+@5ms: {
+    @thief: {
+        anchor base
+        // We MUST wrap this in an isolate to use Capabilities
+        isolate thief_isolate {
+            require System.Log
+            let cash = account["balance"]
+            require System.Log(message="Thief: I took the balance")
+        }
+    }
+
+    @banker: {
+        isolate banker_isolate {
+            require System.Log
+            account["status"] = "frozen"
+            require System.Log(message="Banker: Freezing account")
+        }
+    }
+}
+
+@10ms: {
+    merge [thief, banker] into main resolving (
+        account: topology_union {
+            "balance": priority(thief),
+            "status": priority(banker),
+            "_": decay
+            on_invalid: rewind thief to base
+        }
+    )
+
+    isolate result_check {
+        require System.Log
+        match entropy(account["balance"]) {
+            Valid(v): require System.Log(message="Restored")
+            Consumed: require System.Log(message="Balance is gone")
+            Decayed(d): require System.Log(message="Partial decay")
+        }
+    }
+}
+    "#;
+    let program = parser::parse_ictl(source)?;
+    let ir = ictl_frontend::ir::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.register_capability("System.Log", |_params| Ok(()));
+
+    vm.execute_program(&ir)?;
+
+    // We expect the original topology balance to be restored due to the rewind
+    let account_reg = ir.symbols.get("account").expect("account not found").0;
+    let account_val = vm.root_timeline.arena.peek(account_reg);
+    match account_val {
+        Some(Payload::Topology(fields)) => {
+            let balance = fields.get("balance").expect("balance missing");
+            match balance {
+                ictl_core::value::EntropicState::Valid(Payload::Integer(v)) => {
+                    assert_eq!(*v, 100)
+                }
+                _ => panic!("Expected restored balance=100"),
+            }
+        }
+        _ => panic!("Expected topology"),
+    }
+
+    Ok(())
+}

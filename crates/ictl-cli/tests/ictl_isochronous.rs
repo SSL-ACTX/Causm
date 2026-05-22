@@ -86,3 +86,57 @@ fn ictl_isochronous_tick_loop_double_buffered_channels() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn ictl_isochronous_matrix_complex_integration() -> anyhow::Result<()> {
+    let source = r#"
+@0ms: {
+  isolate hft_pipeline {
+    require System.Log
+    enable system_log(1)
+    enable memory(5KB)
+    slice 20ms
+    open_chan signal_bus(8)
+
+    // Tick 1: market reader produces latest price signal
+    loop tick {
+      let price = 123
+      chan_send signal_bus(price)
+      break
+    }
+
+    // Tick 2: strategy consumer processes the previous tick's signal
+    loop tick {
+      let signal = chan_recv(signal_bus)
+      let out = signal
+      break
+    }
+
+    // Tick 3: publish execution outcome
+    loop tick {
+      let result = out
+      print(result)
+      break
+    }
+  }
+}
+    "#;
+    let program = parser::parse_ictl(source)?;
+    let ir = ictl_frontend::ir::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.register_capability("System.Log", |_params| Ok(()));
+
+    vm.execute_program(&ir)?;
+
+    // Check that we got the output of 123
+    let result_reg = ir.symbols.get("result").expect("result not found").0;
+    match vm.root_timeline.arena.peek(result_reg) {
+        Some(Payload::Integer(v)) => assert_eq!(v, 123),
+        _ => panic!("Expected result=123"),
+    }
+
+    Ok(())
+}

@@ -130,6 +130,15 @@ fn main() -> anyhow::Result<()> {
                 }
                 Ok(())
             });
+            vm.register_capability("System.NetworkFetch", |params| {
+                if let Some(url) = params.get("url") {
+                    println!(
+                        "\x1b[1;34m[System.NetworkFetch]\x1b[0m Fetching {}",
+                        url
+                    );
+                }
+                Ok(())
+            });
 
             if let Err(e) = vm.execute_program(&ir_program) {
                 eprintln!(

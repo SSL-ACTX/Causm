@@ -119,6 +119,7 @@ impl Vm {
             Statement::Await(_) => 1,
             Statement::Break => 0,
             Statement::Entangle { .. } => 0,
+            Statement::Return(_) => 0,
         };
 
         base + extra

@@ -1,5 +1,4 @@
 // src/ast.rs
-use std::collections::HashMap;
 
 pub mod types;
 pub mod value;
@@ -64,152 +63,215 @@ pub struct ParamDecl {
     pub typ: Option<TypeName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Statement {
-    Isolate(IsolateBlock),
-    Split {
-        parent: String,
-        branches: Vec<String>,
-    },
-    Merge {
-        branches: Vec<String>,
-        target: String,
-        resolutions: MergeResolution,
-    },
-    Anchor(String),
-    Rewind(String),
-    Commit(Vec<SpannedStatement>),
-    Assignment {
-        target: String,
-        mutable: bool,
-        var_type: Option<TypeName>,
-        expr: Expression,
-    },
-    TypeDecl {
-        name: String,
-        fields: HashMap<String, TypeName>,
-        decay_after_ms: Option<u64>,
-        scoped_branch: Option<String>,
-    },
-    DecayHandler {
-        type_name: String,
-        body: Vec<SpannedStatement>,
-    },
-    AssertTime {
-        operator: BinaryOperator,
-        limit_ms: u64,
-        fallback: Option<Vec<SpannedStatement>>,
-    },
-    #[allow(dead_code)]
-    Send {
-        value_id: String,
-        target_branch: String,
-    },
-    Expression(Expression),
-    Capability(Capability),
-    ChannelOpen {
-        name: String,
-        capacity: usize,
-    },
-    ChannelSend {
-        chan_id: String,
-        value_id: String,
-    },
-    RelativisticBlock {
-        time: TimeCoordinate,
-        body: Vec<SpannedStatement>,
-    },
-    NetworkRequest {
-        domain: String,
-    },
-    // target: the branch to monitor
-    // timeout_ms: the limit on the target branch's local_clock
-    // recovery: statements to run if the branch is terminated
-    Watchdog {
-        target: String,
-        timeout_ms: u64,
-        recovery: Vec<SpannedStatement>,
-    },
-    Speculate {
-        max_ms: u64,
-        body: Vec<SpannedStatement>,
-        fallback: Option<Vec<SpannedStatement>>,
-    },
-    Collapse,
-    SpeculationMode(SpeculationCommitMode),
-    Select {
-        max_ms: u64,
-        cases: Vec<SelectCase>,
-        timeout: Option<Vec<SpannedStatement>>,
-        reconcile: Option<MergeResolution>,
-    },
-    MatchEntropy {
-        target: Expression,
-        valid_branch: Option<(String, Vec<SpannedStatement>)>,
-        decayed_branch: Option<(String, Vec<SpannedStatement>)>,
-        pending_branch: Option<Vec<SpannedStatement>>,
-        consumed_branch: Option<Vec<SpannedStatement>>,
-    },
-    Await(String),
-    If {
-        condition: Expression,
-        then_branch: Vec<SpannedStatement>,
-        else_branch: Option<Vec<SpannedStatement>>,
-        reconcile: Option<MergeResolution>,
-    },
-    Break,
-    Inspect {
-        target: String,
-        body: Vec<SpannedStatement>,
-    },
-    Loop {
-        max_ms: u64,
-        body: Vec<SpannedStatement>,
-    },
-    LoopTick {
-        body: Vec<SpannedStatement>,
-    },
-    Slice {
-        milliseconds: u64,
-    },
-    For {
-        item_name: String,
-        mode: ForMode,
-        source: String,
-        body: Vec<SpannedStatement>,
-        pacing_ms: Option<u64>,
-        max_ms: Option<u64>,
-    },
-    SplitMap {
-        item_name: String,
-        mode: ForMode,
-        source: String,
-        body: Vec<SpannedStatement>,
-        reconcile: Option<MergeResolution>,
-    },
-    Yield(String),
-    Print(Expression),
-    Debug(Expression),
-    RoutineDef {
-        name: String,
-        params: Vec<ParamDecl>,
-        return_type: Option<TypeName>,
-        taking_ms: Option<u64>,
-        body: Vec<SpannedStatement>,
-    },
-    AcausalReset {
-        target: String,
-        anchor_name: String,
-    },
-    Entangle {
-        variables: Vec<String>,
-    },
-    FieldUpdate {
-        target: Expression,
-        field: String,
-        value: Expression,
-    },
+#[macro_export]
+macro_rules! statements {
+    ($macro:ident) => {
+        $macro! {
+            Isolate(IsolateBlock),
+            Split {
+                parent: String,
+                branches: Vec<String>
+            },
+            Merge {
+                branches: Vec<String>,
+                target: String,
+                resolutions: MergeResolution
+            },
+            Anchor(String),
+            Rewind(String),
+            Commit(Vec<SpannedStatement>),
+            Assignment {
+                target: String,
+                mutable: bool,
+                var_type: Option<TypeName>,
+                expr: Expression
+            },
+            TypeDecl {
+                name: String,
+                fields: std::collections::HashMap<String, TypeName>,
+                decay_after_ms: Option<u64>,
+                scoped_branch: Option<String>
+            },
+            DecayHandler {
+                type_name: String,
+                body: Vec<SpannedStatement>
+            },
+            AssertTime {
+                operator: BinaryOperator,
+                limit_ms: u64,
+                fallback: Option<Vec<SpannedStatement>>
+            },
+            Send {
+                value_id: String,
+                target_branch: String
+            },
+            Expression(Expression),
+            Capability(Capability),
+            ChannelOpen {
+                name: String,
+                capacity: usize
+            },
+            ChannelSend {
+                chan_id: String,
+                value_id: String
+            },
+            RelativisticBlock {
+                time: TimeCoordinate,
+                body: Vec<SpannedStatement>
+            },
+            NetworkRequest {
+                domain: String
+            },
+            Watchdog {
+                target: String,
+                timeout_ms: u64,
+                recovery: Vec<SpannedStatement>
+            },
+            Speculate {
+                max_ms: u64,
+                body: Vec<SpannedStatement>,
+                fallback: Option<Vec<SpannedStatement>>
+            },
+            Collapse,
+            SpeculationMode(SpeculationCommitMode),
+            Select {
+                max_ms: u64,
+                cases: Vec<SelectCase>,
+                timeout: Option<Vec<SpannedStatement>>,
+                reconcile: Option<MergeResolution>
+            },
+            MatchEntropy {
+                target: Expression,
+                valid_branch: Option<(String, Vec<SpannedStatement>)>,
+                decayed_branch: Option<(String, Vec<SpannedStatement>)>,
+                pending_branch: Option<Vec<SpannedStatement>>,
+                consumed_branch: Option<Vec<SpannedStatement>>
+            },
+            Await(String),
+            If {
+                condition: Expression,
+                then_branch: Vec<SpannedStatement>,
+                else_branch: Option<Vec<SpannedStatement>>,
+                reconcile: Option<MergeResolution>
+            },
+            Break,
+            Inspect {
+                target: String,
+                body: Vec<SpannedStatement>
+            },
+            Loop {
+                max_ms: u64,
+                body: Vec<SpannedStatement>
+            },
+            LoopTick {
+                body: Vec<SpannedStatement>
+            },
+            Slice {
+                milliseconds: u64
+            },
+            For {
+                item_name: String,
+                mode: ForMode,
+                source: String,
+                body: Vec<SpannedStatement>,
+                pacing_ms: Option<u64>,
+                max_ms: Option<u64>
+            },
+            SplitMap {
+                item_name: String,
+                mode: ForMode,
+                source: String,
+                body: Vec<SpannedStatement>,
+                reconcile: Option<MergeResolution>
+            },
+            Yield(String),
+            Print(Expression),
+            Debug(Expression),
+            RoutineDef {
+                name: String,
+                params: Vec<ParamDecl>,
+                return_type: Option<TypeName>,
+                taking_ms: Option<u64>,
+                body: Vec<SpannedStatement>
+            },
+            Return(Option<String>),
+            AcausalReset {
+                target: String,
+                anchor_name: String
+            },
+            Entangle {
+                variables: Vec<String>
+            },
+            FieldUpdate {
+                target: Expression,
+                field: String,
+                value: Expression
+            }
+        }
+    };
 }
+
+macro_rules! define_statement_enum {
+    ($($name:ident $({ $($field:ident: $type:ty),* })? $(( $($tuple_type:ty),* ))?),*) => {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum Statement {
+            $($name $({ $($field: $type),* })? $(( $($tuple_type),* ))?),*
+        }
+    };
+}
+
+statements!(define_statement_enum);
+
+#[macro_export]
+macro_rules! expressions {
+    ($macro:ident) => {
+        $macro! {
+            Call {
+                routine: String,
+                args: Vec<Expression>
+            },
+            Literal(String),
+            Identifier(String),
+            FieldAccess {
+                target: Box<Expression>,
+                field: String
+            },
+            CloneOp(String),
+            StructLit(Option<String>, std::collections::HashMap<String, Expression>),
+            TopologyLit(std::collections::HashMap<String, Expression>),
+            IndexAccess {
+                target: Box<Expression>,
+                index: Box<Expression>
+            },
+            ArrayLiteral(Vec<Expression>),
+            ChannelReceive(String),
+            Integer(i64),
+            Boolean(bool),
+            BinaryOp {
+                left: Box<Expression>,
+                op: BinaryOperator,
+                right: Box<Expression>
+            },
+            Deferred {
+                capability: String,
+                params: std::collections::HashMap<String, String>,
+                deadline_ms: u64
+            },
+            Null
+        }
+    };
+}
+
+macro_rules! define_expression_enum {
+    ($($name:ident $({ $($field:ident: $type:ty),* })? $(( $($tuple_type:ty),* ))?),*) => {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum Expression {
+            $($name $({ $($field: $type),* })? $(( $($tuple_type),* ))?),*
+        }
+    };
+}
+
+expressions!(define_expression_enum);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsolateBlock {
@@ -222,7 +284,7 @@ pub struct IsolateBlock {
 pub struct Manifest {
     pub cpu_budget_ms: Option<u64>,
     pub memory_budget_bytes: Option<u64>,
-    pub resource_budgets: HashMap<String, u64>,
+    pub resource_budgets: std::collections::HashMap<String, u64>,
     pub capabilities: Vec<Capability>,
     pub mode: Option<EntropyMode>,
 }
@@ -230,12 +292,12 @@ pub struct Manifest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Capability {
     pub path: String,
-    pub parameters: HashMap<String, String>,
+    pub parameters: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeResolution {
-    pub rules: HashMap<String, ResolutionStrategy>,
+    pub rules: std::collections::HashMap<String, ResolutionStrategy>,
     pub auto: bool,
     pub fallback: Option<Vec<SpannedStatement>>,
     pub taking_ms: Option<u64>,
@@ -256,12 +318,12 @@ pub enum ResolutionStrategy {
     Auto,
     Custom(String),
     TopologyUnion {
-        key_rules: HashMap<String, ResolutionStrategy>,
+        key_rules: std::collections::HashMap<String, ResolutionStrategy>,
         default: Box<ResolutionStrategy>,
         on_invalid: Option<CausalReversion>,
     },
     TopologyIntersect {
-        key_rules: HashMap<String, ResolutionStrategy>,
+        key_rules: std::collections::HashMap<String, ResolutionStrategy>,
         default: Box<ResolutionStrategy>,
         on_invalid: Option<CausalReversion>,
     },
@@ -304,42 +366,6 @@ pub enum ParamMode {
     Clone,
     Decay,
     Peek,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Expression {
-    Call {
-        routine: String,
-        args: Vec<Expression>,
-    },
-    Literal(String),
-    Identifier(String),
-    FieldAccess {
-        target: Box<Expression>,
-        field: String,
-    },
-    CloneOp(String),
-    StructLit(Option<String>, HashMap<String, Expression>),
-    TopologyLit(HashMap<String, Expression>),
-    IndexAccess {
-        target: Box<Expression>,
-        index: Box<Expression>,
-    },
-    ArrayLiteral(Vec<Expression>),
-    ChannelReceive(String),
-    Integer(i64),
-    Boolean(bool),
-    BinaryOp {
-        left: Box<Expression>,
-        op: BinaryOperator,
-        right: Box<Expression>,
-    },
-    Deferred {
-        capability: String,
-        params: HashMap<String, String>,
-        deadline_ms: u64,
-    },
-    Null,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
