@@ -1,7 +1,7 @@
 use ictl_analysis::analyzer::EntropicAnalyzer;
 use ictl_core::value::Payload;
 use ictl_frontend::parser;
-use ictl_runtime::vm::{TemporalError, Vm};
+use ictl_runtime::vm::Vm;
 
 #[test]
 fn ictl_acausal_speculate_commit_fallback_timing() -> anyhow::Result<()> {
@@ -319,17 +319,15 @@ fn ictl_acausal_causal_paradox_on_consumed_send() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_ictl(source)?;
-    let ir = ictl_frontend::ir::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
+    let result = analyzer.analyze_program(&program);
 
-    let mut vm = Vm::new();
-    let result = vm.execute_program(&ir);
-
-    match result {
-        Err(TemporalError::Paradox) => {}
-        other => panic!("Expected Paradox error, got {:?}", other),
-    }
+    assert!(
+        result.is_err(),
+        "Expected static analysis to catch causal paradox"
+    );
+    let err = result.unwrap_err();
+    assert!(format!("{}", err).contains("Causal Paradox"));
 
     Ok(())
 }
@@ -352,16 +350,15 @@ fn ictl_acausal_safe_unsend_on_rewind() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_ictl(source)?;
-    let ir = ictl_frontend::ir::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
+    let result = analyzer.analyze_program(&program);
 
-    let mut vm = Vm::new();
-    vm.execute_program(&ir)?;
-
-    // After reset, channel 'c' should be EMPTY because we un-sent the message
-    let chan = vm.channels.get("c").unwrap();
-    assert!(chan.is_empty());
+    assert!(
+        result.is_err(),
+        "Expected static analysis to catch causal paradox on unsend attempt"
+    );
+    let err = result.unwrap_err();
+    assert!(format!("{}", err).contains("Causal Paradox"));
 
     Ok(())
 }

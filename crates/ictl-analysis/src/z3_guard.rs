@@ -2,15 +2,21 @@ use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use ictl_core::{
     BinaryOperator, Expression, IsolateBlock, Program, SpannedStatement, Statement,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use z3::{ast::Ast, ast::Bool, ast::Int, Context, Solver};
 
 pub struct FormalVerifier<'a> {
     ctx: &'a Context,
     solver: Solver<'a>,
     analyzer: &'a EntropicAnalyzer,
+    // Maps variable name to its "is_valid" boolean in Z3
     variable_validity: HashMap<String, Bool<'a>>,
     variable_leased: HashMap<String, Bool<'a>>,
+    anchors: HashMap<String, Int<'a>>,
+    causal_horizon: Int<'a>,
+    // Entanglement groups: list of sets of variable names that share entropic state
+    entanglements: Vec<HashSet<String>>,
+    current_slice_ms: Option<u64>,
 }
 
 impl<'a> FormalVerifier<'a> {
@@ -21,14 +27,23 @@ impl<'a> FormalVerifier<'a> {
             analyzer,
             variable_validity: HashMap::new(),
             variable_leased: HashMap::new(),
+            anchors: HashMap::new(),
+            causal_horizon: Int::from_u64(ctx, 0),
+            entanglements: Vec::new(),
+            current_slice_ms: None,
         }
     }
 
     pub fn verify(&mut self, program: &Program) -> Result<(), SemanticError> {
         self.solver.reset();
+        self.variable_validity.clear();
+        self.variable_leased.clear();
+        self.anchors.clear();
+        self.causal_horizon = Int::from_u64(self.ctx, 0);
+        self.entanglements.clear();
+        self.current_slice_ms = None;
+
         for timeline in &program.timelines {
-            self.variable_validity.clear();
-            self.variable_leased.clear();
             let mut clock = Int::from_u64(self.ctx, 0);
             for spanned in &timeline.statements {
                 clock = self.verify_statement(
@@ -54,7 +69,7 @@ impl<'a> FormalVerifier<'a> {
 
         match &spanned.stmt {
             Statement::Assignment { target, expr, .. } => {
-                self.verify_expression(expr, path_condition)?;
+                self.verify_expression(expr, path_condition, &current_clock)?;
                 let is_valid = Bool::new_const(
                     self.ctx,
                     format!("{}_valid_{}", target, spanned.span.start),
@@ -75,14 +90,77 @@ impl<'a> FormalVerifier<'a> {
             Statement::ChannelSend { value_id, .. } | Statement::Yield(value_id) => {
                 self.check_available(value_id, path_condition)?;
                 self.check_not_leased(value_id, path_condition)?;
+                self.consume_variable(value_id, path_condition, spanned.span.start);
 
-                let new_valid = Bool::new_const(
-                    self.ctx,
-                    format!("{}_consumed_{}", value_id, spanned.span.start),
-                );
-                self.solver
-                    .assert(&path_condition.implies(&new_valid.not()));
-                self.variable_validity.insert(value_id.clone(), new_valid);
+                if matches!(&spanned.stmt, Statement::ChannelSend { .. }) {
+                    let new_horizon = Int::new_const(
+                        self.ctx,
+                        format!("horizon_{}", spanned.span.start),
+                    );
+                    self.solver.assert(
+                        &path_condition.implies(&new_horizon._eq(&current_clock)),
+                    );
+                    self.solver.assert(
+                        &path_condition
+                            .not()
+                            .implies(&new_horizon._eq(&self.causal_horizon)),
+                    );
+                    self.causal_horizon = new_horizon;
+                }
+                Ok(current_clock)
+            }
+            Statement::RelativisticBlock { body, .. } => {
+                let mut block_clock = current_clock.clone();
+                for stmt in body {
+                    block_clock =
+                        self.verify_statement(stmt, path_condition, &block_clock)?;
+                }
+                Ok(block_clock)
+            }
+            Statement::Split { .. } => Ok(current_clock),
+            Statement::Merge { .. } => Ok(current_clock),
+            Statement::Entangle { variables } => {
+                let mut new_set = HashSet::new();
+                for v in variables {
+                    new_set.insert(v.clone());
+                }
+                let mut merged_set = new_set;
+                let mut i = 0;
+                while i < self.entanglements.len() {
+                    if self.entanglements[i].iter().any(|v| merged_set.contains(v)) {
+                        merged_set.extend(self.entanglements.remove(i));
+                    } else {
+                        i += 1;
+                    }
+                }
+                self.entanglements.push(merged_set);
+                Ok(current_clock)
+            }
+            Statement::Anchor(name) => {
+                self.anchors.insert(name.clone(), current_clock.clone());
+                Ok(current_clock)
+            }
+            Statement::Rewind(name)
+            | Statement::AcausalReset {
+                anchor_name: name, ..
+            } => {
+                if let Some(anchor_time) = self.anchors.get(name) {
+                    let paradox = anchor_time.lt(&self.causal_horizon);
+                    self.solver.push();
+                    self.solver
+                        .assert(&Bool::and(self.ctx, &[path_condition, &paradox]));
+                    if self.solver.check() == z3::SatResult::Sat {
+                        self.solver.pop(1);
+                        return Err(self.analyzer.annotate(SemanticErrorKind::EntropyMismatch(
+                            format!("Causal Paradox: Rewind to '{}' violates causal horizon", name)
+                        )));
+                    }
+                    self.solver.pop(1);
+                } else {
+                    return Err(self.analyzer.annotate(
+                        SemanticErrorKind::UndefinedVariable(name.clone()),
+                    ));
+                }
                 Ok(current_clock)
             }
             Statement::Isolate(block) => {
@@ -97,9 +175,9 @@ impl<'a> FormalVerifier<'a> {
             } => {
                 let cond_bool =
                     self.evaluate_expression_as_bool(condition, path_condition);
-
                 let pre_if_validity = self.variable_validity.clone();
                 let pre_if_leased = self.variable_leased.clone();
+                let pre_if_horizon = self.causal_horizon.clone();
 
                 let then_pc = Bool::and(self.ctx, &[path_condition, &cond_bool]);
                 let mut then_clock = current_clock.clone();
@@ -109,9 +187,11 @@ impl<'a> FormalVerifier<'a> {
                 }
                 let post_then_validity = self.variable_validity.clone();
                 let post_then_leased = self.variable_leased.clone();
+                let post_then_horizon = self.causal_horizon.clone();
 
                 self.variable_validity = pre_if_validity.clone();
                 self.variable_leased = pre_if_leased.clone();
+                self.causal_horizon = pre_if_horizon;
                 let else_pc =
                     Bool::and(self.ctx, &[path_condition, &cond_bool.not()]);
                 let mut else_clock = current_clock.clone();
@@ -123,6 +203,7 @@ impl<'a> FormalVerifier<'a> {
                 }
                 let post_else_validity = self.variable_validity.clone();
                 let post_else_leased = self.variable_leased.clone();
+                let post_else_horizon = self.causal_horizon.clone();
 
                 let mut merged_validity = HashMap::new();
                 let mut merged_leased = HashMap::new();
@@ -131,7 +212,6 @@ impl<'a> FormalVerifier<'a> {
                     let v_else = post_else_validity.get(var).unwrap();
                     let l_then = post_then_leased.get(var).unwrap();
                     let l_else = post_else_leased.get(var).unwrap();
-
                     let m_v = Bool::new_const(
                         self.ctx,
                         format!("{}_m_v_{}", var, spanned.span.start),
@@ -139,7 +219,6 @@ impl<'a> FormalVerifier<'a> {
                     self.solver
                         .assert(&m_v._eq(&Bool::ite(&cond_bool, v_then, v_else)));
                     merged_validity.insert(var.clone(), m_v);
-
                     let m_l = Bool::new_const(
                         self.ctx,
                         format!("{}_m_l_{}", var, spanned.span.start),
@@ -150,6 +229,14 @@ impl<'a> FormalVerifier<'a> {
                 }
                 self.variable_validity = merged_validity;
                 self.variable_leased = merged_leased;
+                let m_h =
+                    Int::new_const(self.ctx, format!("h_m_{}", spanned.span.start));
+                self.solver.assert(&m_h._eq(&Bool::ite(
+                    &cond_bool,
+                    &post_then_horizon,
+                    &post_else_horizon,
+                )));
+                self.causal_horizon = m_h;
 
                 let max_clock = Int::new_const(
                     self.ctx,
@@ -165,7 +252,11 @@ impl<'a> FormalVerifier<'a> {
                     loop_clock =
                         self.verify_statement(stmt, path_condition, &loop_clock)?;
                 }
-
+                let mut unroll_clock = loop_clock.clone();
+                for stmt in body {
+                    unroll_clock =
+                        self.verify_statement(stmt, path_condition, &unroll_clock)?;
+                }
                 let violation = loop_clock.gt(&Int::from_u64(self.ctx, *max_ms));
                 self.solver.push();
                 self.solver
@@ -181,6 +272,133 @@ impl<'a> FormalVerifier<'a> {
                     self.ctx,
                     &[&current_clock, &Int::from_u64(self.ctx, *max_ms)],
                 ))
+            }
+            Statement::LoopTick { body } => {
+                let slice_ms = self.current_slice_ms.unwrap_or(0);
+                let mut loop_clock = Int::from_u64(self.ctx, 0);
+                for stmt in body {
+                    loop_clock =
+                        self.verify_statement(stmt, path_condition, &loop_clock)?;
+                }
+                let mut unroll_clock = loop_clock.clone();
+                for stmt in body {
+                    unroll_clock =
+                        self.verify_statement(stmt, path_condition, &unroll_clock)?;
+                }
+                Ok(Int::add(
+                    self.ctx,
+                    &[&current_clock, &Int::from_u64(self.ctx, slice_ms)],
+                ))
+            }
+            Statement::Slice { milliseconds } => {
+                self.current_slice_ms = Some(*milliseconds);
+                Ok(current_clock)
+            }
+            Statement::For {
+                item_name,
+                mode,
+                source,
+                body,
+                pacing_ms,
+                ..
+            } => {
+                if let ictl_core::ForMode::Consume = mode {
+                    self.check_available(source, path_condition)?;
+                    self.consume_variable(
+                        source,
+                        path_condition,
+                        spanned.span.start,
+                    );
+                }
+                let mut loop_clock = Int::from_u64(self.ctx, 0);
+                {
+                    let item_valid = Bool::new_const(
+                        self.ctx,
+                        format!("{}_v1_{}", item_name, spanned.span.start),
+                    );
+                    self.solver.assert(&path_condition.implies(&item_valid));
+                    self.variable_validity.insert(item_name.clone(), item_valid);
+                    for stmt in body {
+                        loop_clock = self.verify_statement(
+                            stmt,
+                            path_condition,
+                            &loop_clock,
+                        )?;
+                    }
+                }
+                {
+                    let item_valid = Bool::new_const(
+                        self.ctx,
+                        format!("{}_v2_{}", item_name, spanned.span.start),
+                    );
+                    self.solver.assert(&path_condition.implies(&item_valid));
+                    self.variable_validity.insert(item_name.clone(), item_valid);
+                    let mut unroll_clock = loop_clock.clone();
+                    for stmt in body {
+                        unroll_clock = self.verify_statement(
+                            stmt,
+                            path_condition,
+                            &unroll_clock,
+                        )?;
+                    }
+                }
+                self.variable_validity.remove(item_name);
+                if let Some(pacing) = pacing_ms {
+                    let violation = loop_clock.gt(&Int::from_u64(self.ctx, *pacing));
+                    self.solver.push();
+                    self.solver
+                        .assert(&Bool::and(self.ctx, &[path_condition, &violation]));
+                    if self.solver.check() == z3::SatResult::Sat {
+                        self.solver.pop(1);
+                        return Err(self
+                            .analyzer
+                            .annotate(SemanticErrorKind::PacingViolation));
+                    }
+                    self.solver.pop(1);
+                }
+                Ok(current_clock)
+            }
+            Statement::RoutineDef {
+                params,
+                taking_ms,
+                body,
+                ..
+            } => {
+                let mut routine_verifier =
+                    FormalVerifier::new(self.ctx, self.analyzer);
+                for p in params {
+                    let is_valid = Bool::new_const(
+                        self.ctx,
+                        format!("{}_p_{}", p.name, spanned.span.start),
+                    );
+                    routine_verifier
+                        .solver
+                        .assert(&is_valid._eq(&Bool::from_bool(self.ctx, true)));
+                    routine_verifier
+                        .variable_validity
+                        .insert(p.name.clone(), is_valid);
+                }
+                let mut body_clock = Int::from_u64(self.ctx, 0);
+                for stmt in body {
+                    body_clock = routine_verifier.verify_statement(
+                        stmt,
+                        &Bool::from_bool(self.ctx, true),
+                        &body_clock,
+                    )?;
+                }
+                if let Some(limit) = taking_ms {
+                    let violation = body_clock.gt(&Int::from_u64(self.ctx, *limit));
+                    routine_verifier.solver.push();
+                    routine_verifier.solver.assert(&violation);
+                    if routine_verifier.solver.check() == z3::SatResult::Sat {
+                        routine_verifier.solver.pop(1);
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(0, *limit),
+                        ));
+                    }
+                    routine_verifier.solver.pop(1);
+                }
+                Ok(current_clock)
             }
             Statement::AssertTime {
                 operator, limit_ms, ..
@@ -206,7 +424,6 @@ impl<'a> FormalVerifier<'a> {
                     }
                     _ => Bool::from_bool(self.ctx, false),
                 };
-
                 self.solver.push();
                 self.solver
                     .assert(&Bool::and(self.ctx, &[path_condition, &violation]));
@@ -226,17 +443,14 @@ impl<'a> FormalVerifier<'a> {
                 body,
             } => {
                 self.check_available(source, path_condition)?;
-
                 let pre_lease_validity = self.variable_validity.clone();
                 let pre_lease_leased = self.variable_leased.clone();
-
                 let is_valid = Bool::new_const(
                     self.ctx,
                     format!("{}_valid_{}", binding, spanned.span.start),
                 );
                 self.solver.assert(&path_condition.implies(&is_valid));
                 self.variable_validity.insert(binding.clone(), is_valid);
-
                 let is_leased = Bool::new_const(
                     self.ctx,
                     format!("{}_leased_{}", binding, spanned.span.start),
@@ -249,7 +463,6 @@ impl<'a> FormalVerifier<'a> {
                     body_clock =
                         self.verify_statement(stmt, path_condition, &body_clock)?;
                 }
-
                 let violation =
                     body_clock.gt(&Int::from_u64(self.ctx, *duration_ms));
                 self.solver.push();
@@ -262,7 +475,6 @@ impl<'a> FormalVerifier<'a> {
                     ));
                 }
                 self.solver.pop(1);
-
                 self.variable_validity = pre_lease_validity;
                 self.variable_leased = pre_lease_leased;
                 Ok(Int::add(
@@ -273,10 +485,41 @@ impl<'a> FormalVerifier<'a> {
             Statement::Expression(expr)
             | Statement::Print(expr)
             | Statement::Debug(expr) => {
-                self.verify_expression(expr, path_condition)?;
-                Ok(current_clock)
+                self.verify_expression(expr, path_condition, &current_clock)
             }
             _ => Ok(current_clock),
+        }
+    }
+
+    fn consume_variable(
+        &mut self,
+        name: &str,
+        path_condition: &Bool<'a>,
+        span_start: usize,
+    ) {
+        let new_valid =
+            Bool::new_const(self.ctx, format!("{}_consumed_{}", name, span_start));
+        self.solver
+            .assert(&path_condition.implies(&new_valid.not()));
+        self.variable_validity.insert(name.to_string(), new_valid);
+        let mut entangled_to_mark = Vec::new();
+        for set in &self.entanglements {
+            if set.contains(name) {
+                for other in set {
+                    if other != name {
+                        entangled_to_mark.push(other.clone());
+                    }
+                }
+            }
+        }
+        for other in entangled_to_mark {
+            let other_valid = Bool::new_const(
+                self.ctx,
+                format!("{}_decayed_by_{}_{}", other, name, span_start),
+            );
+            self.solver
+                .assert(&path_condition.implies(&other_valid.not()));
+            self.variable_validity.insert(other, other_valid);
         }
     }
 
@@ -339,21 +582,37 @@ impl<'a> FormalVerifier<'a> {
         &mut self,
         expr: &Expression,
         path_condition: &Bool<'a>,
-    ) -> Result<(), SemanticError> {
+        in_clock: &Int<'a>,
+    ) -> Result<Int<'a>, SemanticError> {
         match expr {
             Expression::Identifier(name) => {
                 self.check_available(name, path_condition)?;
+                Ok(in_clock.clone())
             }
             Expression::BinaryOp { left, right, .. } => {
-                self.verify_expression(left, path_condition)?;
-                self.verify_expression(right, path_condition)?;
+                self.verify_expression(left, path_condition, in_clock)?;
+                self.verify_expression(right, path_condition, in_clock)?;
+                Ok(in_clock.clone())
             }
             Expression::UnaryOp { expr, .. } => {
-                self.verify_expression(expr, path_condition)?;
+                self.verify_expression(expr, path_condition, in_clock)?;
+                Ok(in_clock.clone())
             }
-            _ => {}
+            Expression::Call { routine, args } => {
+                for arg in args {
+                    self.verify_expression(arg, path_condition, in_clock)?;
+                }
+                if let Some(info) = self.analyzer.routines.get(routine) {
+                    Ok(Int::add(
+                        self.ctx,
+                        &[in_clock, &Int::from_u64(self.ctx, info.taking_ms)],
+                    ))
+                } else {
+                    Ok(in_clock.clone())
+                }
+            }
+            _ => Ok(in_clock.clone()),
         }
-        Ok(())
     }
 
     fn verify_isolate(
@@ -363,14 +622,22 @@ impl<'a> FormalVerifier<'a> {
     ) -> Result<(), SemanticError> {
         let budget = block.manifest.cpu_budget_ms.unwrap_or(u64::MAX);
         let mut clock = Int::from_u64(self.ctx, 0);
-
         let old_validity = self.variable_validity.clone();
         let old_leased = self.variable_leased.clone();
+        let old_horizon = self.causal_horizon.clone();
+        let old_anchors = self.anchors.clone();
+        let old_slice = self.current_slice_ms;
+
+        self.current_slice_ms = block.manifest.slice_ms;
+
         for spanned in &block.body {
             clock = self.verify_statement(spanned, path_condition, &clock)?;
         }
         self.variable_validity = old_validity;
         self.variable_leased = old_leased;
+        self.causal_horizon = old_horizon;
+        self.anchors = old_anchors;
+        self.current_slice_ms = old_slice;
 
         let violation = clock.gt(&Int::from_u64(self.ctx, budget));
         self.solver.push();
@@ -383,7 +650,6 @@ impl<'a> FormalVerifier<'a> {
             ));
         }
         self.solver.pop(1);
-
         Ok(())
     }
 }
