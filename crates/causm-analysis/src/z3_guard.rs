@@ -110,7 +110,7 @@ impl<'a> FormalVerifier<'a> {
                 Ok(current_clock)
             }
             Statement::RelativisticBlock { body, .. } => {
-                let mut block_clock = current_clock.clone();
+                let mut block_clock = in_clock.clone();
                 for stmt in body {
                     block_clock =
                         self.verify_statement(stmt, path_condition, &block_clock)?;
@@ -165,7 +165,7 @@ impl<'a> FormalVerifier<'a> {
             }
             Statement::Isolate(block) => {
                 self.verify_isolate(block, path_condition)?;
-                Ok(current_clock)
+                Ok(in_clock.clone())
             }
             Statement::If {
                 condition,
@@ -180,7 +180,11 @@ impl<'a> FormalVerifier<'a> {
                 let pre_if_horizon = self.causal_horizon.clone();
 
                 let then_pc = Bool::and(self.ctx, &[path_condition, &cond_bool]);
-                let mut then_clock = current_clock.clone();
+                // Start branches from in_clock + 1 (overhead of the if itself)
+                let branch_start_clock =
+                    Int::add(self.ctx, &[in_clock, &Int::from_u64(self.ctx, 1)]);
+
+                let mut then_clock = branch_start_clock.clone();
                 for stmt in then_branch {
                     then_clock =
                         self.verify_statement(stmt, &then_pc, &then_clock)?;
@@ -194,7 +198,7 @@ impl<'a> FormalVerifier<'a> {
                 self.causal_horizon = pre_if_horizon;
                 let else_pc =
                     Bool::and(self.ctx, &[path_condition, &cond_bool.not()]);
-                let mut else_clock = current_clock.clone();
+                let mut else_clock = branch_start_clock.clone();
                 if let Some(else_stmt) = else_branch {
                     for stmt in else_stmt {
                         else_clock =
@@ -238,13 +242,7 @@ impl<'a> FormalVerifier<'a> {
                 )));
                 self.causal_horizon = m_h;
 
-                let max_clock = Int::new_const(
-                    self.ctx,
-                    format!("if_max_clock_{}", spanned.span.start),
-                );
-                self.solver.assert(&max_clock.ge(&then_clock));
-                self.solver.assert(&max_clock.ge(&else_clock));
-                Ok(max_clock)
+                Ok(Bool::ite(&cond_bool, &then_clock, &else_clock))
             }
             Statement::Loop { max_ms, body } => {
                 let mut loop_clock = Int::from_u64(self.ctx, 0);
@@ -262,15 +260,23 @@ impl<'a> FormalVerifier<'a> {
                 self.solver
                     .assert(&Bool::and(self.ctx, &[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
+                    let model = self.solver.get_model().unwrap();
+                    let actual_wcet = model
+                        .eval(&loop_clock, true)
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     self.solver.pop(1);
                     return Err(self.analyzer.annotate(
-                        SemanticErrorKind::TemporalAssertionViolation(0, *max_ms),
+                        SemanticErrorKind::TemporalAssertionViolation(
+                            actual_wcet,
+                            *max_ms,
+                        ),
                     ));
                 }
                 self.solver.pop(1);
                 Ok(Int::add(
                     self.ctx,
-                    &[&current_clock, &Int::from_u64(self.ctx, *max_ms)],
+                    &[in_clock, &Int::from_u64(self.ctx, *max_ms)],
                 ))
             }
             Statement::LoopTick { body } => {
@@ -287,12 +293,12 @@ impl<'a> FormalVerifier<'a> {
                 }
                 Ok(Int::add(
                     self.ctx,
-                    &[&current_clock, &Int::from_u64(self.ctx, slice_ms)],
+                    &[in_clock, &Int::from_u64(self.ctx, slice_ms)],
                 ))
             }
             Statement::Slice { milliseconds } => {
                 self.current_slice_ms = Some(*milliseconds);
-                Ok(current_clock)
+                Ok(in_clock.clone())
             }
             Statement::For {
                 item_name,
@@ -356,7 +362,7 @@ impl<'a> FormalVerifier<'a> {
                     }
                     self.solver.pop(1);
                 }
-                Ok(current_clock)
+                Ok(in_clock.clone())
             }
             Statement::RoutineDef {
                 params,
@@ -391,14 +397,22 @@ impl<'a> FormalVerifier<'a> {
                     routine_verifier.solver.push();
                     routine_verifier.solver.assert(&violation);
                     if routine_verifier.solver.check() == z3::SatResult::Sat {
+                        let model = routine_verifier.solver.get_model().unwrap();
+                        let actual_wcet = model
+                            .eval(&body_clock, true)
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
                         routine_verifier.solver.pop(1);
                         return Err(self.analyzer.annotate(
-                            SemanticErrorKind::TemporalAssertionViolation(0, *limit),
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                actual_wcet,
+                                *limit,
+                            ),
                         ));
                     }
                     routine_verifier.solver.pop(1);
                 }
-                Ok(current_clock)
+                Ok(in_clock.clone())
             }
             Statement::AssertTime {
                 operator, limit_ms, ..
@@ -428,9 +442,17 @@ impl<'a> FormalVerifier<'a> {
                 self.solver
                     .assert(&Bool::and(self.ctx, &[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
+                    let model = self.solver.get_model().unwrap();
+                    let actual_wcet = model
+                        .eval(in_clock, true)
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     self.solver.pop(1);
                     return Err(self.analyzer.annotate(
-                        SemanticErrorKind::TemporalAssertionViolation(0, *limit_ms),
+                        SemanticErrorKind::TemporalAssertionViolation(
+                            actual_wcet,
+                            *limit_ms,
+                        ),
                     ));
                 }
                 self.solver.pop(1);
@@ -469,9 +491,17 @@ impl<'a> FormalVerifier<'a> {
                 self.solver
                     .assert(&Bool::and(self.ctx, &[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
+                    let model = self.solver.get_model().unwrap();
+                    let actual_wcet = model
+                        .eval(&body_clock, true)
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     self.solver.pop(1);
                     return Err(self.analyzer.annotate(
-                        SemanticErrorKind::LeaseDurationExceeded(0, *duration_ms),
+                        SemanticErrorKind::LeaseDurationExceeded(
+                            actual_wcet,
+                            *duration_ms,
+                        ),
                     ));
                 }
                 self.solver.pop(1);
@@ -479,7 +509,7 @@ impl<'a> FormalVerifier<'a> {
                 self.variable_leased = pre_lease_leased;
                 Ok(Int::add(
                     self.ctx,
-                    &[&current_clock, &Int::from_u64(self.ctx, *duration_ms)],
+                    &[in_clock, &Int::from_u64(self.ctx, *duration_ms)],
                 ))
             }
             Statement::Expression(expr)
