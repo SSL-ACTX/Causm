@@ -130,6 +130,7 @@ pub struct EntropicAnalyzer {
     pub(crate) capability_stack: Vec<HashMap<String, ictl_core::Capability>>,
     pub(crate) routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
+    pub use_z3: bool,
 }
 
 impl Default for EntropicAnalyzer {
@@ -155,6 +156,7 @@ impl EntropicAnalyzer {
             capability_stack: Vec::new(),
             routines: HashMap::new(),
             span_states: HashMap::new(),
+            use_z3: true,
         };
         analyzer.register_intrinsics();
         analyzer
@@ -284,6 +286,15 @@ impl EntropicAnalyzer {
 
             self.current_branch = old_branch;
         }
+
+        // Formal Verification Guard
+        if self.use_z3 {
+            let cfg = z3::Config::new();
+            let ctx = z3::Context::new(&cfg);
+            let mut verifier = crate::z3_guard::FormalVerifier::new(&ctx, self);
+            verifier.verify(program)?;
+        }
+
         Ok(())
     }
 

@@ -538,8 +538,8 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Yield(&mut self, _name: &String) -> Result<(), SemanticError> {
-        Ok(())
+    pub(crate) fn Yield(&mut self, name: &String) -> Result<(), SemanticError> {
+        self.mark_consumed(name)
     }
 
     pub(crate) fn Inspect(
