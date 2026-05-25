@@ -41,6 +41,13 @@ impl EntropicAnalyzer {
         _name: &str,
         _capacity: &usize,
     ) -> Result<(), SemanticError> {
+        if !self.capability_stack.is_empty()
+            && !self.is_capability_allowed("Chan.Manage")
+        {
+            return Err(self.annotate(SemanticErrorKind::MissingCapability(
+                "Chan.Manage".to_string(),
+            )));
+        }
         Ok(())
     }
 
@@ -49,12 +56,11 @@ impl EntropicAnalyzer {
         chan_id: &str,
         value_id: &str,
     ) -> Result<(), SemanticError> {
-        if !self.capability_stack.is_empty()
-            && !self.is_capability_allowed("Chan.Outbound")
-        {
-            // Specifically check for this channel ID
+        if !self.capability_stack.is_empty() {
             let key = format!("Chan.Outbound[id={}]", chan_id);
-            if !self.is_capability_allowed(&key) {
+            if !self.is_capability_allowed("Chan.Outbound")
+                && !self.is_capability_allowed(&key)
+            {
                 return Err(self.annotate(SemanticErrorKind::MissingCapability(
                     format!("Chan.Outbound(id={})", chan_id),
                 )));

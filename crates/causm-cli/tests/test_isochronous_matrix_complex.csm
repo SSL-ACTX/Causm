@@ -1,5 +1,6 @@
 @0ms: {
   isolate hft_pipeline {
+    require Chan.Manage
     require System.Log
     enable system_log(1)
     enable memory(5KB)

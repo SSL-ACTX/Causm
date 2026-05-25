@@ -53,6 +53,7 @@ fn causm_isochronous_tick_loop_double_buffered_channels() -> anyhow::Result<()> 
     let source = r#"
     @0ms: {
       isolate demo {
+        require Chan.Manage
         require Chan.Outbound(id="c")
         require Chan.Inbound(id="c")
         slice 5ms
@@ -94,6 +95,7 @@ fn causm_isochronous_matrix_complex_integration() -> anyhow::Result<()> {
     let source = r#"
 @0ms: {
   isolate hft_pipeline {
+    require Chan.Manage
     require Chan.Outbound(id="signal_bus")
     require Chan.Inbound(id="signal_bus")
     require System.Log

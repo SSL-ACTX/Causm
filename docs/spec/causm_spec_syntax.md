@@ -204,9 +204,9 @@ entangle(<variable_list>)
 ## 6. Communication Channels and Concurrency
 
 ### Communication Primitives
-- **`open_chan <name>(<capacity>)`**: Initializes a buffered communication channel.
-- **`chan_send <chan>(<value>)`**: Moves a value into the designated channel buffer.
-- **`chan_recv(<chan>)`**: Extracts a value from the channel.
+- **`open_chan <name>(<capacity>)`**: Initializes a buffered communication channel. (Requires `Chan.Manage` if inside an `isolate`).
+- **`chan_send <chan>(<value>)`**: Moves a value into the designated channel buffer. (Requires `Chan.Outbound` for the specific ID or `id="*"`).
+- **`chan_recv(<chan>)`**: Extracts a value from the channel. (Requires `Chan.Inbound` for the specific ID or `id="*"`).
 
 ### Isochronous Slicing
 - **`slice <amount>ms`**: Establishes a fixed-duration execution slice for the active isolate.

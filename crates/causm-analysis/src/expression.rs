@@ -358,11 +358,11 @@ pub(crate) fn analyze_expression(
             Ok(())
         }
         Expression::ChannelReceive(id) => {
-            if !analyzer.capability_stack.is_empty()
-                && !analyzer.is_capability_allowed("Chan.Inbound")
-            {
+            if !analyzer.capability_stack.is_empty() {
                 let key = format!("Chan.Inbound[id={}]", id);
-                if !analyzer.is_capability_allowed(&key) {
+                if !analyzer.is_capability_allowed("Chan.Inbound")
+                    && !analyzer.is_capability_allowed(&key)
+                {
                     return Err(analyzer.annotate(
                         SemanticErrorKind::MissingCapability(format!(
                             "Chan.Inbound(id={})",
@@ -438,11 +438,11 @@ pub(crate) fn analyze_expression_nonconsuming(
             Ok(())
         }
         Expression::ChannelReceive(id) => {
-            if !analyzer.capability_stack.is_empty()
-                && !analyzer.is_capability_allowed("Chan.Inbound")
-            {
+            if !analyzer.capability_stack.is_empty() {
                 let key = format!("Chan.Inbound[id={}]", id);
-                if !analyzer.is_capability_allowed(&key) {
+                if !analyzer.is_capability_allowed("Chan.Inbound")
+                    && !analyzer.is_capability_allowed(&key)
+                {
                     return Err(analyzer.annotate(
                         SemanticErrorKind::MissingCapability(format!(
                             "Chan.Inbound(id={})",

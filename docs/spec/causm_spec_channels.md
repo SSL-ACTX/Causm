@@ -3,22 +3,37 @@
 ## 1. Overview
 Entropic Channels provide a mechanism for deterministic mid-execution communication between split timelines. Unlike formal `merge` operations which occur at the end of a timeline's lifecycle, channels allow for asynchronous state transfer while maintaining strict single-ownership invariants.
 
-## 2. Channel Manifests
-Channels must be declared in the `isolate` manifest using the `Chan` capability.
+## 2. Channel Capabilities
+Channels must be declared in the `isolate` manifest. Causm employs a "Deny-by-Default" model, where an isolate has no inherent right to create or access communication channels.
+
+### 2.1 Management Capability
+To initialize a channel via `open_chan` within an isolate, the `Chan.Manage` capability must be present in the manifest.
 
 ```causm
-isolate Producer {
-    require Chan.Outbound(id="data_pipe", type=int)
-}
-
-isolate Consumer {
-    require Chan.Inbound(id="data_pipe", type=int, latency=5ms)
+isolate InternalPipeline {
+    require Chan.Manage
+    open_chan local_bus(8)
 }
 ```
 
-- **id**: A unique global identifier for the channel.
-- **type**: The entropic type allowed for transmission.
-- **latency**: The maximum allowed temporal offset between transmission and reception.
+### 2.2 Access Capabilities
+Communication requires specific `Inbound` and `Outbound` rights. These can be restricted to specific channel IDs or granted broadly via wildcards.
+
+```causm
+isolate Restricted {
+    // Only allowed to send to the "telemetry" channel
+    require Chan.Outbound(id="telemetry", type=float)
+}
+
+isolate Flexible {
+    // Allowed to receive from any channel
+    require Chan.Inbound(id="*")
+}
+```
+
+- **id**: A unique global identifier, or `"*"` for a wildcard grant.
+- **type**: (Optional) The entropic type allowed for transmission.
+- **latency**: (Optional) The maximum allowed temporal offset for WCET estimation.
 
 ## 3. Transmission Primitives
 

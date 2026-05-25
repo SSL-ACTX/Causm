@@ -139,6 +139,7 @@ fn causm_expansion_loop_tick_double_buffer() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       isolate producer_consumer {
+        require Chan.Manage
         require Chan.Outbound(id="c")
         require Chan.Inbound(id="c")
         slice 10ms

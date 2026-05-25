@@ -10,6 +10,10 @@
 
   isolate dsp_pipeline {
     require System.Log
+    require Chan.Manage
+    require Chan.Inbound(id="*")
+    require Chan.Outbound(id="*")
+    
     enable memory(100KB)
     slice 40ms
     

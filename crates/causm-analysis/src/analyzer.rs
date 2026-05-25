@@ -203,10 +203,26 @@ impl EntropicAnalyzer {
 
     pub(crate) fn is_capability_allowed(&self, cap: &str) -> bool {
         self.capability_stack.iter().rev().any(|map| {
-            map.contains_key(cap)
-                || map
-                    .keys()
-                    .any(|k| k.starts_with(&(cap.to_string() + "[id=")))
+            // 1. Direct match
+            if map.contains_key(cap) {
+                return true;
+            }
+
+            // 2. Wildcard ID match (e.g., if cap is "Chan.Outbound[id=sensors]",
+            // check for "Chan.Outbound[id=*]")
+            if cap.contains("[id=") {
+                let base = cap.split('[').next().unwrap();
+                let wildcard_key = format!("{}[id=*]", base);
+                if map.contains_key(&wildcard_key) {
+                    return true;
+                }
+            }
+
+            // 3. Base capability match (e.g., if cap is "Chan.Outbound",
+            // return true if any "Chan.Outbound[id=...]" exists)
+            // This allows broad 'require Chan.Outbound' to cover all IDs.
+            map.keys()
+                .any(|k| k == cap || k.starts_with(&(cap.to_string() + "[id=")))
         })
     }
 
