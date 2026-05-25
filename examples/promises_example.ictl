@@ -1,75 +1,123 @@
+// ============================================================================
+// ICTL Formal Showcase: Temporal Promises and Entropic State Branching
+// ============================================================================
+// This example demonstrates the formal semantics of asynchronous promises,
+// temporal deadlines, and entropic state matching within isolated timelines.
+// ============================================================================
+
 @0ms: {
-  isolate promise_worker {
+  // ------------------------------------------------------------------------
+  // Phase 1: Initialization and Deferred Execution
+  // ------------------------------------------------------------------------
+  // We initialize two deferred network operations (promises) with specific
+  // simulated latencies and strict temporal deadlines.
+  // The local clock does NOT advance during 'defer' initialization.
+  
+  isolate gateway_init {
     enable cpu(100ms)
-    enable memory(10KB)
-    require System.Log
+    enable memory(5KB)
     require System.NetworkFetch
+    require System.Log
 
-    let ds = defer System.NetworkFetch(url="api.data", latency="20") deadline 50ms
-    await(ds)
+    // Primary data source: expected latency 30ms, deadline 40ms.
+    let primary_req = defer System.NetworkFetch(url="api.primary.internal", latency="30") deadline 40ms
+    
+    // Backup data source: expected latency 60ms, strict deadline 50ms (will fail).
+    let backup_req = defer System.NetworkFetch(url="api.backup.internal", latency="60") deadline 50ms
 
-    debug("pending or fetched status cannot be consumed before split")
+    // At this coordinate (@0ms), both 'primary_req' and 'backup_req' are in
+    // the 'Pending' entropic state.
+    debug("Initialization complete. Promises are Pending.")
   }
 
-  routine process_data(peek value) taking 5ms {
-    let out = value
-    yield out
+  // Define a formal routine to process valid data, which consumes exactly 10ms.
+  routine process_payload(peek payload) taking 10ms {
+    let processed = "Processed: " + payload
+    yield processed
   }
 }
 
 @10ms: {
-  split main into [w1,w2]
+  // ------------------------------------------------------------------------
+  // Phase 2: Timeline Bifurcation
+  // ------------------------------------------------------------------------
+  // We split the main timeline into two concurrent workers to handle the
+  // promises independently. Each worker inherits a snapshot of the memory arena.
+  split main into [primary_worker, backup_worker]
 }
 
-@w1: {
-  isolate worker1 {
+@primary_worker: {
+  // ------------------------------------------------------------------------
+  // Phase 3A: Primary Worker Execution
+  // ------------------------------------------------------------------------
+  isolate primary_handler {
     require System.Log
-    match entropy(ds) {
-      Valid(v1): {
-        let w1_out = call process_data(v1)
-        print(v1)
-        require System.Log(message=w1_out)
+
+    // Advance the local clock of this branch to the promise's ready_at timestamp.
+    await(primary_req)
+
+    // Entropic State Branching: Safely handle the resolution state.
+    match entropy(primary_req) {
+      Valid(val): {
+        // The promise resolved within the deadline. 'val' is extracted.
+        let result = call process_payload(val)
+        let w1_status = "Primary Success: " + result
       }
       Pending(p): {
-        let w1_out = "pending"
-        require System.Log(message=w1_out)
+        // Unreachable here due to prior 'await', but semantically required.
+        let w1_status = "Primary Pending"
       }
       Consumed: {
-        let w1_out = "consumed"
-        require System.Log(message=w1_out)
+        // Occurs if the deadline was exceeded.
+        let w1_status = "Primary Timeout"
       }
     }
   }
 }
 
-@w2: {
-  isolate worker2 {
+@backup_worker: {
+  // ------------------------------------------------------------------------
+  // Phase 3B: Backup Worker Execution
+  // ------------------------------------------------------------------------
+  isolate backup_handler {
     require System.Log
-    match entropy(ds) {
-      Valid(v2): {
-        let w2_out = call process_data(v2)
-        print(v2)
-        require System.Log(message=w2_out)
+
+    // The backup promise has a latency of 60ms but a deadline of 50ms.
+    // 'await' will advance the clock, but the deadline will be breached.
+    await(backup_req)
+
+    match entropy(backup_req) {
+      Valid(val): {
+        let result = call process_payload(val)
+        let w2_status = "Backup Success: " + result
       }
       Pending(p): {
-        let w2_out = "pending"
-        require System.Log(message=w2_out)
+        let w2_status = "Backup Pending"
       }
       Consumed: {
-        let w2_out = "consumed"
-        require System.Log(message=w2_out)
+        // The promise transitions to 'Consumed' because local_clock > deadline.
+        let w2_status = "Backup Failed: Deadline Exceeded"
       }
     }
   }
 }
 
-@20ms: {
-  merge [w1,w2] into main resolving(w1_result=w1_out,w2_result=w2_out)
+@80ms: {
+  // ------------------------------------------------------------------------
+  // Phase 4: Timeline Reconciliation
+  // ------------------------------------------------------------------------
+  // Merge the concurrent branches back into the main timeline.
+  // We explicitly resolve the outputs from the isolated workers.
+  merge [primary_worker, backup_worker] into main resolving(primary_final = w1_status, backup_final = w2_status)
 
-  isolate merge_logger {
+  isolate telemetry {
     require System.Log
-    let ready = "ok"
-    require System.Log(message=w1_result)
-    require System.Log(message=w2_result)
+    
+    let summary = "Gateway Telemetry Report:"
+    print(summary)
+    
+    // Output the resolved states from both branches.
+    require System.Log(message = primary_final)
+    require System.Log(message = backup_final)
   }
 }

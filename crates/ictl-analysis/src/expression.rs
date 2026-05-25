@@ -90,7 +90,11 @@ pub(crate) fn infer_expression_type(
         }
         Expression::FieldAccess { target, field } => {
             let t = infer_expression_type(analyzer, target)?;
-            let resolved_t = analyzer.resolve_type(&t);
+            let mut resolved_t = analyzer.resolve_type(&t);
+            if let Type::ConstantAccess { inner_type, .. } = resolved_t {
+                resolved_t = analyzer.resolve_type(&inner_type);
+            }
+
             match resolved_t {
                 Type::Unknown => Ok(Type::Unknown),
                 Type::Struct(s) => {
@@ -353,8 +357,23 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
-        Expression::ChannelReceive(_)
-        | Expression::Literal(_)
+        Expression::ChannelReceive(id) => {
+            if !analyzer.capability_stack.is_empty()
+                && !analyzer.is_capability_allowed("Chan.Inbound")
+            {
+                let key = format!("Chan.Inbound[id={}]", id);
+                if !analyzer.is_capability_allowed(&key) {
+                    return Err(analyzer.annotate(
+                        SemanticErrorKind::MissingCapability(format!(
+                            "Chan.Inbound(id={})",
+                            id
+                        )),
+                    ));
+                }
+            }
+            Ok(())
+        }
+        Expression::Literal(_)
         | Expression::Integer(_)
         | Expression::Float(_)
         | Expression::Boolean(_)
@@ -418,8 +437,23 @@ pub(crate) fn analyze_expression_nonconsuming(
             }
             Ok(())
         }
-        Expression::ChannelReceive(_)
-        | Expression::Literal(_)
+        Expression::ChannelReceive(id) => {
+            if !analyzer.capability_stack.is_empty()
+                && !analyzer.is_capability_allowed("Chan.Inbound")
+            {
+                let key = format!("Chan.Inbound[id={}]", id);
+                if !analyzer.is_capability_allowed(&key) {
+                    return Err(analyzer.annotate(
+                        SemanticErrorKind::MissingCapability(format!(
+                            "Chan.Inbound(id={})",
+                            id
+                        )),
+                    ));
+                }
+            }
+            Ok(())
+        }
+        Expression::Literal(_)
         | Expression::Integer(_)
         | Expression::Float(_)
         | Expression::Boolean(_)
@@ -475,8 +509,16 @@ pub fn estimate_expression_cost(
                 .map(|e| estimate_expression_cost(analyzer, e))
                 .sum::<u64>()
         }
-        Expression::FieldAccess { .. }
-        | Expression::CloneOp(_)
+        Expression::FieldAccess { target, .. } => {
+            let target_type =
+                infer_expression_type(analyzer, target).unwrap_or(Type::Unknown);
+            let base_cost = match target_type {
+                Type::ConstantAccess { access_time_ms, .. } => access_time_ms,
+                _ => 1,
+            };
+            base_cost + estimate_expression_cost(analyzer, target)
+        }
+        Expression::CloneOp(_)
         | Expression::ChannelReceive(_)
         | Expression::Identifier(_)
         | Expression::Literal(_)

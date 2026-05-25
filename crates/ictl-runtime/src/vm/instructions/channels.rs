@@ -25,14 +25,15 @@ impl Vm {
         src: Reg,
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, src.0)?;
-        println!(
-            "[VM] ChanSend: branch={}, chan={}, val={:?}",
-            branch_id, chan_id, val
-        );
+        let sent_at = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.birth_global_time + branch.local_clock
+        };
         let message = Message {
             id: self.next_payload_id,
             sender: branch_id.to_string(),
             payload: val,
+            sent_at,
         };
         self.next_payload_id += 1;
 
@@ -40,7 +41,6 @@ impl Vm {
 
         if is_isochronous {
             if let Some(pending) = self.pending_channels.get_mut(&chan_id) {
-                println!("[VM] ChanSend: pushing to PENDING");
                 pending.push_back(message.clone());
             } else {
                 return Err(TemporalError::ChannelFault(format!(
@@ -49,7 +49,6 @@ impl Vm {
                 )));
             }
         } else if let Some(chan) = self.channels.get_mut(&chan_id) {
-            println!("[VM] ChanSend: pushing to ACTIVE");
             chan.push_back(message.clone());
         } else {
             return Err(TemporalError::ChannelFault(format!(
@@ -66,13 +65,41 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn AwaitChan(
+        &mut self,
+        branch_id: &str,
+        chan_id: String,
+    ) -> Result<(), TemporalError> {
+        let sent_at = {
+            let chan = self.channels.get(&chan_id).ok_or_else(|| {
+                TemporalError::ChannelFault(format!(
+                    "Channel not found: {}",
+                    chan_id
+                ))
+            })?;
+            chan.front().map(|m| m.sent_at).ok_or_else(|| {
+                TemporalError::ChannelFault(format!("Channel empty: {}", chan_id))
+            })?
+        };
+
+        let branch = self.get_branch_mut(branch_id)?;
+        let current_global_time = branch.birth_global_time + branch.local_clock;
+
+        if current_global_time < sent_at {
+            let wait = sent_at - current_global_time;
+            branch.local_clock += wait;
+            branch.consume_budget(wait)?;
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn ChanRecv(
         &mut self,
         branch_id: &str,
         dest: Reg,
         chan_id: String,
     ) -> Result<(), TemporalError> {
-        println!("[VM] ChanRecv: branch={}, chan={}", branch_id, chan_id);
         let message = {
             let chan = self.channels.get_mut(&chan_id).ok_or_else(|| {
                 TemporalError::ChannelFault(format!(
@@ -80,7 +107,6 @@ impl Vm {
                     chan_id
                 ))
             })?;
-            println!("[VM] ChanRecv: queue size={}", chan.len());
             chan.pop_front().ok_or_else(|| {
                 TemporalError::ChannelFault(format!("Channel empty: {}", chan_id))
             })?

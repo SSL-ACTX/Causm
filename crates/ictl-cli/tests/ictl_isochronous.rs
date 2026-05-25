@@ -53,6 +53,8 @@ fn ictl_isochronous_tick_loop_double_buffered_channels() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       isolate demo {
+        require Chan.Outbound(id="c")
+        require Chan.Inbound(id="c")
         slice 5ms
         open_chan c(10)
 
@@ -92,6 +94,8 @@ fn ictl_isochronous_matrix_complex_integration() -> anyhow::Result<()> {
     let source = r#"
 @0ms: {
   isolate hft_pipeline {
+    require Chan.Outbound(id="signal_bus")
+    require Chan.Inbound(id="signal_bus")
     require System.Log
     enable system_log(1)
     enable memory(5KB)

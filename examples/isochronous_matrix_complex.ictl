@@ -1,29 +1,43 @@
 @0ms: {
-  isolate hft_pipeline {
+  routine compute_ema(consume current, consume prev) taking 20ms {
+    let weight = 2
+    let p1 = current * weight
+    let p2 = prev * 8
+    let sum = p1 + p2
+    let ema = sum / 10
+    yield ema
+  }
+
+  isolate dsp_pipeline {
     require System.Log
-    enable system_log(1)
-    enable memory(500)
-    slice 20ms
-    open_chan signal_bus(8)
+    enable memory(100KB)
+    slice 40ms
+    
+    open_chan sensors(16)
+    open_chan signals(16)
 
-    // Tick 1: market reader produces latest price signal
     loop tick {
-      let price = 123
-      chan_send signal_bus(price)
+      let packet = topology {
+        "s1": 150,
+        "s2": 155
+      }
+      chan_send sensors(packet)
       break
     }
 
-    // Tick 2: strategy consumer processes the previous tick's signal
     loop tick {
-      let signal = chan_recv(signal_bus)
-      let out = signal
+      let data = chan_recv(sensors)
+      let v1 = data["s1"]
+      let v2 = data["s2"]
+      let result = call compute_ema(v2, v1)
+      chan_send signals(result)
       break
     }
 
-    // Tick 3: publish execution outcome
     loop tick {
-      let result = out
-      print(result)
+      let final_val = chan_recv(signals)
+      let display = "Signal: " + final_val
+      print(display)
       break
     }
   }

@@ -90,6 +90,20 @@ impl Vm {
                 .consume_field_entropic(target.0, &field)
                 .map_err(TemporalError::MemoryFault)?
         };
+
+        let time = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.birth_global_time + branch.local_clock
+        };
+
+        self.causal_history
+            .push(crate::vm::state::CausalEvent::Decay {
+                branch_id: branch_id.to_string(),
+                reg: target.0,
+                field: field.clone(),
+                time,
+            });
+
         self.insert_reg(branch_id, dest.0, field_state)?;
         self.propagate_field_decay(branch_id, target.0, &field)
     }

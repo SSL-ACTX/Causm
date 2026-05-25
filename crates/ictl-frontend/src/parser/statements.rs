@@ -36,16 +36,61 @@ fn parse_type_name(pair: Pair<Rule>) -> TypeName {
             }
         }
         Rule::base_type => {
-            let text = pair.as_str();
-            match text {
-                "int" => TypeName::Builtin(BuiltinType::Integer),
-                "float" => TypeName::Builtin(BuiltinType::Float),
-                "bool" => TypeName::Builtin(BuiltinType::Bool),
-                "string" => TypeName::Builtin(BuiltinType::String),
-                "struct" => TypeName::Builtin(BuiltinType::Struct),
-                "topology" => TypeName::Builtin(BuiltinType::Topology),
-                "array" => TypeName::Builtin(BuiltinType::Array),
-                _ => TypeName::Custom(text.to_string()),
+            let mut inner = pair.into_inner();
+            let first = inner.next().unwrap();
+            match first.as_rule() {
+                Rule::identifier => {
+                    let name = first.as_str().to_string();
+                    if let Some(params_pair) = inner.next() {
+                        let params = params_pair
+                            .into_inner()
+                            .map(|p| {
+                                let is_duration = p.as_str().contains("ms");
+                                let inner_p = p.into_inner().next().unwrap();
+                                match inner_p.as_rule() {
+                                    Rule::type_name => {
+                                        TypeParam::Type(parse_type_name(inner_p))
+                                    }
+                                    Rule::amount => {
+                                        let text = inner_p.as_str();
+                                        let val = text.parse::<u64>().unwrap_or(0);
+                                        if is_duration {
+                                            TypeParam::Duration(val)
+                                        } else {
+                                            TypeParam::Amount(val)
+                                        }
+                                    }
+                                    _ => TypeParam::Amount(0),
+                                }
+                            })
+                            .collect();
+                        TypeName::Generic(name, params)
+                    } else {
+                        match name.as_str() {
+                            "int" => TypeName::Builtin(BuiltinType::Integer),
+                            "float" => TypeName::Builtin(BuiltinType::Float),
+                            "bool" => TypeName::Builtin(BuiltinType::Bool),
+                            "string" => TypeName::Builtin(BuiltinType::String),
+                            "struct" => TypeName::Builtin(BuiltinType::Struct),
+                            "topology" => TypeName::Builtin(BuiltinType::Topology),
+                            "array" => TypeName::Builtin(BuiltinType::Array),
+                            _ => TypeName::Custom(name),
+                        }
+                    }
+                }
+                _ => {
+                    let text = first.as_str();
+                    match text {
+                        "int" => TypeName::Builtin(BuiltinType::Integer),
+                        "float" => TypeName::Builtin(BuiltinType::Float),
+                        "bool" => TypeName::Builtin(BuiltinType::Bool),
+                        "string" => TypeName::Builtin(BuiltinType::String),
+                        "struct" => TypeName::Builtin(BuiltinType::Struct),
+                        "topology" => TypeName::Builtin(BuiltinType::Topology),
+                        "array" => TypeName::Builtin(BuiltinType::Array),
+                        _ => TypeName::Custom(text.to_string()),
+                    }
+                }
             }
         }
         Rule::identifier => TypeName::Custom(pair.as_str().to_string()),
@@ -731,6 +776,14 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
             Statement::Await(target)
+        }
+        Rule::await_chan_stmt => {
+            let target = pair
+                .into_inner()
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            Statement::AwaitChan(target)
         }
         Rule::print_stmt => {
             let mut inner = pair.into_inner();

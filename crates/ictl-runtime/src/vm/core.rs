@@ -32,6 +32,8 @@ impl Vm {
             speculative_commit_mode: SpeculationCommitMode::Selective,
             entanglements: Vec::new(),
             causal_history: Vec::new(),
+            causal_trace: Vec::new(),
+            debug_mode: false,
             next_payload_id: 0,
             trace_entropy: false,
             _is_decaying: false,
@@ -50,7 +52,7 @@ impl Vm {
         self.speculative_commit_mode = mode;
     }
 
-    pub(crate) fn peek_reg(
+    pub fn peek_reg(
         &mut self,
         branch_id: &str,
         reg: u32,
@@ -62,7 +64,7 @@ impl Vm {
             .ok_or(TemporalError::MemoryFault(MemoryError::AlreadyConsumed))
     }
 
-    pub(crate) fn peek_state(
+    pub fn peek_state(
         &mut self,
         branch_id: &str,
         reg: u32,
@@ -267,6 +269,12 @@ impl Vm {
         &mut self,
         branch_id: &str,
     ) -> Result<(), TemporalError> {
+        if self.debug_mode {
+            let branch = self.get_branch(branch_id)?;
+            let snapshot = branch.clone();
+            self.causal_trace.push((branch_id.to_string(), snapshot));
+        }
+
         // Deterministic instruction cost
         {
             let branch = self.get_branch_mut(branch_id)?;
@@ -542,12 +550,41 @@ impl Vm {
         }
     }
 
+    pub fn step_back(&mut self, branch_id: &str) -> Result<(), TemporalError> {
+        let mut found_idx = None;
+        for (i, (b_id, _)) in self.causal_trace.iter().enumerate().rev() {
+            if b_id == branch_id {
+                found_idx = Some(i);
+                break;
+            }
+        }
+
+        if let Some(idx) = found_idx {
+            let (_, snapshot) = self.causal_trace.remove(idx);
+            if branch_id == "main" {
+                self.root_timeline = snapshot;
+            } else {
+                self.active_branches.insert(branch_id.to_string(), snapshot);
+            }
+            Ok(())
+        } else {
+            Err(TemporalError::EvalError("No trace found for branch".into()))
+        }
+    }
+
     pub fn split_timeline(
         &mut self,
         parent_id: &str,
         branches: Vec<&str>,
     ) -> Result<(), TemporalError> {
-        let (base_arena, cpu_budget_ms, entropy_mode, resource_budgets, slice_ms) = {
+        let (
+            base_arena,
+            cpu_budget_ms,
+            entropy_mode,
+            resource_budgets,
+            slice_ms,
+            parent_global_time,
+        ) = {
             let parent_timeline = if parent_id == "main" {
                 &self.root_timeline
             } else {
@@ -561,13 +598,14 @@ impl Vm {
                 parent_timeline.entropy_mode,
                 parent_timeline.resource_budgets.clone(),
                 parent_timeline.slice_ms,
+                parent_timeline.birth_global_time + parent_timeline.local_clock,
             )
         };
 
         for branch_name in branches {
             let new_branch = Timeline {
                 id: branch_name.to_string(),
-                birth_global_time: self.global_clock,
+                birth_global_time: parent_global_time,
                 local_clock: 0,
                 arena: base_arena.clone(),
                 cpu_budget_ms,
@@ -781,7 +819,17 @@ impl Vm {
         }
     }
 
-    pub(crate) fn get_branch_mut(
+    pub(crate) fn get_branch(&self, id: &str) -> Result<&Timeline, TemporalError> {
+        if id == "main" {
+            Ok(&self.root_timeline)
+        } else {
+            self.active_branches
+                .get(id)
+                .ok_or_else(|| TemporalError::BranchNotFound(id.to_string()))
+        }
+    }
+
+    pub fn get_branch_mut(
         &mut self,
         id: &str,
     ) -> Result<&mut Timeline, TemporalError> {

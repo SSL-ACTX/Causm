@@ -10,6 +10,7 @@ pub struct Message {
     #[allow(dead_code)]
     pub sender: String,
     pub payload: Payload,
+    pub sent_at: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +31,12 @@ pub enum CausalEvent {
         reg: u32,
         #[allow(dead_code)]
         message: Message,
+    },
+    Decay {
+        branch_id: String,
+        reg: u32,
+        field: String,
+        time: u64,
     },
 }
 
@@ -80,6 +87,8 @@ pub struct Vm {
     pub speculation_stack: Vec<SpeculationContext>,
     pub entanglements: Vec<std::collections::HashSet<(String, u32)>>,
     pub causal_history: Vec<CausalEvent>,
+    pub causal_trace: Vec<(String, Timeline)>, // Full snapshots for debugging
+    pub debug_mode: bool,
     pub next_payload_id: u64,
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,

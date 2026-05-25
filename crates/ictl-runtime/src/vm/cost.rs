@@ -118,6 +118,7 @@ impl Vm {
             Statement::Slice { .. } => 0,
             Statement::SpeculationMode(_) => 0,
             Statement::Await(_) => 1,
+            Statement::AwaitChan(_) => 1,
             Statement::Break => 0,
             Statement::Entangle { .. } => 0,
             Statement::Return(_) => 0,

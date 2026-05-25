@@ -25,6 +25,14 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Box<Type>,
     },
+    PacedIterable {
+        element_type: Box<Type>,
+        max_time_ms: u64,
+    },
+    ConstantAccess {
+        inner_type: Box<Type>,
+        access_time_ms: u64,
+    },
     Custom(String),
     Unknown,
 }
@@ -46,6 +54,51 @@ impl Type {
                 BuiltinType::Array => Type::Array(Box::new(Type::Unknown)),
             },
             TypeName::Custom(name) => Type::Custom(name.clone()),
+            TypeName::Generic(name, params) => match name.as_str() {
+                "PacedIterable" => {
+                    let element_type =
+                        if let Some(crate::TypeParam::Type(t)) = params.get(0) {
+                            Box::new(Type::from_typename(t))
+                        } else {
+                            Box::new(Type::Unknown)
+                        };
+                    let max_time_ms = if let Some(crate::TypeParam::Duration(d)) =
+                        params.get(1)
+                    {
+                        *d
+                    } else if let Some(crate::TypeParam::Amount(a)) = params.get(1) {
+                        *a
+                    } else {
+                        0
+                    };
+                    Type::PacedIterable {
+                        element_type,
+                        max_time_ms,
+                    }
+                }
+                "ConstantAccess" => {
+                    let inner_type =
+                        if let Some(crate::TypeParam::Type(t)) = params.get(0) {
+                            Box::new(Type::from_typename(t))
+                        } else {
+                            Box::new(Type::Unknown)
+                        };
+                    let access_time_ms = if let Some(crate::TypeParam::Duration(d)) =
+                        params.get(1)
+                    {
+                        *d
+                    } else if let Some(crate::TypeParam::Amount(a)) = params.get(1) {
+                        *a
+                    } else {
+                        0
+                    };
+                    Type::ConstantAccess {
+                        inner_type,
+                        access_time_ms,
+                    }
+                }
+                _ => Type::Custom(name.clone()),
+            },
             TypeName::Optional(inner) => {
                 Type::Optional(Box::new(Type::from_typename(inner)))
             }

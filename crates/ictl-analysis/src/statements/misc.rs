@@ -46,9 +46,20 @@ impl EntropicAnalyzer {
 
     pub(crate) fn ChannelSend(
         &mut self,
-        _chan_id: &str,
+        chan_id: &str,
         value_id: &str,
     ) -> Result<(), SemanticError> {
+        if !self.capability_stack.is_empty()
+            && !self.is_capability_allowed("Chan.Outbound")
+        {
+            // Specifically check for this channel ID
+            let key = format!("Chan.Outbound[id={}]", chan_id);
+            if !self.is_capability_allowed(&key) {
+                return Err(self.annotate(SemanticErrorKind::MissingCapability(
+                    format!("Chan.Outbound(id={})", chan_id),
+                )));
+            }
+        }
         self.mark_consumed(value_id)
     }
 

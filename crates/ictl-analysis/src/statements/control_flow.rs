@@ -337,6 +337,11 @@ impl EntropicAnalyzer {
 
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
+        if let Some(main_state) = self.branch_contexts.get("main") {
+            let routine_main =
+                routine_analyzer.branch_contexts.get_mut("main").unwrap();
+            routine_main.custom_types = main_state.custom_types.clone();
+        }
 
         for param in params {
             let routine_state =
@@ -364,7 +369,8 @@ impl EntropicAnalyzer {
             routine_analyzer.analyze_statement(stmt)?;
         }
 
-        let estimated_cost = crate::statement::estimate_block_cost(self, body);
+        let estimated_cost =
+            crate::statement::estimate_block_cost(&routine_analyzer, body);
         let final_taking_ms = if let Some(ms) = *taking_ms {
             if estimated_cost > ms {
                 return Err(self.annotate(
@@ -429,7 +435,7 @@ impl EntropicAnalyzer {
             .get_variable_type(source)
             .unwrap_or(ictl_core::types::Type::Unknown);
 
-        let loop_item_type = match source_type {
+        let (loop_item_type, max_per_iteration) = match source_type {
             ictl_core::types::Type::Struct(_)
             | ictl_core::types::Type::Topology(_) => {
                 let mut item_fields = std::collections::HashMap::new();
@@ -437,19 +443,38 @@ impl EntropicAnalyzer {
                     .insert("key".to_string(), ictl_core::types::Type::String);
                 item_fields
                     .insert("value".to_string(), ictl_core::types::Type::Unknown);
-                ictl_core::types::Type::Struct(ictl_core::types::StructType {
-                    fields: item_fields,
-                    decay_after_ms: None,
-                    scoped_branch: None,
-                })
+                (
+                    ictl_core::types::Type::Struct(ictl_core::types::StructType {
+                        fields: item_fields,
+                        decay_after_ms: None,
+                        scoped_branch: None,
+                    }),
+                    None,
+                )
             }
-            ictl_core::types::Type::Array(inner) => *inner.clone(),
-            other => other,
+            ictl_core::types::Type::Array(inner) => (*inner.clone(), None),
+            ictl_core::types::Type::PacedIterable {
+                element_type,
+                max_time_ms,
+            } => (*element_type.clone(), Some(max_time_ms)),
+            other => (other, None),
         };
         self.set_variable_type(item_name, loop_item_type);
 
         if let ForMode::Consume = mode {
             self.mark_consumed(source)?;
+        }
+
+        if let Some(limit) = max_per_iteration {
+            let body_cost = crate::statement::estimate_block_cost(self, body);
+            if body_cost > limit {
+                return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
+                    format!(
+                        "Loop body cost {}ms exceeds PacedIterable contract: {}ms",
+                        body_cost, limit
+                    ),
+                )));
+            }
         }
 
         if let Some(max) = max_ms {
@@ -463,7 +488,7 @@ impl EntropicAnalyzer {
         }
 
         if let Some(pacing) = pacing_ms {
-            let body_cost = body.len() as u64;
+            let body_cost = crate::statement::estimate_block_cost(self, body);
             if body_cost > *pacing {
                 return Err(self.annotate(SemanticErrorKind::PacingViolation));
             }

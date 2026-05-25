@@ -200,10 +200,12 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn is_capability_allowed(&self, cap: &str) -> bool {
-        self.capability_stack
-            .iter()
-            .rev()
-            .any(|map| map.contains_key(cap))
+        self.capability_stack.iter().rev().any(|map| {
+            map.contains_key(cap)
+                || map
+                    .keys()
+                    .any(|k| k.starts_with(&(cap.to_string() + "[id=")))
+        })
     }
 
     pub(crate) fn get_capability(

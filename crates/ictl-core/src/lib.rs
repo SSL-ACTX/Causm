@@ -148,6 +148,7 @@ macro_rules! statements {
                 consumed_branch: Option<Vec<SpannedStatement>>
             },
             Await(String),
+            AwaitChan(String),
             If {
                 condition: Expression,
                 then_branch: Vec<SpannedStatement>,
@@ -352,8 +353,16 @@ pub struct SelectCase {
 pub enum TypeName {
     Builtin(BuiltinType),
     Custom(String),
+    Generic(String, Vec<TypeParam>),
     Optional(Box<TypeName>),
     Union(Vec<TypeName>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeParam {
+    Type(TypeName),
+    Amount(u64),
+    Duration(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

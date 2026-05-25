@@ -182,6 +182,9 @@ macro_rules! instructions {
                 dest: $crate::ir::Reg,
                 chan_id: String
             },
+            AwaitChan {
+                chan_id: String
+            },
 
             // Structural Access
             StructLit {
@@ -875,6 +878,11 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         Statement::Await(name) => {
             let target = ctx.get_reg(name);
             ctx.push(Instruction::Await { target });
+        }
+        Statement::AwaitChan(name) => {
+            ctx.push(Instruction::AwaitChan {
+                chan_id: name.clone(),
+            });
         }
         Statement::Commit(body) => {
             // Simplified commit: we collect modified vars.

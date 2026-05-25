@@ -25,7 +25,12 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         let mut cap_set = std::collections::HashMap::new();
         for cap in &block.manifest.capabilities {
-            cap_set.insert(cap.path.clone(), cap.clone());
+            let key = if let Some(id) = cap.parameters.get("id") {
+                format!("{}[id={}]", cap.path, id)
+            } else {
+                cap.path.clone()
+            };
+            cap_set.insert(key, cap.clone());
         }
         self.capability_stack.push(cap_set);
 
@@ -128,6 +133,23 @@ impl EntropicAnalyzer {
             return Err(
                 self.annotate(SemanticErrorKind::UseAfterConsume(target.clone()))
             );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn AwaitChan(
+        &mut self,
+        chan_id: &String,
+    ) -> Result<(), SemanticError> {
+        if !self.capability_stack.is_empty()
+            && !self.is_capability_allowed("Chan.Inbound")
+        {
+            let key = format!("Chan.Inbound[id={}]", chan_id);
+            if !self.is_capability_allowed(&key) {
+                return Err(self.annotate(SemanticErrorKind::MissingCapability(
+                    format!("Chan.Inbound(id={})", chan_id),
+                )));
+            }
         }
         Ok(())
     }

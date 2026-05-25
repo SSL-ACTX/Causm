@@ -33,6 +33,7 @@ statement = {
     | select_stmt
     | match_entropy_stmt
     | await_stmt
+    | await_chan_stmt
     | if_stmt
     | break_stmt
     | loop_stmt
@@ -141,7 +142,9 @@ type_annotation = { ":" ~ type_name }
 type_name = { union_type }
 union_type = { optional_type ~ ("|" ~ optional_type)* }
 optional_type = { base_type ~ "?"? }
-base_type = { identifier | "int" | "float" | "bool" | "string" | "struct" | "topology" | "array" }
+base_type = { identifier ~ ("<" ~ type_param_list ~ ">")? | "int" | "float" | "bool" | "string" | "struct" | "topology" | "array" }
+type_param_list = { type_param ~ ("," ~ type_param)* }
+type_param = { type_name | amount ~ "ms" | amount }
 
 open_chan_stmt = { "open_chan" ~ identifier ~ "(" ~ amount ~ ")" }
 chan_send_stmt = { "chan_send" ~ identifier ~ "(" ~ identifier ~ ")" }
@@ -149,6 +152,7 @@ chan_send_stmt = { "chan_send" ~ identifier ~ "(" ~ identifier ~ ")" }
 watchdog_stmt = { "watchdog" ~ identifier ~ "timeout" ~ amount ~ "ms" ~ ("recovery" ~ statement_block)? }
 
 await_stmt = { "await" ~ "(" ~ identifier ~ ")" }
+await_chan_stmt = { "await_chan" ~ "(" ~ identifier ~ ")" }
 
 defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ "deadline" ~ amount ~ "ms" }
 

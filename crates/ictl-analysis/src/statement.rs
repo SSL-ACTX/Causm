@@ -166,6 +166,7 @@ pub fn estimate_statement_cost(
         Statement::LoopTick { .. } => 1,
         Statement::Slice { .. } => 0,
         Statement::Await(_) => 1,
+        Statement::AwaitChan(_) => 1,
         Statement::SpeculationMode(_) => 0,
         Statement::Break => 0,
         Statement::Entangle { .. } => 0,
