@@ -179,12 +179,9 @@ impl EntropicAnalyzer {
         }
 
         let mut final_state = branch_results[0].clone();
-        for i in 1..branch_results.len() {
-            final_state = self.merge_states(
-                final_state,
-                branch_results[i].clone(),
-                reconcile,
-            )?;
+        for branch_result in branch_results.iter().skip(1) {
+            final_state =
+                self.merge_states(final_state, branch_result.clone(), reconcile)?;
         }
 
         self.branch_contexts
@@ -538,13 +535,13 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Yield(&mut self, name: &String) -> Result<(), SemanticError> {
+    pub(crate) fn Yield(&mut self, name: &str) -> Result<(), SemanticError> {
         self.mark_consumed(name)
     }
 
     pub(crate) fn Inspect(
         &mut self,
-        _target: &String,
+        _target: &str,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         let snapshot = self

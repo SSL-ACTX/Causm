@@ -1,8 +1,11 @@
 #![allow(unused_imports)]
 
+pub mod branching;
 pub mod core;
 pub mod cost;
+pub mod entropy;
 pub mod error;
+pub mod eval;
 pub mod instructions;
 pub mod state;
 

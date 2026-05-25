@@ -57,7 +57,7 @@ impl Type {
             TypeName::Generic(name, params) => match name.as_str() {
                 "PacedIterable" => {
                     let element_type =
-                        if let Some(crate::TypeParam::Type(t)) = params.get(0) {
+                        if let Some(crate::TypeParam::Type(t)) = params.first() {
                             Box::new(Type::from_typename(t))
                         } else {
                             Box::new(Type::Unknown)
@@ -78,7 +78,7 @@ impl Type {
                 }
                 "ConstantAccess" => {
                     let inner_type =
-                        if let Some(crate::TypeParam::Type(t)) = params.get(0) {
+                        if let Some(crate::TypeParam::Type(t)) = params.first() {
                             Box::new(Type::from_typename(t))
                         } else {
                             Box::new(Type::Unknown)

@@ -180,9 +180,10 @@ pub(crate) fn infer_expression_type(
                     }
                 }
                 causm_core::BinaryOperator::Eq | causm_core::BinaryOperator::Neq => {
-                    if left_type == Type::Unknown || right_type == Type::Unknown {
-                        Ok(Type::Bool)
-                    } else if left_type == right_type {
+                    if left_type == Type::Unknown
+                        || right_type == Type::Unknown
+                        || left_type == right_type
+                    {
                         Ok(Type::Bool)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
@@ -197,9 +198,10 @@ pub(crate) fn infer_expression_type(
                 | causm_core::BinaryOperator::Gt
                 | causm_core::BinaryOperator::Le
                 | causm_core::BinaryOperator::Ge => {
-                    if left_type == Type::Unknown || right_type == Type::Unknown {
-                        Ok(Type::Bool)
-                    } else if left_type.is_numeric() && right_type.is_numeric() {
+                    if left_type == Type::Unknown
+                        || right_type == Type::Unknown
+                        || (left_type.is_numeric() && right_type.is_numeric())
+                    {
                         Ok(Type::Bool)
                     } else {
                         Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
