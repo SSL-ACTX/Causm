@@ -1,8 +1,24 @@
 # Causm
 
+> [!IMPORTANT]  
+> **Research Status**: Causm is a domain-specific research language and experimental toolchain. It is intended for exploring temporal and entropic memory models and is **not suitable for production environments**. The specifications and implementation are subject to radical changes as the research evolves.
+
 ## Abstract
 
 **Causm** is a domain-specific research language designed to address the inherent non-determinism in concurrent systems. By treating time as a first-class execution primitive and implementing an entropic memory model, Causm provides a framework where race conditions are eliminated through mathematical enforcement of temporal invariants. This repository contains the reference implementation of the Causm toolchain, including the compiler, analyzer, and the Z3-governed Register-based Temporal Virtual Machine (TVM).
+
+## Core Research Questions
+
+Causm is a prototype built to investigate and test the feasibility of the following hypotheses:
+
+1.  **Can race conditions be mitigated by making time a verifiable execution primitive?**  
+    Causm explores "Isochronous Scheduling," where execution cost is modeled deterministically. By using an SMT solver (Z3), the project investigates if it is possible to prevent unexpected interleaving by enforcing rigid temporal alignment.
+2.  **Is it feasible to model memory safety through state decay rather than borrow checking?**  
+    The "Entropic Memory Model" hypothesizes that treating data access as a destructive operation (state decay) can provide a simpler alternative to traditional ownership models. Causm tests if this can be verified symbolically to achieve safety without GC pauses.
+3.  **Can cross-timeline state be synchronized without traditional locking mechanisms?**  
+    Through "Causal Synchronization" and "Acausal Rewind," the project researches how independent execution branches might communicate state transitions while attempting to maintain a consistent causal order.
+4.  **How effectively can SMT-based kernels verify temporal correctness in non-linear code?**  
+    The "Z3-Governed Correctness Kernel" is an experimental implementation that unrolls loops and branches into symbolic constraints to explore the boundaries of proving Worst-Case Execution Time (WCET) bounds.
 
 ## Architecture
 
@@ -32,32 +48,24 @@ graph TD
     end
 ```
 
-## Theoretical Framework
+## Investigative Pillars
 
-The design of Causm is predicated on three primary architectural pillars:
+1.  **Time as a Primitive**: Instructions are modeled with deterministic costs, exploring if the TVM can maintain time-invariance through padding.
+2.  **State Decay (Entropy)**: A model where data access triggers "decay," investigating if this can provide memory safety without a borrow checker.
+3.  **Timeline Bifurcation**: Concurrency via independent branches (`split`), researching isolated memory arenas and clocks.
 
-### 1. Deterministic Temporal Execution
-In Causm, computational time is not an emergent side effect of hardware execution but a defined primitive within the language semantics. Every instruction is assigned a deterministic temporal cost. The TVM ensures time-invariance through deterministic padding and isochronous scheduling.
+## Experimental Verification (Z3)
 
-### 2. Entropic Memory Management
-Causm employs an "entropic" memory model based on the principle of state decay. Accessing or moving data structures results in entropic transformation. This model eliminates the necessity for a traditional borrow checker while maintaining strict memory safety.
+The prototype uses Z3 to test the feasibility of proving:
+- **Temporal Bounds**: Modeling WCET and isochronous budgets across paths.
+- **Inductive Safety**: Testing if entropic states can be preserved across loop iterations.
+- **Paradox Prevention**: Tracking "Causal Horizons" to prevent inconsistent rewinds.
+- **Entanglement**: Propagating decay across logically coupled variables.
 
-### 3. Isolated Timeline Concurrency
-Concurrency is modeled through the explicit bifurcation of execution timelines. The `split` operation generates independent execution branches, each equipped with its own memory arena and temporal clock.
+## Research Patterns
 
-## Core Correctness Kernel (Z3 Integration)
-
-Causm features a modular **Correctness Kernel** powered by the Z3 SMT solver. This kernel rigorously proves the following invariants before execution:
-
-- **Symbolic Temporal Proofs**: Proves that Worst-Case Execution Time (WCET) bounds and isochronous slice budgets hold across all possible execution paths.
-- **Inductive Loop Safety**: Uses bounded symbolic unrolling to prove that entropic states (like single-ownership) are preserved across arbitrary iterations.
-- **Formal Paradox Prevention**: Symbolically tracks the "Causal Horizon" to ensure that `rewind_to` operations never attempt to undo events already observed by external systems.
-- **Entanglement Validation**: Proves that destructive operations on logically coupled variables propagate decay correctly through the entanglement graph.
-
-## Advanced Exemplary Patterns
-
-### 1. High-Integrity Entropic Transfer
-Causm ensures that mid-timeline communication is race-free by coupling message passing with entropic consumption and symbolic latency bounds.
+### 1. Entropic Transfer
+Investigating if coupling message passing with entropic consumption can prevent mid-timeline races.
 
 ```ictl
 isolate Producer {
@@ -77,8 +85,8 @@ isolate Consumer {
 }
 ```
 
-### 2. Temporal Contracts & Pacing
-Embedded contracts allow the formal kernel to prove that periodic loops never drift out of sync.
+### 2. Temporal Pacing
+Testing if contracts can allow the formal kernel to prove that periodic loops remain synchronized.
 
 ```ictl
 routine process_packet(p: PacedIterable<int, 2ms>) taking 10ms {
@@ -99,8 +107,8 @@ isolate Logic {
 }
 ```
 
-### 3. Paradox-Free Acausal Reset
-Causm allows timelines to "time travel" to previous anchors, but prevents paradoxes involving external commitments.
+### 3. Acausal Reset
+Exploring how timelines can "time travel" to previous anchors without violating external commitments.
 
 ```ictl
 @0ms: {
