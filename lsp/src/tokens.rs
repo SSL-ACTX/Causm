@@ -1,6 +1,6 @@
 use crate::analysis_worker::AnalysisResults;
 use dashmap::DashMap;
-use ictl_core::*;
+use causm_core::*;
 use tower_lsp::lsp_types::*;
 
 pub async fn handle_tokens(
@@ -52,7 +52,7 @@ pub async fn handle_tokens(
 
 fn walk_statement(
     stmt: &SpannedStatement,
-    state: Option<&ictl_analysis::analyzer::BranchState>,
+    state: Option<&causm_analysis::analyzer::BranchState>,
     tokens: &mut Vec<SemanticToken>,
     last_line: &mut u32,
     last_start: &mut u32,
@@ -84,7 +84,7 @@ fn walk_statement(
 fn walk_expression(
     expr: &Expression,
     span: &Span,
-    state: Option<&ictl_analysis::analyzer::BranchState>,
+    state: Option<&causm_analysis::analyzer::BranchState>,
     tokens: &mut Vec<SemanticToken>,
     last_line: &mut u32,
     last_start: &mut u32,
@@ -130,7 +130,7 @@ fn walk_expression(
 fn push_variable_token(
     name: &str,
     span: &Span,
-    state: Option<&ictl_analysis::analyzer::BranchState>,
+    state: Option<&causm_analysis::analyzer::BranchState>,
     tokens: &mut Vec<SemanticToken>,
     last_line: &mut u32,
     last_start: &mut u32,
@@ -178,7 +178,7 @@ mod tests {
     use super::*;
     use crate::analysis_worker::AnalysisResults;
     use dashmap::DashMap;
-    use ictl_analysis::analyzer::EntropicAnalyzer;
+    use causm_analysis::analyzer::EntropicAnalyzer;
 
     use tower_lsp::lsp_types::Url;
 
@@ -198,7 +198,7 @@ mod tests {
         };
 
         cache.insert(
-            Url::parse("file:///tmp/test.ictl").unwrap(),
+            Url::parse("file:///tmp/test.csm").unwrap(),
             AnalysisResults {
                 diagnostics: vec![],
                 program: Some(program),
@@ -210,7 +210,7 @@ mod tests {
         let result = handle_tokens(
             SemanticTokensParams {
                 text_document: TextDocumentIdentifier {
-                    uri: Url::parse("file:///tmp/test.ictl").unwrap(),
+                    uri: Url::parse("file:///tmp/test.csm").unwrap(),
                 },
                 work_done_progress_params: Default::default(),
                 partial_result_params: Default::default(),

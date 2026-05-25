@@ -1,6 +1,6 @@
-use ictl_analysis::analyzer::EntropicAnalyzer;
-use ictl_core::Program;
-use ictl_frontend::parser::parse_ictl;
+use causm_analysis::analyzer::EntropicAnalyzer;
+use causm_core::Program;
+use causm_frontend::parser::parse_causm;
 use tower_lsp::lsp_types::*;
 
 pub struct AnalysisResults {
@@ -16,7 +16,7 @@ pub fn analyze(text: &str, _filename: &str) -> AnalysisResults {
     let mut analyzer = EntropicAnalyzer::new();
     let source_text = Some(text.to_string());
 
-    match parse_ictl(text) {
+    match parse_causm(text) {
         Ok(program) => {
             program_opt = Some(program.clone());
             if let Err(err) =

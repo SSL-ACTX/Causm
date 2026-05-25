@@ -1,7 +1,7 @@
 use crate::analysis_worker::AnalysisResults;
 use dashmap::DashMap;
-use ictl_analysis::statement::estimate_block_cost;
-use ictl_core::*;
+use causm_analysis::statement::estimate_block_cost;
+use causm_core::*;
 use tower_lsp::lsp_types::*;
 
 pub async fn handle_inlay_hints(
@@ -112,7 +112,7 @@ mod tests {
     use super::*;
     use crate::analysis_worker::AnalysisResults;
     use dashmap::DashMap;
-    use ictl_analysis::analyzer::EntropicAnalyzer;
+    use causm_analysis::analyzer::EntropicAnalyzer;
 
     use tower_lsp::lsp_types::Url;
 
@@ -133,7 +133,7 @@ mod tests {
         };
 
         cache.insert(
-            Url::parse("file:///tmp/test.ictl").unwrap(),
+            Url::parse("file:///tmp/test.csm").unwrap(),
             AnalysisResults {
                 diagnostics: vec![],
                 program: Some(program),
@@ -145,7 +145,7 @@ mod tests {
         let result = handle_inlay_hints(
             InlayHintParams {
                 text_document: TextDocumentIdentifier {
-                    uri: Url::parse("file:///tmp/test.ictl").unwrap(),
+                    uri: Url::parse("file:///tmp/test.csm").unwrap(),
                 },
                 range: Range {
                     start: Position {

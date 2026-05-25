@@ -1,7 +1,7 @@
-# ICTL Agent-Customization Skill
+# Causm Agent-Customization Skill
 
 ## Purpose
-Provide a standard approach for building and iterating ICTL code changes in this repository, focused on parser/analyzer/vm semantics and entropic temporal correctness.
+Provide a standard approach for building and iterating Causm code changes in this repository, focused on parser/analyzer/vm semantics and entropic temporal correctness.
 
 ## When to use
 - Adding new language grammar constructs
@@ -14,7 +14,7 @@ Provide a standard approach for building and iterating ICTL code changes in this
    - Search for existing agent customizations and docs
    - Keep original content; extend where needed
 2. Explore codebase
-   - Identify core files (`src/parser.rs`, `src/ictl.pest`, `src/analyzer.rs`, `src/vm.rs`, `src/memory.rs`)
+   - Identify core files (`src/parser.rs`, `src/causm.pest`, `src/analyzer.rs`, `src/vm.rs`, `src/memory.rs`)
    - Gather build/test commands from `README.md`
 3. Generate or update customization docs
    - Create/update `.github/copilot-instructions.md` with project purpose, conventions, build/test commands, workflow, prompt examples
@@ -37,8 +37,8 @@ A saved `SKILL.md` plus a `.github/copilot-instructions.md` that is maintained, 
 - explicit state on source modules and expected behaviors
 
 ## Example prompts
-- "Using the ICTL skill, add support for `@timeline:` blocks and include parser + analyzer tests."
-- "In ICTL, implement deterministic 1ms cost for `split`/`merge` and add a regression test."
+- "Using the Causm skill, add support for `@timeline:` blocks and include parser + analyzer tests."
+- "In Causm, implement deterministic 1ms cost for `split`/`merge` and add a regression test."
 - "Update watchdog recovery path in `src/vm.rs` and write a focused test." 
 
 ## Next customization ideas

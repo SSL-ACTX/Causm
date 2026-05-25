@@ -103,6 +103,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "causm-analysis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "causm-core",
+ "causm-frontend",
+ "thiserror",
+ "z3",
+]
+
+[[package]]
+name = "causm-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "causm-analysis",
+ "causm-core",
+ "causm-frontend",
+ "causm-runtime",
+ "clap",
+]
+
+[[package]]
+name = "causm-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "causm-frontend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "causm-core",
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
+name = "causm-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "causm-core",
+ "causm-frontend",
+ "dashmap",
+ "thiserror",
+]
+
+[[package]]
 name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,59 +303,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "ictl-analysis"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ictl-core",
- "ictl-frontend",
- "thiserror",
- "z3",
-]
-
-[[package]]
-name = "ictl-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "ictl-analysis",
- "ictl-core",
- "ictl-frontend",
- "ictl-runtime",
-]
-
-[[package]]
-name = "ictl-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "ictl-frontend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ictl-core",
- "pest",
- "pest_derive",
- "serde",
-]
-
-[[package]]
-name = "ictl-runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dashmap",
- "ictl-core",
- "ictl-frontend",
- "thiserror",
-]
 
 [[package]]
 name = "is_terminal_polyfill"

@@ -48,7 +48,7 @@ impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
-                name: "ictl-lsp".to_string(),
+                name: "causm-lsp".to_string(),
                 version: Some("0.1.0".to_string()),
             }),
             capabilities: ServerCapabilities {
@@ -81,7 +81,7 @@ impl LanguageServer for Backend {
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "ICTL LSP initialized!")
+            .log_message(MessageType::INFO, "Causm LSP initialized!")
             .await;
     }
 
@@ -99,7 +99,7 @@ impl LanguageServer for Backend {
                 uri: params.text_document.uri,
                 text: change.text,
                 version: params.text_document.version,
-                language_id: "ictl".to_string(),
+                language_id: "causm".to_string(),
             })
             .await;
         }

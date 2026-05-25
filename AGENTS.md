@@ -1,4 +1,4 @@
-# ICTL Agent Recommendations
+# Causm Agent Recommendations
 
 This project uses a workspace Copilot instruction file in `.github/copilot-instructions.md`.
 
@@ -12,6 +12,6 @@ This project uses a workspace Copilot instruction file in `.github/copilot-instr
 3. Prefer small runs of `cargo test` and `cargo fmt` in every PR.
 
 ## Templates
-- Parser change: update `src/frontend/ictl.pest`, `src/frontend/parser.rs`, add parser unit tests
+- Parser change: update `src/frontend/causm.pest`, `src/frontend/parser.rs`, add parser unit tests
 - Analyzer change: update `src/analysis/analyzer.rs`, add semantic tests
 - VM/memory change: update `src/runtime/{vm.rs,memory.rs}`, add temporal regression tests

@@ -1,0 +1,56 @@
+// examples/temporal_lease.csm
+//
+// This example demonstrates Temporal Leases in Causm.
+// A lease provides transient, read-only access to an entropic structure
+// for a strcausmy defined temporal duration without triggering destructive decay
+// or incurring the CPU penalty of a full 'clone()'.
+
+@0ms: {
+    // 1. Initialize a complex system state.
+    let system_state = struct {
+        status = "OPERATIONAL",
+        entropy_level = 0.042,
+        metrics = struct {
+            requests = 1500,
+            errors = 2
+        }
+    }
+    
+    print("--- Initial System State ---")
+    debug(system_state)
+
+    // 2. Establish a Temporal Lease.
+    // 'system_state' transitions to Leased state.
+    // 'read_view' is a transient view into the data.
+    // The block is guaranteed to take exactly 20ms due to deterministic padding.
+    print("Initiating 20ms lease for validation...")
+    
+    lease read_view = system_state for 20ms {
+        print("Inside Lease Block:")
+        
+        let current_status = read_view.status
+        let err_count = read_view.metrics.errors
+        
+        if (err_count < 5) {
+            print("Status check passed.")
+        } else {
+            print("Status check failed: high error rate.")
+        }
+        
+        // Note: Mutation of 'read_view' or 'system_state' here 
+        // would trigger a Semantic Error during analysis.
+        // e.g., read_view.status = "CORRUPTED" // ILLEGAL
+    }
+    
+    // 3. Post-Lease Verification.
+    // At this point, exactly 20ms + setup time has passed.
+    // 'system_state' is automatically restored to 'Valid'.
+    print("Lease expired. System state restored.")
+    debug(system_state)
+    
+    // Verification of temporal deterministic padding.
+    // Setup + Lease (20ms) should be roughly 25-30ms in current VM model.
+    assert_time(elapsed >= 20ms)
+    
+    print("Execution synchronized.")
+}
