@@ -216,7 +216,7 @@ impl EntropicAnalyzer {
 
             let case_type = crate::expression::infer_expression_type(self, target)?;
             self.set_variable_type(binding, case_type);
-            analyze_expression(self, target)?;
+            crate::expression::analyze_expression_nonconsuming(self, target)?;
 
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
@@ -242,7 +242,7 @@ impl EntropicAnalyzer {
 
             let case_type = crate::expression::infer_expression_type(self, target)?;
             self.set_variable_type(binding, case_type);
-            analyze_expression(self, target)?;
+            crate::expression::analyze_expression_nonconsuming(self, target)?;
 
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;

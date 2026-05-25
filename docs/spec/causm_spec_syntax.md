@@ -99,12 +99,12 @@ Facilitates speculative path evaluation followed by deterministic state reconcil
 
 **Syntax:**
 ```causm
-if (<expression>) <statement_block> [else <statement_block>] [reconcile (<resolution_rules>)]
+if (<expression>) <statement_block> [else <statement_block>] [reconcile (<resolution_rules> | auto)]
 ```
 
 **Semantics:**
 - Both execution paths undergo speculative analysis for entropic consistency.
-- `reconcile` rules define the resolution mechanism for variables consumed within a single path.
+- `reconcile` rules define the resolution mechanism for variables consumed within a single path. The `auto` keyword automatically merges decayed states and enforces type consistency.
 
 ### Speculative Execution (`speculate`)
 Creates a transient micro-timeline for trial computations with guaranteed zero-leakage rollback.

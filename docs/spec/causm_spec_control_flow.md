@@ -10,7 +10,7 @@ The `if` statement facilitates the runtime selection between divergent execution
 
 ### Formal Syntax
 ```causm
-if (<condition>) <statement_block> [else <statement_block>] [reconcile (<resolution_rules>)]
+if (<condition>) <statement_block> [else <statement_block>] [reconcile (<resolution_rules> | auto)]
 ```
 
 ### Execution Semantics
@@ -23,6 +23,7 @@ if (<condition>) <statement_block> [else <statement_block>] [reconcile (<resolut
 
 | Protocol Identifier  | Functional Description                                                                                        |
 | :------------------- | :------------------------------------------------------------------------------------------------------------ |
+| **`auto`**           | Automatically generates reconciliation strategies, merges decayed states, and enforces strict type consistency. |
 | **`first_wins`**     | Prioritizes the value from the executed branch if available; otherwise, utilizes the value from the alternate. |
 | **`priority(if)`**   | Always prioritizes the value produced within the `then` branch in the event of a conflict.                    |
 | **`priority(else)`** | Always prioritizes the value produced within the `else` branch.                                               |

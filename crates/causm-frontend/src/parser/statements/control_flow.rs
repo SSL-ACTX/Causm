@@ -31,7 +31,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             });
             let reconcile_rules = if let Some(reconcile_pair) = inner.next() {
                 let mut rules = HashMap::new();
-                let mut is_auto = false;
+                let is_auto = reconcile_pair.as_str().contains("auto");
                 for child in reconcile_pair.into_inner() {
                     if child.as_rule() == Rule::resolution_rules {
                         for rule in child.into_inner() {
@@ -62,8 +62,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                                 rules.insert(k.as_str().to_string(), strat);
                             }
                         }
-                    } else if child.as_str() == "auto" {
-                        is_auto = true;
                     }
                 }
                 Some(MergeResolution {

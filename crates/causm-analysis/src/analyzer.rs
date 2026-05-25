@@ -364,15 +364,27 @@ impl EntropicAnalyzer {
         }
 
         let mut merged_types = then_end_state.types.clone();
+        let mut type_conflicts = Vec::new();
         for (name, typ) in &else_end_state.types {
             merged_types
                 .entry(name.clone())
                 .and_modify(|existing| {
                     if existing != typ {
+                        type_conflicts.push(name.clone());
                         *existing = causm_core::types::Type::Unknown;
                     }
                 })
                 .or_insert(typ.clone());
+        }
+
+        if !type_conflicts.is_empty() {
+            if let Some(reconcile_rules) = reconcile {
+                if reconcile_rules.auto {
+                    return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
+                        format!("divergent types for {}", type_conflicts.join(", ")),
+                    )));
+                }
+            }
         }
 
         Ok(BranchState {

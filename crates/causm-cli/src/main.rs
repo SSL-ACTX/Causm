@@ -9,14 +9,17 @@ use std::path::PathBuf;
 
 fn usage(program: &str) {
     eprintln!(
-        "Usage: {} [--check] [--run] [--dump-ast] [--dump-ir] [--trace-entropy] <file1.csm> [file2.csm ...]",
+        "Usage: {} [--check] [--run] [--dump-ast] [--dump-ir] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
         program
     );
-    eprintln!("  --check          Perform semantic analysis only");
-    eprintln!("  --run            Execute program after analysis (default)");
-    eprintln!("  --dump-ast       Print the parsed AST and continue");
-    eprintln!("  --dump-ir        Print the lowered IR and continue");
-    eprintln!("  --trace-entropy  Show entropic decay map after every instruction");
+    eprintln!("  --check                Perform semantic analysis only");
+    eprintln!("  --run                  Execute program after analysis (default)");
+    eprintln!("  --dump-ast             Print the parsed AST and continue");
+    eprintln!("  --dump-ir              Print the lowered IR and continue");
+    eprintln!(
+        "  --trace-entropy        Show entropic decay map after every instruction"
+    );
+    eprintln!("  --dump-causal-history  Print the causal trace events at the end of execution");
 }
 
 fn format_entropic_state(state: &EntropicState) -> String {
@@ -43,6 +46,7 @@ fn main() -> anyhow::Result<()> {
     let mut dump_ast = false;
     let mut dump_ir = false;
     let mut trace_entropy = false;
+    let mut dump_causal_history = false;
 
     while let Some(arg) = args.first() {
         if arg == "--check" {
@@ -67,6 +71,11 @@ fn main() -> anyhow::Result<()> {
         }
         if arg == "--trace-entropy" {
             trace_entropy = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-causal-history" {
+            dump_causal_history = true;
             args.remove(0);
             continue;
         }
@@ -171,6 +180,13 @@ fn main() -> anyhow::Result<()> {
                         i,
                         format_entropic_state(state)
                     );
+                }
+            }
+
+            if dump_causal_history {
+                println!("\x1b[1;35mCausal Trace History:\x1b[0m");
+                for (i, event) in vm.causal_history.iter().enumerate() {
+                    println!("  \x1b[1;30m[{:04}]\x1b[0m {:?}", i, event);
                 }
             }
         }
