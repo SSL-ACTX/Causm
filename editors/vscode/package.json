@@ -1,7 +1,7 @@
 {
-    "name": "ictl-vscode",
-    "displayName": "ICTL Entropic Extension",
-    "description": "Language support for ICTL with Entropic Shading and Temporal Pacing.",
+    "name": "causm-vscode",
+    "displayName": "Causm Entropic Extension",
+    "description": "Language support for Causm with Entropic Shading and Temporal Pacing.",
     "version": "0.1.0",
     "license": "AGPL-3.0-only",
     "engines": {
@@ -10,7 +10,7 @@
     "categories": [
         "Programming Languages"
     ],
-    "activationEvents": ["onLanguage:ictl"],
+    "activationEvents": ["onLanguage:causm"],
     "main": "./out/extension.js",
     "publisher": "ssl-actx",
     "dependencies": {
@@ -18,33 +18,33 @@
     },
     "contributes": {
         "languages": [{
-            "id": "ictl",
-            "aliases": ["ICTL", "ictl"],
-            "extensions": [".ictl"],
+            "id": "causm",
+            "aliases": ["Causm", "causm"],
+            "extensions": [".csm"],
             "configuration": "./language-configuration.json"
         }],
         "grammars": [{
-            "language": "ictl",
-            "scopeName": "source.ictl",
-            "path": "./syntaxes/ictl.tmLanguage.json"
+            "language": "causm",
+            "scopeName": "source.csm",
+            "path": "./syntaxes/causm.tmLanguage.json"
         }],
         "configuration": {
-            "title": "ICTL",
+            "title": "Causm",
             "properties": {
-                "ictl.lsp.path": {
+                "causm.lsp.path": {
                     "type": "string",
                     "default": null,
-                    "description": "Path to the ictl-lsp binary"
+                    "description": "Path to the causm-lsp binary"
                 }
             }
         },
         "semanticTokenTypes": [
-            { "id": "ictl_valid", "description": "Valid entropic state" },
-            { "id": "ictl_decayed", "description": "Decayed entropic state" },
-            { "id": "ictl_consumed", "description": "Consumed entropic state" }
+            { "id": "causm_valid", "description": "Valid entropic state" },
+            { "id": "causm_decayed", "description": "Decayed entropic state" },
+            { "id": "causm_consumed", "description": "Consumed entropic state" }
         ],
         "semanticTokenScopes": [
-            { "language": "ictl", "scopes": { "ictl_valid": ["variable.other"], "ictl_decayed": ["markup.changed"], "ictl_consumed": ["comment"] } }
+            { "language": "causm", "scopes": { "causm_valid": ["variable.other"], "causm_decayed": ["markup.changed"], "causm_consumed": ["comment"] } }
         ]
     },
     "scripts": {

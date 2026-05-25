@@ -36,10 +36,10 @@ function resolveViaWhich(command) {
     }
     return undefined;
 }
-function resolveIctlLspPath(context) {
-    const config = vscode_1.workspace.getConfiguration('ictl');
+function resolveCausmLspPath(context) {
+    const config = vscode_1.workspace.getConfiguration('causm');
     const configPath = config.get('lsp.path');
-    const executableName = process.platform === 'win32' ? 'ictl-lsp.exe' : 'ictl-lsp';
+    const executableName = process.platform === 'win32' ? 'causm-lsp.exe' : 'causm-lsp';
     if (configPath) {
         if (path.isAbsolute(configPath) && isExecutable(configPath)) {
             return configPath;
@@ -73,26 +73,26 @@ function resolveIctlLspPath(context) {
     return undefined;
 }
 function activate(context) {
-    const lspPath = resolveIctlLspPath(context);
+    const lspPath = resolveCausmLspPath(context);
     if (!lspPath) {
-        const msg = 'Could not resolve ictl-lsp path (looked for setting, workspace targets, extension path, and PATH).\n' +
-            'Run `cargo build --bin ictl-lsp` and set `ictl.lsp.path` explicitly if needed.';
+        const msg = 'Could not resolve causm-lsp path (looked for setting, workspace targets, extension path, and PATH).\n' +
+            'Run `cargo build --bin causm-lsp` and set `causm.lsp.path` explicitly if needed.';
         vscode_1.window.showErrorMessage(msg);
         console.error(msg);
         return;
     }
-    vscode_1.window.showInformationMessage(`Using ictl-lsp binary: ${lspPath}`);
+    vscode_1.window.showInformationMessage(`Using causm-lsp binary: ${lspPath}`);
     const serverOptions = {
         run: { command: lspPath },
         debug: { command: lspPath }
     };
     const clientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'ictl' }],
+        documentSelector: [{ scheme: 'file', language: 'causm' }],
         synchronize: {
-            fileEvents: vscode_1.workspace.createFileSystemWatcher('**/*.ictl')
+            fileEvents: vscode_1.workspace.createFileSystemWatcher('**/*.csm')
         }
     };
-    client = new node_1.LanguageClient('ictlLanguageServer', 'ICTL Language Server', serverOptions, clientOptions);
+    client = new node_1.LanguageClient('causmLanguageServer', 'Causm Language Server', serverOptions, clientOptions);
     client.start();
 }
 exports.activate = activate;

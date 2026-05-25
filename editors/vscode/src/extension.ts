@@ -40,10 +40,10 @@ function resolveViaWhich(command: string): string | undefined {
     return undefined;
 }
 
-function resolveIctlLspPath(context: ExtensionContext): string | undefined {
-    const config = workspace.getConfiguration('ictl');
+function resolveCausmLspPath(context: ExtensionContext): string | undefined {
+    const config = workspace.getConfiguration('causm');
     const configPath = config.get<string>('lsp.path');
-    const executableName = process.platform === 'win32' ? 'ictl-lsp.exe' : 'ictl-lsp';
+    const executableName = process.platform === 'win32' ? 'causm-lsp.exe' : 'causm-lsp';
 
     if (configPath) {
         if (path.isAbsolute(configPath) && isExecutable(configPath)) {
@@ -85,18 +85,18 @@ function resolveIctlLspPath(context: ExtensionContext): string | undefined {
 }
 
 export function activate(context: ExtensionContext) {
-    const lspPath = resolveIctlLspPath(context);
+    const lspPath = resolveCausmLspPath(context);
 
     if (!lspPath) {
         const msg =
-            'Could not resolve ictl-lsp path (looked for setting, workspace targets, extension path, and PATH).\n' +
-            'Run `cargo build --bin ictl-lsp` and set `ictl.lsp.path` explicitly if needed.';
+            'Could not resolve causm-lsp path (looked for setting, workspace targets, extension path, and PATH).\n' +
+            'Run `cargo build --bin causm-lsp` and set `causm.lsp.path` explicitly if needed.';
         window.showErrorMessage(msg);
         console.error(msg);
         return;
     }
 
-    window.showInformationMessage(`Using ictl-lsp binary: ${lspPath}`);
+    window.showInformationMessage(`Using causm-lsp binary: ${lspPath}`);
 
     const serverOptions: ServerOptions = {
         run: { command: lspPath },
@@ -104,15 +104,15 @@ export function activate(context: ExtensionContext) {
     };
 
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'ictl' }],
+        documentSelector: [{ scheme: 'file', language: 'causm' }],
         synchronize: {
-            fileEvents: workspace.createFileSystemWatcher('**/*.ictl')
+            fileEvents: workspace.createFileSystemWatcher('**/*.csm')
         }
     };
 
     client = new LanguageClient(
-        'ictlLanguageServer',
-        'ICTL Language Server',
+        'causmLanguageServer',
+        'Causm Language Server',
         serverOptions,
         clientOptions
     );

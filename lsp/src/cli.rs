@@ -29,7 +29,7 @@ where
 
 pub fn usage(program: &str) -> String {
     format!(
-        "{program} - ICTL Language Server\n\nUSAGE:\n  {program} [OPTIONS]\n\nOPTIONS:\n  -h, --help       Print this help message and exit\n  -V, --version    Print version information and exit\n  --stdio          Run in stdio/LSP mode (default)\n",
+        "{program} - Causm Language Server\n\nUSAGE:\n  {program} [OPTIONS]\n\nOPTIONS:\n  -h, --help       Print this help message and exit\n  -V, --version    Print version information and exit\n  --stdio          Run in stdio/LSP mode (default)\n",
         program = program
     )
 }
@@ -41,32 +41,32 @@ mod tests {
 
     #[test]
     fn parse_args_defaults_to_serve() {
-        let args = vec![OsString::from("ictl-lsp")];
+        let args = vec![OsString::from("causm-lsp")];
         assert_eq!(parse_args(args), AppMode::Serve);
     }
 
     #[test]
     fn parse_args_help() {
-        let args = vec![OsString::from("ictl-lsp"), OsString::from("--help")];
+        let args = vec![OsString::from("causm-lsp"), OsString::from("--help")];
         assert_eq!(parse_args(args), AppMode::Help);
 
-        let args = vec![OsString::from("ictl-lsp"), OsString::from("-h")];
+        let args = vec![OsString::from("causm-lsp"), OsString::from("-h")];
         assert_eq!(parse_args(args), AppMode::Help);
     }
 
     #[test]
     fn parse_args_version() {
-        let args = vec![OsString::from("ictl-lsp"), OsString::from("--version")];
+        let args = vec![OsString::from("causm-lsp"), OsString::from("--version")];
         assert_eq!(parse_args(args), AppMode::Version);
 
-        let args = vec![OsString::from("ictl-lsp"), OsString::from("-V")];
+        let args = vec![OsString::from("causm-lsp"), OsString::from("-V")];
         assert_eq!(parse_args(args), AppMode::Version);
     }
 
     #[test]
     fn usage_contains_program_and_options() {
-        let text = usage("ictl-lsp");
-        assert!(text.contains("ictl-lsp - ICTL Language Server"));
+        let text = usage("causm-lsp");
+        assert!(text.contains("causm-lsp - Causm Language Server"));
         assert!(text.contains("--help"));
         assert!(text.contains("--version"));
         assert!(text.contains("--stdio"));

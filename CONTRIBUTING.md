@@ -1,4 +1,4 @@
-# Contributing to ICTL
+# Contributing to Causm
 
 Thank you for contributing. Please follow these guidelines.
 
@@ -24,11 +24,13 @@ Thank you for contributing. Please follow these guidelines.
   - `test:` for adding tests.
 
 ## Code structure
-- `src/frontend`: parser + AST
-- `src/analysis`: entropic static checks
-- `src/runtime`: VM + memory model
-- `src/main.rs`: sample demo runner
-- `src/lib.rs`: library interface for tests and embedding
+The project is organized into several crates within the `crates/` directory:
+- `crates/causm-frontend`: Parser (Pest), AST, and IR lowering.
+- `crates/causm-analysis`: Entropic static analyzer and Z3 correctness kernel.
+- `crates/causm-runtime`: Temporal Virtual Machine (TVM) and Entropic GC.
+- `crates/causm-core`: Common types, values, and the facade for integration.
+- `crates/causm-cli`: The primary command-line interface for the Causm toolchain.
+- `lsp/`: Language Server Protocol implementation for IDE support.
 
 ## Review
 - Ensure static analyzer invariants are preserved.

@@ -1,8 +1,8 @@
-# GitHub Copilot Instructions for ICTL
+# GitHub Copilot Instructions for Causm
 
 ## Project purpose
-ICTL is a research-focused Rust project implementing a temporal concurrency language and VM using:
-- AST/parser (`src/frontend/ast.rs`, `src/frontend/parser.rs`, `src/frontend/ictl.pest`)
+Causm is a research-focused Rust project implementing a temporal concurrency language and VM using:
+- AST/parser (`src/frontend/ast.rs`, `src/frontend/parser.rs`, `src/frontend/causm.pest`)
 - Analyzer (`src/analysis/analyzer.rs`) for entropic/causal checks
 - VM (`src/runtime/vm.rs`) with timeline budgeting
 - Memory model (`src/runtime/memory.rs`) for entropy semantics
@@ -28,7 +28,7 @@ The repo is small and self-contained; aim to preserve trust in the existing sema
 4. Run `cargo test` and format with `cargo fmt`
 
 ## Key source files
-- `src/frontend/ast.rs`, `src/frontend/parser.rs`, `src/frontend/ictl.pest`: language syntax and parser
+- `src/frontend/ast.rs`, `src/frontend/parser.rs`, `src/frontend/causm.pest`: language syntax and parser
 - `src/analysis/analyzer.rs`: static/entropic checks
 - `src/runtime/vm.rs`: runtime execution semantics
 - `src/runtime/memory.rs`: memory arena and decay semantics
@@ -36,7 +36,7 @@ The repo is small and self-contained; aim to preserve trust in the existing sema
 - `src/lib.rs`: library entrypoint for embedding and tests
 
 ## Documentation links
-- README: https://github.com/SSL-ACTX/ictl/blob/main/README.md
+- README: https://github.com/SSL-ACTX/causm/blob/main/README.md
 - RFCs: `docs/rfc/RFC.md` for spec/math and evolution notes
 - Always check RFC (if available) when implementing syntax or semantics changes.
 - Do not introduce syntax or behavior that diverges from the RFC without a documented design proposal and team alignment.
@@ -62,12 +62,12 @@ The repo is small and self-contained; aim to preserve trust in the existing sema
 - Add logging / diagnostics around the `watchdog` path
 
 ## Prompting examples
-- "In ICTL, add a parser rule for `@timeline:` labeled blocks and write a unit test."
+- "In Causm, add a parser rule for `@timeline:` labeled blocks and write a unit test."
 - "Update the analyzer so field access breaks parent struct seal and add coverage."
 - "Implement deterministic 1ms clock advancement semantics in `src/vm.rs` around `split`/`merge`."
 
 ## Apply-to recommendations
-- For parser-specific changes, apply to `src/parser.rs`, `src/ictl.pest`
+- For parser-specific changes, apply to `src/parser.rs`, `src/causm.pest`
 - For semantic checks, apply to `src/analyzer.rs`
 - For runtime semantics, apply to `src/vm.rs`, `src/memory.rs`
 

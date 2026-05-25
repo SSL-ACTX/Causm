@@ -1,6 +1,6 @@
 use crate::analysis_worker::AnalysisResults;
 use dashmap::DashMap;
-use ictl_analysis::statement::estimate_statement_cost;
+use causm_analysis::statement::estimate_statement_cost;
 use tower_lsp::lsp_types::*;
 
 pub async fn handle_hover(
@@ -41,7 +41,7 @@ pub async fn handle_hover(
     Ok(None)
 }
 
-fn is_position_in_span(pos: Position, span: &ictl_core::Span, source: &str) -> bool {
+fn is_position_in_span(pos: Position, span: &causm_core::Span, source: &str) -> bool {
     let mut offset = 0;
     for (i, line) in source.lines().enumerate() {
         if i as u32 == pos.line {
@@ -58,13 +58,13 @@ mod tests {
     use super::*;
     use crate::analysis_worker::AnalysisResults;
     use dashmap::DashMap;
-    use ictl_analysis::analyzer::EntropicAnalyzer;
-    use ictl_core::*;
+    use causm_analysis::analyzer::EntropicAnalyzer;
+    use causm_core::*;
     use tower_lsp::lsp_types::Url;
 
     #[tokio::test]
     async fn handle_hover_with_missing_source_does_not_panic() {
-        let mut cache = DashMap::new();
+        let cache = DashMap::new();
         let program = Program {
             timelines: vec![TimelineBlock {
                 time: TimeCoordinate::Global(0),
@@ -78,7 +78,7 @@ mod tests {
         };
 
         cache.insert(
-            Url::parse("file:///tmp/test.ictl").unwrap(),
+            Url::parse("file:///tmp/test.csm").unwrap(),
             AnalysisResults {
                 diagnostics: vec![],
                 program: Some(program),
@@ -91,7 +91,7 @@ mod tests {
             HoverParams {
                 text_document_position_params: TextDocumentPositionParams {
                     text_document: TextDocumentIdentifier {
-                        uri: Url::parse("file:///tmp/test.ictl").unwrap(),
+                        uri: Url::parse("file:///tmp/test.csm").unwrap(),
                     },
                     position: Position {
                         line: 0,

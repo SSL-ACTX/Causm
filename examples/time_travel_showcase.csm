@@ -1,0 +1,128 @@
+// examples/time_travel_showcase.csm
+//
+// This showcase demonstrates Causm's advanced temporal mechanics:
+// 1. Speculative Execution (Local state reversing)
+// 2. Topology Reconciliation with Automatic Rewind (Conflict resolution)
+// 3. Causal Paradox Detection (The safety invariants of time travel)
+
+@0ms: {
+    print("--- Causm Time Travel & Reversing Showcase ---")
+    
+    // 1. Speculative Execution
+    // Speculate allows trying a logic path that might fail or take too long.
+    // If 'collapse' is called, or a timeout occurs, the branch state is 
+    // automatically reverted to the point before 'speculate' began.
+    
+    let bank_balance = 1000
+    print("Initial bank balance: " + bank_balance)
+
+    speculate (max 20ms) {
+        print("Speculating: Attempting high-risk investment...")
+        let bank_balance = bank_balance + 500
+        
+        // Simulating a condition that triggers a rollback
+        let market_crash = true
+        if (market_crash) {
+            print("MARKET CRASH! Collapsing speculation...")
+            collapse
+        }
+        
+        commit {
+            print("Investment successful.")
+            yield bank_balance
+        }
+    } fallback {
+        print("Fallback: Speculation failed. Local state reverted.")
+        // Note: The bank_balance here is the one from BEFORE the speculation.
+        print("Reverted balance: " + bank_balance) 
+    }
+
+    // 2. Topology Reconciliation with Automatic Rewind
+    // A 'topology' is a shared data structure designed for concurrent access.
+    // If multiple branches modify it in ways that cause semantic conflicts,
+    // Causm can automatically rewind a branch to a previously set 'anchor'.
+    
+    let cloud_config = topology {
+        "region": "us-east-1",
+        "instances": 10
+    }
+    
+    print("Splitting for concurrent infrastructure updates...")
+    split main into [dev_branch, ops_branch]
+}
+
+@10ms: {
+    @dev_branch: {
+        // Set an anchor (checkpoint) before making risky changes
+        anchor stable_config
+        cloud_config["instances"] = 20
+        print("Dev: Scaling up to 20 instances.")
+    }
+    
+    @ops_branch: {
+        // Ops performs a concurrent region migration
+        cloud_config["region"] = "eu-central-1"
+        print("Ops: Migrating region to eu-central-1.")
+    }
+}
+
+@20ms: {
+    print("Merging updates with safety constraints...")
+    
+    // During merge, we use 'topology_union' to define how to combine the states.
+    // If the union results in an 'invalid' state (e.g., cross-field dependency violation),
+    // the 'on_invalid' clause triggers an automatic rewind of the offending branch.
+    merge [dev_branch, ops_branch] into main resolving (
+        cloud_config: topology_union {
+            "instances": priority(dev_branch),
+            "region": priority(ops_branch),
+            "_": decay
+            
+            // If the combined state is invalid, reset Dev to its last known good config.
+            on_invalid: rewind dev_branch to stable_config
+        }
+    )
+    
+    print("Merge complete. Final config:")
+    print("Region: " + cloud_config["region"])
+    print("Instances: " + cloud_config["instances"])
+}
+
+@30ms: {
+    // 3. Causal Paradox Detection
+    // Causm ensures that 'reversing' time does not break causality.
+    // If a branch sends a message that is consumed by another branch,
+    // the sender cannot rewind to a point before the message was sent.
+    
+    print("Demonstrating Causal Safety (Paradox Prevention)...")
+    open_chan quantum_bus(1)
+    split main into [sender, receiver]
+}
+
+@40ms: {
+    @sender: {
+        anchor pre_send
+        let signal = "SIGNAL_DETECTED"
+        print("Sender: Emitting signal...")
+        chan_send quantum_bus(signal)
+    }
+    
+    @receiver: {
+        // Receiver consumes the message, creating a causal link.
+        let val = chan_recv(quantum_bus)
+        print("Receiver: Observed: " + val)
+    }
+}
+
+@50ms: {
+    @sender: {
+        // Attempting to rewind_to(pre_send) now would be a 'Causal Paradox'
+        // because the 'receiver' has already observed the signal.
+        // Causm would throw a 'Paradox' error at runtime to protect consistency.
+        
+        print("Sender: A rewind to 'pre_send' would now trigger a Causal Paradox.")
+        print("Causality preserved.")
+        
+        // rewind_to(pre_send) // This would trigger: TemporalError::Paradox
+    }
+}
