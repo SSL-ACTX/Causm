@@ -309,6 +309,7 @@ impl EntropicAnalyzer {
         params: &[ParamDecl],
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
+        taking_cycles: &Option<u64>,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         if self.routines.contains_key(name) {
@@ -537,6 +538,11 @@ impl EntropicAnalyzer {
 
     pub(crate) fn Yield(&mut self, name: &str) -> Result<(), SemanticError> {
         self.mark_consumed(name)
+    }
+
+    pub(crate) fn YieldPad(&mut self) -> Result<(), SemanticError> {
+        // yield_pad is an analysis no-op but a timing constraint for SpeedMicro.
+        Ok(())
     }
 
     pub(crate) fn Inspect(

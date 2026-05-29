@@ -343,6 +343,15 @@ impl Vm {
         )
     }
 
+    pub(crate) fn YieldPad(
+        &mut self,
+        _branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        // In the interpreter, yield_pad is a no-op as we don't have cycle-accurate timing here.
+        // It's primarily a hint for the JIT.
+        Ok(())
+    }
+
     pub(crate) fn Lease(
         &mut self,
         branch_id: &str,

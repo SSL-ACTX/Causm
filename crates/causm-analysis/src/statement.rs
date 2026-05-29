@@ -180,6 +180,7 @@ pub fn estimate_statement_cost(
         }
         Statement::RoutineDef { taking_ms, .. } => taking_ms.unwrap_or(0),
         Statement::Return(_) => 0,
+        Statement::YieldPad => 0,
     };
     base + extra
 }

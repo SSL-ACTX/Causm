@@ -37,6 +37,7 @@ statement = {
     | if_stmt
     | break_stmt
     | loop_stmt
+    | yield_pad_stmt
     | yield_stmt
     | type_decl
     | decay_handler_stmt
@@ -67,7 +68,8 @@ fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ "taking" ~ (amount ~ "ms" | "_") ~ "{" ~ statement* ~ "}" }
+routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ "taking" ~ (amount ~ "ms" | amount ~ "cycles" | "_") ~ "{" ~ statement* ~ "}" }
+yield_pad_stmt = { "yield_pad" }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode ~ identifier ~ type_annotation? }
 param_mode = { "consume" | "clone" | "decay" | "peek" }
@@ -105,7 +107,7 @@ manifest     = { (resource_decl | require_decl | slice_decl)* }
 slice_decl   = { "slice" ~ amount ~ "ms" }
 resource_decl = { "enable" ~ identifier ~ "(" ~ amount ~ unit? ~ ")" }
 amount       = @{ ASCII_DIGIT+ }
-unit         = { "ms" | "KB" | "MB" | "bytes" }
+unit         = { "ms" | "µs" | "KB" | "MB" | "bytes" | "cycles" }
 
 require_decl  = { "require" ~ capability_path ~ ("(" ~ param_list ~ ")")? }
 capability_path = @{ identifier ~ ("." ~ identifier)* }

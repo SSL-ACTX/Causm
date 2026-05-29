@@ -37,6 +37,8 @@ impl Vm {
             next_payload_id: 0,
             trace_entropy: false,
             _is_decaying: false,
+            jit: Some(crate::vm::jit::init_jit()),
+            jit_cache: HashMap::new(),
         }
     }
 
@@ -89,6 +91,17 @@ impl Vm {
         Ok(())
     }
 
+    pub fn clear_state(&mut self) {
+        self.root_timeline.clear_arena();
+        self.root_timeline.pc = 0;
+        self.root_timeline.local_clock = 0;
+        self.active_branches.clear();
+        self.causal_history.clear();
+        self.causal_trace.clear();
+        self.speculation_stack.clear();
+        self.global_clock = 0;
+    }
+
     pub fn execute_program(
         &mut self,
         program: &causm_frontend::ir::IrProgram,
@@ -101,6 +114,7 @@ impl Vm {
                 params: ir_routine.params.clone(),
                 return_type: ir_routine.return_type.clone(),
                 taking_ms: ir_routine.taking_ms,
+                taking_cycles: ir_routine.taking_cycles,
                 instructions: ir_routine.instructions.clone(),
             };
             self.routines.insert(name.clone(), routine);
@@ -423,7 +437,14 @@ impl Vm {
         Ok(())
     }
 
-    pub(crate) fn _set_branch_state(&mut self, id: &str, state: Timeline) {
+    pub fn temporal_freeze(&mut self, cycles_as_ms: u64) {
+        self.global_clock += cycles_as_ms;
+        for branch in self.active_branches.values_mut() {
+            branch.birth_global_time += cycles_as_ms;
+        }
+    }
+
+    pub fn _set_branch_state(&mut self, id: &str, state: Timeline) {
         if id == "main" {
             self.root_timeline = state;
         } else {

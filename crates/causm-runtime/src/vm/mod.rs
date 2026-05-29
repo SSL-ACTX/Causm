@@ -7,6 +7,7 @@ pub mod entropy;
 pub mod error;
 pub mod eval;
 pub mod instructions;
+pub mod jit;
 pub mod state;
 
 #[cfg(test)]

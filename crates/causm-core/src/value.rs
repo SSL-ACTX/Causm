@@ -261,6 +261,15 @@ impl Arena {
         }
     }
 
+    pub fn pre_fault(&mut self) {
+        // Pre-allocate registers vector
+        if self.registers.capacity() < 1024 {
+            self.registers.reserve(1024);
+        }
+        // In a real SpeedMicro implementation, we would mmap and touch every page.
+        // For this prototype, we'll just ensure the Vec is allocated.
+    }
+
     fn ensure_register(&mut self, reg: u32) {
         let idx = reg as usize;
         if idx >= self.registers.len() {

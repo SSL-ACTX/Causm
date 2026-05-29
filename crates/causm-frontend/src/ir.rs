@@ -58,6 +58,12 @@ macro_rules! instructions {
                 dest: $crate::ir::Reg,
                 src: $crate::ir::Reg
             },
+            CMov {
+                dest: $crate::ir::Reg,
+                cond: $crate::ir::Reg,
+                then_src: $crate::ir::Reg,
+                else_src: $crate::ir::Reg
+            },
 
             // Entropic Operations
             Consume {
@@ -229,6 +235,7 @@ macro_rules! instructions {
             Debug {
                 src: $crate::ir::Reg
             },
+            YieldPad,
             AssertTime {
                 op: causm_core::BinaryOperator,
                 limit_ms: u64
@@ -302,6 +309,7 @@ pub struct IrRoutine {
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub taking_cycles: Option<u64>,
     pub instructions: Vec<Instruction>,
 }
 
@@ -314,7 +322,13 @@ pub struct IrBlock {
 impl std::fmt::Display for IrProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (name, routine) in &self.routines {
-            writeln!(f, "routine {} taking {:?}ms:", name, routine.taking_ms)?;
+            if let Some(ms) = routine.taking_ms {
+                writeln!(f, "routine {} taking {}ms:", name, ms)?;
+            } else if let Some(cycles) = routine.taking_cycles {
+                writeln!(f, "routine {} taking {}cycles:", name, cycles)?;
+            } else {
+                writeln!(f, "routine {} taking _:", name)?;
+            }
             for (i, instr) in routine.instructions.iter().enumerate() {
                 writeln!(f, "  {:>3}: {:?}", i, instr)?;
             }
@@ -400,6 +414,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             params,
             return_type,
             taking_ms,
+            taking_cycles,
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
@@ -433,9 +448,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .map(causm_core::types::Type::from_typename)
                     .unwrap_or(causm_core::types::Type::Unknown),
                 taking_ms: *taking_ms,
+                taking_cycles: *taking_cycles,
                 instructions: sub_ctx.instructions,
             };
             ctx.routines.insert(name.clone(), routine);
+        }
+        Statement::YieldPad => {
+            ctx.push(Instruction::YieldPad);
         }
         Statement::Yield(name) => {
             let src = ctx.get_reg(name);

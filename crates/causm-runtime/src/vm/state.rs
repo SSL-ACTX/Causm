@@ -59,6 +59,7 @@ pub struct Routine {
     #[allow(dead_code)]
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub taking_cycles: Option<u64>,
     pub instructions: Vec<causm_frontend::ir::Instruction>,
 }
 
@@ -92,6 +93,8 @@ pub struct Vm {
     pub next_payload_id: u64,
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,
+    pub jit: Option<crate::vm::jit::Jit>,
+    pub jit_cache: HashMap<String, *const u8>,
 }
 
 #[derive(Clone)]

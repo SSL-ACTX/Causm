@@ -103,6 +103,7 @@ pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
                 .unwrap_or_default();
             Statement::AwaitChan(target)
         }
+        Rule::yield_pad_stmt => Statement::YieldPad,
         Rule::lease_stmt => {
             let mut inner = pair.into_inner();
             let binding = inner

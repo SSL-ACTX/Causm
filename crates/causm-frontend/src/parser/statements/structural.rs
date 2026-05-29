@@ -69,15 +69,18 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
             })
         }
         Rule::routine_stmt => {
+            let mut params = Vec::new();
+            let mut return_type = None;
+            let mut taking_ms: Option<u64> = None;
+            let mut taking_cycles: Option<u64> = None;
+            let mut body = Vec::new();
+
+            let routine_str = pair.as_str().to_string();
             let mut inner = pair.into_inner();
             let name = inner
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
-            let mut params = Vec::new();
-            let mut return_type = None;
-            let mut taking_ms: Option<u64> = None;
-            let mut body = Vec::new();
 
             for current in inner {
                 match current.as_rule() {
@@ -111,7 +114,16 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                         }
                     }
                     Rule::amount => {
-                        taking_ms = current.as_str().parse::<u64>().ok();
+                        let val = current.as_str().parse::<u64>().unwrap_or(0);
+                        if routine_str.contains(&format!("{} ms", val))
+                            || routine_str.contains(&format!("{}ms", val))
+                        {
+                            taking_ms = Some(val);
+                        } else if routine_str.contains(&format!("{} cycles", val))
+                            || routine_str.contains(&format!("{}cycles", val))
+                        {
+                            taking_cycles = Some(val);
+                        }
                     }
                     Rule::statement => {
                         if let Some(s) = current.into_inner().next() {
@@ -131,6 +143,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 params,
                 return_type,
                 taking_ms,
+                taking_cycles,
                 body,
             }
         }

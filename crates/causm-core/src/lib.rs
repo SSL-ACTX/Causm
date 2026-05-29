@@ -199,9 +199,11 @@ macro_rules! statements {
                 params: Vec<ParamDecl>,
                 return_type: Option<TypeName>,
                 taking_ms: Option<u64>,
+                taking_cycles: Option<u64>,
                 body: Vec<SpannedStatement>
             },
             Return(Option<String>),
+            YieldPad,
             AcausalReset {
                 target: String,
                 anchor_name: String

@@ -125,6 +125,7 @@ impl Vm {
             Statement::Break => 0,
             Statement::Entangle { .. } => 0,
             Statement::Return(_) => 0,
+            Statement::YieldPad => 0,
         };
 
         base + extra

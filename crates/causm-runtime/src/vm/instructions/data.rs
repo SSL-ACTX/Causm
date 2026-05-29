@@ -80,6 +80,26 @@ impl Vm {
         self.insert_reg(branch_id, dest.0, state)
     }
 
+    pub(crate) fn CMov(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        cond: Reg,
+        then_src: Reg,
+        else_src: Reg,
+    ) -> Result<(), TemporalError> {
+        let cond_val = self.peek_reg(branch_id, cond.0)?;
+        let is_true = match cond_val {
+            Payload::Bool(b) => b,
+            Payload::Integer(i) => i != 0,
+            Payload::Float(bits) => f64::from_bits(bits) != 0.0,
+            _ => false,
+        };
+        let src_reg = if is_true { then_src } else { else_src };
+        let state = self.peek_state(branch_id, src_reg.0)?;
+        self.insert_reg(branch_id, dest.0, state)
+    }
+
     pub(crate) fn BinaryOp(
         &mut self,
         branch_id: &str,

@@ -1,0 +1,20 @@
+[package]
+name = "causm-jit"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+causm-core = { path = "../causm-core" }
+causm-frontend = { path = "../causm-frontend" }
+thiserror = "2.0.18"
+anyhow = "1.0"
+cranelift = "0.100"
+cranelift-module = "0.100"
+cranelift-jit = "0.100"
+cranelift-native = "0.100"
+target-lexicon = "0.12"
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.48", features = ["Win32_System_Memory"] }

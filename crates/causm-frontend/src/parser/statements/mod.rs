@@ -49,6 +49,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::slice_stmt
         | Rule::await_stmt
         | Rule::await_chan_stmt
+        | Rule::yield_pad_stmt
         | Rule::lease_stmt => temporal::parse_temporal_stmt(pair),
 
         // Entropic

@@ -1,6 +1,7 @@
 use crate::vm::error::TemporalError;
-use crate::vm::state::Vm;
-use causm_frontend::ir::Reg;
+use crate::vm::state::{Routine, Vm};
+use causm_frontend::ir::{IrSelectCase, Reg};
+use std::collections::HashMap;
 
 #[allow(non_snake_case)]
 impl Vm {
@@ -21,7 +22,13 @@ impl Vm {
         target: usize,
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, cond.0)?;
-        if let causm_core::value::Payload::Bool(true) = val {
+        let is_true = match val {
+            causm_core::value::Payload::Bool(b) => b,
+            causm_core::value::Payload::Integer(i) => i != 0,
+            _ => false,
+        };
+
+        if is_true {
             let branch = self.get_branch_mut(branch_id)?;
             branch.pc = target;
         }
@@ -35,7 +42,13 @@ impl Vm {
         target: usize,
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, cond.0)?;
-        if let causm_core::value::Payload::Bool(false) = val {
+        let is_true = match val {
+            causm_core::value::Payload::Bool(b) => b,
+            causm_core::value::Payload::Integer(i) => i != 0,
+            _ => false,
+        };
+
+        if !is_true {
             let branch = self.get_branch_mut(branch_id)?;
             branch.pc = target;
         }
@@ -85,6 +98,124 @@ impl Vm {
             arg_values.push(val);
         }
 
+        // SpeedMicro JIT Check
+        if routine_def.taking_cycles.is_some() {
+            let mut code_ptr_opt = self.jit_cache.get(&routine).copied();
+
+            if code_ptr_opt.is_none() {
+                if let Some(jit) = &mut self.jit {
+                    let routine_ir = causm_frontend::ir::IrRoutine {
+                        params: routine_def.params.clone(),
+                        return_type: routine_def.return_type.clone(),
+                        taking_ms: routine_def.taking_ms,
+                        taking_cycles: routine_def.taking_cycles,
+                        instructions: routine_def.instructions.clone(),
+                    };
+                    if let Ok(code_ptr) = jit.compile_routine(&routine, &routine_ir)
+                    {
+                        self.jit_cache.insert(routine.clone(), code_ptr);
+                        code_ptr_opt = Some(code_ptr);
+                    }
+                }
+            }
+
+            if let Some(code_ptr) = code_ptr_opt {
+                // Consume arguments
+                for (i, reg) in args.iter().enumerate() {
+                    let (mode, _, _) = &params[i];
+                    if let causm_core::ParamMode::Consume = mode {
+                        self.consume_reg(branch_id, reg.0)?;
+                    }
+                }
+
+                let mut i64_args = Vec::new();
+                for val in &arg_values {
+                    match val {
+                        causm_core::value::Payload::Integer(i) => i64_args.push(*i),
+                        causm_core::value::Payload::Float(bits) => {
+                            i64_args.push(*bits as i64)
+                        }
+                        _ => i64_args.push(0),
+                    }
+                }
+
+                let mut child = crate::vm::state::Timeline::new(
+                    format!("__jit_{}", routine),
+                    1024 * 1024,
+                    self.global_clock,
+                );
+
+                // SpeedMicro: Capture TSC immediately before call
+                let start_tsc = crate::vm::jit::hw_timing::read_tsc();
+
+                let res_i64 = if i64_args.len() == 2 {
+                    type RoutineFn2 = extern "C" fn(
+                        *mut Vm,
+                        *mut crate::vm::state::Timeline,
+                        i64, // start_tsc
+                        i64,
+                        i64,
+                    ) -> i64;
+                    let func: RoutineFn2 = unsafe { std::mem::transmute(code_ptr) };
+                    func(
+                        self as *mut Vm,
+                        &mut child as *mut crate::vm::state::Timeline,
+                        start_tsc as i64,
+                        i64_args[0],
+                        i64_args[1],
+                    )
+                } else if i64_args.len() == 1 {
+                    type RoutineFn1 = extern "C" fn(
+                        *mut Vm,
+                        *mut crate::vm::state::Timeline,
+                        i64, // start_tsc
+                        i64,
+                    ) -> i64;
+                    let func: RoutineFn1 = unsafe { std::mem::transmute(code_ptr) };
+                    func(
+                        self as *mut Vm,
+                        &mut child as *mut crate::vm::state::Timeline,
+                        start_tsc as i64,
+                        i64_args[0],
+                    )
+                } else {
+                    type RoutineFn0 = extern "C" fn(
+                        *mut Vm,
+                        *mut crate::vm::state::Timeline,
+                        i64, // start_tsc
+                    ) -> i64;
+                    let func: RoutineFn0 = unsafe { std::mem::transmute(code_ptr) };
+                    func(
+                        self as *mut Vm,
+                        &mut child as *mut crate::vm::state::Timeline,
+                        start_tsc as i64,
+                    )
+                };
+
+                // SpeedMicro: Synchronize logical clock with cycle contract
+                if let Some(cycles) = routine_def.taking_cycles {
+                    let branch = self.get_branch_mut(branch_id)?;
+                    // We just jumped forward by the contract.
+                    // execute_instruction already added +1 to local_clock.
+                    // So we add (cycles - 1) to land exactly on 'cycles'.
+                    let adjusted_cycles = cycles.saturating_sub(1);
+                    branch.local_clock =
+                        branch.local_clock.saturating_add(adjusted_cycles);
+                    // Also consume budget
+                    branch.consume_budget(adjusted_cycles / 1000)?;
+                }
+
+                return self.insert_reg(
+                    branch_id,
+                    dest.0,
+                    causm_core::value::EntropicState::Valid(
+                        causm_core::value::Payload::Integer(res_i64),
+                    ),
+                );
+            }
+        }
+
+        // Interpreter Path
         // Consume arguments if needed
         for (i, reg) in args.iter().enumerate() {
             let (mode, _, _) = &params[i];
@@ -99,6 +230,8 @@ impl Vm {
             1024 * 1024,
             self.global_clock,
         );
+        // SpeedMicro: Ensure child starts at 0 logical time
+        child.local_clock = 0;
         child.instructions = routine_def.instructions.clone();
 
         for (i, (mode, _name, _)) in params.iter().enumerate() {
@@ -166,84 +299,29 @@ impl Vm {
         Ok(())
     }
 
-    pub(crate) fn Select(
+    pub(crate) fn MatchEntropy(
         &mut self,
-        branch_id: &str,
-        max_ms: u64,
-        cases: Vec<causm_frontend::ir::IrSelectCase>,
-        timeout_target: Option<usize>,
+        _branch_id: &str,
+        _target: Reg,
+        _valid_target: Option<usize>,
+        _decayed_target: Option<usize>,
+        _pending_target: Option<usize>,
+        _consumed_target: Option<usize>,
     ) -> Result<(), TemporalError> {
-        let mut found_case = None;
-        for case in &cases {
-            let message = {
-                if let Some(chan) = self.channels.get_mut(&case.chan_id) {
-                    chan.pop_front()
-                } else {
-                    None
-                }
-            };
-
-            if let Some(msg) = message {
-                found_case = Some((case.clone(), msg));
-                break;
-            }
-        }
-
-        // Apply deterministic temporal padding
-        {
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.local_clock += max_ms;
-            branch.consume_budget(max_ms)?;
-        }
-
-        if let Some((case, msg)) = found_case {
-            self.insert_reg(
-                branch_id,
-                case.dest.0,
-                causm_core::value::EntropicState::Valid(msg.payload),
-            )?;
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.pc = case.target;
-        } else if let Some(target) = timeout_target {
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.pc = target;
-        }
+        // TODO: Implement MatchEntropy
         Ok(())
     }
 
-    pub(crate) fn MatchEntropy(
+    pub(crate) fn Select(
         &mut self,
-        branch_id: &str,
-        target: Reg,
-        valid_target: Option<usize>,
-        decayed_target: Option<usize>,
-        pending_target: Option<usize>,
-        consumed_target: Option<usize>,
+        _branch_id: &str,
+        _max_ms: u64,
+        _cases: Vec<causm_frontend::ir::IrSelectCase>,
+        _timeout_target: Option<usize>,
     ) -> Result<(), TemporalError> {
-        let state = self.peek_state(branch_id, target.0)?;
-        let maybe_jump = match &state {
-            causm_core::value::EntropicState::Valid(_) => valid_target,
-            causm_core::value::EntropicState::Leased { original, .. } => {
-                match &**original {
-                    causm_core::value::EntropicState::Valid(_) => valid_target,
-                    causm_core::value::EntropicState::Decayed(_) => decayed_target,
-                    causm_core::value::EntropicState::Pending(_) => pending_target,
-                    causm_core::value::EntropicState::Consumed => consumed_target,
-                    causm_core::value::EntropicState::Leased { .. } => valid_target, // Should not happen due to analysis
-                }
-            }
-            causm_core::value::EntropicState::Decayed(_) => decayed_target,
-            causm_core::value::EntropicState::Pending(_) => pending_target,
-            causm_core::value::EntropicState::Consumed => consumed_target,
-        };
-
-        if let Some(target_pc) = maybe_jump {
-            println!("[DEBUG] MatchEntropy jumping to PC {}", target_pc);
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.pc = target_pc;
-        } else {
-            println!("[DEBUG] MatchEntropy NO JUMP for state {:?}", state);
-        }
-        Ok(())
+        // TODO: Implement Select in interpreter
+        Err(TemporalError::EvalError(
+            "Select not implemented in interpreter".to_string(),
+        ))
     }
 }
