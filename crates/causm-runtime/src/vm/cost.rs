@@ -25,7 +25,7 @@ impl Vm {
             | Statement::Send { .. }
             | Statement::ChannelOpen { .. }
             | Statement::ChannelSend { .. }
-            | Statement::AcausalReset { .. }
+            | Statement::Reset { .. }
             | Statement::Capability(_)
             | Statement::Assignment { .. }
             | Statement::TypeDecl { .. }

@@ -266,8 +266,28 @@ impl Arena {
         if self.registers.capacity() < 1024 {
             self.registers.reserve(1024);
         }
-        // In a real SpeedMicro implementation, we would mmap and touch every page.
-        // For this prototype, we'll just ensure the Vec is allocated.
+        // Force allocation and touch every entry to ensure they are in physical RAM
+        for i in 0..1024 {
+            self.ensure_register(i as u32);
+            // Access it to trigger page fault now
+            let _ = &self.registers[i];
+        }
+    }
+
+    /// SpeedMicro: Spoonfeed the CPU by pulling active data into L1/L2 caches.
+    pub fn warm_cache(&self) {
+        // Only touch the active registers, not the entire capacity!
+        for state in self.registers.iter() {
+            match state {
+                EntropicState::Valid(Payload::Integer(i)) => {
+                    let _ = std::hint::black_box(i);
+                }
+                EntropicState::Valid(Payload::Float(f)) => {
+                    let _ = std::hint::black_box(f);
+                }
+                _ => {}
+            }
+        }
     }
 
     fn ensure_register(&mut self, reg: u32) {

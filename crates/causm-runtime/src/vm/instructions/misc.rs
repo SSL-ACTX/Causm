@@ -3,8 +3,23 @@ use crate::vm::state::Vm;
 use causm_core::Capability;
 use causm_frontend::ir::Reg;
 
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 impl Vm {
+    pub(crate) fn GetTsc(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+    ) -> Result<(), TemporalError> {
+        let tsc = crate::vm::jit::hw_timing::read_tsc();
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(
+                causm_core::value::Payload::Integer(tsc as i64),
+            ),
+        )
+    }
+
     pub(crate) fn Print(
         &mut self,
         branch_id: &str,

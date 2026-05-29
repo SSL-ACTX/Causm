@@ -125,7 +125,7 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn AcausalReset(
+    pub(crate) fn Reset(
         &mut self,
         _target: &String,
         _anchor_name: &String,

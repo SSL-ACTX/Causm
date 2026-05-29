@@ -17,10 +17,26 @@ impl Default for Vm {
 
 impl Vm {
     pub fn new() -> Self {
+        // SpeedMicro: Thread Pinning
+        let core_ids = core_affinity::get_core_ids().unwrap_or_default();
+        if !core_ids.is_empty() {
+            // Pin to the first available core
+            core_affinity::set_for_current(core_ids[0]);
+        }
+
+        let mut root_timeline = Timeline::new("main".to_string(), 1024 * 1024, 0);
+        root_timeline.arena.pre_fault();
+
+        // SpeedMicro: Memory Pinning
+        let arena_ptr = root_timeline.arena.registers.as_mut_ptr() as *mut u8;
+        let arena_len = root_timeline.arena.registers.len()
+            * std::mem::size_of::<EntropicState>();
+        let _ = crate::vm::jit::pin_memory(arena_ptr, arena_len);
+
         Self {
             symbols: HashMap::new(),
             global_clock: 0,
-            root_timeline: Timeline::new("main".to_string(), 1024 * 1024, 0),
+            root_timeline,
             active_branches: HashMap::new(),
             capability_handlers: HashMap::new(),
             channels: HashMap::new(),

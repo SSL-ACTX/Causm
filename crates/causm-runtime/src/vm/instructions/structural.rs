@@ -4,7 +4,7 @@ use causm_core::value::{EntropicState, Payload, ValueMetadata};
 use causm_frontend::ir::Reg;
 use std::collections::HashMap;
 
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 impl Vm {
     pub(crate) fn StructLit(
         &mut self,

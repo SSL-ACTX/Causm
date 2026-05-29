@@ -37,7 +37,7 @@ impl Jit {
         // Register symbols for external calls
         builder.symbol("read_tsc", hw_timing::read_tsc as *const u8);
         builder.symbol("spin_pad", hw_timing::spin_pad as *const u8);
-        
+
         for (name, ptr) in external_symbols {
             builder.symbol(name, ptr);
         }
@@ -63,6 +63,7 @@ impl Jit {
         sig.params
             .push(AbiParam::new(self.module.target_config().pointer_type())); // Timeline pointer
         sig.params.push(AbiParam::new(types::I64)); // Start TSC (provided by VM)
+        sig.params.push(AbiParam::new(types::I64)); // Branch/Cycle Budget
 
         // Add routine parameters as i64
         for _ in &routine.params {
@@ -85,18 +86,35 @@ impl Jit {
         builder.switch_to_block(entry_block);
         builder.seal_block(entry_block);
 
+        // SpeedMicro: Hardware Timing Preamble
+        let mut tsc_sig = self.module.make_signature();
+        tsc_sig.returns.push(AbiParam::new(types::I64));
+        let read_tsc_func = self
+            .module
+            .declare_function("read_tsc", Linkage::Import, &tsc_sig)
+            .unwrap();
+        let local_read_tsc = self
+            .module
+            .declare_func_in_func(read_tsc_func, &mut builder.func);
+
         let mut regs: HashMap<u32, Variable> = HashMap::new();
         let mut next_var = 0;
 
         // Map routine parameters (R0, R1, ...)
         for i in 0..routine.params.len() {
-            let arg_val = builder.block_params(entry_block)[i + 3];
+            let arg_val = builder.block_params(entry_block)[i + 4];
             let v = Variable::new(next_var);
             builder.declare_var(v, types::I64);
             next_var += 1;
             builder.def_var(v, arg_val);
             regs.insert(i as u32, v);
         }
+
+        // Budget Watchdog
+        let budget_var = Variable::new(next_var);
+        builder.declare_var(budget_var, types::I64);
+        next_var += 1;
+        builder.def_var(budget_var, builder.block_params(entry_block)[3]);
 
         // Use provided start_tsc from arguments
         let provided_start_tsc = builder.block_params(entry_block)[2];
@@ -118,6 +136,13 @@ impl Jit {
         // Pre-create blocks for all potential jump targets AND fallthroughs
         for (i, instr) in routine.instructions.iter().enumerate() {
             match instr {
+                Instruction::Break { target } => {
+                    blocks.entry(*target).or_insert_with(|| {
+                        let b = builder.create_block();
+                        all_blocks.push(b);
+                        b
+                    });
+                }
                 Instruction::Jump { target } => {
                     blocks.entry(*target).or_insert_with(|| {
                         let b = builder.create_block();
@@ -161,6 +186,34 @@ impl Jit {
                 }
                 builder.switch_to_block(*block);
                 block_filled = false;
+
+                // Budget Watchdog Check
+                let current_budget = builder.use_var(budget_var);
+                let one = builder.ins().iconst(types::I64, 1);
+                let new_budget = builder.ins().isub(current_budget, one);
+                builder.def_var(budget_var, new_budget);
+
+                let zero = builder.ins().iconst(types::I64, 0);
+                let budget_ok =
+                    builder
+                        .ins()
+                        .icmp(IntCC::SignedGreaterThan, new_budget, zero);
+
+                let kill_block = builder.create_block();
+                let continue_block = builder.create_block();
+                all_blocks.push(kill_block);
+                all_blocks.push(continue_block);
+
+                builder
+                    .ins()
+                    .brif(budget_ok, continue_block, &[], kill_block, &[]);
+
+                builder.switch_to_block(kill_block);
+                // Return -1 to indicate budget exhausted/infinite loop
+                let error_val = builder.ins().iconst(types::I64, -1);
+                builder.ins().return_(&[error_val]);
+
+                builder.switch_to_block(continue_block);
             }
 
             if block_filled {
@@ -168,6 +221,11 @@ impl Jit {
             }
 
             match instr {
+                Instruction::Break { target } => {
+                    let target_block = *blocks.get(target).unwrap();
+                    builder.ins().jump(target_block, &[]);
+                    block_filled = true;
+                }
                 Instruction::Jump { target } => {
                     let target_block = *blocks.get(target).unwrap();
                     builder.ins().jump(target_block, &[]);
@@ -215,6 +273,37 @@ impl Jit {
                     let val = builder.ins().iconst(types::I64, *value);
                     builder.def_var(var, val);
                 }
+                Instruction::LoadFloat { dest, value } => {
+                    let var = *regs.entry(dest.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    let val = builder.ins().iconst(types::I64, *value as i64);
+                    builder.def_var(var, val);
+                }
+                Instruction::LoadBool { dest, value } => {
+                    let var = *regs.entry(dest.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    let val =
+                        builder.ins().iconst(types::I64, if *value { 1 } else { 0 });
+                    builder.def_var(var, val);
+                }
+                Instruction::LoadNull { dest } => {
+                    let var = *regs.entry(dest.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    let val = builder.ins().iconst(types::I64, 0);
+                    builder.def_var(var, val);
+                }
                 Instruction::Move { dest, src } => {
                     let src_val = builder.use_var(
                         *regs
@@ -259,6 +348,17 @@ impl Jit {
                     });
                     builder.def_var(d_var, res);
                 }
+                Instruction::GetTsc { dest } => {
+                    let now_call = builder.ins().call(local_read_tsc, &[]);
+                    let res = builder.inst_results(now_call)[0];
+                    let d_var = *regs.entry(dest.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    builder.def_var(d_var, res);
+                }
                 Instruction::Return { src } => {
                     if let Some(reg) = src {
                         let val = builder.use_var(*regs.get(&reg.0).expect(
@@ -275,6 +375,64 @@ impl Jit {
                     }
                     builder.ins().jump(end_block, &[]);
                     block_filled = true;
+                }
+                Instruction::UnaryOp { dest, op, src } => {
+                    let s_val = builder.use_var(*regs.get(&src.0).expect(&format!(
+                        "Reg R{} not found for UnaryOp src",
+                        src.0
+                    )));
+                    let res = match op {
+                        causm_core::UnaryOperator::Neg => builder.ins().ineg(s_val),
+                        causm_core::UnaryOperator::Not => {
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let one = builder.ins().iconst(types::I64, 1);
+                            let cond = builder.ins().icmp(IntCC::Equal, s_val, zero);
+                            builder.ins().select(cond, one, zero)
+                        }
+                    };
+                    let d_var = *regs.entry(dest.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    builder.def_var(d_var, res);
+                }
+                Instruction::Consume { src } => {
+                    let mut sig = self.module.make_signature();
+                    sig.params.push(AbiParam::new(
+                        self.module.target_config().pointer_type(),
+                    )); // Timeline pointer
+                    sig.params.push(AbiParam::new(types::I32)); // Reg index
+                    sig.returns.push(AbiParam::new(types::I64)); // Resulting i64
+
+                    let consume_func = self
+                        .module
+                        .declare_function("arena_consume_int", Linkage::Import, &sig)
+                        .unwrap();
+                    let local_consume = self
+                        .module
+                        .declare_func_in_func(consume_func, &mut builder.func);
+
+                    let timeline_ptr = builder.block_params(entry_block)[1];
+                    let reg_idx = builder.ins().iconst(types::I32, src.0 as i64);
+
+                    let call =
+                        builder.ins().call(local_consume, &[timeline_ptr, reg_idx]);
+                    let res = builder.inst_results(call)[0];
+
+                    let d_var = *regs.entry(src.0).or_insert_with(|| {
+                        let v = Variable::new(next_var);
+                        builder.declare_var(v, types::I64);
+                        next_var += 1;
+                        v
+                    });
+                    builder.def_var(d_var, res);
+                }
+                Instruction::ConsumeField { src: _, field: _ } => {
+                    // Similar to Consume but with a field name (harder to pass string)
+                    // For now, we'll skip or use a simple field index if we can.
+                    // Or we pass field as a pointer to a static string.
                 }
                 Instruction::BinaryOp {
                     dest,
@@ -298,6 +456,26 @@ impl Jit {
                         causm_core::BinaryOperator::Mul => {
                             builder.ins().imul(l_val, r_val)
                         }
+                        causm_core::BinaryOperator::Div => {
+                            builder.ins().sdiv(l_val, r_val)
+                        }
+                        causm_core::BinaryOperator::Rem => {
+                            builder.ins().srem(l_val, r_val)
+                        }
+                        causm_core::BinaryOperator::Eq => {
+                            let cond =
+                                builder.ins().icmp(IntCC::Equal, l_val, r_val);
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let one = builder.ins().iconst(types::I64, 1);
+                            builder.ins().select(cond, one, zero)
+                        }
+                        causm_core::BinaryOperator::Neq => {
+                            let cond =
+                                builder.ins().icmp(IntCC::NotEqual, l_val, r_val);
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let one = builder.ins().iconst(types::I64, 1);
+                            builder.ins().select(cond, one, zero)
+                        }
                         causm_core::BinaryOperator::Gt => {
                             let cond = builder.ins().icmp(
                                 IntCC::SignedGreaterThan,
@@ -318,7 +496,27 @@ impl Jit {
                             let one = builder.ins().iconst(types::I64, 1);
                             builder.ins().select(cond, one, zero)
                         }
-                        _ => builder.ins().iconst(types::I64, 0), // TODO: other ops
+                        causm_core::BinaryOperator::Ge => {
+                            let cond = builder.ins().icmp(
+                                IntCC::SignedGreaterThanOrEqual,
+                                l_val,
+                                r_val,
+                            );
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let one = builder.ins().iconst(types::I64, 1);
+                            builder.ins().select(cond, one, zero)
+                        }
+                        causm_core::BinaryOperator::Le => {
+                            let cond = builder.ins().icmp(
+                                IntCC::SignedLessThanOrEqual,
+                                l_val,
+                                r_val,
+                            );
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let one = builder.ins().iconst(types::I64, 1);
+                            builder.ins().select(cond, one, zero)
+                        }
+                        _ => builder.ins().iconst(types::I64, 0), // TODO: Pow
                     };
                     let d_var = *regs.entry(dest.0).or_insert_with(|| {
                         let v = Variable::new(next_var);
@@ -355,16 +553,6 @@ impl Jit {
         if let (Some(target_cycles), Some(start_var)) =
             (routine.taking_cycles, start_tsc_var)
         {
-            let mut sig = self.module.make_signature();
-            sig.returns.push(AbiParam::new(types::I64));
-            let read_tsc_func = self
-                .module
-                .declare_function("read_tsc", Linkage::Import, &sig)
-                .unwrap();
-            let local_read_tsc = self
-                .module
-                .declare_func_in_func(read_tsc_func, &mut builder.func);
-
             // SpeedMicro: Compensate for the exit path overhead (estimated)
             let overhead = 220;
             let adjusted_target = target_cycles.saturating_sub(overhead);
@@ -424,16 +612,17 @@ impl Jit {
             // SpeedMicro: Elastic Determinism
             // Call temporal_freeze(vm_ptr, delta)
             let mut freeze_sig = self.module.make_signature();
-            freeze_sig.params.push(AbiParam::new(
-                self.module.target_config().pointer_type(),
-            ));
+            freeze_sig
+                .params
+                .push(AbiParam::new(self.module.target_config().pointer_type()));
             freeze_sig.params.push(AbiParam::new(types::I64));
             let freeze_func = self
                 .module
                 .declare_function("temporal_freeze", Linkage::Import, &freeze_sig)
                 .unwrap();
-            let local_freeze =
-                self.module.declare_func_in_func(freeze_func, &mut builder.func);
+            let local_freeze = self
+                .module
+                .declare_func_in_func(freeze_func, &mut builder.func);
             let vm_ptr = builder.block_params(entry_block)[0];
             builder.ins().call(local_freeze, &[vm_ptr, delta]);
 

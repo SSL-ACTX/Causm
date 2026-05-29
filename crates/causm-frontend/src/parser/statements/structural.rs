@@ -170,7 +170,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
-            Statement::AcausalReset {
+            Statement::Reset {
                 target,
                 anchor_name,
             }

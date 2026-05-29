@@ -11,3 +11,6 @@ causm-analysis = { path = "../causm-analysis" }
 causm-runtime = { path = "../causm-runtime" }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
+
+[dev-dependencies]
+causm-jit = { path = "../causm-jit" }

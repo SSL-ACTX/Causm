@@ -3,7 +3,7 @@ use crate::vm::state::Vm;
 use causm_core::{Manifest, MergeResolution};
 use causm_frontend::ir::Reg;
 
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 impl Vm {
     pub(crate) fn Isolate(
         &mut self,
@@ -81,10 +81,23 @@ impl Vm {
         Ok(())
     }
 
-    pub(crate) fn Break(&mut self, branch_id: &str) -> Result<(), TemporalError> {
+    pub(crate) fn Break(
+        &mut self,
+        branch_id: &str,
+        _target: usize,
+    ) -> Result<(), TemporalError> {
         let branch = self.get_branch_mut(branch_id)?;
         branch.break_requested = true;
         Ok(())
+    }
+
+    pub(crate) fn Reset(
+        &mut self,
+        branch_id: &str,
+        target: String,
+        anchor_name: String,
+    ) -> Result<(), TemporalError> {
+        self.Rewind(branch_id, target, anchor_name)
     }
 
     pub(crate) fn AssertTime(

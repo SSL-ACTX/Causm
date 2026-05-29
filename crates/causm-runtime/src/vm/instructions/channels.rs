@@ -3,7 +3,7 @@ use crate::vm::state::{CausalEvent, Message, Vm};
 use causm_frontend::ir::Reg;
 use std::collections::VecDeque;
 
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 impl Vm {
     pub(crate) fn OpenChan(
         &mut self,

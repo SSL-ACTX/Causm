@@ -204,7 +204,7 @@ macro_rules! statements {
             },
             Return(Option<String>),
             YieldPad,
-            AcausalReset {
+            Reset {
                 target: String,
                 anchor_name: String
             },

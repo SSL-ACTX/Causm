@@ -141,7 +141,7 @@ impl<'a> FormalVerifier<'a> {
                 Ok(current_clock)
             }
             Statement::Rewind(name)
-            | Statement::AcausalReset {
+            | Statement::Reset {
                 anchor_name: name, ..
             } => {
                 if let Some(anchor_time) = self.anchors.get(name) {

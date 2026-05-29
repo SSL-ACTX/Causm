@@ -1,4 +1,4 @@
-use causm_core::{Expression, Program, Statement, TimeCoordinate};
+use causm_core::{Expression, Program, SpannedStatement, Statement, TimeCoordinate};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -64,6 +64,9 @@ macro_rules! instructions {
                 then_src: $crate::ir::Reg,
                 else_src: $crate::ir::Reg
             },
+            GetTsc {
+                dest: $crate::ir::Reg
+            },
 
             // Entropic Operations
             Consume {
@@ -101,6 +104,9 @@ macro_rules! instructions {
             },
             Return {
                 src: Option<$crate::ir::Reg>
+            },
+            Break {
+                target: usize
             },
 
             // Causm Temporal & Isolated Concurrency
@@ -149,11 +155,14 @@ macro_rules! instructions {
                 max_ms: u64,
                 fallback_target: usize
             },
+            Collapse,
             EndSpeculate {
                 max_ms: u64,
                 fallback_target: usize
             },
-            Collapse,
+            SpeculationMode {
+                mode: causm_core::SpeculationCommitMode
+            },
             Select {
                 max_ms: u64,
                 cases: Vec<$crate::ir::IrSelectCase>,
@@ -166,69 +175,18 @@ macro_rules! instructions {
                 pending_target: Option<usize>,
                 consumed_target: Option<usize>
             },
-            RelativisticBlock {
-                target: String,
-                block_pc: usize,
-                block_len: usize
-            },
-            SpeculationMode {
-                mode: causm_core::SpeculationCommitMode
-            },
-
-            // Channels & Communication
-            OpenChan {
-                name: String,
-                capacity: usize
-            },
-            ChanSend {
-                chan_id: String,
-                src: $crate::ir::Reg
-            },
-            ChanRecv {
-                dest: $crate::ir::Reg,
-                chan_id: String
+            Await {
+                target: $crate::ir::Reg
             },
             AwaitChan {
-                chan_id: String
+                target: String
             },
-
-            // Structural Access
-            StructLit {
-                dest: $crate::ir::Reg,
-                fields: std::collections::HashMap<String, $crate::ir::Reg>,
-                type_name: Option<String>
+            Loop {
+                max_ms: u64
             },
-            TopologyLit {
-                dest: $crate::ir::Reg,
-                fields: std::collections::HashMap<String, $crate::ir::Reg>
+            EndLoop {
+                max_ms: u64
             },
-            ArrayLit {
-                dest: $crate::ir::Reg,
-                elements: Vec<$crate::ir::Reg>
-            },
-            FieldAccess {
-                dest: $crate::ir::Reg,
-                target: $crate::ir::Reg,
-                field: String
-            },
-            FieldUpdate {
-                target: $crate::ir::Reg,
-                field: String,
-                src: $crate::ir::Reg
-            },
-            IndexAccess {
-                dest: $crate::ir::Reg,
-                target: $crate::ir::Reg,
-                index: $crate::ir::Reg
-            },
-            IndexFieldUpdate {
-                target: $crate::ir::Reg,
-                index: $crate::ir::Reg,
-                field: String,
-                src: $crate::ir::Reg
-            },
-
-            // Misc
             Print {
                 src: $crate::ir::Reg
             },
@@ -243,7 +201,7 @@ macro_rules! instructions {
             Slice {
                 ms: u64
             },
-            Break,
+
             LoopTick,
             EndLoopTick,
             Capability {
@@ -264,22 +222,20 @@ macro_rules! instructions {
                 body: Vec<$crate::ir::Instruction>,
                 reconcile: Option<causm_core::MergeResolution>
             },
-            Defer {
-                dest: $crate::ir::Reg,
-                cap: causm_core::Capability,
-                deadline_ms: u64
+            Reset {
+                target: String,
+                anchor_name: String
             },
-            Await {
-                target: $crate::ir::Reg
+            FieldUpdate {
+                target: $crate::ir::Reg,
+                field: String,
+                src: $crate::ir::Reg
             },
-            Loop {
-                max_ms: u64
-            },
-            EndLoop {
-                max_ms: u64
-            },
-            NetworkRequest {
-                domain: String
+            IndexFieldUpdate {
+                target: $crate::ir::Reg,
+                index: $crate::ir::Reg,
+                field: String,
+                src: $crate::ir::Reg
             }
         }
     };
@@ -297,14 +253,6 @@ macro_rules! define_instruction_enum {
 instructions!(define_instruction_enum);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IrProgram {
-    pub blocks: Vec<IrBlock>,
-    pub routines: HashMap<String, IrRoutine>,
-    pub symbols: HashMap<String, Reg>, // Map names to registers for debugging/tests
-    pub type_decay_limits: HashMap<String, u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrRoutine {
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub return_type: causm_core::types::Type,
@@ -317,6 +265,14 @@ pub struct IrRoutine {
 pub struct IrBlock {
     pub time: TimeCoordinate,
     pub instructions: Vec<Instruction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrProgram {
+    pub blocks: Vec<IrBlock>,
+    pub routines: HashMap<String, IrRoutine>,
+    pub symbols: HashMap<String, Reg>,
+    pub type_decay_limits: HashMap<String, u64>,
 }
 
 impl std::fmt::Display for IrProgram {
@@ -349,6 +305,7 @@ struct LoweringContext {
     instructions: Vec<Instruction>,
     routines: HashMap<String, IrRoutine>,
     type_decay_limits: HashMap<String, u64>,
+    loop_stack: Vec<Vec<usize>>, // Indices of Break instructions to be resolved
 }
 
 impl LoweringContext {
@@ -359,6 +316,7 @@ impl LoweringContext {
             instructions: Vec::new(),
             routines: HashMap::new(),
             type_decay_limits: HashMap::new(),
+            loop_stack: Vec::new(),
         }
     }
 
@@ -407,6 +365,42 @@ pub fn lower_program(program: &Program) -> IrProgram {
     }
 }
 
+fn is_simple_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Boolean(_)
+        | Expression::Literal(_)
+        | Expression::Null
+        | Expression::Identifier(_) => true,
+        Expression::BinaryOp { left, op: _, right } => {
+            is_simple_expression(left) && is_simple_expression(right)
+        }
+        Expression::UnaryOp { op: _, expr } => is_simple_expression(expr),
+        Expression::FieldAccess { target, field: _ } => is_simple_expression(target),
+        _ => false,
+    }
+}
+
+#[allow(dead_code)]
+fn is_simple_statement(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Assignment { expr, .. } => is_simple_expression(expr),
+        Statement::Expression(expr) => is_simple_expression(expr),
+        Statement::FieldUpdate {
+            target,
+            field: _,
+            value,
+        } => is_simple_expression(target) && is_simple_expression(value),
+        _ => false,
+    }
+}
+
+#[allow(dead_code)]
+fn is_simple_block(block: &[SpannedStatement]) -> bool {
+    block.iter().all(|s| is_simple_statement(&s.stmt))
+}
+
 fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
     match stmt {
         Statement::RoutineDef {
@@ -418,17 +412,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
-
-            // Map parameters to registers R0, R1, ...
-            for (i, param) in params.iter().enumerate() {
-                sub_ctx.symbols.insert(param.name.clone(), Reg(i as u32));
-                sub_ctx.next_reg = (i + 1) as u32;
+            for p in params {
+                sub_ctx
+                    .symbols
+                    .insert(p.name.clone(), Reg(sub_ctx.next_reg));
+                sub_ctx.next_reg += 1;
             }
-
             for s in body {
                 lower_statement(&mut sub_ctx, &s.stmt);
             }
-
             let routine = IrRoutine {
                 params: params
                     .iter()
@@ -460,7 +452,187 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let src = ctx.get_reg(name);
             // By convention, Move src to R0 for return
             ctx.push(Instruction::Move { dest: Reg(0), src });
-            ctx.push(Instruction::Return { src: Some(Reg(0)) });
+        }
+        Statement::Await(target) => {
+            let reg = ctx.get_reg(target);
+            ctx.push(Instruction::Await { target: reg });
+        }
+        Statement::AwaitChan(target) => {
+            ctx.push(Instruction::AwaitChan {
+                target: target.clone(),
+            });
+        }
+        Statement::Slice { milliseconds } => {
+            ctx.push(Instruction::Slice { ms: *milliseconds });
+        }
+        Statement::Break => {
+            let idx = ctx.instructions.len();
+            ctx.push(Instruction::Break { target: 0 }); // Placeholder
+            if let Some(breaks) = ctx.loop_stack.last_mut() {
+                breaks.push(idx);
+            }
+        }
+        Statement::LoopTick { body } => {
+            ctx.loop_stack.push(Vec::new());
+            ctx.push(Instruction::LoopTick);
+            for s in body {
+                lower_statement(ctx, &s.stmt);
+            }
+            ctx.push(Instruction::EndLoopTick);
+            let breaks = ctx.loop_stack.pop().unwrap_or_default();
+            let end_idx = ctx.instructions.len();
+            for b_idx in breaks {
+                if let Instruction::Break { ref mut target } =
+                    ctx.instructions[b_idx]
+                {
+                    *target = end_idx;
+                }
+            }
+        }
+        Statement::Lease {
+            binding,
+            source,
+            duration_ms,
+            body,
+        } => {
+            let source_reg = ctx.get_reg(source);
+            let target_reg = ctx.get_reg(binding);
+
+            ctx.push(Instruction::Lease {
+                target_reg,
+                source_reg,
+                duration_ms: *duration_ms,
+            });
+
+            for s in body {
+                lower_statement(ctx, &s.stmt);
+            }
+
+            ctx.push(Instruction::EndLease {
+                source_reg,
+                duration_ms: *duration_ms,
+            });
+        }
+        Statement::Loop { max_ms, body } => {
+            ctx.loop_stack.push(Vec::new());
+            let start_pc = ctx.instructions.len();
+            ctx.push(Instruction::Loop { max_ms: *max_ms });
+            for s in body {
+                lower_statement(ctx, &s.stmt);
+            }
+            ctx.push(Instruction::EndLoop { max_ms: *max_ms });
+            ctx.push(Instruction::Jump { target: start_pc });
+
+            let breaks = ctx.loop_stack.pop().unwrap_or_default();
+            let end_idx = ctx.instructions.len();
+            for b_idx in breaks {
+                if let Instruction::Break { ref mut target } =
+                    ctx.instructions[b_idx]
+                {
+                    *target = end_idx;
+                }
+            }
+        }
+        Statement::If {
+            condition,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            // SpeedMicro: Constant-Time Lowering (Branchless)
+            // If both branches are single simple assignments to the same variable, use CMov.
+            if let Some(eb) = else_branch {
+                if then_branch.len() == 1 && eb.len() == 1 {
+                    if let (
+                        Statement::Assignment {
+                            target: t1,
+                            expr: e1,
+                            ..
+                        },
+                        Statement::Assignment {
+                            target: t2,
+                            expr: e2,
+                            ..
+                        },
+                    ) = (&then_branch[0].stmt, &eb[0].stmt)
+                    {
+                        if t1 == t2
+                            && is_simple_expression(e1)
+                            && is_simple_expression(e2)
+                        {
+                            let cond_reg = lower_expression(ctx, condition);
+                            let t_reg = lower_expression(ctx, e1);
+                            let e_reg = lower_expression(ctx, e2);
+                            let dest = ctx.get_reg(t1);
+                            ctx.push(Instruction::CMov {
+                                dest,
+                                cond: cond_reg,
+                                then_src: t_reg,
+                                else_src: e_reg,
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+
+            let cond_reg = lower_expression(ctx, condition);
+
+            let jump_to_else_idx = ctx.instructions.len();
+            ctx.push(Instruction::JumpIfNot {
+                cond: cond_reg,
+                target: 0,
+            }); // Placeholder
+
+            for s in then_branch {
+                lower_statement(ctx, &s.stmt);
+            }
+
+            if let Some(eb) = else_branch {
+                let jump_to_end_idx = ctx.instructions.len();
+                ctx.push(Instruction::Jump { target: 0 }); // Placeholder
+
+                let else_start_idx = ctx.instructions.len();
+                if let Instruction::JumpIfNot { ref mut target, .. } =
+                    ctx.instructions[jump_to_else_idx]
+                {
+                    *target = else_start_idx;
+                }
+
+                for s in eb {
+                    lower_statement(ctx, &s.stmt);
+                }
+
+                let end_idx = ctx.instructions.len();
+                if let Instruction::Jump { ref mut target, .. } =
+                    ctx.instructions[jump_to_end_idx]
+                {
+                    *target = end_idx;
+                }
+            } else {
+                let end_idx = ctx.instructions.len();
+                if let Instruction::JumpIfNot { ref mut target, .. } =
+                    ctx.instructions[jump_to_else_idx]
+                {
+                    *target = end_idx;
+                }
+            }
+        }
+        Statement::Watchdog {
+            target,
+            timeout_ms,
+            recovery,
+        } => {
+            let recovery_start = ctx.instructions.len() + 1; // Approx
+            let _ = recovery_start; // Placeholder
+            ctx.push(Instruction::Watchdog {
+                target: target.clone(),
+                timeout_ms: *timeout_ms,
+                recovery_jump: None,
+            });
+            for s in recovery {
+                lower_statement(ctx, &s.stmt);
+            }
         }
         Statement::Speculate {
             max_ms,
@@ -470,49 +642,41 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let spec_idx = ctx.instructions.len();
             ctx.push(Instruction::Speculate {
                 max_ms: *max_ms,
-                fallback_target: 0, // Placeholder
+                fallback_target: 0,
             });
 
             for s in body {
                 lower_statement(ctx, &s.stmt);
             }
 
-            let end_spec_idx = ctx.instructions.len();
             ctx.push(Instruction::EndSpeculate {
                 max_ms: *max_ms,
-                fallback_target: 0, // Placeholder
+                fallback_target: 0, // Not strictly used by EndSpeculate but matches signature
             });
 
-            let jump_over_fallback_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Placeholder
-
-            let fallback_start_idx = ctx.instructions.len();
-            if let Instruction::Speculate {
-                ref mut fallback_target,
-                ..
-            } = ctx.instructions[spec_idx]
-            {
-                *fallback_target = fallback_start_idx;
-            }
-            if let Instruction::EndSpeculate {
-                ref mut fallback_target,
-                ..
-            } = ctx.instructions[end_spec_idx]
-            {
-                *fallback_target = fallback_start_idx;
-            }
-
             if let Some(fb) = fallback {
+                let end_idx_placeholder = ctx.instructions.len();
+                ctx.push(Instruction::Jump { target: 0 });
+
+                let fb_start = ctx.instructions.len();
+                if let Instruction::Speculate {
+                    ref mut fallback_target,
+                    ..
+                } = ctx.instructions[spec_idx]
+                {
+                    *fallback_target = fb_start;
+                }
+
                 for s in fb {
                     lower_statement(ctx, &s.stmt);
                 }
-            }
 
-            let end_idx = ctx.instructions.len();
-            if let Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[jump_over_fallback_idx]
-            {
-                *target = end_idx;
+                let end_idx = ctx.instructions.len();
+                if let Instruction::Jump { ref mut target, .. } =
+                    ctx.instructions[end_idx_placeholder]
+                {
+                    *target = end_idx;
+                }
             }
         }
         Statement::Collapse => {
@@ -530,102 +694,60 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let select_idx = ctx.instructions.len();
             ctx.push(Instruction::Select {
                 max_ms: *max_ms,
-                cases: Vec::new(), // Will fill in below
+                cases: Vec::new(),
                 timeout_target: None,
             });
 
-            let mut ir_cases = Vec::new();
-            let mut case_jumps = Vec::new();
-
+            let mut branch_jumps = Vec::new();
             for case in cases {
-                let chan_id = match &case.source {
-                    Expression::ChannelReceive(id) => id.clone(),
-                    _ => "".to_string(), // Error handling?
-                };
                 let dest = ctx.get_reg(&case.binding);
-                let target = ctx.instructions.len();
+                let start = ctx.instructions.len();
+
+                let chan_id = match &case.source {
+                    Expression::Identifier(id) => id.clone(),
+                    _ => "unknown".to_string(),
+                };
+
+                if let Instruction::Select { ref mut cases, .. } =
+                    ctx.instructions[select_idx]
+                {
+                    cases.push(IrSelectCase {
+                        chan_id,
+                        dest,
+                        target: start,
+                    });
+                }
 
                 for s in &case.body {
                     lower_statement(ctx, &s.stmt);
                 }
-                case_jumps.push(ctx.instructions.len());
-                ctx.push(Instruction::Jump { target: 0 }); // Jump to end of select
-
-                ir_cases.push(IrSelectCase {
-                    chan_id,
-                    dest,
-                    target,
-                });
+                branch_jumps.push(ctx.instructions.len());
+                ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Instruction::Select { ref mut cases, .. } =
-                ctx.instructions[select_idx]
-            {
-                *cases = ir_cases;
-            }
-
-            if let Some(t) = timeout {
-                let timeout_start = ctx.instructions.len();
+            if let Some(fb) = timeout {
+                let start = ctx.instructions.len();
                 if let Instruction::Select {
                     ref mut timeout_target,
                     ..
                 } = ctx.instructions[select_idx]
                 {
-                    *timeout_target = Some(timeout_start);
+                    *timeout_target = Some(start);
                 }
-                for s in t {
+                for s in fb {
                     lower_statement(ctx, &s.stmt);
                 }
+                branch_jumps.push(ctx.instructions.len());
+                ctx.push(Instruction::Jump { target: 0 });
             }
 
             let end_idx = ctx.instructions.len();
-            for jump_idx in case_jumps {
+            for jump_idx in branch_jumps {
                 if let Instruction::Jump { ref mut target, .. } =
                     ctx.instructions[jump_idx]
                 {
                     *target = end_idx;
                 }
-            }
-        }
-        Statement::RelativisticBlock { time, body } => {
-            let target = match time {
-                causm_core::TimeCoordinate::Branch(b) => b.clone(),
-                _ => "main".to_string(),
-            };
-
-            // Use a placeholder for the block start PC
-            let rb_instr_idx = ctx.instructions.len();
-            ctx.push(Instruction::RelativisticBlock {
-                target: target.clone(),
-                block_pc: 0,  // Placeholder
-                block_len: 0, // Placeholder
-            });
-
-            let jump_over_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Jump over body
-
-            let start_pc = ctx.instructions.len();
-            for s in body {
-                lower_statement(ctx, &s.stmt);
-            }
-            let len = ctx.instructions.len() - start_pc;
-
-            // Fill in placeholders
-            if let Instruction::RelativisticBlock {
-                ref mut block_pc,
-                ref mut block_len,
-                ..
-            } = ctx.instructions[rb_instr_idx]
-            {
-                *block_pc = start_pc;
-                *block_len = len;
-            }
-
-            let end_idx = ctx.instructions.len();
-            if let Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[jump_over_idx]
-            {
-                *target = end_idx;
             }
         }
         Statement::MatchEntropy {
@@ -656,13 +778,11 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 {
                     *valid_target = Some(start);
                 }
-
                 let dest = ctx.get_reg(binding);
                 ctx.push(Instruction::Move {
                     dest,
                     src: target_reg,
                 });
-
                 for s in body {
                     lower_statement(ctx, &s.stmt);
                 }
@@ -679,13 +799,11 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 {
                     *decayed_target = Some(start);
                 }
-
                 let dest = ctx.get_reg(binding);
                 ctx.push(Instruction::Move {
                     dest,
                     src: target_reg,
                 });
-
                 for s in body {
                     lower_statement(ctx, &s.stmt);
                 }
@@ -793,19 +911,11 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         } => {
             let source_reg = ctx.get_reg(source);
             let mut sub_ctx = LoweringContext::new();
-            sub_ctx.symbols = ctx.symbols.clone();
-            sub_ctx.next_reg = ctx.next_reg;
-
-            // Item name is in a register
-            let _ = sub_ctx.get_reg(item_name);
-
+            sub_ctx.symbols.insert(item_name.clone(), Reg(0));
+            sub_ctx.next_reg = 1;
             for s in body {
                 lower_statement(&mut sub_ctx, &s.stmt);
             }
-
-            ctx.symbols = sub_ctx.symbols;
-            ctx.next_reg = sub_ctx.next_reg;
-
             ctx.push(Instruction::For {
                 item_name: item_name.clone(),
                 mode: mode.clone(),
@@ -821,25 +931,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             source,
             body,
             reconcile,
+            ..
         } => {
             let source_reg = ctx.get_reg(source);
-            // Ensure splitmap_results is reserved in the parent context
-            let _ = ctx.get_reg("splitmap_results");
-
             let mut sub_ctx = LoweringContext::new();
-            sub_ctx.symbols = ctx.symbols.clone();
-            sub_ctx.next_reg = ctx.next_reg;
-
-            // Item name is in a register
-            let _ = sub_ctx.get_reg(item_name);
-
+            sub_ctx.symbols.insert(item_name.clone(), Reg(0));
+            sub_ctx.next_reg = 1;
             for s in body {
                 lower_statement(&mut sub_ctx, &s.stmt);
             }
-
-            ctx.symbols = sub_ctx.symbols;
-            ctx.next_reg = sub_ctx.next_reg;
-
             ctx.push(Instruction::SplitMap {
                 item_name: item_name.clone(),
                 mode: mode.clone(),
@@ -858,7 +958,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             branches,
             target,
             resolutions,
-            ..
         } => {
             ctx.push(Instruction::Merge {
                 branches: branches.clone(),
@@ -869,208 +968,40 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         Statement::Anchor(name) => {
             ctx.push(Instruction::Anchor { name: name.clone() });
         }
-        Statement::Rewind(name) => {
-            // Acausal reset/rewind
+        Statement::Rewind(target) => {
             ctx.push(Instruction::Rewind {
-                target: "self".to_string(), // Default to current branch for rewind
-                anchor: name.clone(),
+                target: "main".to_string(),
+                anchor: target.clone(),
             });
         }
-        Statement::AcausalReset {
+        Statement::Reset {
             target,
             anchor_name,
         } => {
-            ctx.push(Instruction::Rewind {
+            ctx.push(Instruction::Reset {
                 target: target.clone(),
-                anchor: anchor_name.clone(),
+                anchor_name: anchor_name.clone(),
             });
         }
-        Statement::NetworkRequest { domain } => {
-            ctx.push(Instruction::NetworkRequest {
-                domain: domain.clone(),
-            });
+        Statement::Commit(body) => {
+            let mut vars = Vec::new();
+            for s in body {
+                if let Statement::Assignment { target, .. } = &s.stmt {
+                    vars.push(target.clone());
+                }
+                lower_statement(ctx, &s.stmt);
+            }
+            ctx.push(Instruction::Commit { vars });
         }
         Statement::Entangle { variables } => {
             let regs = variables.iter().map(|v| ctx.get_reg(v)).collect();
             ctx.push(Instruction::Entangle { regs });
-        }
-        Statement::Await(name) => {
-            let target = ctx.get_reg(name);
-            ctx.push(Instruction::Await { target });
-        }
-        Statement::AwaitChan(name) => {
-            ctx.push(Instruction::AwaitChan {
-                chan_id: name.clone(),
-            });
-        }
-        Statement::Commit(body) => {
-            // Simplified commit: we collect modified vars.
-            // In a real compiler we'd track what's assigned in the body.
-            // For now, let's just lower the body and use a placeholder for vars.
-            for s in body {
-                lower_statement(ctx, &s.stmt);
-            }
-            ctx.push(Instruction::Commit { vars: Vec::new() });
-        }
-
-        Statement::ChannelOpen { name, capacity } => {
-            ctx.push(Instruction::OpenChan {
-                name: name.clone(),
-                capacity: *capacity,
-            });
-        }
-        Statement::ChannelSend { chan_id, value_id } => {
-            let src = ctx.get_reg(value_id);
-            ctx.push(Instruction::ChanSend {
-                chan_id: chan_id.clone(),
-                src,
-            });
-        }
-        Statement::Slice { milliseconds } => {
-            ctx.push(Instruction::Slice { ms: *milliseconds });
-        }
-        Statement::Break => {
-            ctx.push(Instruction::Break);
-        }
-        Statement::LoopTick { body } => {
-            ctx.push(Instruction::LoopTick);
-            for s in body {
-                lower_statement(ctx, &s.stmt);
-            }
-            ctx.push(Instruction::EndLoopTick);
-        }
-        Statement::Lease {
-            binding,
-            source,
-            duration_ms,
-            body,
-        } => {
-            let source_reg = ctx.get_reg(source);
-            let target_reg = ctx.get_reg(binding);
-
-            ctx.push(Instruction::Lease {
-                target_reg,
-                source_reg,
-                duration_ms: *duration_ms,
-            });
-
-            for s in body {
-                lower_statement(ctx, &s.stmt);
-            }
-
-            ctx.push(Instruction::EndLease {
-                source_reg,
-                duration_ms: *duration_ms,
-            });
-        }
-        Statement::Loop { max_ms, body } => {
-            let start_pc = ctx.instructions.len();
-            ctx.push(Instruction::Loop { max_ms: *max_ms });
-            for s in body {
-                lower_statement(ctx, &s.stmt);
-            }
-            ctx.push(Instruction::EndLoop { max_ms: *max_ms });
-            ctx.push(Instruction::Jump { target: start_pc });
-        }
-        Statement::If {
-            condition,
-            then_branch,
-            else_branch,
-            ..
-        } => {
-            let cond_reg = lower_expression(ctx, condition);
-
-            let jump_to_else_idx = ctx.instructions.len();
-            ctx.push(Instruction::JumpIfNot {
-                cond: cond_reg,
-                target: 0,
-            }); // Placeholder
-
-            for s in then_branch {
-                lower_statement(ctx, &s.stmt);
-            }
-
-            if let Some(eb) = else_branch {
-                let jump_to_end_idx = ctx.instructions.len();
-                ctx.push(Instruction::Jump { target: 0 }); // Placeholder
-
-                let else_start_idx = ctx.instructions.len();
-                if let Instruction::JumpIfNot { ref mut target, .. } =
-                    ctx.instructions[jump_to_else_idx]
-                {
-                    *target = else_start_idx;
-                }
-
-                for s in eb {
-                    lower_statement(ctx, &s.stmt);
-                }
-
-                let end_idx = ctx.instructions.len();
-                if let Instruction::Jump { ref mut target, .. } =
-                    ctx.instructions[jump_to_end_idx]
-                {
-                    *target = end_idx;
-                }
-            } else {
-                let end_idx = ctx.instructions.len();
-                if let Instruction::JumpIfNot { ref mut target, .. } =
-                    ctx.instructions[jump_to_else_idx]
-                {
-                    *target = end_idx;
-                }
-            }
-        }
-        Statement::Watchdog {
-            target,
-            timeout_ms,
-            recovery,
-        } => {
-            // For watchdog, recovery is a block. We use Jump for simplicity in this flat IR.
-            let jump_over_recovery_idx = ctx.instructions.len();
-            ctx.push(Instruction::Watchdog {
-                target: target.clone(),
-                timeout_ms: *timeout_ms,
-                recovery_jump: Some(0), // Placeholder
-            });
-
-            // Jump over recovery by default if watchdog doesn't bite
-            let skip_recovery_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Placeholder
-
-            let recovery_start_idx = ctx.instructions.len();
-            if let Instruction::Watchdog {
-                ref mut recovery_jump,
-                ..
-            } = ctx.instructions[jump_over_recovery_idx]
-            {
-                *recovery_jump = Some(recovery_start_idx);
-            }
-
-            for s in recovery {
-                lower_statement(ctx, &s.stmt);
-            }
-
-            let end_idx = ctx.instructions.len();
-            if let Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[skip_recovery_idx]
-            {
-                *target = end_idx;
-            }
         }
         Statement::FieldUpdate {
             target,
             field,
             value,
         } => match target {
-            Expression::Identifier(name) => {
-                let target_reg = ctx.get_reg(name);
-                let src_reg = lower_expression(ctx, value);
-                ctx.push(Instruction::FieldUpdate {
-                    target: target_reg,
-                    field: field.clone(),
-                    src: src_reg,
-                });
-            }
             Expression::IndexAccess {
                 target: inner_target,
                 index,
@@ -1183,93 +1114,33 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+
+        Expression::FieldAccess { target, field } => {
+            let src = lower_expression(ctx, target);
+            let dest = ctx.alloc_reg();
+            ctx.push(Instruction::ConsumeField {
+                src,
+                field: field.clone(),
+            });
+            // We reuse next_reg for the result
+            dest
+        }
         Expression::CloneOp(name) => {
             let src = ctx.get_reg(name);
             let dest = ctx.alloc_reg();
             ctx.push(Instruction::Clone { dest, src });
             dest
         }
-        Expression::FieldAccess { target, field } => {
-            let t = lower_expression(ctx, target);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::FieldAccess {
-                dest,
-                target: t,
-                field: field.clone(),
-            });
-            dest
-        }
         Expression::IndexAccess { target, index } => {
             let t = lower_expression(ctx, target);
             let i = lower_expression(ctx, index);
             let dest = ctx.alloc_reg();
-            ctx.push(Instruction::IndexAccess {
-                dest,
+            ctx.push(Instruction::ConsumeFieldDynamic {
                 target: t,
                 index: i,
             });
             dest
         }
-        Expression::StructLit(type_name, fields) => {
-            let mut field_regs = HashMap::new();
-            for (name, expr) in fields {
-                field_regs.insert(name.clone(), lower_expression(ctx, expr));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::StructLit {
-                dest,
-                fields: field_regs,
-                type_name: type_name.clone(),
-            });
-            dest
-        }
-        Expression::TopologyLit(fields) => {
-            let mut field_regs = HashMap::new();
-            for (name, expr) in fields {
-                field_regs.insert(name.clone(), lower_expression(ctx, expr));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::TopologyLit {
-                dest,
-                fields: field_regs,
-            });
-            dest
-        }
-        Expression::ArrayLiteral(elements) => {
-            let mut elem_regs = Vec::new();
-            for e in elements {
-                elem_regs.push(lower_expression(ctx, e));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::ArrayLit {
-                dest,
-                elements: elem_regs,
-            });
-            dest
-        }
-        Expression::ChannelReceive(chan_id) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::ChanRecv {
-                dest,
-                chan_id: chan_id.clone(),
-            });
-            dest
-        }
-        Expression::Deferred {
-            capability,
-            params,
-            deadline_ms,
-        } => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::Defer {
-                dest,
-                cap: causm_core::Capability {
-                    path: capability.clone(),
-                    parameters: params.clone(),
-                },
-                deadline_ms: *deadline_ms,
-            });
-            dest
-        }
+        _ => Reg(0), // TODO: other expressions
     }
 }

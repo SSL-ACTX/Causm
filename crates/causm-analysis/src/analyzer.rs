@@ -646,7 +646,7 @@ impl EntropicAnalyzer {
             } => {
                 format!("watchdog {} timeout {}ms", target, timeout_ms)
             }
-            Statement::AcausalReset {
+            Statement::Reset {
                 target,
                 anchor_name,
             } => {

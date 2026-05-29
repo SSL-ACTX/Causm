@@ -72,7 +72,7 @@ pub fn estimate_statement_cost(
         | Statement::Send { .. }
         | Statement::ChannelOpen { .. }
         | Statement::ChannelSend { .. }
-        | Statement::AcausalReset { .. }
+        | Statement::Reset { .. }
         | Statement::Capability(_) => 0,
         Statement::Assignment { expr, .. } => {
             crate::expression::estimate_expression_cost(analyzer, expr)

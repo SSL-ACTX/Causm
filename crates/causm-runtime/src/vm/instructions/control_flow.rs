@@ -145,52 +145,139 @@ impl Vm {
                     self.global_clock,
                 );
 
+                // SpeedMicro: Spoonfeed CPU by warming cache
+                self.root_timeline.arena.warm_cache();
+                for branch in self.active_branches.values() {
+                    branch.arena.warm_cache();
+                }
+
                 // SpeedMicro: Capture TSC immediately before call
                 let start_tsc = crate::vm::jit::hw_timing::read_tsc();
 
-                let res_i64 = if i64_args.len() == 2 {
-                    type RoutineFn2 = extern "C" fn(
-                        *mut Vm,
-                        *mut crate::vm::state::Timeline,
-                        i64, // start_tsc
-                        i64,
-                        i64,
-                    ) -> i64;
-                    let func: RoutineFn2 = unsafe { std::mem::transmute(code_ptr) };
-                    func(
-                        self as *mut Vm,
-                        &mut child as *mut crate::vm::state::Timeline,
-                        start_tsc as i64,
-                        i64_args[0],
-                        i64_args[1],
-                    )
-                } else if i64_args.len() == 1 {
-                    type RoutineFn1 = extern "C" fn(
-                        *mut Vm,
-                        *mut crate::vm::state::Timeline,
-                        i64, // start_tsc
-                        i64,
-                    ) -> i64;
-                    let func: RoutineFn1 = unsafe { std::mem::transmute(code_ptr) };
-                    func(
-                        self as *mut Vm,
-                        &mut child as *mut crate::vm::state::Timeline,
-                        start_tsc as i64,
-                        i64_args[0],
-                    )
-                } else {
-                    type RoutineFn0 = extern "C" fn(
-                        *mut Vm,
-                        *mut crate::vm::state::Timeline,
-                        i64, // start_tsc
-                    ) -> i64;
-                    let func: RoutineFn0 = unsafe { std::mem::transmute(code_ptr) };
-                    func(
-                        self as *mut Vm,
-                        &mut child as *mut crate::vm::state::Timeline,
-                        start_tsc as i64,
-                    )
+                let branch_budget = self
+                    .get_branch(branch_id)?
+                    .cpu_budget_ms
+                    .saturating_mul(1000)
+                    .min(i64::MAX as u64)
+                    .max(10000) as i64;
+
+                let res_i64 = match i64_args.len() {
+                    4 => {
+                        type RoutineFn4 = extern "C" fn(
+                            *mut Vm,
+                            *mut crate::vm::state::Timeline,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                        )
+                            -> i64;
+                        let func: RoutineFn4 =
+                            unsafe { std::mem::transmute(code_ptr) };
+                        func(
+                            self as *mut Vm,
+                            &mut child as *mut crate::vm::state::Timeline,
+                            start_tsc as i64,
+                            branch_budget,
+                            i64_args[0],
+                            i64_args[1],
+                            i64_args[2],
+                            i64_args[3],
+                        )
+                    }
+                    3 => {
+                        type RoutineFn3 = extern "C" fn(
+                            *mut Vm,
+                            *mut crate::vm::state::Timeline,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                        )
+                            -> i64;
+                        let func: RoutineFn3 =
+                            unsafe { std::mem::transmute(code_ptr) };
+                        func(
+                            self as *mut Vm,
+                            &mut child as *mut crate::vm::state::Timeline,
+                            start_tsc as i64,
+                            branch_budget,
+                            i64_args[0],
+                            i64_args[1],
+                            i64_args[2],
+                        )
+                    }
+                    2 => {
+                        type RoutineFn2 = extern "C" fn(
+                            *mut Vm,
+                            *mut crate::vm::state::Timeline,
+                            i64,
+                            i64,
+                            i64,
+                            i64,
+                        )
+                            -> i64;
+                        let func: RoutineFn2 =
+                            unsafe { std::mem::transmute(code_ptr) };
+                        func(
+                            self as *mut Vm,
+                            &mut child as *mut crate::vm::state::Timeline,
+                            start_tsc as i64,
+                            branch_budget,
+                            i64_args[0],
+                            i64_args[1],
+                        )
+                    }
+                    1 => {
+                        type RoutineFn1 = extern "C" fn(
+                            *mut Vm,
+                            *mut crate::vm::state::Timeline,
+                            i64,
+                            i64,
+                            i64,
+                        )
+                            -> i64;
+                        let func: RoutineFn1 =
+                            unsafe { std::mem::transmute(code_ptr) };
+                        func(
+                            self as *mut Vm,
+                            &mut child as *mut crate::vm::state::Timeline,
+                            start_tsc as i64,
+                            branch_budget,
+                            i64_args[0],
+                        )
+                    }
+                    0 => {
+                        type RoutineFn0 = extern "C" fn(
+                            *mut Vm,
+                            *mut crate::vm::state::Timeline,
+                            i64,
+                            i64,
+                        )
+                            -> i64;
+                        let func: RoutineFn0 =
+                            unsafe { std::mem::transmute(code_ptr) };
+                        func(
+                            self as *mut Vm,
+                            &mut child as *mut crate::vm::state::Timeline,
+                            start_tsc as i64,
+                            branch_budget,
+                        )
+                    }
+                    _ => {
+                        return Err(TemporalError::EvalError(format!(
+                        "Routines with {} arguments are not yet supported in JIT",
+                        i64_args.len()
+                    )))
+                    }
                 };
+
+                if res_i64 == -1 {
+                    return Err(TemporalError::BudgetExhausted);
+                }
 
                 // SpeedMicro: Synchronize logical clock with cycle contract
                 if let Some(cycles) = routine_def.taking_cycles {
