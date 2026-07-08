@@ -376,8 +376,27 @@ impl EntropicAnalyzer {
         }
 
         if !type_conflicts.is_empty() {
-            if let Some(reconcile_rules) = reconcile {
-                if reconcile_rules.auto {
+            match reconcile {
+                // `reconcile auto` — widening to Unknown is sufficient, no error.
+                Some(r) if r.auto => {}
+                // Manual reconcile rules — only error for vars not covered.
+                Some(r) => {
+                    let uncovered: Vec<_> = type_conflicts
+                        .iter()
+                        .filter(|n| !r.rules.contains_key(*n))
+                        .cloned()
+                        .collect();
+                    if !uncovered.is_empty() {
+                        return Err(self.annotate(
+                            SemanticErrorKind::EntropyMismatch(format!(
+                                "divergent types for {}",
+                                uncovered.join(", ")
+                            )),
+                        ));
+                    }
+                }
+                // No reconcile clause at all — error on any type conflict.
+                None => {
                     return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
                         format!("divergent types for {}", type_conflicts.join(", ")),
                     )));
