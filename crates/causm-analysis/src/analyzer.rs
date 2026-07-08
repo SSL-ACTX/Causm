@@ -305,9 +305,7 @@ impl EntropicAnalyzer {
 
         // Formal Verification Guard
         if self.use_z3 {
-            let cfg = z3::Config::new();
-            let ctx = z3::Context::new(&cfg);
-            let mut verifier = crate::z3_guard::FormalVerifier::new(&ctx, self);
+            let mut verifier = crate::z3_guard::FormalVerifier::new(self);
             verifier.verify(program)?;
         }
 
