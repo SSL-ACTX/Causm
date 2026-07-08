@@ -112,6 +112,20 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                 .unwrap_or(Expression::Literal("".into()));
             Statement::Debug(expr)
         }
+        Rule::inspect_stmt => {
+            let mut inner = pair.into_inner();
+            let target = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let mut body = Vec::new();
+            for stmt_pair in inner {
+                if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                    body.push(parse_statement(actual_stmt));
+                }
+            }
+            Statement::Inspect { target, body }
+        }
         _ => unreachable!(),
     }
 }

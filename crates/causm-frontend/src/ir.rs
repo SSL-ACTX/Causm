@@ -884,6 +884,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 chan_id: name.clone(),
             });
         }
+        Statement::Inspect { body, .. } => {
+            // inspect is non-destructive: lower the body without consuming the target.
+            for s in body {
+                lower_statement(ctx, &s.stmt);
+            }
+        }
+
         Statement::Commit(body) => {
             // Simplified commit: we collect modified vars.
             // In a real compiler we'd track what's assigned in the body.

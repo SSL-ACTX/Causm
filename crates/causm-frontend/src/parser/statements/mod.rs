@@ -65,7 +65,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::speculation_mode_stmt
         | Rule::network_request_stmt
         | Rule::print_stmt
-        | Rule::debug_stmt => misc::parse_misc_stmt(pair),
+        | Rule::debug_stmt
+        | Rule::inspect_stmt => misc::parse_misc_stmt(pair),
 
         _ => {
             Statement::Expression(crate::parser::expressions::parse_expression(pair))
