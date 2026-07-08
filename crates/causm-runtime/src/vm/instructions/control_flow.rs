@@ -238,11 +238,8 @@ impl Vm {
         };
 
         if let Some(target_pc) = maybe_jump {
-            println!("[DEBUG] MatchEntropy jumping to PC {}", target_pc);
             let branch = self.get_branch_mut(branch_id)?;
             branch.pc = target_pc;
-        } else {
-            println!("[DEBUG] MatchEntropy NO JUMP for state {:?}", state);
         }
         Ok(())
     }

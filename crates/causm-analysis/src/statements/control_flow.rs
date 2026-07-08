@@ -288,18 +288,27 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        let merged_state = context_candidates.into_iter().fold(
-            original_state.clone(),
-            |mut acc, s| {
-                acc.consumed.extend(s.consumed);
-                acc.decayed.extend(s.decayed);
-                acc.yields.extend(s.yields);
-                acc
-            },
-        );
+        if context_candidates.is_empty() {
+            self.branch_contexts
+                .insert(self.current_branch.clone(), original_state);
+            return Ok(());
+        }
+
+        let mut final_state = context_candidates[0].clone();
+        let recon = Some(MergeResolution {
+            rules: std::collections::HashMap::new(),
+            auto: true,
+            fallback: None,
+            taking_ms: None,
+        });
+
+        for candidate in context_candidates.iter().skip(1) {
+            final_state =
+                self.merge_states(final_state, candidate.clone(), &recon)?;
+        }
 
         self.branch_contexts
-            .insert(self.current_branch.clone(), merged_state);
+            .insert(self.current_branch.clone(), final_state);
         Ok(())
     }
 

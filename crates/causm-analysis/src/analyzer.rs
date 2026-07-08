@@ -368,8 +368,14 @@ impl EntropicAnalyzer {
                 .entry(name.clone())
                 .and_modify(|existing| {
                     if existing != typ {
-                        type_conflicts.push(name.clone());
-                        *existing = causm_core::types::Type::Unknown;
+                        if *existing != causm_core::types::Type::Unknown
+                            && *typ != causm_core::types::Type::Unknown
+                        {
+                            type_conflicts.push(name.clone());
+                            *existing = causm_core::types::Type::Unknown;
+                        } else if *existing == causm_core::types::Type::Unknown {
+                            *existing = typ.clone();
+                        }
                     }
                 })
                 .or_insert(typ.clone());

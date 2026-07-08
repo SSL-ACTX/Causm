@@ -25,13 +25,8 @@ impl Vm {
         src: Reg,
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, src.0)?;
-        println!("[DEBUG] {}: {:?}", branch_id, val);
-        let message = format!("{:?}", val);
-        let cap = Capability {
-            path: "System.Log".to_string(),
-            parameters: [("message".to_string(), message)].into(),
-        };
-        self._execute_capability(branch_id, &cap)
+        println!("[debug] {}", val);
+        Ok(())
     }
 
     pub(crate) fn Capability(

@@ -232,6 +232,262 @@ impl<'a> FormalVerifier<'a> {
 
                 Ok(Bool::ite(&cond_bool, &then_clock, &else_clock))
             }
+            Statement::MatchEntropy {
+                target,
+                valid_branch,
+                decayed_branch,
+                pending_branch,
+                consumed_branch,
+            } => {
+                self.verify_expression(target, path_condition, &current_clock)?;
+
+                let valid_cond =
+                    Bool::new_const(format!("valid_cond_{}", spanned.span.start));
+                let decayed_cond =
+                    Bool::new_const(format!("decayed_cond_{}", spanned.span.start));
+                let pending_cond =
+                    Bool::new_const(format!("pending_cond_{}", spanned.span.start));
+                let consumed_cond =
+                    Bool::new_const(format!("consumed_cond_{}", spanned.span.start));
+
+                let one_of_four = Bool::or(&[
+                    &Bool::and(&[
+                        &valid_cond,
+                        &decayed_cond.not(),
+                        &pending_cond.not(),
+                        &consumed_cond.not(),
+                    ]),
+                    &Bool::and(&[
+                        &valid_cond.not(),
+                        &decayed_cond,
+                        &pending_cond.not(),
+                        &consumed_cond.not(),
+                    ]),
+                    &Bool::and(&[
+                        &valid_cond.not(),
+                        &decayed_cond.not(),
+                        &pending_cond,
+                        &consumed_cond.not(),
+                    ]),
+                    &Bool::and(&[
+                        &valid_cond.not(),
+                        &decayed_cond.not(),
+                        &pending_cond.not(),
+                        &consumed_cond,
+                    ]),
+                ]);
+                self.solver.assert(&path_condition.implies(&one_of_four));
+
+                let pre_match_validity = self.variable_validity.clone();
+                let pre_match_leased = self.variable_leased.clone();
+                let pre_match_horizon = self.causal_horizon.clone();
+
+                let branch_start_clock = Int::add(&[in_clock, &Int::from_u64(1)]);
+
+                // 1. Valid branch
+                let mut valid_clock = branch_start_clock.clone();
+                if let Some((binding, branch_body)) = valid_branch {
+                    let valid_pc = Bool::and(&[path_condition, &valid_cond]);
+                    let is_valid = Bool::new_const(format!(
+                        "{}_valid_{}",
+                        binding, spanned.span.start
+                    ));
+                    self.solver.assert(&valid_pc.implies(&is_valid));
+                    self.variable_validity.insert(binding.clone(), is_valid);
+                    let is_leased = Bool::new_const(format!(
+                        "{}_leased_{}",
+                        binding, spanned.span.start
+                    ));
+                    self.solver.assert(&valid_pc.implies(&is_leased.not()));
+                    self.variable_leased.insert(binding.clone(), is_leased);
+
+                    for stmt in branch_body {
+                        valid_clock =
+                            self.verify_statement(stmt, &valid_pc, &valid_clock)?;
+                    }
+                }
+                let post_val_validity = self.variable_validity.clone();
+                let post_val_leased = self.variable_leased.clone();
+                let post_val_horizon = self.causal_horizon.clone();
+
+                // 2. Decayed branch
+                self.variable_validity = pre_match_validity.clone();
+                self.variable_leased = pre_match_leased.clone();
+                self.causal_horizon = pre_match_horizon.clone();
+                let mut decayed_clock = branch_start_clock.clone();
+                if let Some((binding, branch_body)) = decayed_branch {
+                    let decayed_pc = Bool::and(&[path_condition, &decayed_cond]);
+                    let is_valid = Bool::new_const(format!(
+                        "{}_valid_{}",
+                        binding, spanned.span.start
+                    ));
+                    self.solver.assert(&decayed_pc.implies(&is_valid));
+                    self.variable_validity.insert(binding.clone(), is_valid);
+                    let is_leased = Bool::new_const(format!(
+                        "{}_leased_{}",
+                        binding, spanned.span.start
+                    ));
+                    self.solver.assert(&decayed_pc.implies(&is_leased.not()));
+                    self.variable_leased.insert(binding.clone(), is_leased);
+
+                    for stmt in branch_body {
+                        decayed_clock = self.verify_statement(
+                            stmt,
+                            &decayed_pc,
+                            &decayed_clock,
+                        )?;
+                    }
+                }
+                let post_dec_validity = self.variable_validity.clone();
+                let post_dec_leased = self.variable_leased.clone();
+                let post_dec_horizon = self.causal_horizon.clone();
+
+                // 3. Pending branch
+                self.variable_validity = pre_match_validity.clone();
+                self.variable_leased = pre_match_leased.clone();
+                self.causal_horizon = pre_match_horizon.clone();
+                let mut pending_clock = branch_start_clock.clone();
+                if let Some(branch_body) = pending_branch {
+                    let pending_pc = Bool::and(&[path_condition, &pending_cond]);
+                    for stmt in branch_body {
+                        pending_clock = self.verify_statement(
+                            stmt,
+                            &pending_pc,
+                            &pending_clock,
+                        )?;
+                    }
+                }
+                let post_pen_validity = self.variable_validity.clone();
+                let post_pen_leased = self.variable_leased.clone();
+                let post_pen_horizon = self.causal_horizon.clone();
+
+                // 4. Consumed branch
+                self.variable_validity = pre_match_validity.clone();
+                self.variable_leased = pre_match_leased.clone();
+                self.causal_horizon = pre_match_horizon.clone();
+                let mut consumed_clock = branch_start_clock.clone();
+                if let Some(branch_body) = consumed_branch {
+                    let consumed_pc = Bool::and(&[path_condition, &consumed_cond]);
+                    for stmt in branch_body {
+                        consumed_clock = self.verify_statement(
+                            stmt,
+                            &consumed_pc,
+                            &consumed_clock,
+                        )?;
+                    }
+                }
+                let post_con_validity = self.variable_validity.clone();
+                let post_con_leased = self.variable_leased.clone();
+                let post_con_horizon = self.causal_horizon.clone();
+
+                // Merge
+                let mut merged_validity = HashMap::new();
+                let mut merged_leased = HashMap::new();
+
+                let mut all_vars = HashSet::new();
+                for candidate in &[
+                    &post_val_validity,
+                    &post_dec_validity,
+                    &post_pen_validity,
+                    &post_con_validity,
+                ] {
+                    all_vars.extend(candidate.keys().cloned());
+                }
+
+                for var in all_vars {
+                    let v_val = post_val_validity
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let v_dec = post_dec_validity
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let v_pen = post_pen_validity
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let v_con = post_con_validity
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+
+                    let m_v = Bool::new_const(format!(
+                        "{}_m_v_{}",
+                        var, spanned.span.start
+                    ));
+                    let val_expr = Bool::or(&[
+                        &Bool::and(&[&valid_cond, &v_val]),
+                        &Bool::and(&[&decayed_cond, &v_dec]),
+                        &Bool::and(&[&pending_cond, &v_pen]),
+                        &Bool::and(&[&consumed_cond, &v_con]),
+                    ]);
+                    self.solver.assert(&m_v.eq(&val_expr));
+                    merged_validity.insert(var.clone(), m_v);
+
+                    let l_val = post_val_leased
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let l_dec = post_dec_leased
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let l_pen = post_pen_leased
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+                    let l_con = post_con_leased
+                        .get(&var)
+                        .cloned()
+                        .unwrap_or_else(|| Bool::from_bool(false));
+
+                    let m_l = Bool::new_const(format!(
+                        "{}_m_l_{}",
+                        var, spanned.span.start
+                    ));
+                    let leased_expr = Bool::or(&[
+                        &Bool::and(&[&valid_cond, &l_val]),
+                        &Bool::and(&[&decayed_cond, &l_dec]),
+                        &Bool::and(&[&pending_cond, &l_pen]),
+                        &Bool::and(&[&consumed_cond, &l_con]),
+                    ]);
+                    self.solver.assert(&m_l.eq(&leased_expr));
+                    merged_leased.insert(var.clone(), m_l);
+                }
+
+                self.variable_validity = merged_validity;
+                self.variable_leased = merged_leased;
+
+                let m_h = Int::new_const(format!("h_m_{}", spanned.span.start));
+                let h_expr = Bool::ite(
+                    &valid_cond,
+                    &post_val_horizon,
+                    &Bool::ite(
+                        &decayed_cond,
+                        &post_dec_horizon,
+                        &Bool::ite(
+                            &pending_cond,
+                            &post_pen_horizon,
+                            &post_con_horizon,
+                        ),
+                    ),
+                );
+                self.solver.assert(&m_h.eq(&h_expr));
+                self.causal_horizon = m_h;
+
+                let final_clock = Bool::ite(
+                    &valid_cond,
+                    &valid_clock,
+                    &Bool::ite(
+                        &decayed_cond,
+                        &decayed_clock,
+                        &Bool::ite(&pending_cond, &pending_clock, &consumed_clock),
+                    ),
+                );
+
+                Ok(final_clock)
+            }
             Statement::Loop { max_ms, body } => {
                 let mut loop_clock = Int::from_u64(0);
                 for stmt in body {
@@ -615,9 +871,6 @@ impl<'a> FormalVerifier<'a> {
     ) -> Result<(), SemanticError> {
         let budget = block.manifest.cpu_budget_ms.unwrap_or(u64::MAX);
         let mut clock = Int::from_u64(0);
-        let old_validity = self.variable_validity.clone();
-        let old_leased = self.variable_leased.clone();
-        let old_horizon = self.causal_horizon.clone();
         let old_anchors = self.anchors.clone();
         let old_slice = self.current_slice_ms;
 
@@ -626,9 +879,6 @@ impl<'a> FormalVerifier<'a> {
         for spanned in &block.body {
             clock = self.verify_statement(spanned, path_condition, &clock)?;
         }
-        self.variable_validity = old_validity;
-        self.variable_leased = old_leased;
-        self.causal_horizon = old_horizon;
         self.anchors = old_anchors;
         self.current_slice_ms = old_slice;
 

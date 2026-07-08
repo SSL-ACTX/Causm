@@ -297,6 +297,16 @@ impl Vm {
         branch_id: &str,
         cap: &Capability,
     ) -> Result<(), TemporalError> {
+        let mut resolved_params = cap.parameters.clone();
+        for (k, v) in &cap.parameters {
+            let reg_opt = self.symbols.get(v).copied();
+            if let Some(reg) = reg_opt {
+                if let Ok(reg_val) = self.peek_reg(branch_id, reg.0) {
+                    resolved_params.insert(k.clone(), reg_val.to_string());
+                }
+            }
+        }
+
         // Enforce resource budgets
         let res_name = cap.path.replace(".", "_").to_lowercase();
         {
@@ -313,14 +323,14 @@ impl Vm {
         }
 
         if cap.path == "System.Entropy"
-            && cap.parameters.get("mode") == Some(&"chaos".to_string())
+            && resolved_params.get("mode") == Some(&"chaos".to_string())
         {
             let branch = self.get_branch_mut(branch_id)?;
             branch.entropy_mode = EntropyMode::Chaos;
         }
 
         if let Some(handler) = self.capability_handlers.get(&cap.path) {
-            handler(&cap.parameters).map_err(TemporalError::CapabilityViolation)?;
+            handler(&resolved_params).map_err(TemporalError::CapabilityViolation)?;
             Ok(())
         } else if cap.path == "System.Entropy" {
             // System.Entropy is a built-in mode that does not require host handler.

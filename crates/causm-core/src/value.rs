@@ -594,7 +594,6 @@ impl Arena {
         field: &str,
         new_value: Payload,
     ) -> Result<(), MemoryError> {
-        println!("[DEBUG] Arena::update_index_field reg={}, index={}, field={}, value={:?}", reg, index, field, new_value);
         self.ensure_register(reg);
         let idx = reg as usize;
 
@@ -618,7 +617,6 @@ impl Arena {
                 match inner_state {
                     EntropicState::Valid(Payload::Struct(inner_fields))
                     | EntropicState::Valid(Payload::Topology(inner_fields)) => {
-                        println!("[DEBUG] Found inner struct/topology at index {}, updating field {}", index, field);
                         inner_fields.insert(
                             field.to_string(),
                             EntropicState::Valid(new_value),
@@ -632,7 +630,6 @@ impl Arena {
                 }
 
                 let new_state = EntropicState::Valid(Payload::Topology(fields));
-                println!("[DEBUG] Successfully updated nested field");
 
                 let new_parent_weight = new_state.weight();
                 if self.used.saturating_sub(old_parent_weight) + new_parent_weight

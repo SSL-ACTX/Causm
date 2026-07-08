@@ -104,6 +104,15 @@ impl Vm {
             }
         }
 
+        let base_arena_len = if target == "main" {
+            self.root_timeline.arena.registers.len()
+        } else {
+            self.active_branches
+                .get(target)
+                .map(|b| b.arena.registers.len())
+                .unwrap_or(0)
+        };
+
         for branch_name in &branches {
             let branch =
                 self.active_branches.get(*branch_name).ok_or_else(|| {
@@ -116,20 +125,45 @@ impl Vm {
 
             for (idx, state) in branch.arena.registers.iter().enumerate() {
                 if let Some(existing) = &merged_registers[idx] {
-                    let strategy = reg_resolutions
-                        .get(&(idx as u32))
-                        .unwrap_or(&ResolutionStrategy::Auto);
-                    let (resolved, rev) = self.resolve_entropic_conflict(
-                        &idx.to_string(),
-                        existing,
-                        state,
-                        strategy,
-                        branch_name,
-                    );
+                    let resolved = if idx >= base_arena_len {
+                        match (existing, state) {
+                            (EntropicState::Consumed, other) => other.clone(),
+                            (other, EntropicState::Consumed) => other.clone(),
+                            (ext, incoming) => {
+                                let strategy = reg_resolutions
+                                    .get(&(idx as u32))
+                                    .unwrap_or(&ResolutionStrategy::Auto);
+                                let (resolved, rev) = self
+                                    .resolve_entropic_conflict(
+                                        &idx.to_string(),
+                                        ext,
+                                        incoming,
+                                        strategy,
+                                        branch_name,
+                                    );
+                                if pending_reversion.is_none() {
+                                    pending_reversion = rev;
+                                }
+                                resolved
+                            }
+                        }
+                    } else {
+                        let strategy = reg_resolutions
+                            .get(&(idx as u32))
+                            .unwrap_or(&ResolutionStrategy::Auto);
+                        let (resolved, rev) = self.resolve_entropic_conflict(
+                            &idx.to_string(),
+                            existing,
+                            state,
+                            strategy,
+                            branch_name,
+                        );
+                        if pending_reversion.is_none() {
+                            pending_reversion = rev;
+                        }
+                        resolved
+                    };
                     merged_registers[idx] = Some(resolved);
-                    if pending_reversion.is_none() {
-                        pending_reversion = rev;
-                    }
                 } else {
                     merged_registers[idx] = Some(state.clone());
                 }
@@ -222,7 +256,21 @@ impl Vm {
         if matches!(existing, EntropicState::Consumed)
             || matches!(incoming, EntropicState::Consumed)
         {
-            return (EntropicState::Consumed, None);
+            match strategy {
+                ResolutionStrategy::Priority(p) => {
+                    if incoming_branch == p {
+                        return (incoming.clone(), None);
+                    } else {
+                        return (existing.clone(), None);
+                    }
+                }
+                ResolutionStrategy::FirstWins => {
+                    return (existing.clone(), None);
+                }
+                _ => {
+                    return (EntropicState::Consumed, None);
+                }
+            }
         }
 
         match strategy {
@@ -239,11 +287,23 @@ impl Vm {
                 key_rules,
                 default,
                 on_invalid,
-            } => match (existing, incoming) {
-                (
-                    EntropicState::Valid(causm_core::value::Payload::Topology(f1)),
-                    EntropicState::Valid(causm_core::value::Payload::Topology(f2)),
-                ) => {
+            } => {
+                let f1_opt = match existing {
+                    EntropicState::Valid(causm_core::value::Payload::Topology(
+                        f,
+                    )) => Some(f),
+                    EntropicState::Decayed(f) => Some(f),
+                    _ => None,
+                };
+                let f2_opt = match incoming {
+                    EntropicState::Valid(causm_core::value::Payload::Topology(
+                        f,
+                    )) => Some(f),
+                    EntropicState::Decayed(f) => Some(f),
+                    _ => None,
+                };
+
+                if let (Some(f1), Some(f2)) = (f1_opt, f2_opt) {
                     let mut merged_fields = f1.clone();
                     let mut final_reversion = None;
 
@@ -271,24 +331,29 @@ impl Vm {
                         }
                     }
 
-                    if merged_fields
+                    let has_consumed = merged_fields
                         .values()
-                        .any(|s| matches!(s, EntropicState::Consumed))
-                    {
+                        .any(|s| matches!(s, EntropicState::Consumed));
+
+                    if has_consumed {
                         if let Some(rev) = on_invalid {
                             return (EntropicState::Consumed, Some(rev.clone()));
                         }
                     }
 
-                    (
+                    let merged_state = if has_consumed {
+                        EntropicState::Decayed(merged_fields)
+                    } else {
                         EntropicState::Valid(causm_core::value::Payload::Topology(
                             merged_fields,
-                        )),
-                        final_reversion,
-                    )
+                        ))
+                    };
+
+                    (merged_state, final_reversion)
+                } else {
+                    (EntropicState::Consumed, on_invalid.clone())
                 }
-                _ => (EntropicState::Consumed, on_invalid.clone()),
-            },
+            }
             ResolutionStrategy::Auto => {
                 if existing == incoming {
                     (existing.clone(), None)
