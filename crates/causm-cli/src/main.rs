@@ -9,13 +9,17 @@ use std::path::PathBuf;
 
 fn usage(program: &str) {
     eprintln!(
-        "Usage: {} [--check] [--run] [--dump-ast] [--dump-ir] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
+        "Usage: {} [--check] [--run] [--dump-ast] [--dump-ir] [--dump-cfg] [--dump-ssa] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
         program
     );
     eprintln!("  --check                Perform semantic analysis only");
     eprintln!("  --run                  Execute program after analysis (default)");
     eprintln!("  --dump-ast             Print the parsed AST and continue");
     eprintln!("  --dump-ir              Print the lowered IR and continue");
+    eprintln!(
+        "  --dump-cfg             Print the Control Flow Graph (CFG) and continue"
+    );
+    eprintln!("  --dump-ssa             Print the SSA Form Control Flow Graph and continue");
     eprintln!(
         "  --trace-entropy        Show entropic decay map after every instruction"
     );
@@ -45,6 +49,8 @@ fn main() -> anyhow::Result<()> {
     let mut run_program = false;
     let mut dump_ast = false;
     let mut dump_ir = false;
+    let mut dump_cfg = false;
+    let mut dump_ssa = false;
     let mut trace_entropy = false;
     let mut dump_causal_history = false;
 
@@ -66,6 +72,16 @@ fn main() -> anyhow::Result<()> {
         }
         if arg == "--dump-ir" {
             dump_ir = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-cfg" {
+            dump_cfg = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-ssa" {
+            dump_ssa = true;
             args.remove(0);
             continue;
         }
@@ -117,6 +133,46 @@ fn main() -> anyhow::Result<()> {
         if dump_ir {
             let ir_program = ir::lower_program(&program);
             println!("IR for {}:\n{}", path.display(), ir_program);
+        }
+
+        if dump_cfg {
+            let ir_program = ir::lower_program(&program);
+            println!("CFG for {}:", path.display());
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                println!("  Routine {}:", name);
+                println!("{}", cfg);
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                println!("  Block @{}:", block.time);
+                println!("{}", cfg);
+            }
+        }
+
+        if dump_ssa {
+            let ir_program = ir::lower_program(&program);
+            println!("SSA CFG for {}:", path.display());
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("  Routine {}:", name);
+                println!("{}", ssa_cfg);
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("  Block @{}:", block.time);
+                println!("{}", ssa_cfg);
+            }
         }
 
         let mut analyzer = EntropicAnalyzer::new();

@@ -7,6 +7,7 @@ license = "AGPL-3.0-only"
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-frontend = { path = "../causm-frontend" }
+causm-ir = { path = "../causm-ir" }
 z3 = ">=0.20"
 thiserror = "2.0.18"
 anyhow = "1.0"

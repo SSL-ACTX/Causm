@@ -71,6 +71,7 @@ dependencies = [
  "anyhow",
  "causm-core",
  "causm-frontend",
+ "causm-ir",
  "thiserror",
  "z3",
 ]
@@ -83,6 +84,7 @@ dependencies = [
  "causm-analysis",
  "causm-core",
  "causm-frontend",
+ "causm-ir",
  "causm-runtime",
  "clap",
 ]
@@ -101,8 +103,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "causm-core",
+ "causm-ir",
  "pest",
  "pest_derive",
+ "serde",
+]
+
+[[package]]
+name = "causm-ir"
+version = "0.1.0"
+dependencies = [
+ "causm-core",
  "serde",
 ]
 
@@ -113,6 +124,7 @@ dependencies = [
  "anyhow",
  "causm-core",
  "causm-frontend",
+ "causm-ir",
  "dashmap",
  "thiserror",
 ]
