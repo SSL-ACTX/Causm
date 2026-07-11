@@ -55,6 +55,8 @@ pub enum SemanticErrorKind {
     NestedLeasing(String),
     #[error("Illegal Control Flow: Lease blocks cannot contain 'break' or 'return' statements.")]
     IllegalLeaseControlFlow,
+    #[error("Compile-Time Entropic Leak: Variable '{0}' remains Valid or Decayed at program termination without being consumed.")]
+    UnconsumedVariable(String),
 }
 
 #[derive(Debug)]
@@ -131,6 +133,7 @@ pub struct EntropicAnalyzer {
     pub(crate) routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
     pub use_z3: bool,
+    pub enforce_egc: bool,
 }
 
 impl Default for EntropicAnalyzer {
@@ -157,6 +160,7 @@ impl EntropicAnalyzer {
             routines: HashMap::new(),
             span_states: HashMap::new(),
             use_z3: true,
+            enforce_egc: false,
         };
         analyzer.register_intrinsics();
         analyzer
@@ -301,6 +305,21 @@ impl EntropicAnalyzer {
             }
 
             self.current_branch = old_branch;
+        }
+
+        // Entropic Terminal Check
+        if self.enforce_egc {
+            for (_branch_id, state) in &self.branch_contexts {
+                for var in &state.produced {
+                    if var != "_" && !var.starts_with('_') {
+                        if !state.consumed.contains(var) {
+                            return Err(self.annotate(
+                                SemanticErrorKind::UnconsumedVariable(var.clone()),
+                            ));
+                        }
+                    }
+                }
+            }
         }
 
         // Formal Verification Guard

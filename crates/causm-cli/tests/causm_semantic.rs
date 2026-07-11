@@ -960,3 +960,37 @@ fn causm_semantic_capability_budget_enforcement() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_semantic_match_entropy_optional_binding() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      let user = struct { id = "1", name = "Alice" }
+      match entropy(user) {
+        Valid: {
+          let out = user.id
+        }
+        Consumed: {
+          let out = "consumed"
+        }
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::ir::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let out_reg = ir.symbols.get("out").expect("out not found").0;
+    let out_val = vm.root_timeline.arena.peek(out_reg);
+    match out_val {
+        Some(Payload::String(s)) => assert_eq!(s, "1"),
+        _ => panic!("Expected out=1"),
+    }
+
+    Ok(())
+}

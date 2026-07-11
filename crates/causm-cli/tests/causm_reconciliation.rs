@@ -84,3 +84,94 @@ fn test_reconcile_auto_decay_merging() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_reconcile_no_else_success() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 1
+        if (true) {
+            x = 2
+        } reconcile auto
+        
+        print(x)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_select_reconcile_rules() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        open_chan ch1(1)
+        open_chan ch2(1)
+        let x = 10
+        select (max 10ms) {
+            case val1 = chan_recv(ch1): {
+                x = 20
+            }
+            case val2 = chan_recv(ch2): {
+                x = 30
+            }
+        } reconcile (x = first_wins)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_split_map_reconcile_auto() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let items = [1, 2, 3]
+        let result = 0
+        split_map item consume items {
+            result = item * 2
+        } reconcile auto
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_merge_reconcile_keyword() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 10
+        split main into [b1, b2]
+    }
+    @10ms: {
+        @b1: {
+            x = 20
+        }
+        @b2: {
+            x = 30
+        }
+    }
+    @20ms: {
+        merge [b1, b2] into main reconcile (x = first_wins)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    Ok(())
+}

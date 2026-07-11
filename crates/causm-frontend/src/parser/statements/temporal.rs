@@ -1,4 +1,5 @@
 use crate::parser::statements::parse_statement;
+use crate::parser::statements::utils::parse_duration_limit;
 use crate::parser::Rule;
 use causm_core::*;
 use pest::iterators::Pair;
@@ -113,10 +114,7 @@ pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
-            let duration_ms = inner
-                .next()
-                .and_then(|p| p.as_str().parse::<u64>().ok())
-                .unwrap_or(0);
+            let duration_ms = inner.next().map(parse_duration_limit).unwrap_or(0);
             let mut body = Vec::new();
             if let Some(block) = inner.next() {
                 for stmt_pair in block.into_inner() {

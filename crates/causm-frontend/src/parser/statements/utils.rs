@@ -332,3 +332,41 @@ pub fn parse_resolution_strategy(pair: Pair<Rule>) -> ResolutionStrategy {
         _ => ResolutionStrategy::Custom(pair.as_str().to_string()),
     }
 }
+
+pub fn parse_reconcile_clause(pair: Pair<Rule>) -> MergeResolution {
+    assert_eq!(pair.as_rule(), Rule::reconcile_clause);
+    let is_auto = pair.as_str().contains("auto");
+    let mut rules = HashMap::new();
+    for child in pair.into_inner() {
+        if child.as_rule() == Rule::resolution_rules {
+            for rule in child.into_inner() {
+                let mut r_inner = rule.into_inner();
+                if let (Some(k), Some(v)) = (r_inner.next(), r_inner.next()) {
+                    let key = k.as_str().trim_matches('"').to_string();
+                    let strat = parse_resolution_strategy(v);
+                    rules.insert(key, strat);
+                }
+            }
+        }
+    }
+    MergeResolution {
+        rules,
+        auto: is_auto,
+        fallback: None,
+        taking_ms: None,
+    }
+}
+
+pub fn parse_duration_limit(pair: Pair<Rule>) -> u64 {
+    assert_eq!(pair.as_rule(), Rule::duration_limit);
+    if let Some(amount_pair) = pair.clone().into_inner().next() {
+        amount_pair.as_str().parse::<u64>().unwrap_or(0)
+    } else {
+        pair.as_str()
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse::<u64>()
+            .unwrap_or(0)
+    }
+}

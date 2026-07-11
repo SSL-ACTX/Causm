@@ -22,57 +22,32 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             } else {
                 Vec::new()
             };
-            let else_branch = inner.next().map(|else_pair| {
-                else_pair
-                    .into_inner()
-                    .filter_map(|stmt_pair| stmt_pair.into_inner().next())
-                    .map(parse_statement)
-                    .collect()
-            });
-            let reconcile_rules = if let Some(reconcile_pair) = inner.next() {
-                let mut rules = HashMap::new();
-                let is_auto = reconcile_pair.as_str().contains("auto");
-                for child in reconcile_pair.into_inner() {
-                    if child.as_rule() == Rule::resolution_rules {
-                        for rule in child.into_inner() {
-                            let mut r_inner = rule.into_inner();
-                            if let (Some(k), Some(v)) =
-                                (r_inner.next(), r_inner.next())
-                            {
-                                let value = v.as_str();
-                                let strat = if value == "first_wins" {
-                                    ResolutionStrategy::FirstWins
-                                } else if value == "decay" {
-                                    ResolutionStrategy::Decay
-                                } else if let Some(inner) =
-                                    value.strip_prefix("priority(")
-                                {
-                                    if let Some(branch_name) =
-                                        inner.strip_suffix(")")
-                                    {
-                                        ResolutionStrategy::Priority(
-                                            branch_name.to_string(),
-                                        )
-                                    } else {
-                                        ResolutionStrategy::Custom(value.to_string())
-                                    }
-                                } else {
-                                    ResolutionStrategy::Priority(value.to_string())
-                                };
-                                rules.insert(k.as_str().to_string(), strat);
-                            }
+
+            let mut else_branch = None;
+            let mut reconcile_rules = None;
+
+            if let Some(next_pair) = inner.next() {
+                match next_pair.as_rule() {
+                    Rule::statement_block => {
+                        else_branch = Some(
+                            next_pair
+                                .into_inner()
+                                .filter_map(|stmt_pair| {
+                                    stmt_pair.into_inner().next()
+                                })
+                                .map(parse_statement)
+                                .collect(),
+                        );
+                        if let Some(rec_pair) = inner.next() {
+                            reconcile_rules = Some(parse_reconcile_clause(rec_pair));
                         }
                     }
+                    Rule::reconcile_clause => {
+                        reconcile_rules = Some(parse_reconcile_clause(next_pair));
+                    }
+                    _ => {}
                 }
-                Some(MergeResolution {
-                    rules,
-                    auto: is_auto,
-                    fallback: None,
-                    taking_ms: None,
-                })
-            } else {
-                None
-            };
+            }
 
             Statement::If {
                 condition,
@@ -83,10 +58,12 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::loop_stmt => {
             let mut inner = pair.into_inner();
-            let first = inner.next();
+            let first = inner.clone().next();
             if let Some(first) = first {
-                if first.as_rule() == Rule::amount {
-                    let max_value = first.as_str().parse::<u64>().unwrap_or(0);
+                if first.as_rule() == Rule::duration_limit {
+                    let max_value = parse_duration_limit(first);
+                    // consume duration_limit from inner
+                    inner.next();
                     let mut body = Vec::new();
                     for stmt_pair in inner {
                         if stmt_pair.as_rule() == Rule::statement {
@@ -102,18 +79,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                     }
                 } else {
                     let mut body = Vec::new();
-                    if first.as_rule() == Rule::statement_block {
-                        for stmt_pair in first.into_inner() {
-                            if let Some(actual_stmt) = stmt_pair.into_inner().next()
-                            {
-                                body.push(parse_statement(actual_stmt));
-                            }
-                        }
-                    } else if first.as_rule() == Rule::statement {
-                        if let Some(actual_stmt) = first.into_inner().next() {
-                            body.push(parse_statement(actual_stmt));
-                        }
-                    }
                     for stmt_pair in inner {
                         if stmt_pair.as_rule() == Rule::statement {
                             if let Some(actual_stmt) = stmt_pair.into_inner().next()
@@ -125,10 +90,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                     Statement::LoopTick { body }
                 }
             } else {
-                Statement::Loop {
-                    max_ms: 0,
-                    body: Vec::new(),
-                }
+                Statement::LoopTick { body: Vec::new() }
             }
         }
         Rule::for_stmt => {
@@ -156,18 +118,12 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             for next in inner {
                 match next.as_rule() {
                     Rule::pacing_opt => {
-                        let amount = next
-                            .into_inner()
-                            .next()
-                            .and_then(|p| p.as_str().parse::<u64>().ok());
-                        pacing_ms = amount;
+                        if let Some(dl) = next.into_inner().next() {
+                            pacing_ms = Some(parse_duration_limit(dl));
+                        }
                     }
-                    Rule::max_opt => {
-                        let amount = next
-                            .into_inner()
-                            .next_back()
-                            .and_then(|p| p.as_str().parse::<u64>().ok());
-                        max_ms = amount;
+                    Rule::duration_limit => {
+                        max_ms = Some(parse_duration_limit(next));
                     }
                     Rule::statement => {
                         if let Some(actual_stmt) = next.into_inner().next() {
@@ -220,25 +176,13 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
 
             for element in inner {
                 match element.as_rule() {
-                    Rule::merge_taking_opt => {
-                        let ms = element
-                            .into_inner()
-                            .next()
-                            .and_then(|p| p.as_str().parse::<u64>().ok());
-                        taking_ms = ms;
+                    Rule::duration_limit => {
+                        taking_ms = Some(parse_duration_limit(element));
                     }
-                    Rule::resolution_rules => {
-                        let mut rules = HashMap::new();
-                        for rule in element.into_inner() {
-                            let mut r_inner = rule.into_inner();
-                            if let (Some(k), Some(v)) =
-                                (r_inner.next(), r_inner.next())
-                            {
-                                let strat = parse_resolution_strategy(v);
-                                rules.insert(k.as_str().to_string(), strat);
-                            }
-                        }
-                        resolutions.rules = rules;
+                    Rule::reconcile_clause => {
+                        let parsed = parse_reconcile_clause(element);
+                        resolutions.rules = parsed.rules;
+                        resolutions.auto = parsed.auto;
                     }
                     Rule::fallback_stmt => {
                         let mut fb = Vec::new();
@@ -263,10 +207,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::select_stmt => {
             let mut inner = pair.into_inner();
-            let max_ms = inner
-                .next()
-                .and_then(|p| p.as_str().parse::<u64>().ok())
-                .unwrap_or(0);
+            let max_ms = inner.next().map(parse_duration_limit).unwrap_or(0);
             let mut cases = Vec::new();
             let mut timeout = None;
             let mut reconcile = None;
@@ -309,50 +250,8 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                             timeout = Some(body);
                         }
                     }
-                    Rule::resolution_rules => {
-                        let mut rules = HashMap::new();
-                        for rule in element.into_inner() {
-                            let mut r_inner = rule.into_inner();
-                            if let (Some(k), Some(v)) =
-                                (r_inner.next(), r_inner.next())
-                            {
-                                let value = v.as_str();
-                                let strat = if value == "first_wins" {
-                                    ResolutionStrategy::FirstWins
-                                } else if value == "decay" {
-                                    ResolutionStrategy::Decay
-                                } else if let Some(inner) =
-                                    value.strip_prefix("priority(")
-                                {
-                                    if let Some(branch_name) =
-                                        inner.strip_suffix(")")
-                                    {
-                                        ResolutionStrategy::Priority(
-                                            branch_name.to_string(),
-                                        )
-                                    } else {
-                                        ResolutionStrategy::Custom(value.to_string())
-                                    }
-                                } else {
-                                    ResolutionStrategy::Priority(value.to_string())
-                                };
-                                rules.insert(k.as_str().to_string(), strat);
-                            }
-                        }
-                        reconcile = Some(MergeResolution {
-                            rules,
-                            auto: false,
-                            fallback: None,
-                            taking_ms: None,
-                        });
-                    }
-                    Rule::reconcile_clause if element.as_str().contains("auto") => {
-                        reconcile = Some(MergeResolution {
-                            rules: HashMap::new(),
-                            auto: true,
-                            fallback: None,
-                            taking_ms: None,
-                        });
+                    Rule::reconcile_clause => {
+                        reconcile = Some(parse_reconcile_clause(element));
                     }
                     _ => {}
                 }
@@ -391,37 +290,8 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                             body.push(parse_statement(actual_stmt));
                         }
                     }
-                    Rule::resolution_rules => {
-                        let mut rules = HashMap::new();
-                        for rule in next.into_inner() {
-                            let mut r_inner = rule.into_inner();
-                            if let (Some(k), Some(v)) =
-                                (r_inner.next(), r_inner.next())
-                            {
-                                let strat = match v.as_str() {
-                                    "first_wins" => ResolutionStrategy::FirstWins,
-                                    "decay" => ResolutionStrategy::Decay,
-                                    p if p.starts_with("priority(") => {
-                                        let name = p
-                                            .trim_start_matches("priority(")
-                                            .trim_end_matches(")");
-                                        ResolutionStrategy::Priority(
-                                            name.to_string(),
-                                        )
-                                    }
-                                    _ => ResolutionStrategy::Custom(
-                                        v.as_str().to_string(),
-                                    ),
-                                };
-                                rules.insert(k.as_str().to_string(), strat);
-                            }
-                        }
-                        reconcile = Some(MergeResolution {
-                            rules,
-                            auto: false,
-                            fallback: None,
-                            taking_ms: None,
-                        });
+                    Rule::reconcile_clause => {
+                        reconcile = Some(parse_reconcile_clause(next));
                     }
                     _ => {}
                 }

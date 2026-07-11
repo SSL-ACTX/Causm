@@ -208,14 +208,17 @@ impl EntropicAnalyzer {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
-            self.branch_contexts
-                .get_mut(&self.current_branch)
-                .unwrap()
-                .yields
-                .insert(binding.clone());
+            if !binding.is_empty() {
+                self.branch_contexts
+                    .get_mut(&self.current_branch)
+                    .unwrap()
+                    .yields
+                    .insert(binding.clone());
 
-            let case_type = crate::expression::infer_expression_type(self, target)?;
-            self.set_variable_type(binding, case_type);
+                let case_type =
+                    crate::expression::infer_expression_type(self, target)?;
+                self.set_variable_type(binding, case_type);
+            }
             crate::expression::analyze_expression_nonconsuming(self, target)?;
 
             for stmt in branch_body {
@@ -234,14 +237,17 @@ impl EntropicAnalyzer {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
-            self.branch_contexts
-                .get_mut(&self.current_branch)
-                .unwrap()
-                .yields
-                .insert(binding.clone());
+            if !binding.is_empty() {
+                self.branch_contexts
+                    .get_mut(&self.current_branch)
+                    .unwrap()
+                    .yields
+                    .insert(binding.clone());
 
-            let case_type = crate::expression::infer_expression_type(self, target)?;
-            self.set_variable_type(binding, case_type);
+                let case_type =
+                    crate::expression::infer_expression_type(self, target)?;
+                self.set_variable_type(binding, case_type);
+            }
             crate::expression::analyze_expression_nonconsuming(self, target)?;
 
             for stmt in branch_body {

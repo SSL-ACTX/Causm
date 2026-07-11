@@ -110,19 +110,24 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             return_type = Some(parse_type_name(typ));
                         }
                     }
-                    Rule::amount => {
-                        taking_ms = current.as_str().parse::<u64>().ok();
+                    Rule::routine_duration => {
+                        if current.as_str().contains("_") {
+                            taking_ms = None;
+                        } else {
+                            if let Some(amount_pair) = current
+                                .into_inner()
+                                .find(|p| p.as_rule() == Rule::amount)
+                            {
+                                taking_ms = amount_pair.as_str().parse::<u64>().ok();
+                            }
+                        }
                     }
                     Rule::statement => {
                         if let Some(s) = current.into_inner().next() {
                             body.push(parse_statement(s));
                         }
                     }
-                    _ => {
-                        if current.as_str() == "_" {
-                            taking_ms = None;
-                        }
-                    }
+                    _ => {}
                 }
             }
 

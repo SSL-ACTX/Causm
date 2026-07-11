@@ -1,5 +1,6 @@
 use crate::parser::expressions::parse_expression;
 use crate::parser::statements::parse_statement;
+use crate::parser::statements::utils::parse_duration_limit;
 use crate::parser::Rule;
 use causm_core::*;
 use pest::iterators::Pair;
@@ -41,10 +42,7 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::speculate_stmt => {
             let mut inner = pair.into_inner();
-            let max_ms = inner
-                .next()
-                .and_then(|p| p.as_str().parse::<u64>().ok())
-                .unwrap_or(0);
+            let max_ms = inner.next().map(parse_duration_limit).unwrap_or(0);
             let mut body = Vec::new();
             let mut fallback = None;
 

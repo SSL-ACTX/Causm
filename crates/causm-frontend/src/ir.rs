@@ -638,11 +638,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *valid_target = Some(start);
                 }
 
-                let dest = ctx.get_reg(binding);
-                ctx.push(Instruction::Move {
-                    dest,
-                    src: target_reg,
-                });
+                if !binding.is_empty() {
+                    let dest = ctx.get_reg(binding);
+                    ctx.push(Instruction::Move {
+                        dest,
+                        src: target_reg,
+                    });
+                }
 
                 for s in body {
                     lower_statement(ctx, &s.stmt);
@@ -661,11 +663,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *decayed_target = Some(start);
                 }
 
-                let dest = ctx.get_reg(binding);
-                ctx.push(Instruction::Move {
-                    dest,
-                    src: target_reg,
-                });
+                if !binding.is_empty() {
+                    let dest = ctx.get_reg(binding);
+                    ctx.push(Instruction::Move {
+                        dest,
+                        src: target_reg,
+                    });
+                }
 
                 for s in body {
                     lower_statement(ctx, &s.stmt);

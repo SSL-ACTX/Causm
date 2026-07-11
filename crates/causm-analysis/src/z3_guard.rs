@@ -288,18 +288,20 @@ impl<'a> FormalVerifier<'a> {
                 let mut valid_clock = branch_start_clock.clone();
                 if let Some((binding, branch_body)) = valid_branch {
                     let valid_pc = Bool::and(&[path_condition, &valid_cond]);
-                    let is_valid = Bool::new_const(format!(
-                        "{}_valid_{}",
-                        binding, spanned.span.start
-                    ));
-                    self.solver.assert(&valid_pc.implies(&is_valid));
-                    self.variable_validity.insert(binding.clone(), is_valid);
-                    let is_leased = Bool::new_const(format!(
-                        "{}_leased_{}",
-                        binding, spanned.span.start
-                    ));
-                    self.solver.assert(&valid_pc.implies(&is_leased.not()));
-                    self.variable_leased.insert(binding.clone(), is_leased);
+                    if !binding.is_empty() {
+                        let is_valid = Bool::new_const(format!(
+                            "{}_valid_{}",
+                            binding, spanned.span.start
+                        ));
+                        self.solver.assert(&valid_pc.implies(&is_valid));
+                        self.variable_validity.insert(binding.clone(), is_valid);
+                        let is_leased = Bool::new_const(format!(
+                            "{}_leased_{}",
+                            binding, spanned.span.start
+                        ));
+                        self.solver.assert(&valid_pc.implies(&is_leased.not()));
+                        self.variable_leased.insert(binding.clone(), is_leased);
+                    }
 
                     for stmt in branch_body {
                         valid_clock =
@@ -317,18 +319,20 @@ impl<'a> FormalVerifier<'a> {
                 let mut decayed_clock = branch_start_clock.clone();
                 if let Some((binding, branch_body)) = decayed_branch {
                     let decayed_pc = Bool::and(&[path_condition, &decayed_cond]);
-                    let is_valid = Bool::new_const(format!(
-                        "{}_valid_{}",
-                        binding, spanned.span.start
-                    ));
-                    self.solver.assert(&decayed_pc.implies(&is_valid));
-                    self.variable_validity.insert(binding.clone(), is_valid);
-                    let is_leased = Bool::new_const(format!(
-                        "{}_leased_{}",
-                        binding, spanned.span.start
-                    ));
-                    self.solver.assert(&decayed_pc.implies(&is_leased.not()));
-                    self.variable_leased.insert(binding.clone(), is_leased);
+                    if !binding.is_empty() {
+                        let is_valid = Bool::new_const(format!(
+                            "{}_valid_{}",
+                            binding, spanned.span.start
+                        ));
+                        self.solver.assert(&decayed_pc.implies(&is_valid));
+                        self.variable_validity.insert(binding.clone(), is_valid);
+                        let is_leased = Bool::new_const(format!(
+                            "{}_leased_{}",
+                            binding, spanned.span.start
+                        ));
+                        self.solver.assert(&decayed_pc.implies(&is_leased.not()));
+                        self.variable_leased.insert(binding.clone(), is_leased);
+                    }
 
                     for stmt in branch_body {
                         decayed_clock = self.verify_statement(

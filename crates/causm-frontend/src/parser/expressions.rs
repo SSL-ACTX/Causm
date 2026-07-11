@@ -97,22 +97,27 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut params = std::collections::HashMap::new();
             let mut deadline_ms = 0;
 
-            if let Some(param_list) = inner.next() {
-                for param in param_list.into_inner() {
-                    let mut param_inner = param.into_inner();
-                    if let (Some(key), Some(value)) =
-                        (param_inner.next(), param_inner.next())
-                    {
-                        params.insert(
-                            key.as_str().replace("\"", ""),
-                            value.as_str().replace("\"", ""),
-                        );
+            let mut next = inner.next();
+            if let Some(p) = &next {
+                if p.as_rule() == Rule::param_list {
+                    for param in p.clone().into_inner() {
+                        let mut param_inner = param.into_inner();
+                        if let (Some(key), Some(value)) =
+                            (param_inner.next(), param_inner.next())
+                        {
+                            params.insert(
+                                key.as_str().replace("\"", ""),
+                                value.as_str().replace("\"", ""),
+                            );
+                        }
                     }
+                    next = inner.next();
                 }
             }
 
-            if let Some(amount) = inner.next() {
-                deadline_ms = amount.as_str().parse::<u64>().unwrap_or(0);
+            if let Some(p) = next {
+                deadline_ms =
+                    crate::parser::statements::utils::parse_duration_limit(p);
             }
 
             Expression::Deferred {

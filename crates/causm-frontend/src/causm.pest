@@ -62,39 +62,38 @@ assert_time_stmt = { "assert_time" ~ "(" ~ "elapsed" ~ relop ~ amount ~ "ms" ~ "
 
 print_stmt = { "print" ~ "(" ~ expression ~ ")" }
 
-speculate_stmt = { "speculate" ~ "(" ~ "max" ~ amount ~ "ms" ~ ")" ~ "{" ~ statement* ~ "}" ~ fallback_stmt? }
+speculate_stmt = { "speculate" ~ duration_limit ~ "{" ~ statement* ~ "}" ~ fallback_stmt? }
 fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ "taking" ~ (amount ~ "ms" | "_") ~ "{" ~ statement* ~ "}" }
+routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ routine_duration ~ "{" ~ statement* ~ "}" }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode ~ identifier ~ type_annotation? }
 param_mode = { "consume" | "clone" | "decay" | "peek" }
 return_annotation = { "->" ~ type_name }
 
-select_stmt = { "select" ~ "(" ~ "max" ~ amount ~ "ms" ~ ")" ~ "{" ~ select_case* ~ timeout_clause? ~ "}" ~ reconcile_clause? }
+select_stmt = { "select" ~ duration_limit ~ "{" ~ select_case* ~ timeout_clause? ~ "}" ~ reconcile_clause? }
 select_case = { "case" ~ identifier ~ "=" ~ expression ~ ":" ~ statement_block }
 timeout_clause = { "timeout" ~ ":" ~ statement_block }
 
 match_entropy_stmt = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
-entropy_branch = { "Valid" ~ "(" ~ identifier ~ ")" ~ ":" ~ statement_block | "Decayed" ~ "(" ~ identifier ~ ")" ~ ":" ~ statement_block | "Pending" ~ "(" ~ identifier ~ ")" ~ ":" ~ statement_block | "Consumed" ~ ":" ~ statement_block }
+entropy_branch = { "Valid" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Decayed" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Pending" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Consumed" ~ ":" ~ statement_block }
 
 break_stmt = { "break" }
 
 for_mode = { "consume" | "clone" }
-for_stmt = { "for" ~ identifier ~ for_mode ~ identifier ~ pacing_opt? ~ max_opt? ~ "{" ~ statement* ~ "}" }
+for_stmt = { "for" ~ identifier ~ for_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
 inspect_stmt = { "inspect" ~ "(" ~ identifier ~ ")" ~ "{" ~ statement* ~ "}" }
-lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ "for" ~ amount ~ "ms" ~ statement_block }
-split_map_stmt = { "split_map" ~ identifier ~ for_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ "reconcile" ~ "(" ~ resolution_rules ~ ")" }
+lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block }
+split_map_stmt = { "split_map" ~ identifier ~ for_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
-pacing_opt = { "pacing" ~ amount ~ "ms" }
-max_opt = { "(" ~ "max" ~ amount ~ "ms" ~ ")" }
+pacing_opt = { "pacing" ~ duration_limit }
 
 debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
 if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
-loop_stmt = { "loop" ~ "(" ~ "max" ~ amount ~ "ms" ~ ")" ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
+loop_stmt = { "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
 
 slice_stmt = { "slice" ~ amount ~ "ms" }
 
@@ -113,8 +112,7 @@ param_list      = { param ~ ("," ~ param)* }
 param           = { (identifier | string_literal) ~ ("=" | ":") ~ expression }
 
 split_stmt = { "split" ~ identifier ~ "into" ~ "[" ~ identifier_list ~ "]" }
-merge_stmt = { "merge" ~ "[" ~ identifier_list ~ "]" ~ "into" ~ identifier ~ merge_taking_opt? ~ ("resolving" ~ "(" ~ resolution_rules ~ ")")? ~ fallback_stmt? }
-merge_taking_opt = { "taking" ~ amount ~ "ms" }
+merge_stmt = { "merge" ~ "[" ~ identifier_list ~ "]" ~ "into" ~ identifier ~ duration_limit? ~ reconcile_clause? ~ fallback_stmt? }
 identifier_list = { identifier ~ ("," ~ identifier)* }
 resolution_rules = { res_rule ~ ("," ~ res_rule)* }
 res_rule = { (identifier | string_literal | "_") ~ ("=" | ":") ~ resolution_strategy }
@@ -131,7 +129,9 @@ topology_union = { "topology_union" ~ "{" ~ resolution_rules ~ (on_invalid_claus
 topology_intersect = { "topology_intersect" ~ "{" ~ resolution_rules ~ (on_invalid_clause)? ~ "}" }
 on_invalid_clause = { "on_invalid" ~ ":" ~ rewind_clause }
 rewind_clause = { "rewind" ~ identifier ~ "to" ~ identifier }
-reconcile_clause = { "reconcile" ~ ("auto" | "(" ~ resolution_rules ~ ")") }
+reconcile_clause = { ("reconcile" | "resolving") ~ ("auto" | "(" ~ resolution_rules ~ ")") }
+duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline" | "pacing")? ~ amount ~ "ms" ~ ")"? }
+routine_duration = { ("taking" | "for" | "max")? ~ (amount ~ "ms" | "_") }
 
 anchor_stmt = { "anchor" ~ identifier }
 rewind_stmt = { "rewind_to" ~ "(" ~ identifier ~ ")" }
@@ -154,7 +154,7 @@ watchdog_stmt = { "watchdog" ~ identifier ~ "timeout" ~ amount ~ "ms" ~ ("recove
 await_stmt = { "await" ~ "(" ~ identifier ~ ")" }
 await_chan_stmt = { "await_chan" ~ "(" ~ identifier ~ ")" }
 
-defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ "deadline" ~ amount ~ "ms" }
+defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ duration_limit }
 
 reset_stmt = { "reset" ~ identifier ~ "to" ~ identifier }
 yield_stmt = { "yield" ~ identifier }
