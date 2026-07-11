@@ -994,3 +994,23 @@ fn causm_semantic_match_entropy_optional_binding() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_semantic_use_after_consume_in_nonconsuming() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      let x = 10
+      let y = x
+      print(x)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("has been consumed or decayed"));
+
+    Ok(())
+}

@@ -16,6 +16,7 @@ pub struct FormalVerifier<'a> {
     // Entanglement groups: list of sets of variable names that share entropic state
     entanglements: Vec<HashSet<String>>,
     current_slice_ms: Option<u64>,
+    in_entropy_match: bool,
 }
 
 impl<'a> FormalVerifier<'a> {
@@ -29,6 +30,7 @@ impl<'a> FormalVerifier<'a> {
             causal_horizon: Int::from_u64(0),
             entanglements: Vec::new(),
             current_slice_ms: None,
+            in_entropy_match: false,
         }
     }
 
@@ -239,7 +241,11 @@ impl<'a> FormalVerifier<'a> {
                 pending_branch,
                 consumed_branch,
             } => {
-                self.verify_expression(target, path_condition, &current_clock)?;
+                self.in_entropy_match = true;
+                let res =
+                    self.verify_expression(target, path_condition, &current_clock);
+                self.in_entropy_match = false;
+                res?;
 
                 let valid_cond =
                     Bool::new_const(format!("valid_cond_{}", spanned.span.start));
@@ -784,6 +790,9 @@ impl<'a> FormalVerifier<'a> {
         name: &str,
         path_condition: &Bool,
     ) -> Result<(), SemanticError> {
+        if self.in_entropy_match {
+            return Ok(());
+        }
         if let Some(valid_bool) = self.variable_validity.get(name) {
             self.solver.push();
             self.solver

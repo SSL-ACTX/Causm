@@ -396,7 +396,17 @@ pub(crate) fn analyze_expression_nonconsuming(
     infer_expression_type(analyzer, expr)?;
     match expr {
         Expression::Call { .. } => analyze_expression(analyzer, expr),
-        Expression::Identifier(_) => Ok(()),
+        Expression::Identifier(name) => {
+            let state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .unwrap();
+            if !analyzer.in_entropy_match && state.consumed.contains(name) {
+                return Err(analyzer
+                    .annotate(SemanticErrorKind::UseAfterConsume(name.clone())));
+            }
+            Ok(())
+        }
         Expression::FieldAccess { target, .. } => {
             analyze_expression_nonconsuming(analyzer, target)
         }

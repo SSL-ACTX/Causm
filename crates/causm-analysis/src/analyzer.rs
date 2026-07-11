@@ -134,6 +134,7 @@ pub struct EntropicAnalyzer {
     pub span_states: HashMap<Span, BranchState>,
     pub use_z3: bool,
     pub enforce_egc: bool,
+    pub in_entropy_match: bool,
 }
 
 impl Default for EntropicAnalyzer {
@@ -161,6 +162,7 @@ impl EntropicAnalyzer {
             span_states: HashMap::new(),
             use_z3: true,
             enforce_egc: false,
+            in_entropy_match: false,
         };
         analyzer.register_intrinsics();
         analyzer
@@ -281,9 +283,9 @@ impl EntropicAnalyzer {
         self.current_statement = None;
         self.current_span = None;
         self.inspection_depth = 0;
-        self.current_slice_ms = None;
         self.capability_stack.clear();
         self.routines.clear();
+        self.in_entropy_match = false;
         self.register_intrinsics();
 
         for block in &program.timelines {
