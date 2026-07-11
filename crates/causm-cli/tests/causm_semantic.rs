@@ -47,7 +47,7 @@ fn causm_semantic_if_statement_integer_arith() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -172,7 +172,7 @@ fn causm_semantic_routine_param_return_types() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -202,7 +202,7 @@ fn causm_semantic_inspect_block_does_not_consume() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -229,7 +229,7 @@ fn causm_semantic_if_reconcile_auto() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -255,7 +255,7 @@ fn causm_semantic_routine_taking_inferred() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -283,7 +283,7 @@ fn causm_semantic_match_entropy_valid_branch() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -334,7 +334,7 @@ fn causm_semantic_routine_yield_array_struct_return() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -400,7 +400,7 @@ fn causm_semantic_merge_resolution_first_wins() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -473,7 +473,7 @@ fn causm_semantic_isolate_print_with_system_log() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -499,7 +499,7 @@ fn causm_semantic_isolate_print_without_system_log_handler_fails(
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -532,7 +532,7 @@ fn causm_semantic_for_struct_iteration_source() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -554,7 +554,7 @@ fn causm_semantic_file_input_pipeline() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program_with_source(&program, source, "example.csm")?;
 
@@ -578,7 +578,7 @@ fn causm_semantic_print_statement() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -595,7 +595,7 @@ fn causm_semantic_print_statement() -> anyhow::Result<()> {
     // In Causm, print(msg) peeks by default.
     // Let's re-verify the instruction handler for Print:
     /*
-            causm_frontend::ir::Instruction::Print { src } => {
+            causm_ir::Instruction::Print { src } => {
                 let val = {
                     let branch = self.get_branch_mut(branch_id)?;
                     branch.arena.peek(src.0).ok_or(TemporalError::MemoryFault(MemoryError::AlreadyConsumed))?
@@ -628,7 +628,7 @@ fn causm_semantic_debug_log_non_consuming() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -654,7 +654,7 @@ fn causm_semantic_isolate_memory_limit_out_of_memory() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -682,7 +682,7 @@ fn causm_semantic_channel_send_receive() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -710,7 +710,7 @@ fn causm_semantic_clone_and_reuse_variable() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -746,7 +746,7 @@ fn causm_semantic_gc_terminate_branch() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -771,7 +771,7 @@ fn causm_semantic_gc_merge_collects_leaf_branches() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -796,7 +796,7 @@ fn causm_semantic_capability_require_outbound_and_use() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -861,7 +861,7 @@ fn causm_semantic_channel_receive_from_empty_channel_fails() -> anyhow::Result<(
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -883,7 +883,7 @@ fn causm_semantic_merge_priority_resolves_to_priority_branch() -> anyhow::Result
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -912,7 +912,7 @@ fn causm_semantic_split_map_collects_yields() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -943,7 +943,7 @@ fn causm_semantic_capability_budget_enforcement() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -978,7 +978,7 @@ fn causm_semantic_match_entropy_optional_binding() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 

@@ -35,7 +35,7 @@ fn causm_entropic_struct_field_access_leads_to_decay() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -84,7 +84,7 @@ fn causm_entropic_entropic_entanglement_cross_branch() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -129,7 +129,7 @@ fn causm_entropic_entropic_entanglement_field_decay() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -174,7 +174,7 @@ fn causm_entropic_topology_routing() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -236,7 +236,7 @@ fn causm_entropic_topographical_merge_union() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
 
     for (i, block) in ir.blocks.iter().enumerate() {
         println!("Block {}: {:?}", i, block.instructions);
@@ -299,7 +299,7 @@ fn causm_entropic_topographical_merge_union_on_invalid_clause() -> anyhow::Resul
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
 
     // Verify AST parse of `on_invalid` rewinding behavior into topology_union
     let merge_stmt = &program.timelines[2].statements[0].stmt;
@@ -397,7 +397,7 @@ fn causm_entropic_topology2_dynamic_index_assignment_and_rewind(
 }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 

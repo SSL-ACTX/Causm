@@ -50,7 +50,7 @@ pub struct AnchorPoint {
     pub resource_budgets_snapshot: HashMap<String, u64>,
     pub history_index: usize,
     pub pc_snapshot: usize,
-    pub instructions_snapshot: Vec<causm_frontend::ir::Instruction>,
+    pub instructions_snapshot: Vec<causm_ir::Instruction>,
 }
 
 #[derive(Clone)]
@@ -59,7 +59,7 @@ pub struct Routine {
     #[allow(dead_code)]
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
-    pub instructions: Vec<causm_frontend::ir::Instruction>,
+    pub instructions: Vec<causm_ir::Instruction>,
 }
 
 pub struct SpeculationContext {
@@ -73,7 +73,7 @@ pub struct SpeculationContext {
 }
 
 pub struct Vm {
-    pub symbols: std::collections::HashMap<String, causm_frontend::ir::Reg>,
+    pub symbols: std::collections::HashMap<String, causm_ir::Reg>,
     pub speculative_commit_mode: SpeculationCommitMode,
     pub global_clock: u64,
     pub root_timeline: Timeline,
@@ -82,7 +82,7 @@ pub struct Vm {
     pub channels: HashMap<String, VecDeque<Message>>,
     pub pending_channels: HashMap<String, VecDeque<Message>>,
     pub routines: HashMap<String, Routine>,
-    pub decay_handlers: HashMap<String, Vec<causm_frontend::ir::Instruction>>,
+    pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
     pub type_decay_limits: HashMap<String, u64>,
     pub speculation_stack: Vec<SpeculationContext>,
     pub entanglements: Vec<std::collections::HashSet<(String, u32)>>,
@@ -112,7 +112,7 @@ pub struct Timeline {
     pub loop_depth: u32,
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
     pub pc: usize,
-    pub instructions: Vec<causm_frontend::ir::Instruction>,
+    pub instructions: Vec<causm_ir::Instruction>,
 }
 
 impl Timeline {

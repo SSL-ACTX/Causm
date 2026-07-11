@@ -1,14 +1,6 @@
 use causm_core::{Expression, Program, Statement};
+use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
-
-pub use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
-
-#[macro_export]
-macro_rules! instructions {
-    ($macro:ident) => {
-        causm_ir::instructions!($macro);
-    };
-}
 
 struct LoweringContext {
     next_reg: u32,

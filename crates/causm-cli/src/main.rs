@@ -1,6 +1,6 @@
 use causm_analysis::analyzer::EntropicAnalyzer;
 use causm_core::value::EntropicState;
-use causm_frontend::ir;
+use causm_frontend::lower;
 use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 use std::env;
@@ -148,12 +148,12 @@ fn main() -> anyhow::Result<()> {
         }
 
         if dump_ir {
-            let ir_program = ir::lower_program(&program);
+            let ir_program = lower::lower_program(&program);
             println!("IR for {}:\n{}", path.display(), ir_program);
         }
 
         if dump_cfg {
-            let ir_program = ir::lower_program(&program);
+            let ir_program = lower::lower_program(&program);
             println!("CFG for {}:", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
@@ -171,7 +171,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         if dump_ssa {
-            let ir_program = ir::lower_program(&program);
+            let ir_program = lower::lower_program(&program);
             println!("SSA CFG for {}:", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
@@ -206,7 +206,7 @@ fn main() -> anyhow::Result<()> {
         println!("\x1b[1;32m{}: analysis ok\x1b[0m", path.display());
 
         if run_program {
-            let ir_program = ir::lower_program(&program);
+            let ir_program = lower::lower_program(&program);
             let mut vm = Vm::new();
             vm.trace_entropy = trace_entropy;
             vm.register_capability("System.Log", |params| {

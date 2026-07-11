@@ -14,7 +14,7 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::ir::lower_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
         let mut vm = Vm::new();
         vm.debug_mode = true;
 
@@ -75,7 +75,7 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::ir::lower_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
         let mut vm = Vm::new();
         vm.execute_program(&ir)?;
 

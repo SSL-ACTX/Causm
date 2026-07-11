@@ -21,7 +21,7 @@ fn causm_expansion_split_map_topology() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -86,7 +86,7 @@ fn causm_expansion_speculate_inside_split_map() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -181,7 +181,7 @@ fn causm_expansion_loop_tick_double_buffer() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -233,7 +233,7 @@ fn causm_expansion_entanglement_speculation_rollback() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -283,7 +283,7 @@ fn causm_expansion_select_timing_determinism() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -324,7 +324,7 @@ fn causm_expansion_loop_tick_padding() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 

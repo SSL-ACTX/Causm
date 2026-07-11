@@ -1,6 +1,6 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::Vm;
-use causm_frontend::ir::Reg;
+use causm_ir::Reg;
 
 #[allow(non_snake_case)]
 impl Vm {
@@ -170,7 +170,7 @@ impl Vm {
         &mut self,
         branch_id: &str,
         max_ms: u64,
-        cases: Vec<causm_frontend::ir::IrSelectCase>,
+        cases: Vec<causm_ir::IrSelectCase>,
         timeout_target: Option<usize>,
     ) -> Result<(), TemporalError> {
         let mut found_case = None;

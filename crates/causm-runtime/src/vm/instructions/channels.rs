@@ -1,6 +1,6 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::{CausalEvent, Message, Vm};
-use causm_frontend::ir::Reg;
+use causm_ir::Reg;
 use std::collections::VecDeque;
 
 #[allow(non_snake_case)]

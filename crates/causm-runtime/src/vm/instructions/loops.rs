@@ -2,7 +2,7 @@ use crate::vm::error::TemporalError;
 use crate::vm::state::{Timeline, Vm};
 use causm_core::value::{EntropicState, Payload};
 use causm_core::{MergeResolution, ParamMode};
-use causm_frontend::ir::{Instruction, Reg};
+use causm_ir::{Instruction, Reg};
 use std::collections::HashMap;
 
 #[allow(non_snake_case)]

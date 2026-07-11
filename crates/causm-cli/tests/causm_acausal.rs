@@ -20,7 +20,7 @@ fn causm_acausal_speculate_commit_fallback_timing() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -53,7 +53,7 @@ fn causm_acausal_speculate_runs_fallback_on_collapse() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -88,7 +88,7 @@ fn causm_acausal_speculate_commit_scoped_variables() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -132,7 +132,7 @@ fn causm_acausal_speculate_selective_commit_mode() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -176,7 +176,7 @@ fn causm_acausal_select_case_first_chan_ready() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -213,7 +213,7 @@ fn causm_acausal_watchdog_and_acausal_reset() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -246,7 +246,7 @@ fn causm_acausal_acausal_reset_direct() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -275,7 +275,7 @@ fn causm_acausal_rewind_restores_clock() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -383,7 +383,7 @@ fn causm_acausal_safe_unrecv_on_rewind() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 

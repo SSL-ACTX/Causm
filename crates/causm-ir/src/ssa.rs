@@ -44,6 +44,13 @@ pub enum SsaTerminator {
     Unreachable,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SsaSelectCase {
+    pub chan_id: String,
+    pub dest: SsaReg,
+    pub target: usize,
+}
+
 // SsaInstruction corresponds to Instruction but uses SsaReg
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SsaInstruction {
@@ -110,7 +117,166 @@ pub enum SsaInstruction {
     Slice {
         ms: u64,
     },
-    // Other instructions can be represented as Generic for simplicity
+    Isolate {
+        name: String,
+        manifest: causm_core::Manifest,
+    },
+    EndIsolate,
+    Lease {
+        target_reg: SsaReg,
+        source_reg: SsaReg,
+        duration_ms: u64,
+    },
+    EndLease {
+        source_reg: SsaReg,
+        duration_ms: u64,
+    },
+    Split {
+        parent: String,
+        branches: Vec<String>,
+    },
+    Merge {
+        branches: Vec<String>,
+        target: String,
+        resolution: causm_core::MergeResolution,
+    },
+    Entangle {
+        regs: Vec<SsaReg>,
+    },
+    Anchor {
+        name: String,
+    },
+    Rewind {
+        target: String,
+        anchor: String,
+    },
+    Commit {
+        vars: Vec<String>,
+    },
+    Watchdog {
+        target: String,
+        timeout_ms: u64,
+        recovery_jump: Option<usize>,
+    },
+    Speculate {
+        max_ms: u64,
+        fallback_target: usize,
+    },
+    EndSpeculate {
+        max_ms: u64,
+        fallback_target: usize,
+    },
+    Collapse,
+    Select {
+        max_ms: u64,
+        cases: Vec<SsaSelectCase>,
+        timeout_target: Option<usize>,
+    },
+    MatchEntropy {
+        target: SsaReg,
+        valid_target: Option<usize>,
+        decayed_target: Option<usize>,
+        pending_target: Option<usize>,
+        consumed_target: Option<usize>,
+    },
+    RelativisticBlock {
+        target: String,
+        block_pc: usize,
+        block_len: usize,
+    },
+    SpeculationMode {
+        mode: causm_core::SpeculationCommitMode,
+    },
+    OpenChan {
+        name: String,
+        capacity: usize,
+    },
+    ChanSend {
+        chan_id: String,
+        src: SsaReg,
+    },
+    ChanRecv {
+        dest: SsaReg,
+        chan_id: String,
+    },
+    AwaitChan {
+        chan_id: String,
+    },
+    StructLit {
+        dest: SsaReg,
+        fields: std::collections::HashMap<String, SsaReg>,
+        type_name: Option<String>,
+    },
+    TopologyLit {
+        dest: SsaReg,
+        fields: std::collections::HashMap<String, SsaReg>,
+    },
+    ArrayLit {
+        dest: SsaReg,
+        elements: Vec<SsaReg>,
+    },
+    FieldAccess {
+        dest: SsaReg,
+        target: SsaReg,
+        field: String,
+    },
+    FieldUpdate {
+        target: SsaReg,
+        old_target: SsaReg,
+        field: String,
+        src: SsaReg,
+    },
+    IndexAccess {
+        dest: SsaReg,
+        target: SsaReg,
+        index: SsaReg,
+    },
+    IndexFieldUpdate {
+        target: SsaReg,
+        old_target: SsaReg,
+        index: SsaReg,
+        field: String,
+        src: SsaReg,
+    },
+    AssertTime {
+        op: causm_core::BinaryOperator,
+        limit_ms: u64,
+    },
+    Capability {
+        cap: causm_core::Capability,
+    },
+    For {
+        item_name: String,
+        mode: causm_core::ParamMode,
+        source: SsaReg,
+        body: Vec<SsaInstruction>,
+        pacing_ms: Option<u64>,
+        max_ms: Option<u64>,
+    },
+    SplitMap {
+        item_name: String,
+        mode: causm_core::ParamMode,
+        source: SsaReg,
+        body: Vec<SsaInstruction>,
+        reconcile: Option<causm_core::MergeResolution>,
+    },
+    Defer {
+        dest: SsaReg,
+        cap: causm_core::Capability,
+        deadline_ms: u64,
+    },
+    Await {
+        target: SsaReg,
+    },
+    Loop {
+        max_ms: u64,
+    },
+    EndLoop {
+        max_ms: u64,
+    },
+    NetworkRequest {
+        domain: String,
+    },
     Other(String),
 }
 
@@ -236,10 +402,10 @@ impl SsaTransformer {
 
         for (&block_id, block) in &self.cfg.blocks {
             for instr in &block.instructions {
-                if let Some(dest) = get_dest_reg(instr) {
+                for_each_dest_reg(instr, |dest| {
                     def_sites.entry(dest.0).or_default().insert(block_id);
                     all_regs.insert(dest.0);
-                }
+                });
             }
         }
 
@@ -475,9 +641,9 @@ impl SsaTransformer {
             self.pop_version(phi.original_reg.0);
         }
         for instr in &block.instructions {
-            if let Some(dest) = get_dest_reg(instr) {
+            for_each_dest_reg(instr, |dest| {
                 self.pop_version(dest.0);
-            }
+            });
         }
     }
 
@@ -489,8 +655,8 @@ impl SsaTransformer {
                 left,
                 right,
             } => {
-                let left_ssa = self.current_ssa_reg(*left);
-                let right_ssa = self.current_ssa_reg(*right);
+                let left_ver = self.current_version(left.0);
+                let right_ver = self.current_version(right.0);
                 let dest_ver = self.next_version(dest.0);
                 self.push_version(dest.0, dest_ver);
                 SsaInstruction::BinaryOp {
@@ -499,12 +665,18 @@ impl SsaTransformer {
                         version: dest_ver,
                     },
                     op: *op,
-                    left: left_ssa,
-                    right: right_ssa,
+                    left: SsaReg {
+                        reg: left.0,
+                        version: left_ver,
+                    },
+                    right: SsaReg {
+                        reg: right.0,
+                        version: right_ver,
+                    },
                 }
             }
             Instruction::UnaryOp { dest, op, src } => {
-                let src_ssa = self.current_ssa_reg(*src);
+                let src_ver = self.current_version(src.0);
                 let dest_ver = self.next_version(dest.0);
                 self.push_version(dest.0, dest_ver);
                 SsaInstruction::UnaryOp {
@@ -513,7 +685,10 @@ impl SsaTransformer {
                         version: dest_ver,
                     },
                     op: *op,
-                    src: src_ssa,
+                    src: SsaReg {
+                        reg: src.0,
+                        version: src_ver,
+                    },
                 }
             }
             Instruction::LoadInt { dest, value } => {
@@ -571,7 +746,7 @@ impl SsaTransformer {
                 }
             }
             Instruction::Move { dest, src } => {
-                let src_ssa = self.current_ssa_reg(*src);
+                let src_ver = self.current_version(src.0);
                 let dest_ver = self.next_version(dest.0);
                 self.push_version(dest.0, dest_ver);
                 SsaInstruction::Move {
@@ -579,7 +754,10 @@ impl SsaTransformer {
                         reg: dest.0,
                         version: dest_ver,
                     },
-                    src: src_ssa,
+                    src: SsaReg {
+                        reg: src.0,
+                        version: src_ver,
+                    },
                 }
             }
             Instruction::Consume { src } => SsaInstruction::Consume {
@@ -598,7 +776,7 @@ impl SsaTransformer {
                 }
             }
             Instruction::Clone { dest, src } => {
-                let src_ssa = self.current_ssa_reg(*src);
+                let src_ver = self.current_version(src.0);
                 let dest_ver = self.next_version(dest.0);
                 self.push_version(dest.0, dest_ver);
                 SsaInstruction::Clone {
@@ -606,7 +784,10 @@ impl SsaTransformer {
                         reg: dest.0,
                         version: dest_ver,
                     },
-                    src: src_ssa,
+                    src: SsaReg {
+                        reg: src.0,
+                        version: src_ver,
+                    },
                 }
             }
             Instruction::Call {
@@ -634,6 +815,353 @@ impl SsaTransformer {
                 src: self.current_ssa_reg(*src),
             },
             Instruction::Slice { ms } => SsaInstruction::Slice { ms: *ms },
+            Instruction::Isolate { name, manifest } => SsaInstruction::Isolate {
+                name: name.clone(),
+                manifest: manifest.clone(),
+            },
+            Instruction::EndIsolate => SsaInstruction::EndIsolate,
+            Instruction::Lease {
+                target_reg,
+                source_reg,
+                duration_ms,
+            } => {
+                let source_ssa = self.current_ssa_reg(*source_reg);
+                let target_ver = self.next_version(target_reg.0);
+                self.push_version(target_reg.0, target_ver);
+                SsaInstruction::Lease {
+                    target_reg: SsaReg {
+                        reg: target_reg.0,
+                        version: target_ver,
+                    },
+                    source_reg: source_ssa,
+                    duration_ms: *duration_ms,
+                }
+            }
+            Instruction::EndLease {
+                source_reg,
+                duration_ms,
+            } => SsaInstruction::EndLease {
+                source_reg: self.current_ssa_reg(*source_reg),
+                duration_ms: *duration_ms,
+            },
+            Instruction::Split { parent, branches } => SsaInstruction::Split {
+                parent: parent.clone(),
+                branches: branches.clone(),
+            },
+            Instruction::Merge {
+                branches,
+                target,
+                resolution,
+            } => SsaInstruction::Merge {
+                branches: branches.clone(),
+                target: target.clone(),
+                resolution: resolution.clone(),
+            },
+            Instruction::Entangle { regs } => {
+                let regs_ssa =
+                    regs.iter().map(|&r| self.current_ssa_reg(r)).collect();
+                SsaInstruction::Entangle { regs: regs_ssa }
+            }
+            Instruction::Anchor { name } => {
+                SsaInstruction::Anchor { name: name.clone() }
+            }
+            Instruction::Rewind { target, anchor } => SsaInstruction::Rewind {
+                target: target.clone(),
+                anchor: anchor.clone(),
+            },
+            Instruction::Commit { vars } => {
+                SsaInstruction::Commit { vars: vars.clone() }
+            }
+            Instruction::Watchdog {
+                target,
+                timeout_ms,
+                recovery_jump,
+            } => SsaInstruction::Watchdog {
+                target: target.clone(),
+                timeout_ms: *timeout_ms,
+                recovery_jump: *recovery_jump,
+            },
+            Instruction::Speculate {
+                max_ms,
+                fallback_target,
+            } => SsaInstruction::Speculate {
+                max_ms: *max_ms,
+                fallback_target: *fallback_target,
+            },
+            Instruction::EndSpeculate {
+                max_ms,
+                fallback_target,
+            } => SsaInstruction::EndSpeculate {
+                max_ms: *max_ms,
+                fallback_target: *fallback_target,
+            },
+            Instruction::Collapse => SsaInstruction::Collapse,
+            Instruction::Select {
+                max_ms,
+                cases,
+                timeout_target,
+            } => {
+                let cases_ssa = cases
+                    .iter()
+                    .map(|c| {
+                        let dest_ver = self.next_version(c.dest.0);
+                        self.push_version(c.dest.0, dest_ver);
+                        SsaSelectCase {
+                            chan_id: c.chan_id.clone(),
+                            dest: SsaReg {
+                                reg: c.dest.0,
+                                version: dest_ver,
+                            },
+                            target: c.target,
+                        }
+                    })
+                    .collect();
+                SsaInstruction::Select {
+                    max_ms: *max_ms,
+                    cases: cases_ssa,
+                    timeout_target: *timeout_target,
+                }
+            }
+            Instruction::MatchEntropy {
+                target,
+                valid_target,
+                decayed_target,
+                pending_target,
+                consumed_target,
+            } => SsaInstruction::MatchEntropy {
+                target: self.current_ssa_reg(*target),
+                valid_target: *valid_target,
+                decayed_target: *decayed_target,
+                pending_target: *pending_target,
+                consumed_target: *consumed_target,
+            },
+            Instruction::RelativisticBlock {
+                target,
+                block_pc,
+                block_len,
+            } => SsaInstruction::RelativisticBlock {
+                target: target.clone(),
+                block_pc: *block_pc,
+                block_len: *block_len,
+            },
+            Instruction::SpeculationMode { mode } => {
+                SsaInstruction::SpeculationMode { mode: *mode }
+            }
+            Instruction::OpenChan { name, capacity } => SsaInstruction::OpenChan {
+                name: name.clone(),
+                capacity: *capacity,
+            },
+            Instruction::ChanSend { chan_id, src } => SsaInstruction::ChanSend {
+                chan_id: chan_id.clone(),
+                src: self.current_ssa_reg(*src),
+            },
+            Instruction::ChanRecv { dest, chan_id } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ChanRecv {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    chan_id: chan_id.clone(),
+                }
+            }
+            Instruction::AwaitChan { chan_id } => SsaInstruction::AwaitChan {
+                chan_id: chan_id.clone(),
+            },
+            Instruction::StructLit {
+                dest,
+                fields,
+                type_name,
+            } => {
+                let fields_ssa = fields
+                    .iter()
+                    .map(|(k, &v)| (k.clone(), self.current_ssa_reg(v)))
+                    .collect();
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::StructLit {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    fields: fields_ssa,
+                    type_name: type_name.clone(),
+                }
+            }
+            Instruction::TopologyLit { dest, fields } => {
+                let fields_ssa = fields
+                    .iter()
+                    .map(|(k, &v)| (k.clone(), self.current_ssa_reg(v)))
+                    .collect();
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::TopologyLit {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    fields: fields_ssa,
+                }
+            }
+            Instruction::ArrayLit { dest, elements } => {
+                let elements_ssa =
+                    elements.iter().map(|&v| self.current_ssa_reg(v)).collect();
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ArrayLit {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    elements: elements_ssa,
+                }
+            }
+            Instruction::FieldAccess {
+                dest,
+                target,
+                field,
+            } => {
+                let target_ssa = self.current_ssa_reg(*target);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::FieldAccess {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    target: target_ssa,
+                    field: field.clone(),
+                }
+            }
+            Instruction::FieldUpdate { target, field, src } => {
+                let old_target_ssa = self.current_ssa_reg(*target);
+                let src_ssa = self.current_ssa_reg(*src);
+                let target_ver = self.next_version(target.0);
+                self.push_version(target.0, target_ver);
+                SsaInstruction::FieldUpdate {
+                    target: SsaReg {
+                        reg: target.0,
+                        version: target_ver,
+                    },
+                    old_target: old_target_ssa,
+                    field: field.clone(),
+                    src: src_ssa,
+                }
+            }
+            Instruction::IndexAccess {
+                dest,
+                target,
+                index,
+            } => {
+                let target_ssa = self.current_ssa_reg(*target);
+                let index_ssa = self.current_ssa_reg(*index);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::IndexAccess {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    target: target_ssa,
+                    index: index_ssa,
+                }
+            }
+            Instruction::IndexFieldUpdate {
+                target,
+                index,
+                field,
+                src,
+            } => {
+                let old_target_ssa = self.current_ssa_reg(*target);
+                let index_ssa = self.current_ssa_reg(*index);
+                let src_ssa = self.current_ssa_reg(*src);
+                let target_ver = self.next_version(target.0);
+                self.push_version(target.0, target_ver);
+                SsaInstruction::IndexFieldUpdate {
+                    target: SsaReg {
+                        reg: target.0,
+                        version: target_ver,
+                    },
+                    old_target: old_target_ssa,
+                    index: index_ssa,
+                    field: field.clone(),
+                    src: src_ssa,
+                }
+            }
+            Instruction::AssertTime { op, limit_ms } => SsaInstruction::AssertTime {
+                op: *op,
+                limit_ms: *limit_ms,
+            },
+            Instruction::Capability { cap } => {
+                SsaInstruction::Capability { cap: cap.clone() }
+            }
+            Instruction::For {
+                item_name,
+                mode,
+                source,
+                body,
+                pacing_ms,
+                max_ms,
+            } => {
+                let source_ssa = self.current_ssa_reg(*source);
+                let body_ssa =
+                    body.iter().map(|i| self.rename_instruction(i)).collect();
+                SsaInstruction::For {
+                    item_name: item_name.clone(),
+                    mode: mode.clone(),
+                    source: source_ssa,
+                    body: body_ssa,
+                    pacing_ms: *pacing_ms,
+                    max_ms: *max_ms,
+                }
+            }
+            Instruction::SplitMap {
+                item_name,
+                mode,
+                source,
+                body,
+                reconcile,
+            } => {
+                let source_ssa = self.current_ssa_reg(*source);
+                let body_ssa =
+                    body.iter().map(|i| self.rename_instruction(i)).collect();
+                SsaInstruction::SplitMap {
+                    item_name: item_name.clone(),
+                    mode: mode.clone(),
+                    source: source_ssa,
+                    body: body_ssa,
+                    reconcile: reconcile.clone(),
+                }
+            }
+            Instruction::Defer {
+                dest,
+                cap,
+                deadline_ms,
+            } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::Defer {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    cap: cap.clone(),
+                    deadline_ms: *deadline_ms,
+                }
+            }
+            Instruction::Await { target } => SsaInstruction::Await {
+                target: self.current_ssa_reg(*target),
+            },
+            Instruction::Loop { max_ms } => SsaInstruction::Loop { max_ms: *max_ms },
+            Instruction::EndLoop { max_ms } => {
+                SsaInstruction::EndLoop { max_ms: *max_ms }
+            }
+            Instruction::NetworkRequest { domain } => {
+                SsaInstruction::NetworkRequest {
+                    domain: domain.clone(),
+                }
+            }
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }
@@ -671,25 +1199,34 @@ impl SsaTransformer {
 }
 
 // Helpers to extract dest register from flat Instruction
-fn get_dest_reg(instr: &Instruction) -> Option<Reg> {
+fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
     match instr {
-        Instruction::BinaryOp { dest, .. } => Some(*dest),
-        Instruction::UnaryOp { dest, .. } => Some(*dest),
-        Instruction::LoadInt { dest, .. } => Some(*dest),
-        Instruction::LoadFloat { dest, .. } => Some(*dest),
-        Instruction::LoadBool { dest, .. } => Some(*dest),
-        Instruction::LoadString { dest, .. } => Some(*dest),
-        Instruction::LoadNull { dest } => Some(*dest),
-        Instruction::Move { dest, .. } => Some(*dest),
-        Instruction::Clone { dest, .. } => Some(*dest),
-        Instruction::Call { dest, .. } => Some(*dest),
-        Instruction::StructLit { dest, .. } => Some(*dest),
-        Instruction::TopologyLit { dest, .. } => Some(*dest),
-        Instruction::ArrayLit { dest, .. } => Some(*dest),
-        Instruction::FieldAccess { dest, .. } => Some(*dest),
-        Instruction::IndexAccess { dest, .. } => Some(*dest),
-        Instruction::Defer { dest, .. } => Some(*dest),
-        _ => None,
+        Instruction::BinaryOp { dest, .. } => f(*dest),
+        Instruction::UnaryOp { dest, .. } => f(*dest),
+        Instruction::LoadInt { dest, .. } => f(*dest),
+        Instruction::LoadFloat { dest, .. } => f(*dest),
+        Instruction::LoadBool { dest, .. } => f(*dest),
+        Instruction::LoadString { dest, .. } => f(*dest),
+        Instruction::LoadNull { dest } => f(*dest),
+        Instruction::Move { dest, .. } => f(*dest),
+        Instruction::Clone { dest, .. } => f(*dest),
+        Instruction::Call { dest, .. } => f(*dest),
+        Instruction::StructLit { dest, .. } => f(*dest),
+        Instruction::TopologyLit { dest, .. } => f(*dest),
+        Instruction::ArrayLit { dest, .. } => f(*dest),
+        Instruction::FieldAccess { dest, .. } => f(*dest),
+        Instruction::IndexAccess { dest, .. } => f(*dest),
+        Instruction::Defer { dest, .. } => f(*dest),
+        Instruction::Lease { target_reg, .. } => f(*target_reg),
+        Instruction::ChanRecv { dest, .. } => f(*dest),
+        Instruction::FieldUpdate { target, .. } => f(*target),
+        Instruction::IndexFieldUpdate { target, .. } => f(*target),
+        Instruction::Select { cases, .. } => {
+            for case in cases {
+                f(case.dest);
+            }
+        }
+        _ => {}
     }
 }
 

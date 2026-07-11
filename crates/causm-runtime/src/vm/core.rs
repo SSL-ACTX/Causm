@@ -91,7 +91,7 @@ impl Vm {
 
     pub fn execute_program(
         &mut self,
-        program: &causm_frontend::ir::IrProgram,
+        program: &causm_ir::IrProgram,
     ) -> Result<(), TemporalError> {
         self.symbols = program.symbols.clone();
         self.type_decay_limits = program.type_decay_limits.clone();
@@ -145,12 +145,12 @@ impl Vm {
                             b.instructions[b.pc].clone()
                         };
                         match instr {
-                            causm_frontend::ir::Instruction::Loop { .. }
-                            | causm_frontend::ir::Instruction::LoopTick => {
+                            causm_ir::Instruction::Loop { .. }
+                            | causm_ir::Instruction::LoopTick => {
                                 let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth += 1;
                             }
-                            causm_frontend::ir::Instruction::EndLoop { max_ms } => {
+                            causm_ir::Instruction::EndLoop { max_ms } => {
                                 let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth -= 1;
                                 if b.loop_depth < target_depth {
@@ -160,8 +160,9 @@ impl Vm {
                                     b.pc += 1;
                                     // Skip the following Jump if present
                                     if b.pc < b.instructions.len() {
-                                        if let causm_frontend::ir::Instruction::Jump { .. } =
-                                            b.instructions[b.pc]
+                                        if let causm_ir::Instruction::Jump {
+                                            ..
+                                        } = b.instructions[b.pc]
                                         {
                                             b.pc += 1;
                                         }
@@ -169,7 +170,7 @@ impl Vm {
                                     break;
                                 }
                             }
-                            causm_frontend::ir::Instruction::EndLoopTick => {
+                            causm_ir::Instruction::EndLoopTick => {
                                 let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth -= 1;
                                 if b.loop_depth < target_depth {
@@ -178,8 +179,9 @@ impl Vm {
                                     b.pc += 1;
                                     // Skip the following Jump if present
                                     if b.pc < b.instructions.len() {
-                                        if let causm_frontend::ir::Instruction::Jump { .. } =
-                                            b.instructions[b.pc]
+                                        if let causm_ir::Instruction::Jump {
+                                            ..
+                                        } = b.instructions[b.pc]
                                         {
                                             b.pc += 1;
                                         }
@@ -234,7 +236,7 @@ impl Vm {
             ($($name:ident $({ $($field:ident: $type:ty),* })?),*) => {
                 match instr {
                     $(
-                        causm_frontend::ir::Instruction::$name $({ $($field),* })? => {
+                        causm_ir::Instruction::$name $({ $($field),* })? => {
                             self.$name(branch_id, $($($field),*)?)?
                         },
                     )*
@@ -242,7 +244,7 @@ impl Vm {
             };
         }
 
-        causm_frontend::instructions!(dispatch_instruction);
+        causm_ir::instructions!(dispatch_instruction);
 
         if self.trace_entropy {
             println!("\x1b[1;30m--- Entropy Trace [{}] ---\x1b[0m", branch_id);

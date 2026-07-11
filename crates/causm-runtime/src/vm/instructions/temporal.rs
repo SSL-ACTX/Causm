@@ -1,7 +1,7 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::Vm;
 use causm_core::{Manifest, MergeResolution};
-use causm_frontend::ir::Reg;
+use causm_ir::Reg;
 
 #[allow(non_snake_case)]
 impl Vm {
@@ -202,12 +202,12 @@ impl Vm {
                         b.instructions[b.pc].clone()
                     };
                     match instr {
-                        causm_frontend::ir::Instruction::Loop { .. }
-                        | causm_frontend::ir::Instruction::LoopTick => {
+                        causm_ir::Instruction::Loop { .. }
+                        | causm_ir::Instruction::LoopTick => {
                             let b = self.get_branch_mut(&target_id)?;
                             b.loop_depth += 1;
                         }
-                        causm_frontend::ir::Instruction::EndLoop { max_ms } => {
+                        causm_ir::Instruction::EndLoop { max_ms } => {
                             let b = self.get_branch_mut(&target_id)?;
                             b.loop_depth -= 1;
                             if b.loop_depth < target_depth {
@@ -217,9 +217,8 @@ impl Vm {
                                 b.pc += 1;
                                 // Skip the following Jump if present
                                 if b.pc < b.instructions.len() {
-                                    if let causm_frontend::ir::Instruction::Jump {
-                                        ..
-                                    } = b.instructions[b.pc]
+                                    if let causm_ir::Instruction::Jump { .. } =
+                                        b.instructions[b.pc]
                                     {
                                         b.pc += 1;
                                     }
@@ -227,7 +226,7 @@ impl Vm {
                                 break;
                             }
                         }
-                        causm_frontend::ir::Instruction::EndLoopTick => {
+                        causm_ir::Instruction::EndLoopTick => {
                             let b = self.get_branch_mut(&target_id)?;
                             b.loop_depth -= 1;
                             if b.loop_depth < target_depth {
@@ -236,9 +235,8 @@ impl Vm {
                                 b.pc += 1;
                                 // Skip the following Jump if present
                                 if b.pc < b.instructions.len() {
-                                    if let causm_frontend::ir::Instruction::Jump {
-                                        ..
-                                    } = b.instructions[b.pc]
+                                    if let causm_ir::Instruction::Jump { .. } =
+                                        b.instructions[b.pc]
                                     {
                                         b.pc += 1;
                                     }

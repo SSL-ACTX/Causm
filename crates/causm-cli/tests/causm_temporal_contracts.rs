@@ -12,7 +12,7 @@ mod tests {
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let ir_program = causm_frontend::ir::lower_program(&program);
+        let ir_program = causm_frontend::lower::lower_program(&program);
         let mut vm = Vm::new();
         vm.execute_program(&ir_program)?;
         Ok(vm)

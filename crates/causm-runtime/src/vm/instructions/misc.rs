@@ -1,7 +1,7 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::Vm;
 use causm_core::Capability;
-use causm_frontend::ir::Reg;
+use causm_ir::Reg;
 
 #[allow(non_snake_case)]
 impl Vm {

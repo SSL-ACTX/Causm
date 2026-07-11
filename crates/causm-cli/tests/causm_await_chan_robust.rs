@@ -25,7 +25,7 @@ fn causm_robust_await_chan_sync() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
 
     // Semantic analysis
     let mut analyzer = EntropicAnalyzer::new();

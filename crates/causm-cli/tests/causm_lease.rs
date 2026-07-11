@@ -15,7 +15,7 @@ fn causm_lease_basic_execution() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -177,7 +177,7 @@ fn causm_lease_restores_original_state() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;

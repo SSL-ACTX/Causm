@@ -74,7 +74,7 @@ fn causm_isochronous_tick_loop_double_buffered_channels() -> anyhow::Result<()> 
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
@@ -128,7 +128,7 @@ fn causm_isochronous_matrix_complex_integration() -> anyhow::Result<()> {
 }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::ir::lower_program(&program);
+    let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
