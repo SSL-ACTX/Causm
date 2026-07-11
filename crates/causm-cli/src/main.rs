@@ -76,7 +76,9 @@ fn main() -> anyhow::Result<()> {
                 args.remove(0);
                 continue;
             } else {
-                eprintln!("Error: --dump requires a format argument (ast, ir, cfg, ssa).");
+                eprintln!(
+                    "Error: --dump requires a format argument (ast, ir, cfg, ssa)."
+                );
                 std::process::exit(1);
             }
         }

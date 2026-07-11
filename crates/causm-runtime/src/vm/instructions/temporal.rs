@@ -144,10 +144,10 @@ impl Vm {
         block_pc: usize,
         block_len: usize,
     ) -> Result<(), TemporalError> {
-        println!(
-            "[VM] RelativisticBlock: target={}, pc={}, len={}",
-            target, block_pc, block_len
-        );
+        // println!(
+        //     "[VM] RelativisticBlock: target={}, pc={}, len={}",
+        //     target, block_pc, block_len
+        // );
         let (target_id, old_pc, old_instrs) = {
             let t = self.get_branch_mut(&target)?;
             let old_pc = t.pc;
@@ -163,27 +163,27 @@ impl Vm {
             t.pc = block_pc;
         }
 
-        for i in 0..block_len {
+        for _ in 0..block_len {
             let (pc, instrs_len) = {
                 let t = self.get_branch_mut(&target_id)?;
                 (t.pc, t.instructions.len())
             };
             if pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len {
-                println!(
-                    "[VM] RelativisticBlock: PC {} out of bounds [{}, {}), stopping.",
-                    pc,
-                    block_pc,
-                    block_pc + block_len
-                );
+                // println!(
+                //     "[VM] RelativisticBlock: PC {} out of bounds [{}, {}), stopping.",
+                //     pc,
+                //     block_pc,
+                //     block_pc + block_len
+                // );
                 break;
             }
-            println!(
-                "[VM] RelativisticBlock execution: step {}/{} on {} at PC {}",
-                i + 1,
-                block_len,
-                target_id,
-                pc
-            );
+            // println!(
+            //     "[VM] RelativisticBlock execution: step {}/{} on {} at PC {}",
+            //     i + 1,
+            //     block_len,
+            //     target_id,
+            //     pc
+            // );
             self.execute_instruction(&target_id)?;
 
             // Handle break within the relativistic block
@@ -257,7 +257,7 @@ impl Vm {
         let t = self.get_branch_mut(&target_id)?;
         t.instructions = old_instrs;
         t.pc = old_pc;
-        println!("[VM] RelativisticBlock finished: {}", target_id);
+        // println!("[VM] RelativisticBlock finished: {}", target_id);
         Ok(())
     }
 

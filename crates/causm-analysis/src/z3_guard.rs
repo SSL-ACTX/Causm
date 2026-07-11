@@ -70,15 +70,14 @@ impl<'a> FormalVerifier<'a> {
                     "{}_valid_{}",
                     target, spanned.span.start
                 ));
-                self.solver.assert(&path_condition.implies(&is_valid));
+                self.solver.assert(path_condition.implies(&is_valid));
                 self.variable_validity.insert(target.clone(), is_valid);
 
                 let is_leased = Bool::new_const(format!(
                     "{}_leased_{}",
                     target, spanned.span.start
                 ));
-                self.solver
-                    .assert(&path_condition.implies(&is_leased.not()));
+                self.solver.assert(path_condition.implies(is_leased.not()));
                 self.variable_leased.insert(target.clone(), is_leased);
 
                 Ok(current_clock)
@@ -92,12 +91,12 @@ impl<'a> FormalVerifier<'a> {
                     let new_horizon =
                         Int::new_const(format!("horizon_{}", spanned.span.start));
                     self.solver.assert(
-                        &path_condition.implies(&new_horizon.eq(&current_clock)),
+                        path_condition.implies(new_horizon.eq(&current_clock)),
                     );
                     self.solver.assert(
-                        &path_condition
+                        path_condition
                             .not()
-                            .implies(&new_horizon.eq(&self.causal_horizon)),
+                            .implies(new_horizon.eq(&self.causal_horizon)),
                     );
                     self.causal_horizon = new_horizon;
                 }
@@ -141,7 +140,7 @@ impl<'a> FormalVerifier<'a> {
                 if let Some(anchor_time) = self.anchors.get(name) {
                     let paradox = anchor_time.lt(&self.causal_horizon);
                     self.solver.push();
-                    self.solver.assert(&Bool::and(&[path_condition, &paradox]));
+                    self.solver.assert(Bool::and(&[path_condition, &paradox]));
                     if self.solver.check() == z3::SatResult::Sat {
                         self.solver.pop(1);
                         return Err(self.analyzer.annotate(SemanticErrorKind::EntropyMismatch(
@@ -212,20 +211,20 @@ impl<'a> FormalVerifier<'a> {
                         var, spanned.span.start
                     ));
                     self.solver
-                        .assert(&m_v.eq(&Bool::ite(&cond_bool, v_then, v_else)));
+                        .assert(m_v.eq(Bool::ite(&cond_bool, v_then, v_else)));
                     merged_validity.insert(var.clone(), m_v);
                     let m_l = Bool::new_const(format!(
                         "{}_m_l_{}",
                         var, spanned.span.start
                     ));
                     self.solver
-                        .assert(&m_l.eq(&Bool::ite(&cond_bool, l_then, l_else)));
+                        .assert(m_l.eq(Bool::ite(&cond_bool, l_then, l_else)));
                     merged_leased.insert(var.clone(), m_l);
                 }
                 self.variable_validity = merged_validity;
                 self.variable_leased = merged_leased;
                 let m_h = Int::new_const(format!("h_m_{}", spanned.span.start));
-                self.solver.assert(&m_h.eq(&Bool::ite(
+                self.solver.assert(m_h.eq(Bool::ite(
                     &cond_bool,
                     &post_then_horizon,
                     &post_else_horizon,
@@ -282,7 +281,7 @@ impl<'a> FormalVerifier<'a> {
                         &consumed_cond,
                     ]),
                 ]);
-                self.solver.assert(&path_condition.implies(&one_of_four));
+                self.solver.assert(path_condition.implies(&one_of_four));
 
                 let pre_match_validity = self.variable_validity.clone();
                 let pre_match_leased = self.variable_leased.clone();
@@ -299,13 +298,13 @@ impl<'a> FormalVerifier<'a> {
                             "{}_valid_{}",
                             binding, spanned.span.start
                         ));
-                        self.solver.assert(&valid_pc.implies(&is_valid));
+                        self.solver.assert(valid_pc.implies(&is_valid));
                         self.variable_validity.insert(binding.clone(), is_valid);
                         let is_leased = Bool::new_const(format!(
                             "{}_leased_{}",
                             binding, spanned.span.start
                         ));
-                        self.solver.assert(&valid_pc.implies(&is_leased.not()));
+                        self.solver.assert(valid_pc.implies(is_leased.not()));
                         self.variable_leased.insert(binding.clone(), is_leased);
                     }
 
@@ -330,13 +329,13 @@ impl<'a> FormalVerifier<'a> {
                             "{}_valid_{}",
                             binding, spanned.span.start
                         ));
-                        self.solver.assert(&decayed_pc.implies(&is_valid));
+                        self.solver.assert(decayed_pc.implies(&is_valid));
                         self.variable_validity.insert(binding.clone(), is_valid);
                         let is_leased = Bool::new_const(format!(
                             "{}_leased_{}",
                             binding, spanned.span.start
                         ));
-                        self.solver.assert(&decayed_pc.implies(&is_leased.not()));
+                        self.solver.assert(decayed_pc.implies(is_leased.not()));
                         self.variable_leased.insert(binding.clone(), is_leased);
                     }
 
@@ -432,7 +431,7 @@ impl<'a> FormalVerifier<'a> {
                         &Bool::and(&[&pending_cond, &v_pen]),
                         &Bool::and(&[&consumed_cond, &v_con]),
                     ]);
-                    self.solver.assert(&m_v.eq(&val_expr));
+                    self.solver.assert(m_v.eq(&val_expr));
                     merged_validity.insert(var.clone(), m_v);
 
                     let l_val = post_val_leased
@@ -462,7 +461,7 @@ impl<'a> FormalVerifier<'a> {
                         &Bool::and(&[&pending_cond, &l_pen]),
                         &Bool::and(&[&consumed_cond, &l_con]),
                     ]);
-                    self.solver.assert(&m_l.eq(&leased_expr));
+                    self.solver.assert(m_l.eq(&leased_expr));
                     merged_leased.insert(var.clone(), m_l);
                 }
 
@@ -483,7 +482,7 @@ impl<'a> FormalVerifier<'a> {
                         ),
                     ),
                 );
-                self.solver.assert(&m_h.eq(&h_expr));
+                self.solver.assert(m_h.eq(&h_expr));
                 self.causal_horizon = m_h;
 
                 let final_clock = Bool::ite(
@@ -509,10 +508,9 @@ impl<'a> FormalVerifier<'a> {
                     unroll_clock =
                         self.verify_statement(stmt, path_condition, &unroll_clock)?;
                 }
-                let violation = loop_clock.gt(&Int::from_u64(*max_ms));
+                let violation = loop_clock.gt(Int::from_u64(*max_ms));
                 self.solver.push();
-                self.solver
-                    .assert(&Bool::and(&[path_condition, &violation]));
+                self.solver.assert(Bool::and(&[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
                     let model = self.solver.get_model().unwrap();
                     let actual_wcet = model
@@ -556,7 +554,14 @@ impl<'a> FormalVerifier<'a> {
                 pacing_ms,
                 ..
             } => {
-                if let causm_core::ForMode::Consume = mode {
+                if let causm_core::ParamMode::Consume = mode {
+                    self.check_available(source, path_condition)?;
+                    self.consume_variable(
+                        source,
+                        path_condition,
+                        spanned.span.start,
+                    );
+                } else if let causm_core::ParamMode::Decay = mode {
                     self.check_available(source, path_condition)?;
                     self.consume_variable(
                         source,
@@ -570,7 +575,7 @@ impl<'a> FormalVerifier<'a> {
                         "{}_v1_{}",
                         item_name, spanned.span.start
                     ));
-                    self.solver.assert(&path_condition.implies(&item_valid));
+                    self.solver.assert(path_condition.implies(&item_valid));
                     self.variable_validity.insert(item_name.clone(), item_valid);
                     for stmt in body {
                         loop_clock = self.verify_statement(
@@ -585,7 +590,7 @@ impl<'a> FormalVerifier<'a> {
                         "{}_v2_{}",
                         item_name, spanned.span.start
                     ));
-                    self.solver.assert(&path_condition.implies(&item_valid));
+                    self.solver.assert(path_condition.implies(&item_valid));
                     self.variable_validity.insert(item_name.clone(), item_valid);
                     let mut unroll_clock = loop_clock.clone();
                     for stmt in body {
@@ -598,10 +603,9 @@ impl<'a> FormalVerifier<'a> {
                 }
                 self.variable_validity.remove(item_name);
                 if let Some(pacing) = pacing_ms {
-                    let violation = loop_clock.gt(&Int::from_u64(*pacing));
+                    let violation = loop_clock.gt(Int::from_u64(*pacing));
                     self.solver.push();
-                    self.solver
-                        .assert(&Bool::and(&[path_condition, &violation]));
+                    self.solver.assert(Bool::and(&[path_condition, &violation]));
                     if self.solver.check() == z3::SatResult::Sat {
                         self.solver.pop(1);
                         return Err(self
@@ -626,7 +630,7 @@ impl<'a> FormalVerifier<'a> {
                     ));
                     routine_verifier
                         .solver
-                        .assert(&is_valid.eq(&Bool::from_bool(true)));
+                        .assert(is_valid.eq(Bool::from_bool(true)));
                     routine_verifier
                         .variable_validity
                         .insert(p.name.clone(), is_valid);
@@ -640,7 +644,7 @@ impl<'a> FormalVerifier<'a> {
                     )?;
                 }
                 if let Some(limit) = taking_ms {
-                    let violation = body_clock.gt(&Int::from_u64(*limit));
+                    let violation = body_clock.gt(Int::from_u64(*limit));
                     routine_verifier.solver.push();
                     routine_verifier.solver.assert(&violation);
                     if routine_verifier.solver.check() == z3::SatResult::Sat {
@@ -665,19 +669,18 @@ impl<'a> FormalVerifier<'a> {
                 operator, limit_ms, ..
             } => {
                 let violation = match operator {
-                    BinaryOperator::Gt => in_clock.le(&Int::from_u64(*limit_ms)),
-                    BinaryOperator::Lt => in_clock.ge(&Int::from_u64(*limit_ms)),
-                    BinaryOperator::Ge => in_clock.lt(&Int::from_u64(*limit_ms)),
-                    BinaryOperator::Le => in_clock.gt(&Int::from_u64(*limit_ms)),
+                    BinaryOperator::Gt => in_clock.le(Int::from_u64(*limit_ms)),
+                    BinaryOperator::Lt => in_clock.ge(Int::from_u64(*limit_ms)),
+                    BinaryOperator::Ge => in_clock.lt(Int::from_u64(*limit_ms)),
+                    BinaryOperator::Le => in_clock.gt(Int::from_u64(*limit_ms)),
                     BinaryOperator::Eq => {
-                        in_clock.eq(&Int::from_u64(*limit_ms)).not()
+                        in_clock.eq(Int::from_u64(*limit_ms)).not()
                     }
-                    BinaryOperator::Neq => in_clock.eq(&Int::from_u64(*limit_ms)),
+                    BinaryOperator::Neq => in_clock.eq(Int::from_u64(*limit_ms)),
                     _ => Bool::from_bool(false),
                 };
                 self.solver.push();
-                self.solver
-                    .assert(&Bool::and(&[path_condition, &violation]));
+                self.solver.assert(Bool::and(&[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
                     let model = self.solver.get_model().unwrap();
                     let actual_wcet = model
@@ -708,13 +711,13 @@ impl<'a> FormalVerifier<'a> {
                     "{}_valid_{}",
                     binding, spanned.span.start
                 ));
-                self.solver.assert(&path_condition.implies(&is_valid));
+                self.solver.assert(path_condition.implies(&is_valid));
                 self.variable_validity.insert(binding.clone(), is_valid);
                 let is_leased = Bool::new_const(format!(
                     "{}_leased_{}",
                     binding, spanned.span.start
                 ));
-                self.solver.assert(&path_condition.implies(&is_leased));
+                self.solver.assert(path_condition.implies(&is_leased));
                 self.variable_leased.insert(binding.clone(), is_leased);
 
                 let mut body_clock = Int::from_u64(0);
@@ -722,10 +725,9 @@ impl<'a> FormalVerifier<'a> {
                     body_clock =
                         self.verify_statement(stmt, path_condition, &body_clock)?;
                 }
-                let violation = body_clock.gt(&Int::from_u64(*duration_ms));
+                let violation = body_clock.gt(Int::from_u64(*duration_ms));
                 self.solver.push();
-                self.solver
-                    .assert(&Bool::and(&[path_condition, &violation]));
+                self.solver.assert(Bool::and(&[path_condition, &violation]));
                 if self.solver.check() == z3::SatResult::Sat {
                     let model = self.solver.get_model().unwrap();
                     let actual_wcet = model
@@ -761,8 +763,7 @@ impl<'a> FormalVerifier<'a> {
         span_start: usize,
     ) {
         let new_valid = Bool::new_const(format!("{}_consumed_{}", name, span_start));
-        self.solver
-            .assert(&path_condition.implies(&new_valid.not()));
+        self.solver.assert(path_condition.implies(new_valid.not()));
         self.variable_validity.insert(name.to_string(), new_valid);
         let mut entangled_to_mark = Vec::new();
         for set in &self.entanglements {
@@ -780,7 +781,7 @@ impl<'a> FormalVerifier<'a> {
                 other, name, span_start
             ));
             self.solver
-                .assert(&path_condition.implies(&other_valid.not()));
+                .assert(path_condition.implies(other_valid.not()));
             self.variable_validity.insert(other, other_valid);
         }
     }
@@ -796,7 +797,7 @@ impl<'a> FormalVerifier<'a> {
         if let Some(valid_bool) = self.variable_validity.get(name) {
             self.solver.push();
             self.solver
-                .assert(&Bool::and(&[path_condition, &valid_bool.not()]));
+                .assert(Bool::and(&[path_condition, &valid_bool.not()]));
             if self.solver.check() == z3::SatResult::Sat {
                 self.solver.pop(1);
                 return Err(self.analyzer.annotate(
@@ -820,7 +821,7 @@ impl<'a> FormalVerifier<'a> {
         if let Some(leased_bool) = self.variable_leased.get(name) {
             self.solver.push();
             self.solver
-                .assert(&Bool::and(&[path_condition, leased_bool]));
+                .assert(Bool::and(&[path_condition, leased_bool]));
             if self.solver.check() == z3::SatResult::Sat {
                 self.solver.pop(1);
                 return Err(self
@@ -895,10 +896,9 @@ impl<'a> FormalVerifier<'a> {
         self.anchors = old_anchors;
         self.current_slice_ms = old_slice;
 
-        let violation = clock.gt(&Int::from_u64(budget));
+        let violation = clock.gt(Int::from_u64(budget));
         self.solver.push();
-        self.solver
-            .assert(&Bool::and(&[path_condition, &violation]));
+        self.solver.assert(Bool::and(&[path_condition, &violation]));
         if self.solver.check() == z3::SatResult::Sat {
             self.solver.pop(1);
             return Err(self.analyzer.annotate(

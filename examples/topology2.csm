@@ -28,7 +28,7 @@
 }
 
 @10ms: {
-    merge [thief, banker] into main resolving (
+    merge [thief, banker] into main reconcile (
         account: topology_union {
             "balance": priority(thief),
             "status": priority(banker),

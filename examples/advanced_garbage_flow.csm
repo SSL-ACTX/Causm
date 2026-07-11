@@ -62,7 +62,7 @@
 
 // Merge results back and launch inter-branch channel exchange.
 @0ms: {
-  merge [w1, w2] into main resolving(raw=first_wins)
+  merge [w1, w2] into main reconcile(raw=first_wins)
 
   open_chan ch1 (3)
   let hello = "hello"

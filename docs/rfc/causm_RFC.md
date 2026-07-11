@@ -86,7 +86,7 @@ Concurrency involves the formal bifurcation of the memory arena.
 
 @200ms:
   // Reconciliation conflict unless a protocol is specified:
-  merge [service_a, service_b] into main resolving (user_data = first_wins)
+  merge [service_a, service_b] into main reconcile (user_data = first_wins)
 ```
 
 ### 3.5 Acausal Anchors and Commit Horizons
@@ -151,7 +151,7 @@ require_decl  ::= "require" capability_path ("(" param_list ")")?
 ### 4.4 Temporal Control Flow Primitives
 ```ebnf
 branch_stmt ::= "split" identifier "into" "[" identifier_list "]"
-merge_stmt  ::= "merge" "[" identifier_list "]" "into" identifier ("resolving" "(" resolution_rules ")")?
+merge_stmt  ::= "merge" "[" identifier_list "]" "into" identifier ("reconcile" "(" resolution_rules ")")?
 anchor_stmt ::= "anchor" identifier
 commit_stmt ::= "commit" "{" statement* "}"
 ```
@@ -232,7 +232,7 @@ This implementation demonstrates parameterized capabilities, relative temporal l
 
 @100ms: // Global temporal synchronization point
   // Explicit reconciliation required for 'api_result'
-  merge [api_request, watchdog] into main resolving (api_result = first_wins)
+  merge [api_request, watchdog] into main reconcile (api_result = first_wins)
   
   isolate {
     require System.IO

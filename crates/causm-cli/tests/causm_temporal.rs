@@ -218,7 +218,7 @@ fn causm_temporal_relativistic_network_request_merge() -> anyhow::Result<()> {
     @0ms: { split main into [a,b] }
     @a: { network_request "api.example.com" }
     @b: { let v = "fallback" }
-    @0ms: { merge [a,b] into main resolving(v=b) }
+    @0ms: { merge [a,b] into main reconcile(v=b) }
     "#;
 
     let program = parser::parse_causm(source)?;
@@ -362,7 +362,7 @@ fn causm_temporal_promises_example_integration() -> anyhow::Result<()> {
 }
 
 @20ms: {
-  merge [w1,w2] into main resolving(w1=w1,w2=w2)
+  merge [w1,w2] into main reconcile(w1=w1,w2=w2)
 
   isolate merge_logger {
     require System.Log

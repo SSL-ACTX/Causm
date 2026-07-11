@@ -244,7 +244,7 @@ macro_rules! instructions {
             },
             For {
                 item_name: String,
-                mode: causm_core::ForMode,
+                mode: causm_core::ParamMode,
                 source: $crate::Reg,
                 body: Vec<$crate::Instruction>,
                 pacing_ms: Option<u64>,
@@ -252,7 +252,7 @@ macro_rules! instructions {
             },
             SplitMap {
                 item_name: String,
-                mode: causm_core::ForMode,
+                mode: causm_core::ParamMode,
                 source: $crate::Reg,
                 body: Vec<$crate::Instruction>,
                 reconcile: Option<causm_core::MergeResolution>

@@ -112,17 +112,27 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::inspect_stmt => {
             let mut inner = pair.into_inner();
+            let binding = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
             let target = inner
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
             let mut body = Vec::new();
-            for stmt_pair in inner {
-                if let Some(actual_stmt) = stmt_pair.into_inner().next() {
-                    body.push(parse_statement(actual_stmt));
+            if let Some(block) = inner.next() {
+                for stmt_pair in block.into_inner() {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
                 }
             }
-            Statement::Inspect { target, body }
+            Statement::Inspect {
+                binding,
+                target,
+                body,
+            }
         }
         _ => unreachable!(),
     }

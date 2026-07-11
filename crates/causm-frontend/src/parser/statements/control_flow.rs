@@ -102,10 +102,12 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             let mode = inner
                 .next()
                 .map(|p| match p.as_str() {
-                    "consume" => ForMode::Consume,
-                    _ => ForMode::Clone,
+                    "consume" => ParamMode::Consume,
+                    "clone" => ParamMode::Clone,
+                    "decay" => ParamMode::Decay,
+                    _ => ParamMode::Peek,
                 })
-                .unwrap_or(ForMode::Consume);
+                .unwrap_or(ParamMode::Consume);
             let source = inner
                 .next()
                 .map(|p| p.as_str().to_string())
@@ -274,10 +276,11 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
-            let mode_enum = if mode == "clone" {
-                ForMode::Clone
-            } else {
-                ForMode::Consume
+            let mode_enum = match mode {
+                "consume" => ParamMode::Consume,
+                "clone" => ParamMode::Clone,
+                "decay" => ParamMode::Decay,
+                _ => ParamMode::Peek,
             };
 
             let mut body = Vec::new();

@@ -193,9 +193,9 @@ fn causm_semantic_inspect_block_does_not_consume() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       let p = struct { a = "x", b = "y" }
-      inspect(p) {
-        let x = p.a
-        let y = p.b
+      inspect view = p {
+        let x = view.a
+        let y = view.b
       }
       let z = p
     }
@@ -395,7 +395,7 @@ fn causm_semantic_merge_resolution_first_wins() -> anyhow::Result<()> {
       let v = "v2"
     }
     @0ms: {
-      merge [w1,w2] into main resolving(v=w1)
+      merge [w1,w2] into main reconcile(v=w1)
     }
     "#;
 
@@ -767,7 +767,7 @@ fn causm_semantic_gc_merge_collects_leaf_branches() -> anyhow::Result<()> {
     }
     @w1: { let v1 = "x" }
     @w2: { let v2 = "y" }
-    @0ms: { merge [w1,w2] into main resolving(v1=w1,v2=w2) }
+    @0ms: { merge [w1,w2] into main reconcile(v1=w1,v2=w2) }
     "#;
 
     let program = parser::parse_causm(source)?;
@@ -879,7 +879,7 @@ fn causm_semantic_merge_priority_resolves_to_priority_branch() -> anyhow::Result
     @0ms: { split main into [w1,w2] }
     @w1: { let v = "v1" }
     @w2: { let v = "v2" }
-    @0ms: { merge [w1,w2] into main resolving(v=w2) }
+    @0ms: { merge [w1,w2] into main reconcile(v=w2) }
     "#;
 
     let program = parser::parse_causm(source)?;

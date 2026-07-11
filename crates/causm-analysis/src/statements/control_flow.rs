@@ -445,7 +445,7 @@ impl EntropicAnalyzer {
     pub(crate) fn For(
         &mut self,
         item_name: &str,
-        mode: &ForMode,
+        mode: &ParamMode,
         source: &str,
         body: &[SpannedStatement],
         pacing_ms: &Option<u64>,
@@ -481,8 +481,10 @@ impl EntropicAnalyzer {
         };
         self.set_variable_type(item_name, loop_item_type);
 
-        if let ForMode::Consume = mode {
+        if let ParamMode::Consume = mode {
             self.mark_consumed(source)?;
+        } else if let ParamMode::Decay = mode {
+            self.mark_decayed(source)?;
         }
 
         if let Some(limit) = max_per_iteration {
@@ -519,7 +521,7 @@ impl EntropicAnalyzer {
     pub(crate) fn SplitMap(
         &mut self,
         item_name: &str,
-        mode: &ForMode,
+        mode: &ParamMode,
         source: &str,
         body: &[SpannedStatement],
         _reconcile: &Option<MergeResolution>,
@@ -547,8 +549,10 @@ impl EntropicAnalyzer {
         };
         self.set_variable_type(item_name, loop_item_type);
 
-        if let ForMode::Consume = mode {
+        if let ParamMode::Consume = mode {
             self.mark_consumed(source)?;
+        } else if let ParamMode::Decay = mode {
+            self.mark_decayed(source)?;
         }
 
         for inner_stmt in body {
@@ -564,7 +568,8 @@ impl EntropicAnalyzer {
 
     pub(crate) fn Inspect(
         &mut self,
-        _target: &str,
+        binding: &str,
+        target: &str,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         let snapshot = self
@@ -572,6 +577,11 @@ impl EntropicAnalyzer {
             .get(&self.current_branch)
             .cloned()
             .unwrap_or_default();
+
+        let target_type = self
+            .get_variable_type(target)
+            .unwrap_or(causm_core::types::Type::Unknown);
+        self.set_variable_type(binding, target_type);
 
         self.inspection_depth += 1;
         for inner_stmt in body {

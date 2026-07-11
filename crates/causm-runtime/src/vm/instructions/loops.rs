@@ -1,7 +1,7 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::{Timeline, Vm};
 use causm_core::value::{EntropicState, Payload};
-use causm_core::{ForMode, MergeResolution};
+use causm_core::{MergeResolution, ParamMode};
 use causm_frontend::ir::{Instruction, Reg};
 use std::collections::HashMap;
 
@@ -12,19 +12,21 @@ impl Vm {
         &mut self,
         branch_id: &str,
         item_name: String,
-        mode: ForMode,
+        mode: ParamMode,
         source: Reg,
         body: Vec<Instruction>,
         pacing_ms: Option<u64>,
         max_ms: Option<u64>,
     ) -> Result<(), TemporalError> {
         let source_payload = match mode {
-            ForMode::Consume => {
+            ParamMode::Consume | ParamMode::Decay => {
                 let payload = self.peek_reg(branch_id, source.0)?;
                 self.consume_reg(branch_id, source.0)?;
                 payload
             }
-            ForMode::Clone => self.peek_reg(branch_id, source.0)?,
+            ParamMode::Clone | ParamMode::Peek => {
+                self.peek_reg(branch_id, source.0)?
+            }
         };
 
         let elements = match source_payload {
@@ -117,18 +119,20 @@ impl Vm {
         &mut self,
         branch_id: &str,
         item_name: String,
-        mode: ForMode,
+        mode: ParamMode,
         source: Reg,
         body: Vec<Instruction>,
         _reconcile: Option<MergeResolution>,
     ) -> Result<(), TemporalError> {
         let source_payload = match mode {
-            ForMode::Consume => {
+            ParamMode::Consume | ParamMode::Decay => {
                 let payload = self.peek_reg(branch_id, source.0)?;
                 self.consume_reg(branch_id, source.0)?;
                 payload
             }
-            ForMode::Clone => self.peek_reg(branch_id, source.0)?,
+            ParamMode::Clone | ParamMode::Peek => {
+                self.peek_reg(branch_id, source.0)?
+            }
         };
         let elements = match source_payload {
             Payload::Array(vec) => vec,

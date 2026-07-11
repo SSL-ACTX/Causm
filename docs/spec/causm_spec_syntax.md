@@ -178,7 +178,7 @@ routine <name>(<params>) taking (<amount>ms | _) { <statements> }
 
 ### Branching Operations (`split` / `merge`)
 - **`split <parent> into [<branches>]`**: Initializes isolated child timelines.
-- **`merge [<branches>] into <target> [resolving (<rules>)]`**: Recombines branch states into a target timeline.
+- **`merge [<branches>] into <target> [reconcile (<rules>)]`**: Recombines branch states into a target timeline.
 
 ### Resets and Anchors
 - **`anchor <name>`**: Snapshots the current state of the timeline, including the local clock and memory arena.

@@ -67,7 +67,7 @@ fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ routine_duration ~ "{" ~ statement* ~ "}" }
+routine_stmt = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit ~ "{" ~ statement* ~ "}" }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode ~ identifier ~ type_annotation? }
 param_mode = { "consume" | "clone" | "decay" | "peek" }
@@ -82,11 +82,10 @@ entropy_branch = { "Valid" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block |
 
 break_stmt = { "break" }
 
-for_mode = { "consume" | "clone" }
-for_stmt = { "for" ~ identifier ~ for_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
-inspect_stmt = { "inspect" ~ "(" ~ identifier ~ ")" ~ "{" ~ statement* ~ "}" }
+for_stmt = { "for" ~ identifier ~ param_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
+inspect_stmt = { "inspect" ~ identifier ~ "=" ~ identifier ~ statement_block }
 lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block }
-split_map_stmt = { "split_map" ~ identifier ~ for_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
+split_map_stmt = { "split_map" ~ identifier ~ param_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
 pacing_opt = { "pacing" ~ duration_limit }
 
@@ -129,10 +128,8 @@ topology_union = { "topology_union" ~ "{" ~ resolution_rules ~ (on_invalid_claus
 topology_intersect = { "topology_intersect" ~ "{" ~ resolution_rules ~ (on_invalid_clause)? ~ "}" }
 on_invalid_clause = { "on_invalid" ~ ":" ~ rewind_clause }
 rewind_clause = { "rewind" ~ identifier ~ "to" ~ identifier }
-reconcile_clause = { ("reconcile" | "resolving") ~ ("auto" | "(" ~ resolution_rules ~ ")") }
-duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline" | "pacing")? ~ amount ~ "ms" ~ ")"? }
-routine_duration = { ("taking" | "for" | "max")? ~ (amount ~ "ms" | "_") }
-
+reconcile_clause = { "reconcile" ~ ("auto" | "(" ~ resolution_rules ~ ")") }
+duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline")? ~ (amount ~ "ms" | "_") ~ ")"? }
 anchor_stmt = { "anchor" ~ identifier }
 rewind_stmt = { "rewind_to" ~ "(" ~ identifier ~ ")" }
 commit_stmt = { "commit" ~ "{" ~ statement* ~ "}" }

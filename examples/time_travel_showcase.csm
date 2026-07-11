@@ -45,7 +45,7 @@
 
 @20ms: {
     print("Merging updates with safety constraints...")
-    merge [dev_branch, ops_branch] into main resolving (
+    merge [dev_branch, ops_branch] into main reconcile (
         cloud_config: topology_union {
             "instances": priority(dev_branch),
             "region": priority(ops_branch),

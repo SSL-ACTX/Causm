@@ -157,6 +157,7 @@ macro_rules! statements {
             },
             Break,
             Inspect {
+                binding: String,
                 target: String,
                 body: Vec<SpannedStatement>
             },
@@ -178,7 +179,7 @@ macro_rules! statements {
             },
             For {
                 item_name: String,
-                mode: ForMode,
+                mode: ParamMode,
                 source: String,
                 body: Vec<SpannedStatement>,
                 pacing_ms: Option<u64>,
@@ -186,7 +187,7 @@ macro_rules! statements {
             },
             SplitMap {
                 item_name: String,
-                mode: ForMode,
+                mode: ParamMode,
                 source: String,
                 body: Vec<SpannedStatement>,
                 reconcile: Option<MergeResolution>
@@ -374,12 +375,6 @@ pub enum BuiltinType {
     Struct,
     Topology,
     Array,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ForMode {
-    Consume,
-    Clone,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -217,14 +217,14 @@ fn causm_entropic_topographical_merge_union() -> anyhow::Result<()> {
         }
         
         @beta: {
-            inspect(graph) {
-                let dead_core = graph["core"]
+            inspect view = graph {
+                let dead_core = view["core"]
             }
         }
     }
 
     @10ms: {
-        merge [alpha, beta] into main resolving (
+        merge [alpha, beta] into main reconcile (
             graph: topology_union {
                 "core": priority(alpha),
                 "_": decay
@@ -286,7 +286,7 @@ fn causm_entropic_topographical_merge_union_on_invalid_clause() -> anyhow::Resul
     }
 
     @10ms: {
-        merge [alpha, beta] into main resolving (
+        merge [alpha, beta] into main reconcile (
             graph: topology_union {
                 "core": priority(alpha),
                 "_": decay
@@ -377,7 +377,7 @@ fn causm_entropic_topology2_dynamic_index_assignment_and_rewind(
 }
 
 @10ms: {
-    merge [thief, banker] into main resolving (
+    merge [thief, banker] into main reconcile (
         account: topology_union {
             "balance": priority(thief),
             "status": priority(banker),

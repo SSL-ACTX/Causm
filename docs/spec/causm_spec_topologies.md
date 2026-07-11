@@ -96,7 +96,7 @@ Within the Causm framework, a topology key (e.g., `"node_1"`) is defined as a **
 ### 3. Topographical Reconciliation (Wavefunction Collapse)
 ```causm
 @10ms: {
-  merge [worker_alpha, worker_beta] into main resolving (
+  merge [worker_alpha, worker_beta] into main reconcile (
     graph: topology_union {
       "core": priority(worker_alpha),
       _: decay
@@ -111,7 +111,7 @@ Within the Causm framework, a topology key (e.g., `"node_1"`) is defined as a **
 The `topology_union` and `topology_intersect` mechanisms support an optional `on_invalid` clause for automated causal recovery:
 
 ```causm
-merge [alpha, beta] into main resolving (
+merge [alpha, beta] into main reconcile (
   graph: topology_union {
     "core": priority(alpha),
     _ : decay,

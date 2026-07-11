@@ -311,14 +311,15 @@ impl EntropicAnalyzer {
 
         // Entropic Terminal Check
         if self.enforce_egc {
-            for (_branch_id, state) in &self.branch_contexts {
+            for state in self.branch_contexts.values() {
                 for var in &state.produced {
-                    if var != "_" && !var.starts_with('_') {
-                        if !state.consumed.contains(var) {
-                            return Err(self.annotate(
-                                SemanticErrorKind::UnconsumedVariable(var.clone()),
-                            ));
-                        }
+                    if var != "_"
+                        && !var.starts_with('_')
+                        && !state.consumed.contains(var)
+                    {
+                        return Err(self.annotate(
+                            SemanticErrorKind::UnconsumedVariable(var.clone()),
+                        ));
                     }
                 }
             }

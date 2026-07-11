@@ -569,11 +569,19 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 chan_id: name.clone(),
             });
         }
-        Statement::Inspect { body, .. } => {
-            // inspect is non-destructive: lower the body without consuming the target.
+        Statement::Inspect {
+            binding,
+            target,
+            body,
+        } => {
+            let orig_symbols = ctx.symbols.clone();
+            if let Some(r) = ctx.symbols.get(target).cloned() {
+                ctx.symbols.insert(binding.clone(), r);
+            }
             for s in body {
                 lower_statement(ctx, &s.stmt);
             }
+            ctx.symbols = orig_symbols;
         }
 
         Statement::Commit(body) => {

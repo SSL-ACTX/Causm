@@ -110,7 +110,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             return_type = Some(parse_type_name(typ));
                         }
                     }
-                    Rule::routine_duration => {
+                    Rule::duration_limit => {
                         if current.as_str().contains("_") {
                             taking_ms = None;
                         } else {
