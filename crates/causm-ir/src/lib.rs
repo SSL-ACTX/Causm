@@ -337,3 +337,6 @@ pub use ssa::{
     SsaBasicBlock, SsaCFG, SsaInstruction, SsaPhiNode, SsaReg, SsaTerminator,
     SsaTransformer,
 };
+
+pub mod optimize;
+pub use optimize::optimize_program;

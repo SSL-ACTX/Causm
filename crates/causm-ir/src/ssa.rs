@@ -41,6 +41,18 @@ pub enum SsaTerminator {
     Return {
         src: Option<SsaReg>,
     },
+    MatchEntropy {
+        target: SsaReg,
+        valid_block: Option<BlockId>,
+        decayed_block: Option<BlockId>,
+        pending_block: Option<BlockId>,
+        consumed_block: Option<BlockId>,
+    },
+    Select {
+        max_ms: u64,
+        cases: Vec<SsaSelectCase>,
+        timeout_block: Option<BlockId>,
+    },
     Unreachable,
 }
 
@@ -274,6 +286,9 @@ pub enum SsaInstruction {
     EndLoop {
         max_ms: u64,
     },
+    Break,
+    LoopTick,
+    EndLoopTick,
     NetworkRequest {
         domain: String,
     },
@@ -284,6 +299,7 @@ pub enum SsaInstruction {
 pub struct SsaCFG {
     pub entry_block: BlockId,
     pub blocks: HashMap<BlockId, SsaBasicBlock>,
+    pub original_pc_to_block_id: HashMap<usize, BlockId>,
 }
 
 impl std::fmt::Display for SsaCFG {
@@ -352,7 +368,89 @@ impl SsaTransformer {
                     predecessors.entry(*then_block).or_default().push(id);
                     predecessors.entry(*else_block).or_default().push(id);
                 }
+                Terminator::MatchEntropy {
+                    valid_block,
+                    decayed_block,
+                    pending_block,
+                    consumed_block,
+                    ..
+                } => {
+                    let targets = [
+                        *valid_block,
+                        *decayed_block,
+                        *pending_block,
+                        *consumed_block,
+                    ];
+                    for t in targets.into_iter().flatten() {
+                        successors.entry(id).or_default().push(t);
+                        predecessors.entry(t).or_default().push(id);
+                    }
+                }
+                Terminator::Select {
+                    cases,
+                    timeout_block,
+                    ..
+                } => {
+                    for case in cases {
+                        successors.entry(id).or_default().push(case.target_block);
+                        predecessors.entry(case.target_block).or_default().push(id);
+                    }
+                    if let Some(t) = timeout_block {
+                        successors.entry(id).or_default().push(*t);
+                        predecessors.entry(*t).or_default().push(id);
+                    }
+                }
                 Terminator::Return { .. } | Terminator::Unreachable => {}
+            }
+
+            for instr in &block.instructions {
+                match instr {
+                    Instruction::RelativisticBlock {
+                        block_pc,
+                        block_len,
+                        ..
+                    } => {
+                        let body_block = cfg.original_pc_to_block_id[block_pc];
+                        let end_block =
+                            cfg.original_pc_to_block_id[&(block_pc + block_len)];
+                        let succ_list = successors.entry(id).or_default();
+                        if !succ_list.contains(&body_block) {
+                            succ_list.push(body_block);
+                            predecessors.entry(body_block).or_default().push(id);
+                        }
+                        let succ_list = successors.entry(id).or_default();
+                        if !succ_list.contains(&end_block) {
+                            succ_list.push(end_block);
+                            predecessors.entry(end_block).or_default().push(id);
+                        }
+                    }
+                    Instruction::Watchdog {
+                        recovery_jump: Some(t),
+                        ..
+                    } => {
+                        let recovery_block = cfg.original_pc_to_block_id[t];
+                        let succ_list = successors.entry(id).or_default();
+                        if !succ_list.contains(&recovery_block) {
+                            succ_list.push(recovery_block);
+                            predecessors.entry(recovery_block).or_default().push(id);
+                        }
+                    }
+                    Instruction::Speculate {
+                        fallback_target, ..
+                    }
+                    | Instruction::EndSpeculate {
+                        fallback_target, ..
+                    } => {
+                        let fallback_block =
+                            cfg.original_pc_to_block_id[fallback_target];
+                        let succ_list = successors.entry(id).or_default();
+                        if !succ_list.contains(&fallback_block) {
+                            succ_list.push(fallback_block);
+                            predecessors.entry(fallback_block).or_default().push(id);
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -390,6 +488,7 @@ impl SsaTransformer {
             return SsaCFG {
                 entry_block: self.cfg.entry_block,
                 blocks: HashMap::new(),
+                original_pc_to_block_id: self.cfg.original_pc_to_block_id.clone(),
             };
         }
 
@@ -402,10 +501,16 @@ impl SsaTransformer {
 
         for (&block_id, block) in &self.cfg.blocks {
             for instr in &block.instructions {
-                for_each_dest_reg(instr, |dest| {
+                for_each_dest_reg_recursive(instr, &mut |dest| {
                     def_sites.entry(dest.0).or_default().insert(block_id);
                     all_regs.insert(dest.0);
                 });
+            }
+            if let Terminator::Select { cases, .. } = &block.terminator {
+                for case in cases {
+                    def_sites.entry(case.dest.0).or_default().insert(block_id);
+                    all_regs.insert(case.dest.0);
+                }
             }
         }
 
@@ -451,6 +556,7 @@ impl SsaTransformer {
         SsaCFG {
             entry_block: self.cfg.entry_block,
             blocks: renamed_blocks,
+            original_pc_to_block_id: self.cfg.original_pc_to_block_id.clone(),
         }
     }
 
@@ -576,20 +682,59 @@ impl SsaTransformer {
         }
 
         // 3. Rename terminator condition/src
-        let ssa_term = match block.terminator {
-            Terminator::Jump { target } => SsaTerminator::Jump { target },
+        let ssa_term = match &block.terminator {
+            Terminator::Jump { target } => SsaTerminator::Jump { target: *target },
             Terminator::Branch {
                 cond,
                 then_block,
                 else_block,
             } => SsaTerminator::Branch {
-                cond: self.current_ssa_reg(cond),
-                then_block,
-                else_block,
+                cond: self.current_ssa_reg(*cond),
+                then_block: *then_block,
+                else_block: *else_block,
             },
             Terminator::Return { src } => SsaTerminator::Return {
                 src: src.map(|r| self.current_ssa_reg(r)),
             },
+            Terminator::MatchEntropy {
+                target,
+                valid_block,
+                decayed_block,
+                pending_block,
+                consumed_block,
+            } => SsaTerminator::MatchEntropy {
+                target: self.current_ssa_reg(*target),
+                valid_block: *valid_block,
+                decayed_block: *decayed_block,
+                pending_block: *pending_block,
+                consumed_block: *consumed_block,
+            },
+            Terminator::Select {
+                max_ms,
+                cases,
+                timeout_block,
+            } => {
+                let cases_ssa = cases
+                    .iter()
+                    .map(|c| {
+                        let dest_ver = self.next_version(c.dest.0);
+                        self.push_version(c.dest.0, dest_ver);
+                        SsaSelectCase {
+                            chan_id: c.chan_id.clone(),
+                            dest: SsaReg {
+                                reg: c.dest.0,
+                                version: dest_ver,
+                            },
+                            target: c.target_block as usize,
+                        }
+                    })
+                    .collect();
+                SsaTerminator::Select {
+                    max_ms: *max_ms,
+                    cases: cases_ssa,
+                    timeout_block: *timeout_block,
+                }
+            }
             Terminator::Unreachable => SsaTerminator::Unreachable,
         };
 
@@ -644,6 +789,11 @@ impl SsaTransformer {
             for_each_dest_reg(instr, |dest| {
                 self.pop_version(dest.0);
             });
+        }
+        if let Terminator::Select { cases, .. } = &block.terminator {
+            for case in cases {
+                self.pop_version(case.dest.0);
+            }
         }
     }
 
@@ -1107,6 +1257,11 @@ impl SsaTransformer {
                 let source_ssa = self.current_ssa_reg(*source);
                 let body_ssa =
                     body.iter().map(|i| self.rename_instruction(i)).collect();
+                for sub_instr in body {
+                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
+                        self.pop_version(dest.0);
+                    });
+                }
                 SsaInstruction::For {
                     item_name: item_name.clone(),
                     mode: mode.clone(),
@@ -1126,6 +1281,11 @@ impl SsaTransformer {
                 let source_ssa = self.current_ssa_reg(*source);
                 let body_ssa =
                     body.iter().map(|i| self.rename_instruction(i)).collect();
+                for sub_instr in body {
+                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
+                        self.pop_version(dest.0);
+                    });
+                }
                 SsaInstruction::SplitMap {
                     item_name: item_name.clone(),
                     mode: mode.clone(),
@@ -1157,6 +1317,9 @@ impl SsaTransformer {
             Instruction::EndLoop { max_ms } => {
                 SsaInstruction::EndLoop { max_ms: *max_ms }
             }
+            Instruction::Break => SsaInstruction::Break,
+            Instruction::LoopTick => SsaInstruction::LoopTick,
+            Instruction::EndLoopTick => SsaInstruction::EndLoopTick,
             Instruction::NetworkRequest { domain } => {
                 SsaInstruction::NetworkRequest {
                     domain: domain.clone(),
@@ -1224,6 +1387,18 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Select { cases, .. } => {
             for case in cases {
                 f(case.dest);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn for_each_dest_reg_recursive(instr: &Instruction, f: &mut impl FnMut(Reg)) {
+    for_each_dest_reg(instr, &mut *f);
+    match instr {
+        Instruction::For { body, .. } | Instruction::SplitMap { body, .. } => {
+            for sub_instr in body {
+                for_each_dest_reg_recursive(sub_instr, &mut *f);
             }
         }
         _ => {}

@@ -206,7 +206,8 @@ fn main() -> anyhow::Result<()> {
         println!("\x1b[1;32m{}: analysis ok\x1b[0m", path.display());
 
         if run_program {
-            let ir_program = lower::lower_program(&program);
+            let mut ir_program = lower::lower_program(&program);
+            ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
             vm.trace_entropy = trace_entropy;
             vm.register_capability("System.Log", |params| {

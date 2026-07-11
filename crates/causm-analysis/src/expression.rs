@@ -42,10 +42,6 @@ pub(crate) fn infer_expression_type(
                 .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
         },
         Expression::StructLit(_, fields) => {
-            println!(
-                "DEBUG: Inferring StructLit with fields: {:?}",
-                fields.keys().collect::<Vec<_>>()
-            );
             let mut schema = std::collections::HashMap::new();
             for (k, v) in fields {
                 schema.insert(k.clone(), infer_expression_type(analyzer, v)?);

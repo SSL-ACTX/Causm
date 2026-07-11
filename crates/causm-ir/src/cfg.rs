@@ -7,6 +7,7 @@ pub type BlockId = u32;
 pub struct CFG {
     pub entry_block: BlockId,
     pub blocks: HashMap<BlockId, BasicBlock>,
+    pub original_pc_to_block_id: HashMap<usize, BlockId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +15,13 @@ pub struct BasicBlock {
     pub id: BlockId,
     pub instructions: Vec<Instruction>,
     pub terminator: Terminator,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectCase {
+    pub chan_id: String,
+    pub dest: Reg,
+    pub target_block: BlockId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +37,18 @@ pub enum Terminator {
     Return {
         src: Option<Reg>,
     },
+    MatchEntropy {
+        target: Reg,
+        valid_block: Option<BlockId>,
+        decayed_block: Option<BlockId>,
+        pending_block: Option<BlockId>,
+        consumed_block: Option<BlockId>,
+    },
+    Select {
+        max_ms: u64,
+        cases: Vec<SelectCase>,
+        timeout_block: Option<BlockId>,
+    },
     Unreachable,
 }
 
@@ -38,6 +58,7 @@ impl CFG {
             return Self {
                 entry_block: 0,
                 blocks: HashMap::new(),
+                original_pc_to_block_id: HashMap::new(),
             };
         }
 
@@ -57,6 +78,64 @@ impl CFG {
                     leaders.insert(idx + 1);
                 }
                 Instruction::Return { .. } => {
+                    leaders.insert(idx + 1);
+                }
+                Instruction::MatchEntropy {
+                    valid_target,
+                    decayed_target,
+                    pending_target,
+                    consumed_target,
+                    ..
+                } => {
+                    if let Some(t) = valid_target {
+                        leaders.insert(*t);
+                    }
+                    if let Some(t) = decayed_target {
+                        leaders.insert(*t);
+                    }
+                    if let Some(t) = pending_target {
+                        leaders.insert(*t);
+                    }
+                    if let Some(t) = consumed_target {
+                        leaders.insert(*t);
+                    }
+                    leaders.insert(idx + 1);
+                }
+                Instruction::Select {
+                    cases,
+                    timeout_target,
+                    ..
+                } => {
+                    for case in cases {
+                        leaders.insert(case.target);
+                    }
+                    if let Some(t) = timeout_target {
+                        leaders.insert(*t);
+                    }
+                    leaders.insert(idx + 1);
+                }
+                Instruction::Watchdog { recovery_jump, .. } => {
+                    if let Some(t) = recovery_jump {
+                        leaders.insert(*t);
+                    }
+                    leaders.insert(idx + 1);
+                }
+                Instruction::Speculate {
+                    fallback_target, ..
+                }
+                | Instruction::EndSpeculate {
+                    fallback_target, ..
+                } => {
+                    leaders.insert(*fallback_target);
+                    leaders.insert(idx + 1);
+                }
+                Instruction::RelativisticBlock {
+                    block_pc,
+                    block_len,
+                    ..
+                } => {
+                    leaders.insert(*block_pc);
+                    leaders.insert(*block_pc + *block_len);
                     leaders.insert(idx + 1);
                 }
                 _ => {}
@@ -129,6 +208,42 @@ impl CFG {
                             block_instrs.pop();
                             terminator = Terminator::Return { src };
                         }
+                        Instruction::MatchEntropy {
+                            target,
+                            valid_target,
+                            decayed_target,
+                            pending_target,
+                            consumed_target,
+                        } => {
+                            block_instrs.pop();
+                            terminator = Terminator::MatchEntropy {
+                                target,
+                                valid_block: valid_target.map(find_block_id),
+                                decayed_block: decayed_target.map(find_block_id),
+                                pending_block: pending_target.map(find_block_id),
+                                consumed_block: consumed_target.map(find_block_id),
+                            };
+                        }
+                        Instruction::Select {
+                            max_ms,
+                            cases,
+                            timeout_target,
+                        } => {
+                            block_instrs.pop();
+                            let cases_mapped = cases
+                                .iter()
+                                .map(|c| SelectCase {
+                                    chan_id: c.chan_id.clone(),
+                                    dest: c.dest,
+                                    target_block: find_block_id(c.target),
+                                })
+                                .collect();
+                            terminator = Terminator::Select {
+                                max_ms,
+                                cases: cases_mapped,
+                                timeout_block: timeout_target.map(find_block_id),
+                            };
+                        }
                         _ => {
                             if end < instructions.len() {
                                 terminator = Terminator::Jump {
@@ -156,9 +271,18 @@ impl CFG {
             );
         }
 
+        let mut original_pc_to_block_id = HashMap::new();
+        for idx in 0..=instructions.len() {
+            original_pc_to_block_id.insert(
+                idx,
+                find_block_id(idx.min(instructions.len().saturating_sub(1))),
+            );
+        }
+
         Self {
             entry_block: 0,
             blocks,
+            original_pc_to_block_id,
         }
     }
 }

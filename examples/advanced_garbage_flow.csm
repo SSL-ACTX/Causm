@@ -3,11 +3,11 @@
   let raw = struct { a = "fieldA", b = "fieldB", count = "0" }
 
   // Friendly inspect syntax makes a non-destructive view of raw data.
-  inspect(raw) {
-    let raw_copy = clone(raw)
+  inspect raw_binding = raw {
+    let raw_copy = clone(raw_binding)
     let a_check = raw_copy.a
     debug(a_check)
-    log(raw.count)
+    log(raw_binding.count)
   }
 
   print("starting split")
