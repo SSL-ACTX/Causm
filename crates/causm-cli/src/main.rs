@@ -9,17 +9,12 @@ use std::path::PathBuf;
 
 fn usage(program: &str) {
     eprintln!(
-        "Usage: {} [--check] [--run] [--dump-ast] [--dump-ir] [--dump-cfg] [--dump-ssa] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
+        "Usage: {} [--check] [--run] [--dump ast/ir/cfg/ssa] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
         program
     );
     eprintln!("  --check                Perform semantic analysis only");
     eprintln!("  --run                  Execute program after analysis (default)");
-    eprintln!("  --dump-ast             Print the parsed AST and continue");
-    eprintln!("  --dump-ir              Print the lowered IR and continue");
-    eprintln!(
-        "  --dump-cfg             Print the Control Flow Graph (CFG) and continue"
-    );
-    eprintln!("  --dump-ssa             Print the SSA Form Control Flow Graph and continue");
+    eprintln!("  --dump <format>        Print compiler representation (ast, ir, cfg, ssa) and continue");
     eprintln!(
         "  --trace-entropy        Show entropic decay map after every instruction"
     );
@@ -64,6 +59,26 @@ fn main() -> anyhow::Result<()> {
             run_program = true;
             args.remove(0);
             continue;
+        }
+        if arg == "--dump" {
+            args.remove(0);
+            if let Some(format) = args.first() {
+                match format.as_str() {
+                    "ast" => dump_ast = true,
+                    "ir" => dump_ir = true,
+                    "cfg" => dump_cfg = true,
+                    "ssa" => dump_ssa = true,
+                    other => {
+                        eprintln!("Error: Unknown dump format '{}'. Valid formats are: ast, ir, cfg, ssa.", other);
+                        std::process::exit(1);
+                    }
+                }
+                args.remove(0);
+                continue;
+            } else {
+                eprintln!("Error: --dump requires a format argument (ast, ir, cfg, ssa).");
+                std::process::exit(1);
+            }
         }
         if arg == "--dump-ast" {
             dump_ast = true;
