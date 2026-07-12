@@ -241,8 +241,7 @@ fn main() -> anyhow::Result<()> {
                 };
                 eprintln!(
                     "\x1b[1;31merror: runtime failure{}\x1b[0m\n  cause: {}",
-                    location_info,
-                    e
+                    location_info, e
                 );
             }
 

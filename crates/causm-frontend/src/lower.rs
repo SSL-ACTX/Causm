@@ -1,4 +1,4 @@
-use causm_core::{Expression, Program, Statement, SpannedStatement};
+use causm_core::{Expression, Program, SpannedStatement, Statement};
 use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
 
@@ -855,6 +855,30 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let src = lower_expression(ctx, expr);
             let dest = ctx.alloc_reg();
             ctx.push(Instruction::UnaryOp { dest, op: *op, src });
+            dest
+        }
+
+        Expression::MethodCall {
+            target,
+            method: _,
+            args,
+            resolved_routine,
+        } => {
+            let routine_name =
+                resolved_routine.borrow().clone().unwrap_or_else(|| {
+                    panic!("MethodCall was not resolved during semantic analysis");
+                });
+            let mut arg_regs = Vec::new();
+            arg_regs.push(lower_expression(ctx, target));
+            for arg in args {
+                arg_regs.push(lower_expression(ctx, arg));
+            }
+            let dest = ctx.alloc_reg();
+            ctx.push(Instruction::Call {
+                routine: routine_name,
+                args: arg_regs,
+                dest,
+            });
             dest
         }
 

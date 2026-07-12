@@ -43,7 +43,12 @@ pub trait SolverBackend: Sized {
     fn bool_or(&mut self, args: &[&Self::Bool]) -> Self::Bool;
 
     /// If-then-else selection for boolean expressions.
-    fn bool_ite(&mut self, cond: &Self::Bool, then: &Self::Bool, orelse: &Self::Bool) -> Self::Bool;
+    fn bool_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Bool,
+        orelse: &Self::Bool,
+    ) -> Self::Bool;
 
     /// Equivalence of two boolean expressions.
     fn bool_eq(&mut self, a: &Self::Bool, b: &Self::Bool) -> Self::Bool;
@@ -76,7 +81,12 @@ pub trait SolverBackend: Sized {
     fn int_eq(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool;
 
     /// If-then-else selection for integer expressions.
-    fn int_ite(&mut self, cond: &Self::Bool, then: &Self::Int, orelse: &Self::Int) -> Self::Int;
+    fn int_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Int,
+        orelse: &Self::Int,
+    ) -> Self::Int;
 
     /// Evaluates an integer expression in the current solver model, returning its `u64` value if possible.
     fn eval_u64(&mut self, val: &Self::Int) -> Option<u64>;
@@ -152,7 +162,12 @@ impl SolverBackend for MockBackend {
         format!("(or {})", joined.join(" "))
     }
 
-    fn bool_ite(&mut self, cond: &Self::Bool, then: &Self::Bool, orelse: &Self::Bool) -> Self::Bool {
+    fn bool_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Bool,
+        orelse: &Self::Bool,
+    ) -> Self::Bool {
         format!("(ite {} {} {})", cond, then, orelse)
     }
 
@@ -197,7 +212,12 @@ impl SolverBackend for MockBackend {
         format!("(= {} {})", a, b)
     }
 
-    fn int_ite(&mut self, cond: &Self::Bool, then: &Self::Int, orelse: &Self::Int) -> Self::Int {
+    fn int_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Int,
+        orelse: &Self::Int,
+    ) -> Self::Int {
         format!("(ite {} {} {})", cond, then, orelse)
     }
 
@@ -214,7 +234,7 @@ mod tests {
     fn test_mock_backend_assertions() {
         let mut solver = MockBackend::new();
         solver.check_result = true;
-        
+
         let a = solver.bool_const("a");
         let b = solver.bool_const("b");
         let and_expr = solver.bool_and(&[&a, &b]);

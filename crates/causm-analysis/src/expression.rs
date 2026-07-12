@@ -84,6 +84,34 @@ pub(crate) fn infer_expression_type(
                 Ok(Type::Unknown)
             }
         }
+        Expression::MethodCall {
+            target,
+            method,
+            args: _,
+            resolved_routine,
+        } => {
+            let target_type = infer_expression_type(analyzer, target)?;
+            let struct_name = match &target_type {
+                Type::Custom(name) => name.clone(),
+                _ => {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        "method call target must be a custom type instance".into(),
+                    )));
+                }
+            };
+            let routine_name = format!("{}.{}", struct_name, method);
+            if let Some(info) = analyzer.routines.get(&routine_name) {
+                *resolved_routine.borrow_mut() = Some(routine_name);
+                Ok(info.return_type.clone())
+            } else {
+                Err(
+                    analyzer.annotate(SemanticErrorKind::EntropyMismatch(format!(
+                        "unknown method {} on type {}",
+                        method, struct_name
+                    ))),
+                )
+            }
+        }
         Expression::FieldAccess { target, field } => {
             let t = infer_expression_type(analyzer, target)?;
             let mut resolved_t = analyzer.resolve_type(&t);
@@ -243,6 +271,123 @@ pub(crate) fn analyze_expression(
     infer_expression_type(analyzer, expr)?;
     match expr {
         Expression::Null => Ok(()),
+        Expression::MethodCall {
+            target,
+            method,
+            args,
+            resolved_routine,
+        } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            let target_type = infer_expression_type(analyzer, target)?;
+            let struct_name = match &target_type {
+                Type::Custom(name) => name.clone(),
+                _ => {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        "method call target must be a custom type instance".into(),
+                    )));
+                }
+            };
+
+            let routine_name = format!("{}.{}", struct_name, method);
+            let info =
+                analyzer
+                    .routines
+                    .get(&routine_name)
+                    .cloned()
+                    .ok_or_else(|| {
+                        analyzer.annotate(SemanticErrorKind::EntropyMismatch(
+                            format!(
+                                "unknown method {} on type {}",
+                                method, struct_name
+                            ),
+                        ))
+                    })?;
+
+            if args.len() + 1 != info.params.len() {
+                return Err(analyzer.annotate(SemanticErrorKind::EntropyMismatch(
+                    format!(
+                        "method {} expects {} arguments (excluding self), got {}",
+                        method,
+                        info.params.len() - 1,
+                        args.len()
+                    ),
+                )));
+            }
+
+            let (self_mode, _self_name, self_type) = &info.params[0];
+            if !analyzer.types_compatible(self_type, &target_type) {
+                return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                    format!(
+                        "method {} self type mismatch: expected {:?}, got {:?}",
+                        method, self_type, target_type
+                    ),
+                )));
+            }
+
+            match self_mode {
+                ParamMode::Consume => {
+                    if let Expression::Identifier(name) = &**target {
+                        analyzer.mark_consumed(name)?;
+                    }
+                }
+                ParamMode::Clone => {
+                    if let Expression::Identifier(name) = &**target {
+                        let state = analyzer
+                            .branch_contexts
+                            .get(&analyzer.current_branch)
+                            .unwrap();
+                        if state.consumed.contains(name) {
+                            return Err(analyzer.annotate(
+                                SemanticErrorKind::UseAfterConsume(name.clone()),
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            for (arg_expr, (mode, _param_name, expected_type)) in
+                args.iter().zip(info.params.iter().skip(1))
+            {
+                let arg_type = infer_expression_type(analyzer, arg_expr)?;
+
+                if !analyzer.types_compatible(expected_type, &arg_type) {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        format!(
+                            "method {} arg type mismatch: expected {:?}, got {:?}",
+                            method, expected_type, arg_type
+                        ),
+                    )));
+                }
+
+                analyze_expression_nonconsuming(analyzer, arg_expr)?;
+
+                match mode {
+                    ParamMode::Consume => {
+                        if let Expression::Identifier(name) = arg_expr {
+                            analyzer.mark_consumed(name)?;
+                        }
+                    }
+                    ParamMode::Clone => {
+                        if let Expression::Identifier(name) = arg_expr {
+                            let state = analyzer
+                                .branch_contexts
+                                .get(&analyzer.current_branch)
+                                .unwrap();
+                            if state.consumed.contains(name) {
+                                return Err(analyzer.annotate(
+                                    SemanticErrorKind::UseAfterConsume(name.clone()),
+                                ));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            *resolved_routine.borrow_mut() = Some(routine_name);
+            Ok(())
+        }
         Expression::Call { routine, args } => {
             let info = analyzer.routines.get(routine).cloned().ok_or_else(|| {
                 analyzer.annotate(SemanticErrorKind::EntropyMismatch(format!(
@@ -391,7 +536,9 @@ pub(crate) fn analyze_expression_nonconsuming(
 ) -> Result<(), SemanticError> {
     infer_expression_type(analyzer, expr)?;
     match expr {
-        Expression::Call { .. } => analyze_expression(analyzer, expr),
+        Expression::Call { .. } | Expression::MethodCall { .. } => {
+            analyze_expression(analyzer, expr)
+        }
         Expression::Identifier(name) => {
             let state = analyzer
                 .branch_contexts
@@ -493,6 +640,40 @@ pub fn estimate_expression_cost(
                 .map(|info| info.taking_ms)
                 .unwrap_or(0);
             arg_cost + taking_ms
+        }
+        Expression::MethodCall {
+            target,
+            method,
+            args,
+            resolved_routine,
+        } => {
+            let target_cost = estimate_expression_cost(analyzer, target);
+            let arg_cost: u64 = args
+                .iter()
+                .map(|a| estimate_expression_cost(analyzer, a))
+                .sum();
+            let routine_opt = resolved_routine.borrow();
+            let taking_ms = if let Some(ref routine) = *routine_opt {
+                analyzer
+                    .routines
+                    .get(routine)
+                    .map(|info| info.taking_ms)
+                    .unwrap_or(0)
+            } else {
+                let target_type =
+                    infer_expression_type(analyzer, target).unwrap_or(Type::Unknown);
+                if let Type::Custom(struct_name) = target_type {
+                    let routine_name = format!("{}.{}", struct_name, method);
+                    analyzer
+                        .routines
+                        .get(&routine_name)
+                        .map(|info| info.taking_ms)
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            };
+            target_cost + arg_cost + taking_ms
         }
         Expression::BinaryOp { left, right, .. } => {
             1 + estimate_expression_cost(analyzer, left)

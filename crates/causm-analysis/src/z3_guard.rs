@@ -60,7 +60,12 @@ impl SolverBackend for Z3Backend {
         Z3Bool::or(args)
     }
 
-    fn bool_ite(&mut self, cond: &Self::Bool, then: &Self::Bool, orelse: &Self::Bool) -> Self::Bool {
+    fn bool_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Bool,
+        orelse: &Self::Bool,
+    ) -> Self::Bool {
         cond.ite(then, orelse)
     }
 
@@ -104,12 +109,20 @@ impl SolverBackend for Z3Backend {
         a.eq(b)
     }
 
-    fn int_ite(&mut self, cond: &Self::Bool, then: &Self::Int, orelse: &Self::Int) -> Self::Int {
+    fn int_ite(
+        &mut self,
+        cond: &Self::Bool,
+        then: &Self::Int,
+        orelse: &Self::Int,
+    ) -> Self::Int {
         cond.ite(then, orelse)
     }
 
     fn eval_u64(&mut self, val: &Self::Int) -> Option<u64> {
-        self.solver.get_model().and_then(|m| m.eval(val, true)).and_then(|v| v.as_u64())
+        self.solver
+            .get_model()
+            .and_then(|m| m.eval(val, true))
+            .and_then(|v| v.as_u64())
     }
 }
 
@@ -155,8 +168,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
             let mut clock = self.solver.int_from_u64(0);
             let path_cond = self.solver.bool_from_bool(true);
             for spanned in &timeline.statements {
-                clock =
-                    self.verify_statement(spanned, &path_cond, &clock)?;
+                clock = self.verify_statement(spanned, &path_cond, &clock)?;
             }
         }
         Ok(())
@@ -176,10 +188,9 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         match &spanned.stmt {
             Statement::Assignment { target, expr, .. } => {
                 self.verify_expression(expr, path_condition, &current_clock)?;
-                let is_valid = self.solver.bool_const(&format!(
-                    "{}_valid_{}",
-                    target, spanned.span.start
-                ));
+                let is_valid = self
+                    .solver
+                    .bool_const(&format!("{}_valid_{}", target, spanned.span.start));
                 let impl_valid = self.solver.bool_implies(path_condition, &is_valid);
                 self.solver.assert(&impl_valid);
                 self.variable_validity.insert(target.clone(), is_valid);
@@ -189,7 +200,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     target, spanned.span.start
                 ));
                 let not_leased = self.solver.bool_not(&is_leased);
-                let impl_not_leased = self.solver.bool_implies(path_condition, &not_leased);
+                let impl_not_leased =
+                    self.solver.bool_implies(path_condition, &not_leased);
                 self.solver.assert(&impl_not_leased);
                 self.variable_leased.insert(target.clone(), is_leased);
 
@@ -201,13 +213,18 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.consume_variable(value_id, path_condition, spanned.span.start);
 
                 if matches!(&spanned.stmt, Statement::ChannelSend { .. }) {
-                    let new_horizon = self.solver.int_const(&format!("horizon_{}", spanned.span.start));
+                    let new_horizon = self
+                        .solver
+                        .int_const(&format!("horizon_{}", spanned.span.start));
                     let eq_clock = self.solver.int_eq(&new_horizon, &current_clock);
-                    let impl_eq_clock = self.solver.bool_implies(path_condition, &eq_clock);
+                    let impl_eq_clock =
+                        self.solver.bool_implies(path_condition, &eq_clock);
                     self.solver.assert(&impl_eq_clock);
-                    let eq_horizon = self.solver.int_eq(&new_horizon, &self.causal_horizon);
+                    let eq_horizon =
+                        self.solver.int_eq(&new_horizon, &self.causal_horizon);
                     let not_pc = self.solver.bool_not(path_condition);
-                    let impl_eq_horizon = self.solver.bool_implies(&not_pc, &eq_horizon);
+                    let impl_eq_horizon =
+                        self.solver.bool_implies(&not_pc, &eq_horizon);
                     self.solver.assert(&impl_eq_horizon);
                     self.causal_horizon = new_horizon;
                 }
@@ -249,7 +266,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 anchor_name: name, ..
             } => {
                 if let Some(anchor_time) = self.anchors.get(name) {
-                    let paradox = self.solver.int_lt(anchor_time, &self.causal_horizon);
+                    let paradox =
+                        self.solver.int_lt(anchor_time, &self.causal_horizon);
                     self.solver.push();
                     let cond_and = self.solver.bool_and(&[path_condition, &paradox]);
                     self.solver.assert(&cond_and);
@@ -319,20 +337,18 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     let v_else = post_else_validity.get(var).unwrap();
                     let l_then = post_then_leased.get(var).unwrap();
                     let l_else = post_else_leased.get(var).unwrap();
-                    
-                    let m_v = self.solver.bool_const(&format!(
-                        "{}_m_v_{}",
-                        var, spanned.span.start
-                    ));
+
+                    let m_v = self
+                        .solver
+                        .bool_const(&format!("{}_m_v_{}", var, spanned.span.start));
                     let ite_v = self.solver.bool_ite(&cond_bool, v_then, v_else);
                     let eq_v = self.solver.bool_eq(&m_v, &ite_v);
                     self.solver.assert(&eq_v);
                     merged_validity.insert(var.clone(), m_v);
-                    
-                    let m_l = self.solver.bool_const(&format!(
-                        "{}_m_l_{}",
-                        var, spanned.span.start
-                    ));
+
+                    let m_l = self
+                        .solver
+                        .bool_const(&format!("{}_m_l_{}", var, spanned.span.start));
                     let ite_l = self.solver.bool_ite(&cond_bool, l_then, l_else);
                     let eq_l = self.solver.bool_eq(&m_l, &ite_l);
                     self.solver.assert(&eq_l);
@@ -340,8 +356,14 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
                 self.variable_validity = merged_validity;
                 self.variable_leased = merged_leased;
-                let m_h = self.solver.int_const(&format!("h_m_{}", spanned.span.start));
-                let ite_h = self.solver.int_ite(&cond_bool, &post_then_horizon, &post_else_horizon);
+                let m_h = self
+                    .solver
+                    .int_const(&format!("h_m_{}", spanned.span.start));
+                let ite_h = self.solver.int_ite(
+                    &cond_bool,
+                    &post_then_horizon,
+                    &post_else_horizon,
+                );
                 let eq_h = self.solver.int_eq(&m_h, &ite_h);
                 self.solver.assert(&eq_h);
                 self.causal_horizon = m_h;
@@ -361,20 +383,48 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.in_entropy_match = false;
                 res?;
 
-                let valid_cond = self.solver.bool_const(&format!("valid_cond_{}", spanned.span.start));
-                let decayed_cond = self.solver.bool_const(&format!("decayed_cond_{}", spanned.span.start));
-                let pending_cond = self.solver.bool_const(&format!("pending_cond_{}", spanned.span.start));
-                let consumed_cond = self.solver.bool_const(&format!("consumed_cond_{}", spanned.span.start));
+                let valid_cond = self
+                    .solver
+                    .bool_const(&format!("valid_cond_{}", spanned.span.start));
+                let decayed_cond = self
+                    .solver
+                    .bool_const(&format!("decayed_cond_{}", spanned.span.start));
+                let pending_cond = self
+                    .solver
+                    .bool_const(&format!("pending_cond_{}", spanned.span.start));
+                let consumed_cond = self
+                    .solver
+                    .bool_const(&format!("consumed_cond_{}", spanned.span.start));
 
                 let not_dec = self.solver.bool_not(&decayed_cond);
                 let not_pen = self.solver.bool_not(&pending_cond);
                 let not_con = self.solver.bool_not(&consumed_cond);
                 let not_val = self.solver.bool_not(&valid_cond);
 
-                let case_valid = self.solver.bool_and(&[&valid_cond, &not_dec, &not_pen, &not_con]);
-                let case_decayed = self.solver.bool_and(&[&not_val, &decayed_cond, &not_pen, &not_con]);
-                let case_pending = self.solver.bool_and(&[&not_val, &not_dec, &pending_cond, &not_con]);
-                let case_consumed = self.solver.bool_and(&[&not_val, &not_dec, &not_pen, &consumed_cond]);
+                let case_valid = self.solver.bool_and(&[
+                    &valid_cond,
+                    &not_dec,
+                    &not_pen,
+                    &not_con,
+                ]);
+                let case_decayed = self.solver.bool_and(&[
+                    &not_val,
+                    &decayed_cond,
+                    &not_pen,
+                    &not_con,
+                ]);
+                let case_pending = self.solver.bool_and(&[
+                    &not_val,
+                    &not_dec,
+                    &pending_cond,
+                    &not_con,
+                ]);
+                let case_consumed = self.solver.bool_and(&[
+                    &not_val,
+                    &not_dec,
+                    &not_pen,
+                    &consumed_cond,
+                ]);
 
                 let one_of_four = self.solver.bool_or(&[
                     &case_valid,
@@ -382,7 +432,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     &case_pending,
                     &case_consumed,
                 ]);
-                let impl_one_of_four = self.solver.bool_implies(path_condition, &one_of_four);
+                let impl_one_of_four =
+                    self.solver.bool_implies(path_condition, &one_of_four);
                 self.solver.assert(&impl_one_of_four);
 
                 let pre_match_validity = self.variable_validity.clone();
@@ -395,22 +446,25 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 // 1. Valid branch
                 let mut valid_clock = branch_start_clock.clone();
                 if let Some((binding, branch_body)) = valid_branch {
-                    let valid_pc = self.solver.bool_and(&[path_condition, &valid_cond]);
+                    let valid_pc =
+                        self.solver.bool_and(&[path_condition, &valid_cond]);
                     if !binding.is_empty() {
                         let is_valid = self.solver.bool_const(&format!(
                             "{}_valid_{}",
                             binding, spanned.span.start
                         ));
-                        let impl_is_valid = self.solver.bool_implies(&valid_pc, &is_valid);
+                        let impl_is_valid =
+                            self.solver.bool_implies(&valid_pc, &is_valid);
                         self.solver.assert(&impl_is_valid);
                         self.variable_validity.insert(binding.clone(), is_valid);
-                        
+
                         let is_leased = self.solver.bool_const(&format!(
                             "{}_leased_{}",
                             binding, spanned.span.start
                         ));
                         let not_leased = self.solver.bool_not(&is_leased);
-                        let impl_not_leased = self.solver.bool_implies(&valid_pc, &not_leased);
+                        let impl_not_leased =
+                            self.solver.bool_implies(&valid_pc, &not_leased);
                         self.solver.assert(&impl_not_leased);
                         self.variable_leased.insert(binding.clone(), is_leased);
                     }
@@ -430,22 +484,25 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut decayed_clock = branch_start_clock.clone();
                 if let Some((binding, branch_body)) = decayed_branch {
-                    let decayed_pc = self.solver.bool_and(&[path_condition, &decayed_cond]);
+                    let decayed_pc =
+                        self.solver.bool_and(&[path_condition, &decayed_cond]);
                     if !binding.is_empty() {
                         let is_valid = self.solver.bool_const(&format!(
                             "{}_valid_{}",
                             binding, spanned.span.start
                         ));
-                        let impl_is_valid = self.solver.bool_implies(&decayed_pc, &is_valid);
+                        let impl_is_valid =
+                            self.solver.bool_implies(&decayed_pc, &is_valid);
                         self.solver.assert(&impl_is_valid);
                         self.variable_validity.insert(binding.clone(), is_valid);
-                        
+
                         let is_leased = self.solver.bool_const(&format!(
                             "{}_leased_{}",
                             binding, spanned.span.start
                         ));
                         let not_leased = self.solver.bool_not(&is_leased);
-                        let impl_not_leased = self.solver.bool_implies(&decayed_pc, &not_leased);
+                        let impl_not_leased =
+                            self.solver.bool_implies(&decayed_pc, &not_leased);
                         self.solver.assert(&impl_not_leased);
                         self.variable_leased.insert(binding.clone(), is_leased);
                     }
@@ -468,7 +525,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut pending_clock = branch_start_clock.clone();
                 if let Some(branch_body) = pending_branch {
-                    let pending_pc = self.solver.bool_and(&[path_condition, &pending_cond]);
+                    let pending_pc =
+                        self.solver.bool_and(&[path_condition, &pending_cond]);
                     for stmt in branch_body {
                         pending_clock = self.verify_statement(
                             stmt,
@@ -487,7 +545,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut consumed_clock = branch_start_clock.clone();
                 if let Some(branch_body) = consumed_branch {
-                    let consumed_pc = self.solver.bool_and(&[path_condition, &consumed_cond]);
+                    let consumed_pc =
+                        self.solver.bool_and(&[path_condition, &consumed_cond]);
                     for stmt in branch_body {
                         consumed_clock = self.verify_statement(
                             stmt,
@@ -516,29 +575,20 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
 
                 let bool_false = self.solver.bool_from_bool(false);
                 for var in all_vars {
-                    let v_val = post_val_validity
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let v_dec = post_dec_validity
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let v_pen = post_pen_validity
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let v_con = post_con_validity
-                        .get(&var)
-                        .unwrap_or(&bool_false);
+                    let v_val = post_val_validity.get(&var).unwrap_or(&bool_false);
+                    let v_dec = post_dec_validity.get(&var).unwrap_or(&bool_false);
+                    let v_pen = post_pen_validity.get(&var).unwrap_or(&bool_false);
+                    let v_con = post_con_validity.get(&var).unwrap_or(&bool_false);
 
-                    let m_v = self.solver.bool_const(&format!(
-                        "{}_m_v_{}",
-                        var, spanned.span.start
-                    ));
-                    
+                    let m_v = self
+                        .solver
+                        .bool_const(&format!("{}_m_v_{}", var, spanned.span.start));
+
                     let case_val_v = self.solver.bool_and(&[&valid_cond, v_val]);
                     let case_dec_v = self.solver.bool_and(&[&decayed_cond, v_dec]);
                     let case_pen_v = self.solver.bool_and(&[&pending_cond, v_pen]);
                     let case_con_v = self.solver.bool_and(&[&consumed_cond, v_con]);
-                    
+
                     let val_expr = self.solver.bool_or(&[
                         &case_val_v,
                         &case_dec_v,
@@ -549,29 +599,20 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     self.solver.assert(&eq_v);
                     merged_validity.insert(var.clone(), m_v);
 
-                    let l_val = post_val_leased
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let l_dec = post_dec_leased
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let l_pen = post_pen_leased
-                        .get(&var)
-                        .unwrap_or(&bool_false);
-                    let l_con = post_con_leased
-                        .get(&var)
-                        .unwrap_or(&bool_false);
+                    let l_val = post_val_leased.get(&var).unwrap_or(&bool_false);
+                    let l_dec = post_dec_leased.get(&var).unwrap_or(&bool_false);
+                    let l_pen = post_pen_leased.get(&var).unwrap_or(&bool_false);
+                    let l_con = post_con_leased.get(&var).unwrap_or(&bool_false);
 
-                    let m_l = self.solver.bool_const(&format!(
-                        "{}_m_l_{}",
-                        var, spanned.span.start
-                    ));
-                    
+                    let m_l = self
+                        .solver
+                        .bool_const(&format!("{}_m_l_{}", var, spanned.span.start));
+
                     let case_val_l = self.solver.bool_and(&[&valid_cond, l_val]);
                     let case_dec_l = self.solver.bool_and(&[&decayed_cond, l_dec]);
                     let case_pen_l = self.solver.bool_and(&[&pending_cond, l_pen]);
                     let case_con_l = self.solver.bool_and(&[&consumed_cond, l_con]);
-                    
+
                     let leased_expr = self.solver.bool_or(&[
                         &case_val_l,
                         &case_dec_l,
@@ -586,19 +627,43 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_validity = merged_validity;
                 self.variable_leased = merged_leased;
 
-                let m_h = self.solver.int_const(&format!("h_m_{}", spanned.span.start));
-                
-                let inner_ite1 = self.solver.int_ite(&pending_cond, &post_pen_horizon, &post_con_horizon);
-                let inner_ite2 = self.solver.int_ite(&decayed_cond, &post_dec_horizon, &inner_ite1);
-                let h_expr = self.solver.int_ite(&valid_cond, &post_val_horizon, &inner_ite2);
-                
+                let m_h = self
+                    .solver
+                    .int_const(&format!("h_m_{}", spanned.span.start));
+
+                let inner_ite1 = self.solver.int_ite(
+                    &pending_cond,
+                    &post_pen_horizon,
+                    &post_con_horizon,
+                );
+                let inner_ite2 = self.solver.int_ite(
+                    &decayed_cond,
+                    &post_dec_horizon,
+                    &inner_ite1,
+                );
+                let h_expr =
+                    self.solver
+                        .int_ite(&valid_cond, &post_val_horizon, &inner_ite2);
+
                 let eq_h = self.solver.int_eq(&m_h, &h_expr);
                 self.solver.assert(&eq_h);
                 self.causal_horizon = m_h;
 
-                let inner_clock_ite1 = self.solver.int_ite(&pending_cond, &pending_clock, &consumed_clock);
-                let inner_clock_ite2 = self.solver.int_ite(&decayed_cond, &decayed_clock, &inner_clock_ite1);
-                let final_clock = self.solver.int_ite(&valid_cond, &valid_clock, &inner_clock_ite2);
+                let inner_clock_ite1 = self.solver.int_ite(
+                    &pending_cond,
+                    &pending_clock,
+                    &consumed_clock,
+                );
+                let inner_clock_ite2 = self.solver.int_ite(
+                    &decayed_cond,
+                    &decayed_clock,
+                    &inner_clock_ite1,
+                );
+                let final_clock = self.solver.int_ite(
+                    &valid_cond,
+                    &valid_clock,
+                    &inner_clock_ite2,
+                );
 
                 Ok(final_clock)
             }
@@ -679,7 +744,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         "{}_v1_{}",
                         item_name, spanned.span.start
                     ));
-                    let impl_valid = self.solver.bool_implies(path_condition, &item_valid);
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
                     for stmt in body {
@@ -695,7 +761,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         "{}_v2_{}",
                         item_name, spanned.span.start
                     ));
-                    let impl_valid = self.solver.bool_implies(path_condition, &item_valid);
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
                     let mut unroll_clock = loop_clock.clone();
@@ -712,7 +779,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     let pacing_int = self.solver.int_from_u64(*pacing);
                     let violation = self.solver.int_gt(&loop_clock, &pacing_int);
                     self.solver.push();
-                    let cond_and = self.solver.bool_and(&[path_condition, &violation]);
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
                     self.solver.assert(&cond_and);
                     if self.solver.check() {
                         self.solver.pop(1);
@@ -733,14 +801,12 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let mut routine_verifier = FormalVerifier::<S>::new(self.analyzer);
                 let true_bool = routine_verifier.solver.bool_from_bool(true);
                 for p in params {
-                    let is_valid = routine_verifier.solver.bool_const(&format!(
-                        "{}_p_{}",
-                        p.name, spanned.span.start
-                    ));
-                    let eq_true = routine_verifier.solver.bool_eq(&is_valid, &true_bool);
-                    routine_verifier
+                    let is_valid = routine_verifier
                         .solver
-                        .assert(&eq_true);
+                        .bool_const(&format!("{}_p_{}", p.name, spanned.span.start));
+                    let eq_true =
+                        routine_verifier.solver.bool_eq(&is_valid, &true_bool);
+                    routine_verifier.solver.assert(&eq_true);
                     routine_verifier
                         .variable_validity
                         .insert(p.name.clone(), is_valid);
@@ -755,11 +821,15 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
                 if let Some(limit) = taking_ms {
                     let limit_int = routine_verifier.solver.int_from_u64(*limit);
-                    let violation = routine_verifier.solver.int_gt(&body_clock, &limit_int);
+                    let violation =
+                        routine_verifier.solver.int_gt(&body_clock, &limit_int);
                     routine_verifier.solver.push();
                     routine_verifier.solver.assert(&violation);
                     if routine_verifier.solver.check() {
-                        let actual_wcet = routine_verifier.solver.eval_u64(&body_clock).unwrap_or(0);
+                        let actual_wcet = routine_verifier
+                            .solver
+                            .eval_u64(&body_clock)
+                            .unwrap_or(0);
                         routine_verifier.solver.pop(1);
                         return Err(self.analyzer.annotate(
                             SemanticErrorKind::TemporalAssertionViolation(
@@ -824,7 +894,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     "{}_leased_{}",
                     binding, spanned.span.start
                 ));
-                let impl_leased = self.solver.bool_implies(path_condition, &is_leased);
+                let impl_leased =
+                    self.solver.bool_implies(path_condition, &is_leased);
                 self.solver.assert(&impl_leased);
                 self.variable_leased.insert(binding.clone(), is_leased);
 
@@ -868,7 +939,9 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         path_condition: &S::Bool,
         span_start: usize,
     ) {
-        let new_valid = self.solver.bool_const(&format!("{}_consumed_{}", name, span_start));
+        let new_valid = self
+            .solver
+            .bool_const(&format!("{}_consumed_{}", name, span_start));
         let not_valid = self.solver.bool_not(&new_valid);
         let impl_not_valid = self.solver.bool_implies(path_condition, &not_valid);
         self.solver.assert(&impl_not_valid);
@@ -889,7 +962,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 other, name, span_start
             ));
             let not_valid = self.solver.bool_not(&other_valid);
-            let impl_not_valid = self.solver.bool_implies(path_condition, &not_valid);
+            let impl_not_valid =
+                self.solver.bool_implies(path_condition, &not_valid);
             self.solver.assert(&impl_not_valid);
             self.variable_validity.insert(other, other_valid);
         }

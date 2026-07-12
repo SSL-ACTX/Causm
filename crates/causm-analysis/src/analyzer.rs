@@ -327,7 +327,9 @@ impl EntropicAnalyzer {
 
         // Formal Verification Guard
         if self.use_z3 {
-            let mut verifier = crate::z3_guard::FormalVerifier::<crate::z3_guard::Z3Backend>::new(self);
+            let mut verifier = crate::z3_guard::FormalVerifier::<
+                crate::z3_guard::Z3Backend,
+            >::new(self);
             verifier.verify(program)?;
         }
 
@@ -768,6 +770,21 @@ impl EntropicAnalyzer {
             Expression::Float(bits) => format!("{}", f64::from_bits(*bits)),
             Expression::Deferred { capability, .. } => {
                 format!("defer {}(...)", capability)
+            }
+            Expression::MethodCall {
+                target,
+                method,
+                args,
+                ..
+            } => {
+                let args_str: Vec<String> =
+                    args.iter().map(|e| self.expr_snippet(e)).collect();
+                format!(
+                    "{}.{}({})",
+                    self.expr_snippet(target),
+                    method,
+                    args_str.join(", ")
+                )
             }
             Expression::Call { routine, args } => {
                 let args_str: Vec<String> =

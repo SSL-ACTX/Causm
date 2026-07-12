@@ -71,6 +71,25 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                             index: Box::new(index),
                         };
                     }
+                    Rule::method_call_tail => {
+                        let mut call_inner = access_pair.into_inner();
+                        let method = call_inner
+                            .next()
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_default();
+                        let mut args = Vec::new();
+                        if let Some(arg_list_pair) = call_inner.next() {
+                            for arg in arg_list_pair.into_inner() {
+                                args.push(parse_expression(arg));
+                            }
+                        }
+                        expr = Expression::MethodCall {
+                            target: Box::new(expr),
+                            method,
+                            args,
+                            resolved_routine: std::cell::RefCell::new(None),
+                        };
+                    }
                     Rule::field_access_tail => {
                         let field = access_pair
                             .into_inner()

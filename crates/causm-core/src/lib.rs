@@ -238,6 +238,12 @@ macro_rules! expressions {
                 routine: String,
                 args: Vec<Expression>
             },
+            MethodCall {
+                target: Box<Expression>,
+                method: String,
+                args: Vec<Expression>,
+                resolved_routine: std::cell::RefCell<Option<String>>
+            },
             Literal(String),
             Identifier(String),
             FieldAccess {

@@ -24,7 +24,7 @@ impl EntropicAnalyzer {
         analyze_expression(self, expr)?;
         let inferred_type = crate::expression::infer_expression_type(self, expr)?;
 
-        if let Some(explicit_type_name) = var_type {
+        let final_type = if let Some(explicit_type_name) = var_type {
             let explicit_type =
                 causm_core::types::Type::from_typename(explicit_type_name);
             if !self.types_compatible(&explicit_type, &inferred_type) {
@@ -35,6 +35,7 @@ impl EntropicAnalyzer {
                     ),
                 )));
             }
+            explicit_type
         } else if let Some(existing_type) = self.get_variable_type(target) {
             if !self.types_compatible(&existing_type, &inferred_type) {
                 return Err(self.annotate(SemanticErrorKind::TypeMismatch(
@@ -44,13 +45,16 @@ impl EntropicAnalyzer {
                     ),
                 )));
             }
-        }
+            existing_type
+        } else {
+            inferred_type
+        };
 
         let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
         if *mutable {
             branch.mutables.insert(target.clone());
         }
-        branch.types.insert(target.clone(), inferred_type);
+        branch.types.insert(target.clone(), final_type);
         branch.produced.insert(target.clone());
         branch.consumed.remove(target);
         branch

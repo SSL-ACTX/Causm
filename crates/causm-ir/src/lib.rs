@@ -319,7 +319,9 @@ impl std::fmt::Display for IrProgram {
             writeln!(f, "routine {} taking {:?}ms:", name, routine.taking_ms)?;
             for (i, instr) in routine.instructions.iter().enumerate() {
                 let span_str = match routine.spans.get(i) {
-                    Some(Some(span)) => format!(" // span: {}-{}", span.start, span.end),
+                    Some(Some(span)) => {
+                        format!(" // span: {}-{}", span.start, span.end)
+                    }
                     _ => "".to_string(),
                 };
                 writeln!(f, "  {:>3}: {:?}{}", i, instr, span_str)?;
@@ -329,7 +331,9 @@ impl std::fmt::Display for IrProgram {
             writeln!(f, "@{}:", block.time)?;
             for (i, instr) in block.instructions.iter().enumerate() {
                 let span_str = match block.spans.get(i) {
-                    Some(Some(span)) => format!(" // span: {}-{}", span.start, span.end),
+                    Some(Some(span)) => {
+                        format!(" // span: {}-{}", span.start, span.end)
+                    }
                     _ => "".to_string(),
                 };
                 writeln!(f, "  {:>3}: {:?}{}", i, instr, span_str)?;

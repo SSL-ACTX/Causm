@@ -641,7 +641,12 @@ pub fn dead_code_elimination(
 
 pub trait OptimizationPass {
     fn name(&self) -> &str;
-    fn run(&self, ssa_cfg: &mut SsaCFG, globally_used_regs: &HashSet<u32>, is_routine: bool) -> bool;
+    fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        globally_used_regs: &HashSet<u32>,
+        is_routine: bool,
+    ) -> bool;
 }
 
 #[derive(Default)]
@@ -685,7 +690,12 @@ impl OptimizationPass for DeadCodeEliminationPass {
         "DeadCodeElimination"
     }
 
-    fn run(&self, ssa_cfg: &mut SsaCFG, globally_used_regs: &HashSet<u32>, is_routine: bool) -> bool {
+    fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        globally_used_regs: &HashSet<u32>,
+        is_routine: bool,
+    ) -> bool {
         dead_code_elimination(ssa_cfg, globally_used_regs, is_routine)
     }
 }
@@ -697,7 +707,12 @@ impl OptimizationPass for BlockCoalescingPass {
         "BlockCoalescing"
     }
 
-    fn run(&self, ssa_cfg: &mut SsaCFG, _globally_used_regs: &HashSet<u32>, _is_routine: bool) -> bool {
+    fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        _globally_used_regs: &HashSet<u32>,
+        _is_routine: bool,
+    ) -> bool {
         let mut changed = false;
 
         loop {
@@ -727,7 +742,9 @@ impl OptimizationPass for BlockCoalescingPass {
 
                 let mut b_instructions = Vec::new();
                 for phi in block_b.phi_nodes {
-                    if let Some((_, src_reg)) = phi.incoming.iter().find(|(pred, _)| *pred == id_a) {
+                    if let Some((_, src_reg)) =
+                        phi.incoming.iter().find(|(pred, _)| *pred == id_a)
+                    {
                         b_instructions.push(SsaInstruction::Move {
                             dest: phi.dest,
                             src: *src_reg,
@@ -1260,9 +1277,15 @@ mod tests {
     #[test]
     fn test_block_coalescing_pass() {
         let instrs = vec![
-            Instruction::LoadInt { dest: Reg(0), value: 5 },
+            Instruction::LoadInt {
+                dest: Reg(0),
+                value: 5,
+            },
             Instruction::Jump { target: 2 },
-            Instruction::LoadInt { dest: Reg(1), value: 10 },
+            Instruction::LoadInt {
+                dest: Reg(1),
+                value: 10,
+            },
             Instruction::Return { src: Some(Reg(1)) },
         ];
 
@@ -1278,7 +1301,7 @@ mod tests {
         assert_eq!(ssa_cfg.blocks.len(), 1);
         let block0 = ssa_cfg.blocks.get(&0).unwrap();
         assert_eq!(block0.instructions.len(), 2);
-        
+
         match &block0.terminator {
             SsaTerminator::Return { src } => {
                 assert!(src.is_some());
