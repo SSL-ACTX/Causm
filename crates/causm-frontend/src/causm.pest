@@ -54,7 +54,10 @@ statement = {
     | entangle_stmt
     | field_update_stmt
     | slice_stmt
+    | expression_stmt
 }
+
+expression_stmt = { expression }
 
 entangle_stmt = { "entangle" ~ "(" ~ identifier_list ~ ")" }
 

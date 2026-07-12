@@ -695,7 +695,19 @@ impl EntropicAnalyzer {
                 if exp_struct.fields.is_empty() {
                     true
                 } else {
-                    exp_struct.fields == act_struct.fields
+                    let mut compatible = true;
+                    for (name, exp_field_ty) in &exp_struct.fields {
+                        if let Some(act_field_ty) = act_struct.fields.get(name) {
+                            if exp_field_ty != act_field_ty {
+                                compatible = false;
+                                break;
+                            }
+                        } else {
+                            compatible = false;
+                            break;
+                        }
+                    }
+                    compatible
                 }
             }
             (Type::Topology(exp_fields), Type::Topology(act_fields)) => {

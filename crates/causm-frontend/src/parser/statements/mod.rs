@@ -70,6 +70,12 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::debug_stmt
         | Rule::inspect_stmt => misc::parse_misc_stmt(pair),
 
+        Rule::expression_stmt => {
+            let inner_expr = pair.into_inner().next().unwrap();
+            Statement::Expression(crate::parser::expressions::parse_expression(
+                inner_expr,
+            ))
+        }
         _ => {
             Statement::Expression(crate::parser::expressions::parse_expression(pair))
         }

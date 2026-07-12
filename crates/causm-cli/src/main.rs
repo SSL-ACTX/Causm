@@ -147,6 +147,19 @@ fn main() -> anyhow::Result<()> {
             println!("AST for {}:\n{:#?}", path.display(), program);
         }
 
+        let mut analyzer = EntropicAnalyzer::new();
+        if let Err(err) = analyzer.analyze_program_with_source(
+            &program,
+            &source,
+            &path.display().to_string(),
+        ) {
+            let formatted = analyzer.format_semantic_error(&err);
+            eprintln!("error: {}", formatted);
+            continue;
+        }
+
+        println!("\x1b[1;32m{}: analysis ok\x1b[0m", path.display());
+
         if dump_ir {
             let ir_program = lower::lower_program(&program);
             println!("IR for {}:\n{}", path.display(), ir_program);
@@ -191,19 +204,6 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", ssa_cfg);
             }
         }
-
-        let mut analyzer = EntropicAnalyzer::new();
-        if let Err(err) = analyzer.analyze_program_with_source(
-            &program,
-            &source,
-            &path.display().to_string(),
-        ) {
-            let formatted = analyzer.format_semantic_error(&err);
-            eprintln!("error: {}", formatted);
-            continue;
-        }
-
-        println!("\x1b[1;32m{}: analysis ok\x1b[0m", path.display());
 
         if run_program {
             let mut ir_program = lower::lower_program(&program);

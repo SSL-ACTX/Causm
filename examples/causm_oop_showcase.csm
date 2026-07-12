@@ -1,0 +1,98 @@
+@0ms: {
+    // 1. Struct Composition (Inheritance)
+    type Actor = struct {
+        id: int,
+        name: string
+    }
+
+    type Robot = Actor + struct decay_after 100ms {
+        model: string
+    }
+
+    type PlayableRobot = Robot + struct {
+        score: int
+    }
+
+    // 2. Struct Method Inheritance
+    routine Actor.introduce(peek self) -> int taking 20ms {
+        let name = self.name
+        print("Hello, I am Actor: " + name)
+        let res = 0
+        yield res
+    }
+
+    // 3. Struct Method Overriding
+    routine Robot.status(peek self) -> int taking 20ms {
+        print("Robot status: active")
+        let res = 0
+        yield res
+    }
+
+    routine PlayableRobot.status(peek self) -> int taking 20ms {
+        let score = self.score
+        print("Playable Robot status: active, score=" + score)
+        let res = 0
+        yield res
+    }
+
+    // 4. Interface Composition & Default Method
+    interface Worker {
+        routine work(consume self) -> int taking 20ms
+    }
+
+    interface PlayableWorker = Worker + interface {
+        routine play(peek self) -> int taking 20ms {
+            let bonus = 100
+            yield bonus
+        }
+    }
+
+    // Implement Worker interface for PlayableRobot
+    routine PlayableRobot.work(consume self) -> int taking 20ms {
+        print("Robot is working...")
+        let res = 0
+        yield res
+    }
+
+    // 5. Entropic State Gate Constraints
+    routine Robot.check_battery(peek self) -> int taking 20ms where self.state == Valid {
+        print("Battery OK")
+        let res = 0
+        yield res
+    }
+
+    // Let's create an instance of PlayableRobot
+    let r: PlayableRobot = struct {
+        id = 42,
+        name = "T-800",
+        model = "Cyberdyne Model 101",
+        score = 999
+    }
+
+    // Call inherited method
+    r.introduce()
+
+    // Call overridden method
+    r.status()
+
+    // Call state-constrained method
+    r.check_battery()
+
+    // Assign to composed interface (PlayableRobot implements PlayableWorker implicitly)
+    let w: PlayableWorker = r
+
+    // Call interface method (runs the default implementation!)
+    let bonus = w.play()
+
+    // 6. Guarded Type Assertion (Downcasting)
+    if let robot = w.(PlayableRobot) {
+        inspect r_temp = robot {
+            let model = r_temp.model
+            print("Downcast successful! Model: " + model)
+        }
+        // Consume the downcasted robot to satisfy EGC
+        robot.work()
+    } else {
+        print("Downcast failed.")
+    }
+}
