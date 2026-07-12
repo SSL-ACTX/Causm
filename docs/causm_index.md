@@ -15,6 +15,7 @@ The following documents define the formal behavior, syntax, and semantics of Cau
 - **[Speculative Branches](./spec/causm_spec_speculation.md)**: Micro-timelines and rollback mechanisms.
 - **[Temporal Leases](./spec/causm_spec_leases.md)**: Transient, time-bound memory borrowing.
 - **[Type System](./spec/causm_spec_types.md)**: Entropic types (int/float) and temporal contracts.
+- **[Object-Oriented Programming](./spec/causm_spec_oop.md)**: Struct types, default values, constants, and methods.
 - **[Topological Field Access](./spec/causm_spec_topologies.md)**: Memory layout and field-level entropy.
 - **[Asynchronous Promises](./spec/causm_spec_promises.md)**: Temporal promises and causal synchronization.
 - **[Timeline Routing](./spec/causm_spec_temporal_routing.md)**: Advanced routing across isolated timelines.

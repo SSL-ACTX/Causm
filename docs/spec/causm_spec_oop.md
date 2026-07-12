@@ -1,0 +1,77 @@
+# Specification: Object-Oriented Programming (OOP) in Causm
+
+## 1. Core Principles
+Causm provides a lightweight, entropic-aware Object-Oriented Programming (OOP) model. Unlike traditional languages that bundle state mutation directly, Causm enforces **Entropic Safety** and **Temporal Budgets** on method invocations and instantiation.
+
+## 2. Struct Declarations
+
+Structs represent structured records. A struct type is declared using the `type` keyword.
+
+### 2.1 Default Field Values
+Fields can specify optional default values to simplify initialization.
+```causm
+type Player = struct {
+    score: int = 0,
+    level: int = 1,
+    name: string = "Anonymous"
+}
+```
+If an instantiation omits fields that have default values, the compiler automatically populates them at construction time.
+
+### 2.2 Associated Constants
+Associated constants represent static, type-scoped compile-time constants. They are defined using the `const` keyword inside the struct definition.
+```causm
+type Config = struct {
+    const MAX_SCORE: int = 9999,
+    port: int = 8080
+}
+```
+Associated constants do not occupy instance memory and are accessed via dot-notation directly on the type name:
+```causm
+let limit = Config.MAX_SCORE
+```
+
+## 3. Methods
+
+Methods are routines associated with a struct type. They are defined using dot-notation: `TypeName.MethodName`.
+
+### 3.1 Receiver Parameter
+The first parameter of a method must be `self`, which represents the instance receiver. The type of `self` is automatically inferred to be the struct type.
+The receiver parameter requires a parameter mode (`consume`, `peek`, or `clone`):
+*   `consume self`: Consumes the instance, moving ownership into the method.
+*   `peek self`: Grants read-only access (borrow) without consuming or copying.
+*   `clone self`: Automatically clones the instance.
+
+```causm
+routine Player.get_score(peek self) -> int (taking 2ms) {
+    let s = self.score
+    yield s
+}
+```
+
+### 3.2 Method Chaining
+Methods that consume `self` and return a new instance of the type can be chained together in a fluent API style.
+```causm
+routine Player.add_score(consume self, clone amount: int) -> Player (taking 10ms) {
+    let new_score = self.score + amount
+    let p2: Player = struct { score = new_score }
+    yield p2
+}
+
+let p: Player = struct { score = 42 }
+let p2: Player = p.add_score(5).add_score(10)
+```
+
+## 4. Static Methods & Constructors
+
+Routines declared on a type that do not have `self` as their first parameter act as **Static Methods** or **Constructors**.
+```causm
+routine Player.new(clone score: int) -> Player (taking 4ms) {
+    let p: Player = struct { score = score }
+    yield p
+}
+```
+Static methods are invoked using the `call` keyword followed by the dot-separated routine name:
+```causm
+let p: Player = call Player.new(42)
+```
