@@ -317,14 +317,14 @@ pub(crate) fn analyze_expression(
                     })?;
 
             if args.len() + 1 != info.params.len() {
-                return Err(analyzer.annotate(SemanticErrorKind::EntropyMismatch(
-                    format!(
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::ArgumentCountMismatch(format!(
                         "method {} expects {} arguments (excluding self), got {}",
                         method,
                         info.params.len() - 1,
                         args.len()
-                    ),
-                )));
+                    )),
+                ));
             }
 
             let (self_mode, _self_name, self_type) = &info.params[0];
@@ -418,14 +418,14 @@ pub(crate) fn analyze_expression(
             })?;
 
             if args.len() != info.params.len() {
-                return Err(analyzer.annotate(SemanticErrorKind::EntropyMismatch(
-                    format!(
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::ArgumentCountMismatch(format!(
                         "routine {} expects {} args, got {}",
                         routine,
                         info.params.len(),
                         args.len()
-                    ),
-                )));
+                    )),
+                ));
             }
 
             for (arg_expr, (mode, _param_name, expected_type)) in

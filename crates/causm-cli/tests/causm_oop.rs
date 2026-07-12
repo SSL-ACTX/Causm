@@ -86,11 +86,8 @@ fn causm_oop_method_type_mismatch() -> anyhow::Result<()> {
     assert!(result.is_err());
     let err = result.unwrap_err();
     match *err.kind {
-        SemanticErrorKind::EntropyMismatch(_) => {}
-        _ => panic!(
-            "Expected EntropyMismatch/Argument count mismatch, got {:?}",
-            err.kind
-        ),
+        SemanticErrorKind::ArgumentCountMismatch(_) => {}
+        _ => panic!("Expected ArgumentCountMismatch, got {:?}", err.kind),
     }
 
     Ok(())

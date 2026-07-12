@@ -57,6 +57,8 @@ pub enum SemanticErrorKind {
     IllegalLeaseControlFlow,
     #[error("Compile-Time Entropic Leak: Variable '{0}' remains Valid or Decayed at program termination without being consumed.")]
     UnconsumedVariable(String),
+    #[error("Argument count mismatch: {0}")]
+    ArgumentCountMismatch(String),
 }
 
 #[derive(Debug)]
