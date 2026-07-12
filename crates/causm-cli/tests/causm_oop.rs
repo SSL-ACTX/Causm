@@ -95,3 +95,30 @@ fn causm_oop_method_type_mismatch() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_oop_constructor_call() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Player = struct { score: int }
+
+        routine Player.new(clone score: int) -> Player (taking 4ms) {
+            let p: Player = struct { score = score }
+            yield p
+        }
+
+        let p: Player = call Player.new(42)
+        let _p = p
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
