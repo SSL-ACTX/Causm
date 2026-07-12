@@ -37,6 +37,7 @@ impl Vm {
             next_payload_id: 0,
             trace_entropy: false,
             _is_decaying: false,
+            current_span: None,
         }
     }
 
@@ -102,6 +103,7 @@ impl Vm {
                 return_type: ir_routine.return_type.clone(),
                 taking_ms: ir_routine.taking_ms,
                 instructions: ir_routine.instructions.clone(),
+                spans: ir_routine.spans.clone(),
             };
             self.routines.insert(name.clone(), routine);
         }
@@ -116,6 +118,7 @@ impl Vm {
             {
                 let branch = self.get_branch_mut(branch_id)?;
                 branch.instructions = block.instructions.clone();
+                branch.spans = block.spans.clone();
                 branch.pc = 0;
             }
 
@@ -217,13 +220,17 @@ impl Vm {
             branch.consume_budget(1)?;
         }
 
-        let instr = {
+        let (instr, span) = {
             let branch = self.get_branch_mut(branch_id)?;
             if branch.pc >= branch.instructions.len() {
                 return Ok(());
             }
-            branch.instructions[branch.pc].clone()
+            (
+                branch.instructions[branch.pc].clone(),
+                branch.spans.get(branch.pc).cloned().flatten(),
+            )
         };
+        self.current_span = span;
 
         // Advance PC before execution to handle jumps correctly
         {
@@ -463,6 +470,7 @@ impl Timeline {
             loop_stack: Vec::new(),
             pc: 0,
             instructions: Vec::new(),
+            spans: Vec::new(),
         }
     }
 

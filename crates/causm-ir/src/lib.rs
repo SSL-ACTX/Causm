@@ -303,12 +303,14 @@ pub struct IrRoutine {
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
     pub instructions: Vec<Instruction>,
+    pub spans: Vec<Option<causm_core::Span>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrBlock {
     pub time: TimeCoordinate,
     pub instructions: Vec<Instruction>,
+    pub spans: Vec<Option<causm_core::Span>>,
 }
 
 impl std::fmt::Display for IrProgram {
@@ -316,13 +318,21 @@ impl std::fmt::Display for IrProgram {
         for (name, routine) in &self.routines {
             writeln!(f, "routine {} taking {:?}ms:", name, routine.taking_ms)?;
             for (i, instr) in routine.instructions.iter().enumerate() {
-                writeln!(f, "  {:>3}: {:?}", i, instr)?;
+                let span_str = match routine.spans.get(i) {
+                    Some(Some(span)) => format!(" // span: {}-{}", span.start, span.end),
+                    _ => "".to_string(),
+                };
+                writeln!(f, "  {:>3}: {:?}{}", i, instr, span_str)?;
             }
         }
         for block in &self.blocks {
             writeln!(f, "@{}:", block.time)?;
             for (i, instr) in block.instructions.iter().enumerate() {
-                writeln!(f, "  {:>3}: {:?}", i, instr)?;
+                let span_str = match block.spans.get(i) {
+                    Some(Some(span)) => format!(" // span: {}-{}", span.start, span.end),
+                    _ => "".to_string(),
+                };
+                writeln!(f, "  {:>3}: {:?}{}", i, instr, span_str)?;
             }
         }
         Ok(())

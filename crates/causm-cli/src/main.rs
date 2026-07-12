@@ -227,9 +227,21 @@ fn main() -> anyhow::Result<()> {
             });
 
             if let Err(e) = vm.execute_program(&ir_program) {
+                let location_info = if let Some(ref span) = vm.current_span {
+                    let before = &source[..span.start];
+                    let ln = before.lines().count() + 1;
+                    let col = before
+                        .lines()
+                        .last()
+                        .map(|line| line.len() + 1)
+                        .unwrap_or(1);
+                    format!(" at {}:{}:{}", path.display(), ln, col)
+                } else {
+                    format!(" in {}", path.display())
+                };
                 eprintln!(
-                    "\x1b[1;31merror: runtime failure in {}\x1b[0m\n  cause: {}",
-                    path.display(),
+                    "\x1b[1;31merror: runtime failure{}\x1b[0m\n  cause: {}",
+                    location_info,
                     e
                 );
             }

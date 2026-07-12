@@ -1,4 +1,4 @@
-use causm_core::{Expression, Program, Statement};
+use causm_core::{Expression, Program, Statement, SpannedStatement};
 use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
 
@@ -6,8 +6,10 @@ struct LoweringContext {
     next_reg: u32,
     symbols: HashMap<String, Reg>,
     instructions: Vec<Instruction>,
+    spans: Vec<Option<causm_core::Span>>,
     routines: HashMap<String, IrRoutine>,
     type_decay_limits: HashMap<String, u64>,
+    current_span: Option<causm_core::Span>,
 }
 
 impl LoweringContext {
@@ -16,8 +18,10 @@ impl LoweringContext {
             next_reg: 0,
             symbols: HashMap::new(),
             instructions: Vec::new(),
+            spans: Vec::new(),
             routines: HashMap::new(),
             type_decay_limits: HashMap::new(),
+            current_span: None,
         }
     }
 
@@ -39,7 +43,15 @@ impl LoweringContext {
 
     fn push(&mut self, instr: Instruction) {
         self.instructions.push(instr);
+        self.spans.push(self.current_span.clone());
     }
+}
+
+fn lower_spanned(ctx: &mut LoweringContext, spanned: &SpannedStatement) {
+    let old_span = ctx.current_span.clone();
+    ctx.current_span = Some(spanned.span.clone());
+    lower_statement(ctx, &spanned.stmt);
+    ctx.current_span = old_span;
 }
 
 pub fn lower_program(program: &Program) -> IrProgram {
@@ -49,12 +61,14 @@ pub fn lower_program(program: &Program) -> IrProgram {
     for tb in &program.timelines {
         let start_idx = ctx.instructions.len();
         for stmt in &tb.statements {
-            lower_statement(&mut ctx, &stmt.stmt);
+            lower_spanned(&mut ctx, stmt);
         }
         let block_instrs = ctx.instructions.split_off(start_idx);
+        let block_spans = ctx.spans.split_off(start_idx);
         blocks.push(IrBlock {
             time: tb.time.clone(),
             instructions: block_instrs,
+            spans: block_spans,
         });
     }
 
@@ -84,7 +98,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
 
             for s in body {
-                lower_statement(&mut sub_ctx, &s.stmt);
+                lower_spanned(&mut sub_ctx, s);
             }
 
             let routine = IrRoutine {
@@ -107,6 +121,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .unwrap_or(causm_core::types::Type::Unknown),
                 taking_ms: *taking_ms,
                 instructions: sub_ctx.instructions,
+                spans: sub_ctx.spans,
             };
             ctx.routines.insert(name.clone(), routine);
         }
@@ -128,7 +143,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             });
 
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
 
             let end_spec_idx = ctx.instructions.len();
@@ -158,7 +173,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             if let Some(fb) = fallback {
                 for s in fb {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
             }
 
@@ -200,7 +215,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 let target = ctx.instructions.len();
 
                 for s in &case.body {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
                 case_jumps.push(ctx.instructions.len());
                 ctx.push(Instruction::Jump { target: 0 }); // Jump to end of select
@@ -228,7 +243,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *timeout_target = Some(timeout_start);
                 }
                 for s in t {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
             }
 
@@ -260,7 +275,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             let start_pc = ctx.instructions.len();
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             let len = ctx.instructions.len() - start_pc;
 
@@ -320,7 +335,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
 
                 for s in body {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
                 branch_jumps.push(ctx.instructions.len());
                 ctx.push(Instruction::Jump { target: 0 });
@@ -345,7 +360,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
 
                 for s in body {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
                 branch_jumps.push(ctx.instructions.len());
                 ctx.push(Instruction::Jump { target: 0 });
@@ -361,7 +376,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *pending_target = Some(start);
                 }
                 for s in body {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
                 branch_jumps.push(ctx.instructions.len());
                 ctx.push(Instruction::Jump { target: 0 });
@@ -377,7 +392,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *consumed_target = Some(start);
                 }
                 for s in body {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
                 branch_jumps.push(ctx.instructions.len());
                 ctx.push(Instruction::Jump { target: 0 });
@@ -434,7 +449,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 manifest: block.manifest.clone(),
             });
             for s in &block.body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             ctx.push(Instruction::EndIsolate);
         }
@@ -458,7 +473,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let _ = sub_ctx.get_reg(item_name);
 
             for s in body {
-                lower_statement(&mut sub_ctx, &s.stmt);
+                lower_spanned(&mut sub_ctx, s);
             }
 
             ctx.symbols = sub_ctx.symbols;
@@ -492,7 +507,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let _ = sub_ctx.get_reg(item_name);
 
             for s in body {
-                lower_statement(&mut sub_ctx, &s.stmt);
+                lower_spanned(&mut sub_ctx, s);
             }
 
             ctx.symbols = sub_ctx.symbols;
@@ -571,7 +586,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.symbols.insert(binding.clone(), r);
             }
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             ctx.symbols = orig_symbols;
         }
@@ -581,7 +596,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             // In a real compiler we'd track what's assigned in the body.
             // For now, let's just lower the body and use a placeholder for vars.
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             ctx.push(Instruction::Commit { vars: Vec::new() });
         }
@@ -608,7 +623,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         Statement::LoopTick { body } => {
             ctx.push(Instruction::LoopTick);
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             ctx.push(Instruction::EndLoopTick);
         }
@@ -628,7 +643,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             });
 
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
 
             ctx.push(Instruction::EndLease {
@@ -640,7 +655,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let start_pc = ctx.instructions.len();
             ctx.push(Instruction::Loop { max_ms: *max_ms });
             for s in body {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
             ctx.push(Instruction::EndLoop { max_ms: *max_ms });
             ctx.push(Instruction::Jump { target: start_pc });
@@ -660,7 +675,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }); // Placeholder
 
             for s in then_branch {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
 
             if let Some(eb) = else_branch {
@@ -675,7 +690,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
 
                 for s in eb {
-                    lower_statement(ctx, &s.stmt);
+                    lower_spanned(ctx, s);
                 }
 
                 let end_idx = ctx.instructions.len();
@@ -720,7 +735,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
 
             for s in recovery {
-                lower_statement(ctx, &s.stmt);
+                lower_spanned(ctx, s);
             }
 
             let end_idx = ctx.instructions.len();

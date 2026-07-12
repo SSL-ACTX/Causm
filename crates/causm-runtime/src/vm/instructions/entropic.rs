@@ -87,6 +87,7 @@ impl Vm {
             history_index,
             pc_snapshot: branch.pc,
             instructions_snapshot: branch.instructions.clone(),
+            spans_snapshot: branch.spans.clone(),
         };
         branch.anchors.insert(name, snapshot);
         Ok(())
@@ -118,6 +119,7 @@ impl Vm {
         t_branch.resource_budgets = anchor_data.resource_budgets_snapshot;
         t_branch.pc = anchor_data.pc_snapshot;
         t_branch.instructions = anchor_data.instructions_snapshot;
+        t_branch.spans = anchor_data.spans_snapshot;
         t_branch.commit_horizon_passed = false;
         Ok(())
     }

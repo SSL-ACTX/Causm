@@ -51,6 +51,7 @@ pub struct AnchorPoint {
     pub history_index: usize,
     pub pc_snapshot: usize,
     pub instructions_snapshot: Vec<causm_ir::Instruction>,
+    pub spans_snapshot: Vec<Option<causm_core::Span>>,
 }
 
 #[derive(Clone)]
@@ -60,6 +61,7 @@ pub struct Routine {
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
     pub instructions: Vec<causm_ir::Instruction>,
+    pub spans: Vec<Option<causm_core::Span>>,
 }
 
 pub struct SpeculationContext {
@@ -92,6 +94,7 @@ pub struct Vm {
     pub next_payload_id: u64,
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,
+    pub current_span: Option<causm_core::Span>,
 }
 
 #[derive(Clone)]
@@ -113,6 +116,7 @@ pub struct Timeline {
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
     pub pc: usize,
     pub instructions: Vec<causm_ir::Instruction>,
+    pub spans: Vec<Option<causm_core::Span>>,
 }
 
 impl Timeline {

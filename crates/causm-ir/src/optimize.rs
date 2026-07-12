@@ -4,6 +4,10 @@ use crate::{Instruction, IrProgram, Reg};
 use std::collections::{HashMap, HashSet};
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
+    let mut manager = PassManager::new();
+    manager.add_pass(Box::new(BlockCoalescingPass));
+    manager.add_pass(Box::new(DeadCodeEliminationPass));
+
     // 1. Optimize routines (routines are self-contained, no global usage tracking needed)
     let empty_set = HashSet::new();
     for routine in ir.routines.values_mut() {
@@ -12,11 +16,12 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
             let ssa_transformer = SsaTransformer::new(cfg);
             let mut ssa_cfg = ssa_transformer.transform();
 
-            dead_code_elimination(&mut ssa_cfg, &empty_set, true);
+            manager.run(&mut ssa_cfg, &empty_set, true);
 
             let destructed_cfg = destruct_ssa(ssa_cfg);
             routine.instructions = flatten_cfg(&destructed_cfg);
         }
+        routine.spans.resize(routine.instructions.len(), None);
     }
 
     // 2. Scan all timeline blocks to build a set of registers used anywhere in the timeline
@@ -52,11 +57,12 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
             let ssa_transformer = SsaTransformer::new(cfg);
             let mut ssa_cfg = ssa_transformer.transform();
 
-            dead_code_elimination(&mut ssa_cfg, &globally_used_regs, false);
+            manager.run(&mut ssa_cfg, &globally_used_regs, false);
 
             let destructed_cfg = destruct_ssa(ssa_cfg);
             block.instructions = flatten_cfg(&destructed_cfg);
         }
+        block.spans.resize(block.instructions.len(), None);
     }
 
     ir
@@ -580,7 +586,7 @@ pub fn dead_code_elimination(
     ssa_cfg: &mut SsaCFG,
     globally_used_regs: &HashSet<u32>,
     is_routine: bool,
-) {
+) -> bool {
     let mut use_counts: HashMap<SsaReg, usize> = HashMap::new();
     let mut count_uses = |r: SsaReg| {
         *use_counts.entry(r).or_insert(0) += 1;
@@ -599,6 +605,7 @@ pub fn dead_code_elimination(
     }
 
     let mut changed = true;
+    let mut any_changed = false;
     while changed {
         changed = false;
         for block in ssa_cfg.blocks.values_mut() {
@@ -621,10 +628,205 @@ pub fn dead_code_elimination(
                         });
                         block.instructions.remove(i);
                         changed = true;
+                        any_changed = true;
                         continue;
                     }
                 }
                 i += 1;
+            }
+        }
+    }
+    any_changed
+}
+
+pub trait OptimizationPass {
+    fn name(&self) -> &str;
+    fn run(&self, ssa_cfg: &mut SsaCFG, globally_used_regs: &HashSet<u32>, is_routine: bool) -> bool;
+}
+
+#[derive(Default)]
+pub struct PassManager {
+    passes: Vec<Box<dyn OptimizationPass>>,
+}
+
+impl PassManager {
+    pub fn new() -> Self {
+        Self { passes: Vec::new() }
+    }
+
+    pub fn add_pass(&mut self, pass: Box<dyn OptimizationPass>) {
+        self.passes.push(pass);
+    }
+
+    pub fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        globally_used_regs: &HashSet<u32>,
+        is_routine: bool,
+    ) {
+        let mut changed = true;
+        let mut iterations = 0;
+        while changed && iterations < 10 {
+            changed = false;
+            for pass in &self.passes {
+                if pass.run(ssa_cfg, globally_used_regs, is_routine) {
+                    changed = true;
+                }
+            }
+            iterations += 1;
+        }
+    }
+}
+
+pub struct DeadCodeEliminationPass;
+
+impl OptimizationPass for DeadCodeEliminationPass {
+    fn name(&self) -> &str {
+        "DeadCodeElimination"
+    }
+
+    fn run(&self, ssa_cfg: &mut SsaCFG, globally_used_regs: &HashSet<u32>, is_routine: bool) -> bool {
+        dead_code_elimination(ssa_cfg, globally_used_regs, is_routine)
+    }
+}
+
+pub struct BlockCoalescingPass;
+
+impl OptimizationPass for BlockCoalescingPass {
+    fn name(&self) -> &str {
+        "BlockCoalescing"
+    }
+
+    fn run(&self, ssa_cfg: &mut SsaCFG, _globally_used_regs: &HashSet<u32>, _is_routine: bool) -> bool {
+        let mut changed = false;
+
+        loop {
+            let mut merge_candidate: Option<(BlockId, BlockId)> = None;
+            let (preds, succs) = compute_ssa_predecessors_successors(ssa_cfg);
+
+            for &id in ssa_cfg.blocks.keys() {
+                if let Some(successors_list) = succs.get(&id) {
+                    if successors_list.len() == 1 {
+                        let successor_b = successors_list[0];
+                        if let Some(predecessors_list) = preds.get(&successor_b) {
+                            if predecessors_list.len() == 1
+                                && predecessors_list[0] == id
+                                && successor_b != ssa_cfg.entry_block
+                            {
+                                merge_candidate = Some((id, successor_b));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some((id_a, id_b)) = merge_candidate {
+                let block_b = ssa_cfg.blocks.remove(&id_b).unwrap();
+                let block_a = ssa_cfg.blocks.get_mut(&id_a).unwrap();
+
+                let mut b_instructions = Vec::new();
+                for phi in block_b.phi_nodes {
+                    if let Some((_, src_reg)) = phi.incoming.iter().find(|(pred, _)| *pred == id_a) {
+                        b_instructions.push(SsaInstruction::Move {
+                            dest: phi.dest,
+                            src: *src_reg,
+                        });
+                    }
+                }
+                b_instructions.extend(block_b.instructions);
+
+                block_a.instructions.extend(b_instructions);
+                block_a.terminator = block_b.terminator;
+
+                redirect_predecessor(ssa_cfg, id_b, id_a);
+                changed = true;
+            } else {
+                break;
+            }
+        }
+
+        changed
+    }
+}
+
+fn compute_ssa_predecessors_successors(
+    ssa_cfg: &SsaCFG,
+) -> (
+    HashMap<BlockId, Vec<BlockId>>,
+    HashMap<BlockId, Vec<BlockId>>,
+) {
+    let mut predecessors: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+    let mut successors: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+
+    for &id in ssa_cfg.blocks.keys() {
+        predecessors.entry(id).or_default();
+        successors.entry(id).or_default();
+    }
+
+    for (&id, block) in &ssa_cfg.blocks {
+        match &block.terminator {
+            SsaTerminator::Jump { target } => {
+                successors.entry(id).or_default().push(*target);
+                predecessors.entry(*target).or_default().push(id);
+            }
+            SsaTerminator::Branch {
+                then_block,
+                else_block,
+                ..
+            } => {
+                successors.entry(id).or_default().push(*then_block);
+                successors.entry(id).or_default().push(*else_block);
+                predecessors.entry(*then_block).or_default().push(id);
+                predecessors.entry(*else_block).or_default().push(id);
+            }
+            SsaTerminator::MatchEntropy {
+                valid_block,
+                decayed_block,
+                pending_block,
+                consumed_block,
+                ..
+            } => {
+                let targets = [
+                    *valid_block,
+                    *decayed_block,
+                    *pending_block,
+                    *consumed_block,
+                ];
+                for t in targets.into_iter().flatten() {
+                    successors.entry(id).or_default().push(t);
+                    predecessors.entry(t).or_default().push(id);
+                }
+            }
+            SsaTerminator::Select {
+                cases,
+                timeout_block,
+                ..
+            } => {
+                for case in cases {
+                    let target_id = case.target as BlockId;
+                    successors.entry(id).or_default().push(target_id);
+                    predecessors.entry(target_id).or_default().push(id);
+                }
+                if let Some(t) = timeout_block {
+                    successors.entry(id).or_default().push(*t);
+                    predecessors.entry(*t).or_default().push(id);
+                }
+            }
+            SsaTerminator::Return { .. } | SsaTerminator::Unreachable => {}
+        }
+    }
+
+    (predecessors, successors)
+}
+
+fn redirect_predecessor(ssa_cfg: &mut SsaCFG, old_pred: BlockId, new_pred: BlockId) {
+    for block in ssa_cfg.blocks.values_mut() {
+        for phi in &mut block.phi_nodes {
+            for (incoming_block, _) in &mut phi.incoming {
+                if *incoming_block == old_pred {
+                    *incoming_block = new_pred;
+                }
             }
         }
     }
@@ -1049,4 +1251,39 @@ pub fn flatten_cfg(cfg: &CFG) -> Vec<Instruction> {
     }
 
     instructions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_block_coalescing_pass() {
+        let instrs = vec![
+            Instruction::LoadInt { dest: Reg(0), value: 5 },
+            Instruction::Jump { target: 2 },
+            Instruction::LoadInt { dest: Reg(1), value: 10 },
+            Instruction::Return { src: Some(Reg(1)) },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        let pass = BlockCoalescingPass;
+        let empty_used = HashSet::new();
+        let changed = pass.run(&mut ssa_cfg, &empty_used, false);
+
+        assert!(changed);
+        assert_eq!(ssa_cfg.blocks.len(), 1);
+        let block0 = ssa_cfg.blocks.get(&0).unwrap();
+        assert_eq!(block0.instructions.len(), 2);
+        
+        match &block0.terminator {
+            SsaTerminator::Return { src } => {
+                assert!(src.is_some());
+            }
+            _ => panic!("Expected return terminator"),
+        }
+    }
 }
