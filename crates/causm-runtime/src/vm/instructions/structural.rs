@@ -40,6 +40,49 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn TypeAssert(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+        type_name: String,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, src.0)?;
+        let meta = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .metadata
+                .get(src.0 as usize)
+                .and_then(|m| m.as_ref())
+                .cloned()
+        };
+
+        let matches = match &meta {
+            Some(m) => m.type_name.as_ref() == Some(&type_name),
+            None => false,
+        };
+
+        if !matches {
+            return Err(TemporalError::EvalError(format!(
+                "Type assertion failed: expected {}, got {:?}",
+                type_name,
+                meta.and_then(|m| m.type_name)
+            )));
+        }
+
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(val),
+        )?;
+        if let Some(m) = meta {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.arena.metadata[dest.0 as usize] = Some(m);
+        }
+        Ok(())
+    }
+
     pub(crate) fn TopologyLit(
         &mut self,
         branch_id: &str,

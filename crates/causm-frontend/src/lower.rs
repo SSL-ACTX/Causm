@@ -10,6 +10,7 @@ struct LoweringContext {
     routines: HashMap<String, IrRoutine>,
     type_decay_limits: HashMap<String, u64>,
     type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
+    interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
     current_span: Option<causm_core::Span>,
 }
 
@@ -23,6 +24,7 @@ impl LoweringContext {
             routines: HashMap::new(),
             type_decay_limits: HashMap::new(),
             type_decls: HashMap::new(),
+            interfaces: HashMap::new(),
             current_span: None,
         }
     }
@@ -819,7 +821,20 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             ctx.type_decls.insert(name.clone(), resolved_fields);
         }
-        Statement::InterfaceDecl { .. } => {}
+        Statement::InterfaceDecl {
+            name,
+            extends,
+            methods,
+        } => {
+            let mut resolved_methods = Vec::new();
+            for base in extends {
+                if let Some(base_methods) = ctx.interfaces.get(base) {
+                    resolved_methods.extend(base_methods.clone());
+                }
+            }
+            resolved_methods.extend(methods.clone());
+            ctx.interfaces.insert(name.clone(), resolved_methods);
+        }
         _ => {
             // Other statements can be added as needed
         }
@@ -881,6 +896,7 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             method,
             args,
             resolved_routine,
+            resolved_budget,
         } => {
             let routine_name =
                 resolved_routine.borrow().clone().unwrap_or_else(|| {
@@ -893,10 +909,12 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             }
             let dest = ctx.alloc_reg();
             if routine_name == "<dynamic>" {
+                let budget = resolved_budget.borrow().clone();
                 ctx.push(Instruction::DynamicCall {
                     method: method.clone(),
                     args: arg_regs,
                     dest,
+                    budget,
                 });
             } else {
                 ctx.push(Instruction::Call {
@@ -1042,6 +1060,20 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                     parameters: params.clone(),
                 },
                 deadline_ms: *deadline_ms,
+            });
+            dest
+        }
+        Expression::TypeAssertion { target, cast_type } => {
+            let src = lower_expression(ctx, target);
+            let dest = ctx.alloc_reg();
+            let type_name = match cast_type {
+                causm_core::TypeName::Custom(ref s) => s.clone(),
+                _ => panic!("Type assertion target must be a custom type name"),
+            };
+            ctx.push(Instruction::TypeAssert {
+                dest,
+                src,
+                type_name,
             });
             dest
         }

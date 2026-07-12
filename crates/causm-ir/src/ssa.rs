@@ -124,6 +124,12 @@ pub enum SsaInstruction {
         method: String,
         args: Vec<SsaReg>,
         dest: SsaReg,
+        budget: Option<u64>,
+    },
+    TypeAssert {
+        dest: SsaReg,
+        src: SsaReg,
+        type_name: String,
     },
     Print {
         src: SsaReg,
@@ -963,7 +969,12 @@ impl SsaTransformer {
                     },
                 }
             }
-            Instruction::DynamicCall { method, args, dest } => {
+            Instruction::DynamicCall {
+                method,
+                args,
+                dest,
+                budget,
+            } => {
                 let args_ssa =
                     args.iter().map(|&r| self.current_ssa_reg(r)).collect();
                 let dest_ver = self.next_version(dest.0);
@@ -975,6 +986,24 @@ impl SsaTransformer {
                         reg: dest.0,
                         version: dest_ver,
                     },
+                    budget: *budget,
+                }
+            }
+            Instruction::TypeAssert {
+                dest,
+                src,
+                type_name,
+            } => {
+                let src_ssa = self.current_ssa_reg(*src);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::TypeAssert {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: src_ssa,
+                    type_name: type_name.clone(),
                 }
             }
             Instruction::Print { src } => SsaInstruction::Print {
@@ -1394,6 +1423,7 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Clone { dest, .. } => f(*dest),
         Instruction::Call { dest, .. } => f(*dest),
         Instruction::DynamicCall { dest, .. } => f(*dest),
+        Instruction::TypeAssert { dest, .. } => f(*dest),
         Instruction::StructLit { dest, .. } => f(*dest),
         Instruction::TopologyLit { dest, .. } => f(*dest),
         Instruction::ArrayLit { dest, .. } => f(*dest),

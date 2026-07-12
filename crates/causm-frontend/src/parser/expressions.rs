@@ -88,6 +88,19 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                             method,
                             args,
                             resolved_routine: std::cell::RefCell::new(None),
+                            resolved_budget: std::cell::RefCell::new(None),
+                        };
+                    }
+                    Rule::type_assertion_tail => {
+                        let type_name_pair =
+                            access_pair.into_inner().next().unwrap();
+                        let cast_type =
+                            crate::parser::statements::utils::parse_type_name(
+                                type_name_pair,
+                            );
+                        expr = Expression::TypeAssertion {
+                            target: Box::new(expr),
+                            cast_type,
                         };
                     }
                     Rule::field_access_tail => {

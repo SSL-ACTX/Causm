@@ -103,6 +103,7 @@ macro_rules! statements {
             },
             InterfaceDecl {
                 name: String,
+                extends: Vec<String>,
                 methods: Vec<InterfaceMethod>
             },
             DecayHandler {
@@ -255,7 +256,8 @@ macro_rules! expressions {
                 target: Box<Expression>,
                 method: String,
                 args: Vec<Expression>,
-                resolved_routine: std::cell::RefCell<Option<String>>
+                resolved_routine: std::cell::RefCell<Option<String>>,
+                resolved_budget: std::cell::RefCell<Option<u64>>
             },
             Literal(String),
             Identifier(String),
@@ -288,6 +290,10 @@ macro_rules! expressions {
                 capability: String,
                 params: std::collections::HashMap<String, String>,
                 deadline_ms: u64
+            },
+            TypeAssertion {
+                target: Box<Expression>,
+                cast_type: TypeName
             },
             Null
         }

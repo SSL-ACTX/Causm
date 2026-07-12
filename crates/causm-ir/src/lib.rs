@@ -96,7 +96,8 @@ macro_rules! instructions {
             DynamicCall {
                 method: String,
                 args: Vec<$crate::Reg>,
-                dest: $crate::Reg
+                dest: $crate::Reg,
+                budget: Option<u64>
             },
             Return {
                 src: Option<$crate::Reg>
@@ -225,6 +226,11 @@ macro_rules! instructions {
                 index: $crate::Reg,
                 field: String,
                 src: $crate::Reg
+            },
+            TypeAssert {
+                dest: $crate::Reg,
+                src: $crate::Reg,
+                type_name: String
             },
 
             // Misc

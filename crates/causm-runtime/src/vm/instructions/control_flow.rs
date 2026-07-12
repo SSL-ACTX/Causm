@@ -48,6 +48,7 @@ impl Vm {
         method: String,
         args: Vec<Reg>,
         dest: Reg,
+        budget: Option<u64>,
     ) -> Result<(), TemporalError> {
         if args.is_empty() {
             return Err(TemporalError::EvalError(
@@ -72,7 +73,7 @@ impl Vm {
         };
 
         let routine_name = format!("{}.{}", type_name, method);
-        self.Call(branch_id, routine_name, args, dest)
+        self.execute_call(branch_id, routine_name, args, dest, budget)
     }
 
     pub(crate) fn Call(
@@ -81,6 +82,17 @@ impl Vm {
         routine: String,
         args: Vec<Reg>,
         dest: Reg,
+    ) -> Result<(), TemporalError> {
+        self.execute_call(branch_id, routine, args, dest, None)
+    }
+
+    fn execute_call(
+        &mut self,
+        branch_id: &str,
+        routine: String,
+        args: Vec<Reg>,
+        dest: Reg,
+        budget: Option<u64>,
     ) -> Result<(), TemporalError> {
         if self.is_intrinsic(&routine) {
             let mut arg_values = Vec::new();
@@ -167,6 +179,16 @@ impl Vm {
             .active_branches
             .remove(&child_id)
             .ok_or_else(|| TemporalError::BranchNotFound(child_id.clone()))?;
+
+        let elapsed = child_branch.local_clock;
+        if let Some(limit) = budget {
+            if elapsed > limit {
+                return Err(TemporalError::EvalError(format!(
+                    "temporal contract violated: concrete implementation of method '{}' took {}ms, exceeding the interface's budget of {}ms",
+                    routine, elapsed, limit
+                )));
+            }
+        }
 
         let result = child_branch
             .arena

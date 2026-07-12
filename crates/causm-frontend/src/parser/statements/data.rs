@@ -181,10 +181,12 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::interface_decl => {
-            let mut inner = pair.into_inner();
+            let mut inner = pair.into_inner().peekable();
             let name = inner.next().unwrap().as_str().to_string();
+            let mut extends = Vec::new();
             let mut methods = Vec::new();
-            for m_pair in inner {
+
+            let parse_method = |m_pair: Pair<Rule>| -> causm_core::InterfaceMethod {
                 let mut m_inner = m_pair.into_inner();
                 let m_name = m_inner.next().unwrap().as_str().to_string();
 
@@ -229,14 +231,50 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     }
                 }
 
-                methods.push(causm_core::InterfaceMethod {
+                causm_core::InterfaceMethod {
                     name: m_name,
                     params,
                     return_type,
                     taking_ms,
-                });
+                }
+            };
+
+            while let Some(next_pair) = inner.next() {
+                match next_pair.as_rule() {
+                    Rule::interface_sum => {
+                        for term in next_pair.into_inner() {
+                            match term.as_rule() {
+                                Rule::interface_term => {
+                                    let mut term_inner = term.into_inner();
+                                    if let Some(first) = term_inner.next() {
+                                        if first.as_rule() == Rule::identifier {
+                                            extends.push(first.as_str().to_string());
+                                        } else {
+                                            methods.push(parse_method(first));
+                                            for m_pair in term_inner {
+                                                methods.push(parse_method(m_pair));
+                                            }
+                                        }
+                                    }
+                                }
+                                Rule::identifier => {
+                                    extends.push(term.as_str().to_string());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Rule::interface_method => {
+                        methods.push(parse_method(next_pair));
+                    }
+                    _ => {}
+                }
             }
-            Statement::InterfaceDecl { name, methods }
+            Statement::InterfaceDecl {
+                name,
+                extends,
+                methods,
+            }
         }
         _ => unreachable!(),
     }

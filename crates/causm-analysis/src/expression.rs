@@ -92,6 +92,7 @@ pub(crate) fn infer_expression_type(
             method,
             args: _,
             resolved_routine,
+            resolved_budget,
         } => {
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
@@ -113,6 +114,7 @@ pub(crate) fn infer_expression_type(
                         )))
                     })?;
                 *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
+                *resolved_budget.borrow_mut() = m.taking_ms;
                 let ret_t = m
                     .return_type
                     .as_ref()
@@ -334,6 +336,19 @@ pub(crate) fn infer_expression_type(
                 }
             }
         }
+        Expression::TypeAssertion { target, cast_type } => {
+            let target_type = infer_expression_type(analyzer, target)?;
+            match target_type {
+                Type::Custom(_) | Type::Unknown => {}
+                _ => {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        "type assertion target must be a custom struct or interface"
+                            .into(),
+                    )));
+                }
+            }
+            Ok(Type::from_typename(cast_type))
+        }
     }
 }
 
@@ -349,6 +364,7 @@ pub(crate) fn analyze_expression(
             method,
             args,
             resolved_routine,
+            resolved_budget,
         } => {
             analyze_expression_nonconsuming(analyzer, target)?;
             let target_type = infer_expression_type(analyzer, target)?;
@@ -388,6 +404,7 @@ pub(crate) fn analyze_expression(
                 let first_param = &interface_method.params[0];
                 let self_mode = first_param.mode.clone();
                 *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
+                *resolved_budget.borrow_mut() = interface_method.taking_ms;
 
                 for (i, arg) in args.iter().enumerate() {
                     let param_decl = &interface_method.params[i + 1];
@@ -734,6 +751,34 @@ pub(crate) fn analyze_expression(
             Ok(())
         }
         Expression::UnaryOp { expr, .. } => analyze_expression(analyzer, expr),
+        Expression::TypeAssertion { target, cast_type } => {
+            let target_type = infer_expression_type(analyzer, target)?;
+            let cast_type_resolved = Type::from_typename(cast_type);
+            match (&target_type, &cast_type_resolved) {
+                (Type::Unknown, _) => {}
+                (Type::Custom(ref source_name), Type::Custom(ref dest_name)) => {
+                    let ok = source_name == dest_name
+                        || analyzer.implements_interface(dest_name, source_name)
+                        || analyzer.implements_interface(source_name, dest_name);
+                    if !ok {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::TypeMismatch(format!(
+                                "cannot assert type {} to {}",
+                                source_name, dest_name
+                            )),
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        "type assertions require custom struct or interface types"
+                            .into(),
+                    )));
+                }
+            }
+            analyze_expression(analyzer, target)?;
+            Ok(())
+        }
     }
 }
 
@@ -828,6 +873,10 @@ pub(crate) fn analyze_expression_nonconsuming(
         Expression::UnaryOp { expr, .. } => {
             analyze_expression_nonconsuming(analyzer, expr)
         }
+        Expression::TypeAssertion { target, .. } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            Ok(())
+        }
     }
 }
 
@@ -853,6 +902,7 @@ pub fn estimate_expression_cost(
             method,
             args,
             resolved_routine,
+            resolved_budget,
         } => {
             let target_cost = estimate_expression_cost(analyzer, target);
             let arg_cost: u64 = args
@@ -861,21 +911,34 @@ pub fn estimate_expression_cost(
                 .sum();
             let routine_opt = resolved_routine.borrow();
             let taking_ms = if let Some(ref routine) = *routine_opt {
-                analyzer
-                    .routines
-                    .get(routine)
-                    .map(|info| info.taking_ms)
-                    .unwrap_or(0)
+                if routine == "<dynamic>" {
+                    resolved_budget.borrow().unwrap_or(0)
+                } else {
+                    analyzer
+                        .routines
+                        .get(routine)
+                        .map(|info| info.taking_ms)
+                        .unwrap_or(0)
+                }
             } else {
                 let target_type =
                     infer_expression_type(analyzer, target).unwrap_or(Type::Unknown);
                 if let Type::Custom(struct_name) = target_type {
-                    let routine_name = format!("{}.{}", struct_name, method);
-                    analyzer
-                        .routines
-                        .get(&routine_name)
-                        .map(|info| info.taking_ms)
-                        .unwrap_or(0)
+                    if analyzer.interfaces.contains_key(&struct_name) {
+                        let methods = &analyzer.interfaces[&struct_name];
+                        methods
+                            .iter()
+                            .find(|m| &m.name == method)
+                            .and_then(|m| m.taking_ms)
+                            .unwrap_or(0)
+                    } else {
+                        let routine_name = format!("{}.{}", struct_name, method);
+                        analyzer
+                            .routines
+                            .get(&routine_name)
+                            .map(|info| info.taking_ms)
+                            .unwrap_or(0)
+                    }
                 } else {
                     0
                 }
@@ -923,5 +986,8 @@ pub fn estimate_expression_cost(
         | Expression::Boolean(_)
         | Expression::Null
         | Expression::Deferred { .. } => 1,
+        Expression::TypeAssertion { target, .. } => {
+            1 + estimate_expression_cost(analyzer, target)
+        }
     }
 }

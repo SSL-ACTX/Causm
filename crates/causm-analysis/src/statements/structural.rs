@@ -44,9 +44,24 @@ impl EntropicAnalyzer {
     pub(crate) fn InterfaceDecl(
         &mut self,
         name: &str,
+        extends: &[String],
         methods: &[causm_core::InterfaceMethod],
     ) -> Result<(), SemanticError> {
-        self.interfaces.insert(name.to_owned(), methods.to_vec());
+        let mut resolved_methods = Vec::new();
+        for base in extends {
+            if let Some(base_methods) = self.interfaces.get(base) {
+                resolved_methods.extend(base_methods.clone());
+            } else {
+                return Err(self.annotate(
+                    crate::analyzer::SemanticErrorKind::TypeMismatch(format!(
+                        "Interface {} extends undefined interface {}",
+                        name, base
+                    )),
+                ));
+            }
+        }
+        resolved_methods.extend(methods.to_vec());
+        self.interfaces.insert(name.to_owned(), resolved_methods);
         Ok(())
     }
 

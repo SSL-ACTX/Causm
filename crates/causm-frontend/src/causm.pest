@@ -172,8 +172,9 @@ powop = { "^" }
 unary_expr = { neg_expr | not_expr | primary_expr }
 neg_expr = { "-" ~ unary_expr }
 not_expr = { "!" ~ unary_expr }
-primary_expr = { base_expr ~ (index_access | method_call_tail | field_access_tail)* }
+primary_expr = { base_expr ~ (index_access | method_call_tail | type_assertion_tail | field_access_tail)* }
 method_call_tail = { "." ~ identifier ~ "(" ~ expression_list? ~ ")" }
+type_assertion_tail = { "." ~ "(" ~ type_name ~ ")" }
 field_access_tail = { "." ~ identifier }
 field_update_stmt = { primary_expr ~ "=" ~ expression }
 null = { "null" }
@@ -198,7 +199,9 @@ type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
 type_decl = { "type" ~ identifier ~ "=" ~ (identifier ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
-interface_decl = { "interface" ~ identifier ~ "{" ~ interface_method* ~ "}" }
+interface_decl = { "interface" ~ identifier ~ ("=" ~ interface_sum)? ~ ("{" ~ interface_method* ~ "}")? }
+interface_sum = { interface_term ~ ("+" ~ interface_term)* }
+interface_term = { "interface" ~ "{" ~ interface_method* ~ "}" | identifier }
 interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }

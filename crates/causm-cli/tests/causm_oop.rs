@@ -354,3 +354,162 @@ fn causm_oop_composition() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_oop_downcast_type_assertion() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Actor {
+            routine act(consume self)
+        }
+        type Robot = struct {
+            name: string
+        }
+        routine Robot.act(consume self) taking 1ms {
+            // do nothing
+        }
+        let r: Robot = struct { name = "Terminator" }
+        let a: Actor = r
+        let concrete = a.(Robot)
+        let name = concrete.name
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let name_reg = ir.symbols.get("name").expect("name not found").0;
+    let name_val = vm.root_timeline.arena.peek(name_reg);
+    match name_val {
+        Some(causm_core::value::Payload::String(s)) => assert_eq!(s, "Terminator"),
+        _ => panic!("Expected concrete.name to be Terminator"),
+    }
+    Ok(())
+}
+
+#[test]
+fn causm_oop_interface_composition() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Actor {
+            routine act(consume self)
+        }
+        interface PlayableActor = Actor + interface {
+            routine play(consume self)
+        }
+        type Robot = struct {
+            name: string
+        }
+        routine Robot.act(consume self) taking 1ms {
+            // do nothing
+        }
+        routine Robot.play(consume self) taking 1ms {
+            // do nothing
+        }
+        let r: Robot = struct { name = "Terminator" }
+        let pa: PlayableActor = r
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    Ok(())
+}
+
+#[test]
+fn causm_oop_dynamic_budget_enforcement() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate worker_isolate {
+            enable cpu(100ms)
+            enable memory(50KB)
+            require System.NetworkFetch
+
+            interface Worker {
+                routine work(consume self) taking 10ms
+            }
+            type SlowWorker = struct {
+                name: string
+            }
+            routine SlowWorker.work(consume self) taking 10ms {
+                let dataset = defer System.NetworkFetch(url="api.data", latency="15") deadline 50ms
+                await(dataset)
+            }
+            let w: SlowWorker = struct { name = "lazy" }
+            let worker: Worker = w
+            let _res = worker.work()
+        }
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut vm = Vm::new();
+    vm.register_capability("System.NetworkFetch", |_params| Ok(()));
+    let res = vm.execute_program(&ir);
+    assert!(res.is_err());
+    let err_msg = format!("{:?}", res.err().unwrap());
+    assert!(err_msg.contains("temporal contract violated"));
+    Ok(())
+}
+
+#[test]
+fn causm_oop_multilevel_struct_composition() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type A = struct {
+            const x: int = 100,
+            y: int = 200
+        }
+        type B = A + struct {
+            const z: int = 300,
+            w: int = 400
+        }
+        type C = B + struct {
+            v: int = 500
+        }
+        let c: C = struct {}
+        let val_x = C.x
+        let val_y = c.y
+        let val_z = C.z
+        let val_w = c.w
+        let val_v = c.v
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let y_reg = ir.symbols.get("val_y").expect("val_y not found").0;
+    let y_val = vm.root_timeline.arena.peek(y_reg);
+    match y_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 200),
+        _ => panic!("Expected y=200"),
+    }
+
+    let w_reg = ir.symbols.get("val_w").expect("val_w not found").0;
+    let w_val = vm.root_timeline.arena.peek(w_reg);
+    match w_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 400),
+        _ => panic!("Expected w=400"),
+    }
+
+    let v_reg = ir.symbols.get("val_v").expect("val_v not found").0;
+    let v_val = vm.root_timeline.arena.peek(v_reg);
+    match v_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 500),
+        _ => panic!("Expected v=500"),
+    }
+
+    Ok(())
+}

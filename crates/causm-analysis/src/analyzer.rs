@@ -944,6 +944,9 @@ impl EntropicAnalyzer {
                 };
                 format!("{}{}", op_str, self.expr_snippet(expr))
             }
+            Expression::TypeAssertion { target, cast_type } => {
+                format!("{}.({:?})", self.expr_snippet(target), cast_type)
+            }
         }
     }
 
