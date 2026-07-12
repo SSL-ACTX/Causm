@@ -79,8 +79,15 @@ pub fn lower_program(program: &Program) -> IrProgram {
     }
 
     let mut default_methods = HashMap::new();
-    for struct_name in ctx.type_decls.keys() {
-        for methods in ctx.interfaces.values() {
+    let mut sorted_struct_names: Vec<&String> = ctx.type_decls.keys().collect();
+    sorted_struct_names.sort();
+    for struct_name in sorted_struct_names {
+        let mut sorted_interfaces: Vec<(
+            &String,
+            &Vec<causm_core::InterfaceMethod>,
+        )> = ctx.interfaces.iter().collect();
+        sorted_interfaces.sort_by_key(|(name, _)| *name);
+        for (_interface_name, methods) in sorted_interfaces {
             let mut implements = true;
             for im in methods {
                 let r_name = format!("{}.{}", struct_name, im.name);
@@ -1149,14 +1156,20 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         }
         Expression::StructLit(type_name, fields) => {
             let mut field_regs = HashMap::new();
-            for (name, expr) in fields {
+            let mut sorted_fields: Vec<(&String, &Expression)> =
+                fields.iter().collect();
+            sorted_fields.sort_by_key(|(name, _)| *name);
+            for (name, expr) in sorted_fields {
                 field_regs.insert(name.clone(), lower_expression(ctx, expr));
             }
             let type_name_opt = type_name.borrow().clone();
             let mut defaults_to_lower = Vec::new();
             if let Some(ref name) = type_name_opt {
                 if let Some(fields_map) = ctx.type_decls.get(name) {
-                    for (field_name, field_def) in fields_map {
+                    let mut sorted_fields_map: Vec<(&String, &TypeFieldDef)> =
+                        fields_map.iter().collect();
+                    sorted_fields_map.sort_by_key(|(name, _)| *name);
+                    for (field_name, field_def) in sorted_fields_map {
                         if !field_def.is_const
                             && !field_regs.contains_key(field_name)
                         {
@@ -1183,7 +1196,10 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         }
         Expression::TopologyLit(fields) => {
             let mut field_regs = HashMap::new();
-            for (name, expr) in fields {
+            let mut sorted_fields: Vec<(&String, &Expression)> =
+                fields.iter().collect();
+            sorted_fields.sort_by_key(|(name, _)| *name);
+            for (name, expr) in sorted_fields {
                 field_regs.insert(name.clone(), lower_expression(ctx, expr));
             }
             let dest = ctx.alloc_reg();
