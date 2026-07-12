@@ -206,6 +206,13 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             args: args.iter().copied().map(ssa_reg_to_reg).collect(),
             dest: ssa_reg_to_reg(*dest),
         },
+        SsaInstruction::DynamicCall { method, args, dest } => {
+            Instruction::DynamicCall {
+                method: method.clone(),
+                args: args.iter().copied().map(ssa_reg_to_reg).collect(),
+                dest: ssa_reg_to_reg(*dest),
+            }
+        }
         SsaInstruction::StructLit {
             dest,
             fields,

@@ -63,6 +63,14 @@ pub struct ParamDecl {
     pub typ: Option<TypeName>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceMethod {
+    pub name: String,
+    pub params: Vec<ParamDecl>,
+    pub return_type: Option<TypeName>,
+    pub taking_ms: Option<u64>,
+}
+
 #[macro_export]
 macro_rules! statements {
     ($macro:ident) => {
@@ -88,9 +96,14 @@ macro_rules! statements {
             },
             TypeDecl {
                 name: String,
+                extends: Option<String>,
                 fields: std::collections::HashMap<String, TypeFieldDef>,
                 decay_after_ms: Option<u64>,
                 scoped_branch: Option<String>
+            },
+            InterfaceDecl {
+                name: String,
+                methods: Vec<InterfaceMethod>
             },
             DecayHandler {
                 type_name: String,

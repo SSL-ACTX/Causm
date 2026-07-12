@@ -102,6 +102,45 @@ pub(crate) fn infer_expression_type(
                     )));
                 }
             };
+
+            if analyzer.interfaces.contains_key(&struct_name) {
+                let methods = &analyzer.interfaces[&struct_name];
+                let m =
+                    methods.iter().find(|m| &m.name == method).ok_or_else(|| {
+                        analyzer.annotate(SemanticErrorKind::TypeMismatch(format!(
+                            "unknown method {} on interface {}",
+                            method, struct_name
+                        )))
+                    })?;
+                *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
+                let ret_t = m
+                    .return_type
+                    .as_ref()
+                    .map(Type::from_typename)
+                    .unwrap_or(Type::Unknown);
+                return Ok(ret_t);
+            }
+
+            if method.starts_with('_') {
+                let mut is_allowed = false;
+                if let Some(ref cur_routine) = analyzer.current_routine {
+                    if let Some(dot_idx) = cur_routine.find('.') {
+                        let struct_prefix = &cur_routine[..dot_idx];
+                        if struct_prefix == struct_name {
+                            is_allowed = true;
+                        }
+                    }
+                }
+                if !is_allowed {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        format!(
+                            "Method '{}' is private to type '{}'",
+                            method, struct_name
+                        ),
+                    )));
+                }
+            }
+
             let routine_name = format!("{}.{}", struct_name, method);
             if let Some(info) = analyzer.routines.get(&routine_name) {
                 *resolved_routine.borrow_mut() = Some(routine_name);
@@ -127,6 +166,27 @@ pub(crate) fn infer_expression_type(
                 }
             }
             let t = infer_expression_type(analyzer, target)?;
+            if let Type::Custom(ref struct_name) = t {
+                if field.starts_with('_') {
+                    let mut is_allowed = false;
+                    if let Some(ref cur_routine) = analyzer.current_routine {
+                        if let Some(dot_idx) = cur_routine.find('.') {
+                            let struct_prefix = &cur_routine[..dot_idx];
+                            if struct_prefix == struct_name {
+                                is_allowed = true;
+                            }
+                        }
+                    }
+                    if !is_allowed {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::TypeMismatch(format!(
+                                "Field '{}' is private to type '{}'",
+                                field, struct_name
+                            )),
+                        ));
+                    }
+                }
+            }
             let mut resolved_t = analyzer.resolve_type(&t);
             if let Type::ConstantAccess { inner_type, .. } = resolved_t {
                 resolved_t = analyzer.resolve_type(&inner_type);
@@ -300,6 +360,125 @@ pub(crate) fn analyze_expression(
                     )));
                 }
             };
+
+            if analyzer.interfaces.contains_key(&struct_name) {
+                let methods = &analyzer.interfaces[&struct_name];
+                let interface_method = methods
+                    .iter()
+                    .find(|m| &m.name == method)
+                    .ok_or_else(|| {
+                        analyzer.annotate(SemanticErrorKind::TypeMismatch(format!(
+                            "unknown method {} on interface {}",
+                            method, struct_name
+                        )))
+                    })?
+                    .clone();
+
+                if args.len() + 1 != interface_method.params.len() {
+                    return Err(analyzer.annotate(
+                        SemanticErrorKind::ArgumentCountMismatch(format!(
+                            "method {} expects {} arguments (excluding self), got {}",
+                            method,
+                            interface_method.params.len() - 1,
+                            args.len()
+                        )),
+                    ));
+                }
+
+                let first_param = &interface_method.params[0];
+                let self_mode = first_param.mode.clone();
+                *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
+
+                for (i, arg) in args.iter().enumerate() {
+                    let param_decl = &interface_method.params[i + 1];
+                    let param_type = param_decl
+                        .typ
+                        .as_ref()
+                        .map(Type::from_typename)
+                        .unwrap_or(Type::Unknown);
+                    let arg_type = infer_expression_type(analyzer, arg)?;
+                    if !analyzer.types_compatible(&param_type, &arg_type) {
+                        return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            format!(
+                                "interface method {} param {} type mismatch: expected {:?}, got {:?}",
+                                method, param_decl.name, param_type, arg_type
+                            ),
+                        )));
+                    }
+                    if let Expression::StructLit(ref type_name, _) = arg {
+                        if type_name.borrow().is_none() {
+                            if let Type::Custom(ref name) = param_type {
+                                *type_name.borrow_mut() = Some(name.clone());
+                            }
+                        }
+                    }
+                    analyze_expression_nonconsuming(analyzer, arg)?;
+                    if let ParamMode::Consume = param_decl.mode {
+                        if let Expression::Identifier(ref name) = arg {
+                            analyzer.mark_consumed(name)?;
+                        }
+                    } else if let ParamMode::Clone = param_decl.mode {
+                        if let Expression::Identifier(name) = arg {
+                            let state = analyzer
+                                .branch_contexts
+                                .get(&analyzer.current_branch)
+                                .unwrap();
+                            if state.consumed.contains(name) {
+                                return Err(analyzer.annotate(
+                                    SemanticErrorKind::UseAfterConsume(name.clone()),
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                if let ParamMode::Consume = self_mode {
+                    if let Expression::Identifier(name) = &**target {
+                        analyzer.mark_consumed(name)?;
+                    }
+                } else if let ParamMode::Clone = self_mode {
+                    if let Expression::Identifier(name) = &**target {
+                        let state = analyzer
+                            .branch_contexts
+                            .get(&analyzer.current_branch)
+                            .unwrap();
+                        if state.consumed.contains(name) {
+                            return Err(analyzer.annotate(
+                                SemanticErrorKind::UseAfterConsume(name.clone()),
+                            ));
+                        }
+                    }
+                }
+
+                let cost = interface_method.taking_ms.unwrap_or(0);
+                let branch = analyzer
+                    .branch_contexts
+                    .get_mut(&analyzer.current_branch)
+                    .unwrap();
+                branch.accumulated_cost += cost;
+
+                return Ok(());
+            }
+
+            if method.starts_with('_') {
+                let mut is_allowed = false;
+                if let Some(ref cur_routine) = analyzer.current_routine {
+                    if let Some(dot_idx) = cur_routine.find('.') {
+                        let struct_prefix = &cur_routine[..dot_idx];
+                        if struct_prefix == struct_name {
+                            is_allowed = true;
+                        }
+                    }
+                }
+                if !is_allowed {
+                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                        format!(
+                            "Method '{}' is private to type '{}'",
+                            method, struct_name
+                        ),
+                    )));
+                }
+            }
 
             let routine_name = format!("{}.{}", struct_name, method);
             let info =

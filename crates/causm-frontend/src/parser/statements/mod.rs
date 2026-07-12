@@ -29,6 +29,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         // Data
         Rule::assignment_stmt
         | Rule::type_decl
+        | Rule::interface_decl
         | Rule::decay_handler_stmt
         | Rule::field_update_stmt => data::parse_data_stmt(pair),
 

@@ -12,6 +12,7 @@ pub(crate) fn get_ssa_dest_reg(instr: &SsaInstruction) -> Option<SsaReg> {
         | SsaInstruction::Move { dest, .. }
         | SsaInstruction::Clone { dest, .. }
         | SsaInstruction::Call { dest, .. }
+        | SsaInstruction::DynamicCall { dest, .. }
         | SsaInstruction::StructLit { dest, .. }
         | SsaInstruction::TopologyLit { dest, .. }
         | SsaInstruction::ArrayLit { dest, .. }
@@ -55,6 +56,11 @@ pub(crate) fn for_each_ssa_src_reg(
             f(*src);
         }
         SsaInstruction::Call { args, .. } => {
+            for a in args {
+                f(*a);
+            }
+        }
+        SsaInstruction::DynamicCall { args, .. } => {
             for a in args {
                 f(*a);
             }

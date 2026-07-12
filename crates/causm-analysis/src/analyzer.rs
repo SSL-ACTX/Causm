@@ -138,6 +138,8 @@ pub struct EntropicAnalyzer {
     pub use_z3: bool,
     pub enforce_egc: bool,
     pub in_entropy_match: bool,
+    pub(crate) current_routine: Option<String>,
+    pub(crate) interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -167,6 +169,8 @@ impl EntropicAnalyzer {
             use_z3: true,
             enforce_egc: false,
             in_entropy_match: false,
+            current_routine: None,
+            interfaces: HashMap::new(),
         };
         analyzer.register_intrinsics();
         analyzer
@@ -626,6 +630,17 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn types_compatible(&self, expected: &Type, actual: &Type) -> bool {
+        if let Type::Custom(ref exp_name) = expected {
+            if self.interfaces.contains_key(exp_name.as_str()) {
+                if let Type::Custom(ref act_name) = actual {
+                    if self
+                        .implements_interface(act_name.as_str(), exp_name.as_str())
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
         if let Type::Custom(name) = expected {
             if let Type::Struct(act_struct) = actual {
                 if self.custom_struct_compatible(name, act_struct) {
@@ -703,11 +718,69 @@ impl EntropicAnalyzer {
                         .all(|(e, a)| self.types_compatible(e, a))
                     && self.types_compatible(&exp_rt, &act_rt)
             }
-            (Type::Custom(exp_name), Type::Custom(act_name)) => exp_name == act_name,
+            (Type::Custom(exp_name), Type::Custom(act_name)) => {
+                if exp_name == act_name {
+                    true
+                } else if self.interfaces.contains_key(exp_name.as_str()) {
+                    self.implements_interface(act_name.as_str(), exp_name.as_str())
+                } else {
+                    false
+                }
+            }
             (Type::Custom(_), _) => false,
             (_, Type::Custom(_)) => false,
             _ => false,
         }
+    }
+
+    pub(crate) fn implements_interface(
+        &self,
+        concrete_name: &str,
+        interface_name: &str,
+    ) -> bool {
+        if !self.interfaces.contains_key(interface_name) {
+            return false;
+        }
+        let interface_methods = &self.interfaces[interface_name];
+        for im in interface_methods {
+            let concrete_method_name = format!("{}.{}", concrete_name, im.name);
+            if let Some(cm) = self.routines.get(&concrete_method_name) {
+                if cm.params.len() != im.params.len() {
+                    return false;
+                }
+                // Skip self parameter type checking (index 0) but check modes
+                if cm.params[0].0 != im.params[0].mode {
+                    return false;
+                }
+                for i in 1..cm.params.len() {
+                    let cp_param = &cm.params[i];
+                    let ip_param = &im.params[i];
+                    if cp_param.0 != ip_param.mode {
+                        return false;
+                    }
+                    if let Some(ref typ) = ip_param.typ {
+                        let ip_type = Type::from_typename(typ);
+                        if !self.types_compatible(&ip_type, &cp_param.2) {
+                            return false;
+                        }
+                    }
+                }
+                if let Some(ref rt) = im.return_type {
+                    let im_rt = Type::from_typename(rt);
+                    if !self.types_compatible(&im_rt, &cm.return_type) {
+                        return false;
+                    }
+                }
+                if let Some(im_budget) = im.taking_ms {
+                    if cm.taking_ms > im_budget {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
+        true
     }
 
     fn statement_snippet(&self, stmt: &SpannedStatement) -> String {

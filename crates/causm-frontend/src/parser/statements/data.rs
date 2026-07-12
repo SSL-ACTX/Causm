@@ -47,11 +47,21 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::type_decl => {
-            let mut inner = pair.into_inner();
+            let mut inner = pair.into_inner().peekable();
             let name = inner
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
+
+            let mut extends = None;
+            if let Some(p) = inner.peek() {
+                if p.as_rule() == Rule::identifier {
+                    extends = Some(p.as_str().to_string());
+                }
+            }
+            if extends.is_some() {
+                inner.next(); // Consume the extends identifier
+            }
 
             let mut decay_after_ms = None;
             let mut scoped_branch = None;
@@ -106,6 +116,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
             Statement::TypeDecl {
                 name,
+                extends,
                 fields,
                 decay_after_ms,
                 scoped_branch,
@@ -168,6 +179,64 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     right: Box::new(value),
                 })
             }
+        }
+        Rule::interface_decl => {
+            let mut inner = pair.into_inner();
+            let name = inner.next().unwrap().as_str().to_string();
+            let mut methods = Vec::new();
+            for m_pair in inner {
+                let mut m_inner = m_pair.into_inner();
+                let m_name = m_inner.next().unwrap().as_str().to_string();
+
+                let mut params = Vec::new();
+                let mut return_type = None;
+                let mut taking_ms = None;
+
+                for opt in m_inner {
+                    match opt.as_rule() {
+                        Rule::param_decl_list => {
+                            for p_pair in opt.into_inner() {
+                                let mut p_inner = p_pair.into_inner();
+                                let mode_str = p_inner.next().unwrap().as_str();
+                                let mode = match mode_str {
+                                    "consume" => causm_core::ParamMode::Consume,
+                                    "clone" => causm_core::ParamMode::Clone,
+                                    "decay" => causm_core::ParamMode::Decay,
+                                    "peek" => causm_core::ParamMode::Peek,
+                                    _ => causm_core::ParamMode::Peek,
+                                };
+                                let p_name =
+                                    p_inner.next().unwrap().as_str().to_string();
+                                let typ = p_inner.next().map(parse_type_name);
+                                params.push(causm_core::ParamDecl {
+                                    mode,
+                                    name: p_name,
+                                    typ,
+                                });
+                            }
+                        }
+                        Rule::return_annotation => {
+                            let type_name_pair = opt.into_inner().next().unwrap();
+                            return_type = Some(parse_type_name(type_name_pair));
+                        }
+                        Rule::duration_limit => {
+                            taking_ms = opt
+                                .into_inner()
+                                .next()
+                                .and_then(|p| p.as_str().parse::<u64>().ok());
+                        }
+                        _ => {}
+                    }
+                }
+
+                methods.push(causm_core::InterfaceMethod {
+                    name: m_name,
+                    params,
+                    return_type,
+                    taking_ms,
+                });
+            }
+            Statement::InterfaceDecl { name, methods }
         }
         _ => unreachable!(),
     }

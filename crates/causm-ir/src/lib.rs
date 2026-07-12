@@ -93,6 +93,11 @@ macro_rules! instructions {
                 args: Vec<$crate::Reg>,
                 dest: $crate::Reg
             },
+            DynamicCall {
+                method: String,
+                args: Vec<$crate::Reg>,
+                dest: $crate::Reg
+            },
             Return {
                 src: Option<$crate::Reg>
             },

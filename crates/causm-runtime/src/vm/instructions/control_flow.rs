@@ -42,6 +42,39 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn DynamicCall(
+        &mut self,
+        branch_id: &str,
+        method: String,
+        args: Vec<Reg>,
+        dest: Reg,
+    ) -> Result<(), TemporalError> {
+        if args.is_empty() {
+            return Err(TemporalError::EvalError(
+                "DynamicCall requires at least one argument (the receiver)"
+                    .to_string(),
+            ));
+        }
+        let receiver_reg = args[0].0;
+        let type_name = {
+            let branch = self.get_branch_mut(branch_id)?;
+            let meta = branch
+                .arena
+                .metadata
+                .get(receiver_reg as usize)
+                .and_then(|m| m.as_ref())
+                .ok_or_else(|| {
+                    TemporalError::EvalError("receiver has no metadata".to_string())
+                })?;
+            meta.type_name.clone().ok_or_else(|| {
+                TemporalError::EvalError("receiver has no type name".to_string())
+            })?
+        };
+
+        let routine_name = format!("{}.{}", type_name, method);
+        self.Call(branch_id, routine_name, args, dest)
+    }
+
     pub(crate) fn Call(
         &mut self,
         branch_id: &str,

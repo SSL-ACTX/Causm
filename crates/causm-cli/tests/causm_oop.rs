@@ -203,3 +203,154 @@ fn causm_oop_default_field_values() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_oop_encapsulation_success() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Account = struct {
+            _balance: int = 100
+        }
+
+        routine Account.get_balance(peek self) -> int (taking 4ms) {
+            let b = self._balance
+            yield b
+        }
+
+        let a: Account = struct {}
+        let b = a.get_balance()
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_encapsulation_failure_field() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Account = struct {
+            _balance: int = 100
+        }
+
+        let a: Account = struct {}
+        let b = a._balance
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.kind.to_string().contains("private"));
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_encapsulation_failure_method() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Account = struct {
+            balance: int = 100
+        }
+
+        routine Account._secret(peek self) -> int (taking 4ms) {
+            let b = self.balance
+            yield b
+        }
+
+        let a: Account = struct {}
+        let b = a._secret()
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.kind.to_string().contains("private"));
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_interfaces() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Actor {
+            routine act(consume self) -> int (taking 10ms)
+        }
+
+        type Robot = struct {
+            id: int
+        }
+
+        routine Robot.act(consume self) -> int (taking 5ms) {
+            let id = self.id
+            yield id
+        }
+
+        let r: Robot = struct { id = 42 }
+        let a: Actor = r
+        let id = a.act()
+        let _id = id
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_composition() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Player = struct {
+            score: int = 10
+        }
+
+        type SpecialPlayer = Player + struct {
+            bonus: int = 5
+        }
+
+        let p: SpecialPlayer = struct {}
+        let s = p.score
+        let b = p.bonus
+        let _s = s
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}

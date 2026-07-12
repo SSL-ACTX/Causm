@@ -29,7 +29,7 @@ impl Vm {
         dest: Reg,
         src: Reg,
     ) -> Result<(), TemporalError> {
-        let val = {
+        let (val, metadata) = {
             let branch = self.get_branch_mut(branch_id)?;
             let payload =
                 branch.arena.peek(src.0).ok_or(TemporalError::MemoryFault(
@@ -37,9 +37,24 @@ impl Vm {
                 ))?;
             let cost = branch.arena.calculate_clone_cost(&payload, 1);
             branch.consume_budget(cost)?;
-            payload
+            let metadata = branch
+                .arena
+                .metadata
+                .get(src.0 as usize)
+                .and_then(|m| m.clone());
+            (payload, metadata)
         };
-        self.insert_reg(branch_id, dest.0, EntropicState::Valid(val))
+        let branch = self.get_branch_mut(branch_id)?;
+        if let Some(meta) = metadata {
+            branch.arena.insert_with_metadata(
+                dest.0,
+                EntropicState::Valid(val),
+                meta,
+            )?;
+        } else {
+            branch.arena.insert(dest.0, EntropicState::Valid(val))?;
+        }
+        Ok(())
     }
 
     pub(crate) fn Entangle(

@@ -120,6 +120,11 @@ pub enum SsaInstruction {
         args: Vec<SsaReg>,
         dest: SsaReg,
     },
+    DynamicCall {
+        method: String,
+        args: Vec<SsaReg>,
+        dest: SsaReg,
+    },
     Print {
         src: SsaReg,
     },
@@ -958,6 +963,20 @@ impl SsaTransformer {
                     },
                 }
             }
+            Instruction::DynamicCall { method, args, dest } => {
+                let args_ssa =
+                    args.iter().map(|&r| self.current_ssa_reg(r)).collect();
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::DynamicCall {
+                    method: method.clone(),
+                    args: args_ssa,
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                }
+            }
             Instruction::Print { src } => SsaInstruction::Print {
                 src: self.current_ssa_reg(*src),
             },
@@ -1374,6 +1393,7 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Move { dest, .. } => f(*dest),
         Instruction::Clone { dest, .. } => f(*dest),
         Instruction::Call { dest, .. } => f(*dest),
+        Instruction::DynamicCall { dest, .. } => f(*dest),
         Instruction::StructLit { dest, .. } => f(*dest),
         Instruction::TopologyLit { dest, .. } => f(*dest),
         Instruction::ArrayLit { dest, .. } => f(*dest),

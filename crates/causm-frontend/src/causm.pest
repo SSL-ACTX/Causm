@@ -39,6 +39,7 @@ statement = {
     | loop_stmt
     | yield_stmt
     | type_decl
+    | interface_decl
     | decay_handler_stmt
     | assert_time_stmt
     | assignment_stmt
@@ -196,7 +197,9 @@ type_field = { "const"? ~ identifier ~ ":" ~ type_name ~ ("=" ~ expression)? }
 type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
-type_decl = { "type" ~ identifier ~ "=" ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
+type_decl = { "type" ~ identifier ~ "=" ~ (identifier ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
+interface_decl = { "interface" ~ identifier ~ "{" ~ interface_method* ~ "}" }
+interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }

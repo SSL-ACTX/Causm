@@ -77,7 +77,21 @@ impl Vm {
                 causm_core::value::MemoryError::AlreadyConsumed,
             ));
         }
-        self.insert_reg(branch_id, dest.0, state)
+        let metadata = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .metadata
+                .get(src.0 as usize)
+                .and_then(|m| m.clone())
+        };
+        let branch = self.get_branch_mut(branch_id)?;
+        if let Some(meta) = metadata {
+            branch.arena.insert_with_metadata(dest.0, state, meta)?;
+        } else {
+            branch.arena.insert(dest.0, state)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn BinaryOp(

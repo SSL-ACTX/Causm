@@ -29,6 +29,7 @@ impl Vm {
             | Statement::Capability(_)
             | Statement::Assignment { .. }
             | Statement::TypeDecl { .. }
+            | Statement::InterfaceDecl { .. }
             | Statement::FieldUpdate { .. }
             | Statement::Expression(_)
             | Statement::Print(_) => 0,

@@ -358,6 +358,8 @@ impl EntropicAnalyzer {
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
         routine_analyzer.type_decls = self.type_decls.clone();
+        routine_analyzer.interfaces = self.interfaces.clone();
+        routine_analyzer.current_routine = Some(name.clone());
         if let Some(main_state) = self.branch_contexts.get("main") {
             let routine_main =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();

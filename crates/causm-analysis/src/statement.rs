@@ -170,7 +170,7 @@ pub fn estimate_statement_cost(
         Statement::SpeculationMode(_) => 0,
         Statement::Break => 0,
         Statement::Entangle { .. } => 0,
-        Statement::TypeDecl { .. } => 0,
+        Statement::TypeDecl { .. } | Statement::InterfaceDecl { .. } => 0,
         Statement::DecayHandler { body, .. } => estimate_block_cost(analyzer, body),
         Statement::AssertTime { fallback, .. } => {
             1 + fallback

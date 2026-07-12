@@ -800,16 +800,26 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         }
         Statement::TypeDecl {
             name,
+            extends,
             fields,
-            decay_after_ms: Some(limit),
-            ..
+            decay_after_ms,
+            scoped_branch: _,
         } => {
-            ctx.type_decay_limits.insert(name.clone(), *limit);
-            ctx.type_decls.insert(name.clone(), fields.clone());
+            let mut resolved_fields = HashMap::new();
+            if let Some(ref base_name) = extends {
+                if let Some(base_fields) = ctx.type_decls.get(base_name) {
+                    resolved_fields = base_fields.clone();
+                }
+            }
+            for (k, v) in fields {
+                resolved_fields.insert(k.clone(), v.clone());
+            }
+            if let Some(limit) = decay_after_ms {
+                ctx.type_decay_limits.insert(name.clone(), *limit);
+            }
+            ctx.type_decls.insert(name.clone(), resolved_fields);
         }
-        Statement::TypeDecl { name, fields, .. } => {
-            ctx.type_decls.insert(name.clone(), fields.clone());
-        }
+        Statement::InterfaceDecl { .. } => {}
         _ => {
             // Other statements can be added as needed
         }
@@ -868,7 +878,7 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
 
         Expression::MethodCall {
             target,
-            method: _,
+            method,
             args,
             resolved_routine,
         } => {
@@ -882,11 +892,19 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 arg_regs.push(lower_expression(ctx, arg));
             }
             let dest = ctx.alloc_reg();
-            ctx.push(Instruction::Call {
-                routine: routine_name,
-                args: arg_regs,
-                dest,
-            });
+            if routine_name == "<dynamic>" {
+                ctx.push(Instruction::DynamicCall {
+                    method: method.clone(),
+                    args: arg_regs,
+                    dest,
+                });
+            } else {
+                ctx.push(Instruction::Call {
+                    routine: routine_name,
+                    args: arg_regs,
+                    dest,
+                });
+            }
             dest
         }
 
