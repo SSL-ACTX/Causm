@@ -1,10 +1,23 @@
+pub mod coalescing;
+pub mod constant_prop;
+pub mod dead_code;
+pub(crate) mod utils;
+
+#[cfg(test)]
+mod tests;
+
 use crate::cfg::{self, BlockId, Terminator, CFG};
 use crate::ssa::{SsaCFG, SsaInstruction, SsaReg, SsaTerminator, SsaTransformer};
 use crate::{Instruction, IrProgram, Reg};
 use std::collections::{HashMap, HashSet};
 
+use coalescing::BlockCoalescingPass;
+use constant_prop::ConstantPropagationPass;
+use dead_code::DeadCodeEliminationPass;
+
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     let mut manager = PassManager::new();
+    manager.add_pass(Box::new(ConstantPropagationPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));
 
@@ -21,38 +34,49 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
             let destructed_cfg = destruct_ssa(ssa_cfg);
             routine.instructions = flatten_cfg(&destructed_cfg);
         }
-        routine.spans.resize(routine.instructions.len(), None);
     }
 
-    // 2. Scan all timeline blocks to build a set of registers used anywhere in the timeline
-    let mut globally_used_regs = HashSet::new();
-    for block in &ir.blocks {
+    // 2. Optimize blocks
+    for block in ir.blocks.iter_mut() {
         if !block.instructions.is_empty() {
+            // Analyze the block to collect all read registers inside it (to feed globally_used_regs).
+            // Any register that is read before it is defined in the block (or is a parameter) must be preserved.
             let cfg = CFG::from_flat_instructions(&block.instructions);
             let ssa_transformer = SsaTransformer::new(cfg);
             let ssa_cfg = ssa_transformer.transform();
 
+            let mut defined = HashSet::new();
+            let mut globally_used_regs = HashSet::new();
+
             for ssa_block in ssa_cfg.blocks.values() {
                 for phi in &ssa_block.phi_nodes {
+                    defined.insert(phi.dest.reg);
                     for (_, incoming_reg) in &phi.incoming {
-                        globally_used_regs.insert(incoming_reg.reg);
+                        if !defined.contains(&incoming_reg.reg) {
+                            globally_used_regs.insert(incoming_reg.reg);
+                        }
                     }
                 }
                 for instr in &ssa_block.instructions {
-                    for_each_ssa_src_reg(instr, &mut |r| {
-                        globally_used_regs.insert(r.reg);
+                    if let Some(dest) = utils::get_ssa_dest_reg(instr) {
+                        defined.insert(dest.reg);
+                    }
+                    utils::for_each_ssa_src_reg(instr, &mut |src| {
+                        if !defined.contains(&src.reg) {
+                            globally_used_regs.insert(src.reg);
+                        }
                     });
                 }
-                for_each_ssa_term_src_reg(&ssa_block.terminator, &mut |r| {
-                    globally_used_regs.insert(r.reg);
-                });
+                utils::for_each_ssa_term_src_reg(
+                    &ssa_block.terminator,
+                    &mut |src| {
+                        if !defined.contains(&src.reg) {
+                            globally_used_regs.insert(src.reg);
+                        }
+                    },
+                );
             }
-        }
-    }
 
-    // 3. Optimize timeline blocks with the global usage set
-    for block in &mut ir.blocks {
-        if !block.instructions.is_empty() {
             let cfg = CFG::from_flat_instructions(&block.instructions);
             let ssa_transformer = SsaTransformer::new(cfg);
             let mut ssa_cfg = ssa_transformer.transform();
@@ -62,10 +86,53 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
             let destructed_cfg = destruct_ssa(ssa_cfg);
             block.instructions = flatten_cfg(&destructed_cfg);
         }
-        block.spans.resize(block.instructions.len(), None);
     }
 
     ir
+}
+
+pub trait OptimizationPass {
+    fn name(&self) -> &str;
+    fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        globally_used_regs: &HashSet<u32>,
+        is_routine: bool,
+    ) -> bool;
+}
+
+#[derive(Default)]
+pub struct PassManager {
+    passes: Vec<Box<dyn OptimizationPass>>,
+}
+
+impl PassManager {
+    pub fn new() -> Self {
+        Self { passes: Vec::new() }
+    }
+
+    pub fn add_pass(&mut self, pass: Box<dyn OptimizationPass>) {
+        self.passes.push(pass);
+    }
+
+    pub fn run(
+        &self,
+        ssa_cfg: &mut SsaCFG,
+        globally_used_regs: &HashSet<u32>,
+        is_routine: bool,
+    ) {
+        let mut changed = true;
+        let mut iterations = 0;
+        while changed && iterations < 10 {
+            changed = false;
+            for pass in &self.passes {
+                if pass.run(ssa_cfg, globally_used_regs, is_routine) {
+                    changed = true;
+                }
+            }
+            iterations += 1;
+        }
+    }
 }
 
 fn ssa_reg_to_reg(r: SsaReg) -> Reg {
@@ -409,446 +476,6 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
     }
 }
 
-fn get_ssa_dest_reg(instr: &SsaInstruction) -> Option<SsaReg> {
-    match instr {
-        SsaInstruction::BinaryOp { dest, .. }
-        | SsaInstruction::UnaryOp { dest, .. }
-        | SsaInstruction::LoadInt { dest, .. }
-        | SsaInstruction::LoadFloat { dest, .. }
-        | SsaInstruction::LoadBool { dest, .. }
-        | SsaInstruction::LoadString { dest, .. }
-        | SsaInstruction::LoadNull { dest }
-        | SsaInstruction::Move { dest, .. }
-        | SsaInstruction::Clone { dest, .. }
-        | SsaInstruction::Call { dest, .. }
-        | SsaInstruction::StructLit { dest, .. }
-        | SsaInstruction::TopologyLit { dest, .. }
-        | SsaInstruction::ArrayLit { dest, .. }
-        | SsaInstruction::FieldAccess { dest, .. }
-        | SsaInstruction::IndexAccess { dest, .. }
-        | SsaInstruction::Defer { dest, .. } => Some(*dest),
-
-        SsaInstruction::FieldUpdate { target, .. }
-        | SsaInstruction::IndexFieldUpdate { target, .. } => Some(*target),
-
-        _ => None,
-    }
-}
-
-fn for_each_ssa_src_reg(instr: &SsaInstruction, f: &mut impl FnMut(SsaReg)) {
-    match instr {
-        SsaInstruction::BinaryOp { left, right, .. } => {
-            f(*left);
-            f(*right);
-        }
-        SsaInstruction::UnaryOp { src, .. } => {
-            f(*src);
-        }
-        SsaInstruction::Move { src, .. } => {
-            f(*src);
-        }
-        SsaInstruction::Consume { src } => {
-            f(*src);
-        }
-        SsaInstruction::ConsumeField { src, .. } => {
-            f(*src);
-        }
-        SsaInstruction::ConsumeFieldDynamic { target, index } => {
-            f(*target);
-            f(*index);
-        }
-        SsaInstruction::Clone { src, .. } => {
-            f(*src);
-        }
-        SsaInstruction::Call { args, .. } => {
-            for a in args {
-                f(*a);
-            }
-        }
-        SsaInstruction::StructLit { fields, .. } => {
-            for v in fields.values() {
-                f(*v);
-            }
-        }
-        SsaInstruction::TopologyLit { fields, .. } => {
-            for v in fields.values() {
-                f(*v);
-            }
-        }
-        SsaInstruction::ArrayLit { elements, .. } => {
-            for e in elements {
-                f(*e);
-            }
-        }
-        SsaInstruction::FieldAccess { target, .. } => {
-            f(*target);
-        }
-        SsaInstruction::FieldUpdate {
-            old_target, src, ..
-        } => {
-            f(*old_target);
-            f(*src);
-        }
-        SsaInstruction::IndexAccess { target, index, .. } => {
-            f(*target);
-            f(*index);
-        }
-        SsaInstruction::IndexFieldUpdate {
-            old_target,
-            index,
-            src,
-            ..
-        } => {
-            f(*old_target);
-            f(*index);
-            f(*src);
-        }
-        SsaInstruction::For { source, body, .. } => {
-            f(*source);
-            for b in body {
-                for_each_ssa_src_reg(b, f);
-            }
-        }
-        SsaInstruction::SplitMap { source, body, .. } => {
-            f(*source);
-            for b in body {
-                for_each_ssa_src_reg(b, f);
-            }
-        }
-        SsaInstruction::Await { target } => {
-            f(*target);
-        }
-        SsaInstruction::Print { src } => {
-            f(*src);
-        }
-        SsaInstruction::Debug { src } => {
-            f(*src);
-        }
-        SsaInstruction::ChanSend { src, .. } => {
-            f(*src);
-        }
-        SsaInstruction::Lease { source_reg, .. } => {
-            f(*source_reg);
-        }
-        SsaInstruction::EndLease { source_reg, .. } => {
-            f(*source_reg);
-        }
-        SsaInstruction::Entangle { regs } => {
-            for &r in regs {
-                f(r);
-            }
-        }
-        SsaInstruction::MatchEntropy { target, .. } => {
-            f(*target);
-        }
-        _ => {}
-    }
-}
-
-fn for_each_ssa_term_src_reg(term: &SsaTerminator, f: &mut impl FnMut(SsaReg)) {
-    match term {
-        SsaTerminator::Branch { cond, .. } => {
-            f(*cond);
-        }
-        SsaTerminator::Return { src: Some(r) } => {
-            f(*r);
-        }
-        SsaTerminator::MatchEntropy { target, .. } => {
-            f(*target);
-        }
-        _ => {}
-    }
-}
-
-fn has_side_effects(instr: &SsaInstruction) -> bool {
-    !matches!(
-        instr,
-        SsaInstruction::BinaryOp { .. }
-            | SsaInstruction::UnaryOp { .. }
-            | SsaInstruction::LoadInt { .. }
-            | SsaInstruction::LoadFloat { .. }
-            | SsaInstruction::LoadBool { .. }
-            | SsaInstruction::LoadString { .. }
-            | SsaInstruction::LoadNull { .. }
-            | SsaInstruction::Move { .. }
-            | SsaInstruction::Clone { .. }
-            | SsaInstruction::StructLit { .. }
-            | SsaInstruction::TopologyLit { .. }
-            | SsaInstruction::ArrayLit { .. }
-            | SsaInstruction::FieldAccess { .. }
-            | SsaInstruction::IndexAccess { .. }
-            | SsaInstruction::FieldUpdate { .. }
-            | SsaInstruction::IndexFieldUpdate { .. }
-    )
-}
-
-pub fn dead_code_elimination(
-    ssa_cfg: &mut SsaCFG,
-    globally_used_regs: &HashSet<u32>,
-    is_routine: bool,
-) -> bool {
-    let mut use_counts: HashMap<SsaReg, usize> = HashMap::new();
-    let mut count_uses = |r: SsaReg| {
-        *use_counts.entry(r).or_insert(0) += 1;
-    };
-
-    for block in ssa_cfg.blocks.values() {
-        for phi in &block.phi_nodes {
-            for (_, incoming_reg) in &phi.incoming {
-                count_uses(*incoming_reg);
-            }
-        }
-        for instr in &block.instructions {
-            for_each_ssa_src_reg(instr, &mut count_uses);
-        }
-        for_each_ssa_term_src_reg(&block.terminator, &mut count_uses);
-    }
-
-    let mut changed = true;
-    let mut any_changed = false;
-    while changed {
-        changed = false;
-        for block in ssa_cfg.blocks.values_mut() {
-            let mut i = 0;
-            while i < block.instructions.len() {
-                let instr = &block.instructions[i];
-                if let Some(dest) = get_ssa_dest_reg(instr) {
-                    let mut is_used =
-                        use_counts.get(&dest).copied().unwrap_or(0) > 0;
-                    if !is_routine && globally_used_regs.contains(&dest.reg) {
-                        is_used = true;
-                    }
-                    if !is_used && !has_side_effects(instr) {
-                        for_each_ssa_src_reg(instr, &mut |r| {
-                            if let Some(count) = use_counts.get_mut(&r) {
-                                if *count > 0 {
-                                    *count -= 1;
-                                }
-                            }
-                        });
-                        block.instructions.remove(i);
-                        changed = true;
-                        any_changed = true;
-                        continue;
-                    }
-                }
-                i += 1;
-            }
-        }
-    }
-    any_changed
-}
-
-pub trait OptimizationPass {
-    fn name(&self) -> &str;
-    fn run(
-        &self,
-        ssa_cfg: &mut SsaCFG,
-        globally_used_regs: &HashSet<u32>,
-        is_routine: bool,
-    ) -> bool;
-}
-
-#[derive(Default)]
-pub struct PassManager {
-    passes: Vec<Box<dyn OptimizationPass>>,
-}
-
-impl PassManager {
-    pub fn new() -> Self {
-        Self { passes: Vec::new() }
-    }
-
-    pub fn add_pass(&mut self, pass: Box<dyn OptimizationPass>) {
-        self.passes.push(pass);
-    }
-
-    pub fn run(
-        &self,
-        ssa_cfg: &mut SsaCFG,
-        globally_used_regs: &HashSet<u32>,
-        is_routine: bool,
-    ) {
-        let mut changed = true;
-        let mut iterations = 0;
-        while changed && iterations < 10 {
-            changed = false;
-            for pass in &self.passes {
-                if pass.run(ssa_cfg, globally_used_regs, is_routine) {
-                    changed = true;
-                }
-            }
-            iterations += 1;
-        }
-    }
-}
-
-pub struct DeadCodeEliminationPass;
-
-impl OptimizationPass for DeadCodeEliminationPass {
-    fn name(&self) -> &str {
-        "DeadCodeElimination"
-    }
-
-    fn run(
-        &self,
-        ssa_cfg: &mut SsaCFG,
-        globally_used_regs: &HashSet<u32>,
-        is_routine: bool,
-    ) -> bool {
-        dead_code_elimination(ssa_cfg, globally_used_regs, is_routine)
-    }
-}
-
-pub struct BlockCoalescingPass;
-
-impl OptimizationPass for BlockCoalescingPass {
-    fn name(&self) -> &str {
-        "BlockCoalescing"
-    }
-
-    fn run(
-        &self,
-        ssa_cfg: &mut SsaCFG,
-        _globally_used_regs: &HashSet<u32>,
-        _is_routine: bool,
-    ) -> bool {
-        let mut changed = false;
-
-        loop {
-            let mut merge_candidate: Option<(BlockId, BlockId)> = None;
-            let (preds, succs) = compute_ssa_predecessors_successors(ssa_cfg);
-
-            for &id in ssa_cfg.blocks.keys() {
-                if let Some(successors_list) = succs.get(&id) {
-                    if successors_list.len() == 1 {
-                        let successor_b = successors_list[0];
-                        if let Some(predecessors_list) = preds.get(&successor_b) {
-                            if predecessors_list.len() == 1
-                                && predecessors_list[0] == id
-                                && successor_b != ssa_cfg.entry_block
-                            {
-                                merge_candidate = Some((id, successor_b));
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if let Some((id_a, id_b)) = merge_candidate {
-                let block_b = ssa_cfg.blocks.remove(&id_b).unwrap();
-                let block_a = ssa_cfg.blocks.get_mut(&id_a).unwrap();
-
-                let mut b_instructions = Vec::new();
-                for phi in block_b.phi_nodes {
-                    if let Some((_, src_reg)) =
-                        phi.incoming.iter().find(|(pred, _)| *pred == id_a)
-                    {
-                        b_instructions.push(SsaInstruction::Move {
-                            dest: phi.dest,
-                            src: *src_reg,
-                        });
-                    }
-                }
-                b_instructions.extend(block_b.instructions);
-
-                block_a.instructions.extend(b_instructions);
-                block_a.terminator = block_b.terminator;
-
-                redirect_predecessor(ssa_cfg, id_b, id_a);
-                changed = true;
-            } else {
-                break;
-            }
-        }
-
-        changed
-    }
-}
-
-fn compute_ssa_predecessors_successors(
-    ssa_cfg: &SsaCFG,
-) -> (
-    HashMap<BlockId, Vec<BlockId>>,
-    HashMap<BlockId, Vec<BlockId>>,
-) {
-    let mut predecessors: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
-    let mut successors: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
-
-    for &id in ssa_cfg.blocks.keys() {
-        predecessors.entry(id).or_default();
-        successors.entry(id).or_default();
-    }
-
-    for (&id, block) in &ssa_cfg.blocks {
-        match &block.terminator {
-            SsaTerminator::Jump { target } => {
-                successors.entry(id).or_default().push(*target);
-                predecessors.entry(*target).or_default().push(id);
-            }
-            SsaTerminator::Branch {
-                then_block,
-                else_block,
-                ..
-            } => {
-                successors.entry(id).or_default().push(*then_block);
-                successors.entry(id).or_default().push(*else_block);
-                predecessors.entry(*then_block).or_default().push(id);
-                predecessors.entry(*else_block).or_default().push(id);
-            }
-            SsaTerminator::MatchEntropy {
-                valid_block,
-                decayed_block,
-                pending_block,
-                consumed_block,
-                ..
-            } => {
-                let targets = [
-                    *valid_block,
-                    *decayed_block,
-                    *pending_block,
-                    *consumed_block,
-                ];
-                for t in targets.into_iter().flatten() {
-                    successors.entry(id).or_default().push(t);
-                    predecessors.entry(t).or_default().push(id);
-                }
-            }
-            SsaTerminator::Select {
-                cases,
-                timeout_block,
-                ..
-            } => {
-                for case in cases {
-                    let target_id = case.target as BlockId;
-                    successors.entry(id).or_default().push(target_id);
-                    predecessors.entry(target_id).or_default().push(id);
-                }
-                if let Some(t) = timeout_block {
-                    successors.entry(id).or_default().push(*t);
-                    predecessors.entry(*t).or_default().push(id);
-                }
-            }
-            SsaTerminator::Return { .. } | SsaTerminator::Unreachable => {}
-        }
-    }
-
-    (predecessors, successors)
-}
-
-fn redirect_predecessor(ssa_cfg: &mut SsaCFG, old_pred: BlockId, new_pred: BlockId) {
-    for block in ssa_cfg.blocks.values_mut() {
-        for phi in &mut block.phi_nodes {
-            for (incoming_block, _) in &mut phi.incoming {
-                if *incoming_block == old_pred {
-                    *incoming_block = new_pred;
-                }
-            }
-        }
-    }
-}
-
 pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {
     let mut blocks = HashMap::new();
 
@@ -896,7 +523,7 @@ pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {
                     .map(|c| cfg::SelectCase {
                         chan_id: c.chan_id.clone(),
                         dest: ssa_reg_to_reg(c.dest),
-                        target_block: c.target as u32,
+                        target_block: c.target as BlockId,
                     })
                     .collect();
                 Terminator::Select {
@@ -1268,45 +895,4 @@ pub fn flatten_cfg(cfg: &CFG) -> Vec<Instruction> {
     }
 
     instructions
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_block_coalescing_pass() {
-        let instrs = vec![
-            Instruction::LoadInt {
-                dest: Reg(0),
-                value: 5,
-            },
-            Instruction::Jump { target: 2 },
-            Instruction::LoadInt {
-                dest: Reg(1),
-                value: 10,
-            },
-            Instruction::Return { src: Some(Reg(1)) },
-        ];
-
-        let cfg = CFG::from_flat_instructions(&instrs);
-        let transformer = SsaTransformer::new(cfg);
-        let mut ssa_cfg = transformer.transform();
-
-        let pass = BlockCoalescingPass;
-        let empty_used = HashSet::new();
-        let changed = pass.run(&mut ssa_cfg, &empty_used, false);
-
-        assert!(changed);
-        assert_eq!(ssa_cfg.blocks.len(), 1);
-        let block0 = ssa_cfg.blocks.get(&0).unwrap();
-        assert_eq!(block0.instructions.len(), 2);
-
-        match &block0.terminator {
-            SsaTerminator::Return { src } => {
-                assert!(src.is_some());
-            }
-            _ => panic!("Expected return terminator"),
-        }
-    }
 }
