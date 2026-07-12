@@ -77,6 +77,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
             let mut params = Vec::new();
             let mut return_type = None;
             let mut taking_ms: Option<u64> = None;
+            let mut state_constraint = None;
             let mut body = Vec::new();
 
             for current in inner {
@@ -122,6 +123,13 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             }
                         }
                     }
+                    Rule::state_constraint => {
+                        let mut sc_inner = current.into_inner();
+                        let var_name = sc_inner.next().unwrap().as_str().to_string();
+                        let state_name =
+                            sc_inner.next().unwrap().as_str().to_string();
+                        state_constraint = Some((var_name, state_name));
+                    }
                     Rule::statement => {
                         if let Some(s) = current.into_inner().next() {
                             body.push(parse_statement(s));
@@ -136,6 +144,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 params,
                 return_type,
                 taking_ms,
+                state_constraint,
                 body,
             }
         }

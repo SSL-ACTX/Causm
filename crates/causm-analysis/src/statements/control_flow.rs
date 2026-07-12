@@ -64,6 +64,91 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn IfLet(
+        &mut self,
+        binding: &String,
+        expr: &Expression,
+        then_branch: &[SpannedStatement],
+        else_branch: &Option<Vec<SpannedStatement>>,
+    ) -> Result<(), SemanticError> {
+        let cast_type = match expr {
+            Expression::TypeAssertion { cast_type, .. } => {
+                causm_core::types::Type::from_typename(cast_type)
+            }
+            _ => {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    "if let expression must be a type assertion".into(),
+                )));
+            }
+        };
+
+        analyze_expression(self, expr)?;
+
+        let original_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut then_contexts = self.branch_contexts.clone();
+        then_contexts.insert(self.current_branch.clone(), original_state.clone());
+        let previous_contexts =
+            std::mem::replace(&mut self.branch_contexts, then_contexts);
+
+        {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.types.insert(binding.clone(), cast_type.clone());
+            branch.produced.insert(binding.clone());
+            branch
+                .instantiated_at
+                .insert(binding.clone(), branch.accumulated_cost);
+        }
+
+        for inner_stmt in then_branch {
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        let mut then_end_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+
+        if self.enforce_egc && !then_end_state.consumed.contains(binding) {
+            return Err(self
+                .annotate(SemanticErrorKind::UnconsumedVariable(binding.clone())));
+        }
+
+        then_end_state.types.remove(binding);
+        then_end_state.produced.remove(binding);
+        then_end_state.consumed.remove(binding);
+        then_end_state.instantiated_at.remove(binding);
+
+        self.branch_contexts = previous_contexts.clone();
+        let mut else_contexts = self.branch_contexts.clone();
+        else_contexts.insert(self.current_branch.clone(), original_state.clone());
+        self.branch_contexts = else_contexts;
+
+        if let Some(else_stmts) = else_branch {
+            for inner_stmt in else_stmts {
+                self.analyze_statement(inner_stmt)?;
+            }
+        }
+
+        let else_end_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+
+        self.branch_contexts = previous_contexts;
+        let merged = self.merge_states(then_end_state, else_end_state, &None)?;
+        self.branch_contexts
+            .insert(self.current_branch.clone(), merged);
+
+        Ok(())
+    }
+
     pub(crate) fn Loop(
         &mut self,
         max_ms: &u64,
@@ -332,6 +417,7 @@ impl EntropicAnalyzer {
         params: &[ParamDecl],
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
+        state_constraint: &Option<(String, String)>,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         if self.routines.contains_key(name) {
@@ -441,6 +527,7 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: final_taking_ms,
+            state_constraint: state_constraint.clone(),
         };
 
         self.routines.insert(name.clone(), routine_info);

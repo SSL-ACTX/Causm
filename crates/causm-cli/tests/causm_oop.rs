@@ -513,3 +513,196 @@ fn causm_oop_multilevel_struct_composition() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_oop_struct_method_inheritance_and_overriding() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Parent = struct { val: int }
+        routine Parent.hello(peek self) -> int taking 10ms {
+            let v = self.val
+            yield v
+        }
+
+        type ChildInheriting = Parent + struct {}
+        type ChildOverriding = Parent + struct {}
+        routine ChildOverriding.hello(peek self) -> int taking 10ms {
+            let v = self.val + 100
+            yield v
+        }
+
+        let c1: ChildInheriting = struct { val = 42 }
+        let c2: ChildOverriding = struct { val = 42 }
+
+        let r1 = c1.hello()
+        let r2 = c2.hello()
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let r1_reg = ir.symbols.get("r1").expect("r1 not found").0;
+    let r1_val = vm.root_timeline.arena.peek(r1_reg);
+    match r1_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 42),
+        _ => panic!("Expected r1 to be 42, got {:?}", r1_val),
+    }
+
+    let r2_reg = ir.symbols.get("r2").expect("r2 not found").0;
+    let r2_val = vm.root_timeline.arena.peek(r2_reg);
+    match r2_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 142),
+        _ => panic!("Expected r2 to be 142, got {:?}", r2_val),
+    }
+    Ok(())
+}
+
+#[test]
+fn causm_oop_interface_default_methods() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface PlayableActor {
+            routine play(peek self) -> int taking 5ms {
+                let x = 777
+                yield x
+            }
+        }
+        type Robot = struct {
+            id: int
+        }
+        let r: Robot = struct { id = 42 }
+        let pa: PlayableActor = r
+        let res = pa.play()
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_reg = ir.symbols.get("res").expect("res not found").0;
+    let res_val = vm.root_timeline.arena.peek(res_reg);
+    match res_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 777),
+        _ => panic!("Expected res to be 777, got {:?}", res_val),
+    }
+    Ok(())
+}
+
+#[test]
+fn causm_oop_entropic_state_gate_constraints() -> anyhow::Result<()> {
+    let source_success = r#"
+    @0ms: {
+        type Device = struct { id: int }
+        routine Device.check(peek self) taking 10ms where self.state == Valid {
+            let id = self.id
+            yield id
+        }
+        let d: Device = struct { id = 101 }
+        let ok = d.check()
+    }
+    "#;
+    let program = parser::parse_causm(source_success)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let source_failure = r#"
+    @0ms: {
+        type Device = struct { id: int }
+        routine Device.check(peek self) taking 10ms where self.state == Decayed {
+            let id = self.id
+            yield id
+        }
+        let d: Device = struct { id = 101 }
+        let fail = d.check()
+    }
+    "#;
+    let program_fail = parser::parse_causm(source_failure)?;
+    let mut analyzer_fail = EntropicAnalyzer::new();
+    let result = analyzer_fail.analyze_program(&program_fail);
+    assert!(result.is_err());
+    let err_msg = result.err().unwrap().to_string();
+    assert!(
+        err_msg.contains("State constraint violated") || err_msg.contains("state")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_guarded_type_assertions() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Actor {
+            routine act(consume self)
+        }
+        type Robot = struct { id: int }
+        routine Robot.act(consume self) taking 1ms {}
+
+        type Human = struct { age: int }
+        routine Human.act(consume self) taking 1ms {}
+
+        let r: Robot = struct { id = 99 }
+        let a: Actor = r
+
+        let success = 0
+        let id_val = 0
+        if let robot = a.(Robot) {
+            success = 1
+            id_val = robot.id
+        } else {
+            success = 2
+        }
+
+        let h: Human = struct { age = 25 }
+        let a2: Actor = h
+        let success2 = 0
+        if let robot2 = a2.(Robot) {
+            success2 = 1
+        } else {
+            success2 = 2
+        }
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let success_reg = ir.symbols.get("success").expect("success not found").0;
+    let success_val = vm.root_timeline.arena.peek(success_reg);
+    match success_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 1),
+        _ => panic!("Expected success to be 1, got {:?}", success_val),
+    }
+
+    let id_reg = ir.symbols.get("id_val").expect("id_val not found").0;
+    let id_val = vm.root_timeline.arena.peek(id_reg);
+    match id_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 99),
+        _ => panic!("Expected id_val to be 99, got {:?}", id_val),
+    }
+
+    let success2_reg = ir.symbols.get("success2").expect("success2 not found").0;
+    let success2_val = vm.root_timeline.arena.peek(success2_reg);
+    match success2_val {
+        Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 2),
+        _ => panic!("Expected success2 to be 2, got {:?}", success2_val),
+    }
+
+    Ok(())
+}

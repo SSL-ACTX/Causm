@@ -102,6 +102,16 @@ pub fn estimate_statement_cost(
                 else_branch.as_ref().unwrap_or(&Vec::new()),
             ))
         }
+        Statement::IfLet {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            1 + estimate_block_cost(analyzer, then_branch).max(estimate_block_cost(
+                analyzer,
+                else_branch.as_ref().unwrap_or(&Vec::new()),
+            ))
+        }
         Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
         Statement::Print(expr) | Statement::Debug(expr) => {
             1 + crate::expression::estimate_expression_cost(analyzer, expr)

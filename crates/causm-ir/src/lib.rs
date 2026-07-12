@@ -232,6 +232,16 @@ macro_rules! instructions {
                 src: $crate::Reg,
                 type_name: String
             },
+            AssertState {
+                src: $crate::Reg,
+                state: String
+            },
+            TryTypeAssert {
+                dest: $crate::Reg,
+                src: $crate::Reg,
+                type_name: String,
+                success: $crate::Reg
+            },
 
             // Misc
             Print {

@@ -120,6 +120,7 @@ pub struct RoutineInfo {
     pub params: Vec<(causm_core::ParamMode, String, Type)>,
     pub return_type: Type,
     pub taking_ms: u64,
+    pub state_constraint: Option<(String, String)>,
 }
 
 pub struct EntropicAnalyzer {
@@ -140,6 +141,7 @@ pub struct EntropicAnalyzer {
     pub in_entropy_match: bool,
     pub(crate) current_routine: Option<String>,
     pub(crate) interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
+    pub(crate) struct_extends: HashMap<String, String>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -171,6 +173,7 @@ impl EntropicAnalyzer {
             in_entropy_match: false,
             current_routine: None,
             interfaces: HashMap::new(),
+            struct_extends: HashMap::new(),
         };
         analyzer.register_intrinsics();
         analyzer
@@ -274,6 +277,7 @@ impl EntropicAnalyzer {
                         .collect(),
                     return_type: ret,
                     taking_ms: 1,
+                    state_constraint: None,
                 },
             );
         }
@@ -293,13 +297,28 @@ impl EntropicAnalyzer {
         self.inspection_depth = 0;
         self.capability_stack.clear();
         self.routines.clear();
+        self.struct_extends.clear();
         self.in_entropy_match = false;
         self.register_intrinsics();
 
         for block in &program.timelines {
             let old_branch = self.current_branch.clone();
-            if let TimeCoordinate::Branch(id) = &block.time {
-                self.current_branch = id.clone();
+            match &block.time {
+                TimeCoordinate::Branch(id) => {
+                    self.current_branch = id.clone();
+                }
+                TimeCoordinate::Global(t) => {
+                    let state =
+                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                    if *t > state.accumulated_cost {
+                        state.accumulated_cost = *t;
+                    }
+                }
+                TimeCoordinate::Relative(t) => {
+                    let state =
+                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                    state.accumulated_cost += *t;
+                }
             }
 
             for stmt in &block.statements {
@@ -598,17 +617,17 @@ impl EntropicAnalyzer {
     }
 
     fn custom_struct_compatible(
-        &self,
+        &mut self,
         name: &str,
         act_struct: &causm_core::types::StructType,
     ) -> bool {
-        if let Some(fields_map) = self.type_decls.get(name) {
+        if let Some(fields_map) = self.type_decls.get(name).cloned() {
             for k in act_struct.fields.keys() {
                 if !fields_map.contains_key(k) {
                     return false;
                 }
             }
-            for (field_name, field_def) in fields_map {
+            for (field_name, field_def) in &fields_map {
                 if field_def.is_const {
                     continue;
                 }
@@ -629,7 +648,11 @@ impl EntropicAnalyzer {
         }
     }
 
-    pub(crate) fn types_compatible(&self, expected: &Type, actual: &Type) -> bool {
+    pub(crate) fn types_compatible(
+        &mut self,
+        expected: &Type,
+        actual: &Type,
+    ) -> bool {
         if let Type::Custom(ref exp_name) = expected {
             if self.interfaces.contains_key(exp_name.as_str()) {
                 if let Type::Custom(ref act_name) = actual {
@@ -734,50 +757,73 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn implements_interface(
-        &self,
+        &mut self,
         concrete_name: &str,
         interface_name: &str,
     ) -> bool {
         if !self.interfaces.contains_key(interface_name) {
             return false;
         }
-        let interface_methods = &self.interfaces[interface_name];
-        for im in interface_methods {
+        let interface_methods = self.interfaces[interface_name].clone();
+        for im in &interface_methods {
             let concrete_method_name = format!("{}.{}", concrete_name, im.name);
-            if let Some(cm) = self.routines.get(&concrete_method_name) {
-                if cm.params.len() != im.params.len() {
+            if !self.routines.contains_key(&concrete_method_name) {
+                if let Some(ref default_body) = im.default_body {
+                    let mut params = im.params.clone();
+                    if !params.is_empty() && params[0].name == "self" {
+                        params[0].typ = None;
+                    }
+                    let routine_name = format!("{}.{}", concrete_name, im.name);
+                    if self
+                        .RoutineDef(
+                            &routine_name,
+                            &params,
+                            &im.return_type,
+                            &im.taking_ms,
+                            &im.state_constraint,
+                            default_body,
+                        )
+                        .is_err()
+                    {
+                        return false;
+                    }
+                } else {
                     return false;
                 }
-                // Skip self parameter type checking (index 0) but check modes
-                if cm.params[0].0 != im.params[0].mode {
-                    return false;
-                }
-                for i in 1..cm.params.len() {
-                    let cp_param = &cm.params[i];
-                    let ip_param = &im.params[i];
-                    if cp_param.0 != ip_param.mode {
-                        return false;
-                    }
-                    if let Some(ref typ) = ip_param.typ {
-                        let ip_type = Type::from_typename(typ);
-                        if !self.types_compatible(&ip_type, &cp_param.2) {
-                            return false;
-                        }
-                    }
-                }
-                if let Some(ref rt) = im.return_type {
-                    let im_rt = Type::from_typename(rt);
-                    if !self.types_compatible(&im_rt, &cm.return_type) {
-                        return false;
-                    }
-                }
-                if let Some(im_budget) = im.taking_ms {
-                    if cm.taking_ms > im_budget {
-                        return false;
-                    }
-                }
-            } else {
+            }
+
+            let (cm_params, cm_return_type, cm_taking_ms) = {
+                let cm = &self.routines[&concrete_method_name];
+                (cm.params.clone(), cm.return_type.clone(), cm.taking_ms)
+            };
+            if cm_params.len() != im.params.len() {
                 return false;
+            }
+            if cm_params[0].0 != im.params[0].mode {
+                return false;
+            }
+            for (i, cp_param) in cm_params.iter().enumerate().skip(1) {
+                let ip_param = &im.params[i];
+                if cp_param.0 != ip_param.mode {
+                    return false;
+                }
+                if let Some(ref typ) = ip_param.typ {
+                    let ip_type = Type::from_typename(typ);
+                    if !self.types_compatible(&ip_type, &cp_param.2) {
+                        return false;
+                    }
+                }
+            }
+            if let Some(ref rt) = im.return_type {
+                let im_rt = Type::from_typename(rt);
+                if !self.types_compatible(&im_rt, &cm_return_type) {
+                    return false;
+                }
+            }
+            if let Some(im_budget) = im.taking_ms {
+                if cm_taking_ms > im_budget {
+                    return false;
+                }
             }
         }
         true

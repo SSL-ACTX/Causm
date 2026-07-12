@@ -8,6 +8,40 @@ use std::collections::HashMap;
 
 pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
+        Rule::if_let_stmt => {
+            let mut inner = pair.into_inner();
+            let binding = inner.next().unwrap().as_str().to_string();
+            let expr = parse_expression(inner.next().unwrap());
+            let then_branch = if let Some(b) = inner.next() {
+                b.into_inner()
+                    .filter_map(|stmt_pair| stmt_pair.into_inner().next())
+                    .map(parse_statement)
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let else_branch = if let Some(next_pair) = inner.next() {
+                if next_pair.as_rule() == Rule::statement_block {
+                    Some(
+                        next_pair
+                            .into_inner()
+                            .filter_map(|stmt_pair| stmt_pair.into_inner().next())
+                            .map(parse_statement)
+                            .collect(),
+                    )
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            Statement::IfLet {
+                binding,
+                expr,
+                then_branch,
+                else_branch,
+            }
+        }
         Rule::if_stmt => {
             let mut inner = pair.into_inner();
             let condition = inner

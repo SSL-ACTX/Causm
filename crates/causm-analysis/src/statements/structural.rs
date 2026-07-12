@@ -13,6 +13,8 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         let mut resolved_fields = std::collections::HashMap::new();
         if let Some(ref base_name) = extends {
+            self.struct_extends
+                .insert(name.to_string(), base_name.clone());
             if let Some(base_fields) = self.type_decls.get(base_name) {
                 resolved_fields = base_fields.clone();
             }

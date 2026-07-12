@@ -83,6 +83,82 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn AssertState(
+        &mut self,
+        branch_id: &str,
+        src: Reg,
+        state: String,
+    ) -> Result<(), TemporalError> {
+        let entropic_state = self.peek_state(branch_id, src.0)?;
+        let state_name = match entropic_state {
+            causm_core::value::EntropicState::Valid(_) => "Valid",
+            causm_core::value::EntropicState::Leased { .. } => "Leased",
+            causm_core::value::EntropicState::Decayed(_) => "Decayed",
+            causm_core::value::EntropicState::Pending(_) => "Pending",
+            causm_core::value::EntropicState::Consumed => "Consumed",
+        };
+        if state_name != state {
+            return Err(TemporalError::EvalError(format!(
+                "State constraint violated: expected receiver to be in state '{}', but was in state '{}'",
+                state, state_name
+            )));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn TryTypeAssert(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+        type_name: String,
+        success: Reg,
+    ) -> Result<(), TemporalError> {
+        let meta = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .metadata
+                .get(src.0 as usize)
+                .and_then(|m| m.as_ref())
+                .cloned()
+        };
+
+        let matches = match &meta {
+            Some(m) => m.type_name.as_ref() == Some(&type_name),
+            None => false,
+        };
+
+        if matches {
+            let val = self.peek_reg(branch_id, src.0)?;
+            self.insert_reg(
+                branch_id,
+                dest.0,
+                causm_core::value::EntropicState::Valid(val),
+            )?;
+            if let Some(m) = meta {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.arena.metadata[dest.0 as usize] = Some(m);
+            }
+            self.insert_reg(
+                branch_id,
+                success.0,
+                causm_core::value::EntropicState::Valid(
+                    causm_core::value::Payload::Bool(true),
+                ),
+            )?;
+        } else {
+            self.insert_reg(
+                branch_id,
+                success.0,
+                causm_core::value::EntropicState::Valid(
+                    causm_core::value::Payload::Bool(false),
+                ),
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn TopologyLit(
         &mut self,
         branch_id: &str,

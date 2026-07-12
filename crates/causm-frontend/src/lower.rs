@@ -11,6 +11,7 @@ struct LoweringContext {
     type_decay_limits: HashMap<String, u64>,
     type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
+    struct_extends: HashMap<String, String>,
     current_span: Option<causm_core::Span>,
 }
 
@@ -25,6 +26,7 @@ impl LoweringContext {
             type_decay_limits: HashMap::new(),
             type_decls: HashMap::new(),
             interfaces: HashMap::new(),
+            struct_extends: HashMap::new(),
             current_span: None,
         }
     }
@@ -76,6 +78,114 @@ pub fn lower_program(program: &Program) -> IrProgram {
         });
     }
 
+    let mut inherited_routines = HashMap::new();
+    for struct_name in ctx.type_decls.keys() {
+        let mut current = struct_name.clone();
+        while let Some(parent) = ctx.struct_extends.get(&current) {
+            let parent_prefix = format!("{}.", parent);
+            let mut parent_routines = Vec::new();
+            for r_name in ctx.routines.keys() {
+                if r_name.starts_with(&parent_prefix) {
+                    parent_routines.push(r_name.clone());
+                }
+            }
+
+            for parent_r_name in parent_routines {
+                let method_name = &parent_r_name[parent_prefix.len()..];
+                let target_r_name = format!("{}.{}", struct_name, method_name);
+                if !ctx.routines.contains_key(&target_r_name)
+                    && !inherited_routines.contains_key(&target_r_name)
+                {
+                    let mut r_clone = ctx.routines[&parent_r_name].clone();
+                    if !r_clone.params.is_empty() && r_clone.params[0].1 == "self" {
+                        r_clone.params[0].2 =
+                            causm_core::types::Type::Custom(struct_name.clone());
+                    }
+                    inherited_routines.insert(target_r_name, r_clone);
+                }
+            }
+            current = parent.clone();
+        }
+    }
+    ctx.routines.extend(inherited_routines);
+
+    let mut default_methods = HashMap::new();
+    for struct_name in ctx.type_decls.keys() {
+        for methods in ctx.interfaces.values() {
+            let mut implements = true;
+            for im in methods {
+                let r_name = format!("{}.{}", struct_name, im.name);
+                if !ctx.routines.contains_key(&r_name) && im.default_body.is_none() {
+                    implements = false;
+                    break;
+                }
+            }
+
+            if implements {
+                for im in methods {
+                    let r_name = format!("{}.{}", struct_name, im.name);
+                    if !ctx.routines.contains_key(&r_name)
+                        && !default_methods.contains_key(&r_name)
+                    {
+                        if let Some(ref default_body) = im.default_body {
+                            let mut sub_ctx = LoweringContext::new();
+                            sub_ctx.type_decls = ctx.type_decls.clone();
+                            sub_ctx.type_decay_limits =
+                                ctx.type_decay_limits.clone();
+
+                            for (i, param) in im.params.iter().enumerate() {
+                                sub_ctx
+                                    .symbols
+                                    .insert(param.name.clone(), Reg(i as u32));
+                                sub_ctx.next_reg = (i + 1) as u32;
+                            }
+
+                            if let Some((ref param_name, ref expected_state)) =
+                                im.state_constraint
+                            {
+                                if let Some(&reg) = sub_ctx.symbols.get(param_name) {
+                                    sub_ctx.push(Instruction::AssertState {
+                                        src: reg,
+                                        state: expected_state.clone(),
+                                    });
+                                }
+                            }
+
+                            for s in default_body {
+                                lower_spanned(&mut sub_ctx, s);
+                            }
+
+                            let routine = IrRoutine {
+                                params: im.params
+                                    .iter()
+                                    .map(|p| {
+                                        let mut t = p.typ
+                                            .as_ref()
+                                            .map(causm_core::types::Type::from_typename)
+                                            .unwrap_or(causm_core::types::Type::Unknown);
+                                        if p.name == "self" {
+                                            t = causm_core::types::Type::Custom(struct_name.clone());
+                                        }
+                                        (p.mode.clone(), p.name.clone(), t)
+                                    })
+                                    .collect(),
+                                return_type: im.return_type
+                                    .as_ref()
+                                    .map(causm_core::types::Type::from_typename)
+                                    .unwrap_or(causm_core::types::Type::Unknown),
+                                taking_ms: im.taking_ms,
+                                instructions: sub_ctx.instructions,
+                                spans: sub_ctx.spans,
+                            };
+                            default_methods.insert(r_name, routine);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ctx.routines.extend(default_methods);
+
     IrProgram {
         blocks,
         routines: ctx.routines,
@@ -91,6 +201,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             params,
             return_type,
             taking_ms,
+            state_constraint,
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
@@ -101,6 +212,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             for (i, param) in params.iter().enumerate() {
                 sub_ctx.symbols.insert(param.name.clone(), Reg(i as u32));
                 sub_ctx.next_reg = (i + 1) as u32;
+            }
+
+            if let Some((ref param_name, ref expected_state)) = state_constraint {
+                if let Some(&reg) = sub_ctx.symbols.get(param_name) {
+                    sub_ctx.push(Instruction::AssertState {
+                        src: reg,
+                        state: expected_state.clone(),
+                    });
+                }
             }
 
             for s in body {
@@ -714,6 +834,81 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
             }
         }
+        Statement::IfLet {
+            binding,
+            expr,
+            then_branch,
+            else_branch,
+        } => {
+            if let Expression::TypeAssertion { target, cast_type } = expr {
+                let target_reg = lower_expression(ctx, target);
+                let dest_reg = ctx.alloc_reg();
+                let success_reg = ctx.alloc_reg();
+
+                let type_name_str = match cast_type {
+                    causm_core::TypeName::Custom(ref s) => s.clone(),
+                    causm_core::TypeName::Builtin(b) => format!("{:?}", b),
+                    _ => format!("{:?}", cast_type),
+                };
+
+                ctx.push(Instruction::TryTypeAssert {
+                    dest: dest_reg,
+                    src: target_reg,
+                    type_name: type_name_str,
+                    success: success_reg,
+                });
+
+                let old_symbol = ctx.symbols.insert(binding.clone(), dest_reg);
+
+                let jump_to_else_idx = ctx.instructions.len();
+                ctx.push(Instruction::JumpIfNot {
+                    cond: success_reg,
+                    target: 0,
+                });
+
+                for s in then_branch {
+                    lower_spanned(ctx, s);
+                }
+
+                if let Some(old) = old_symbol {
+                    ctx.symbols.insert(binding.clone(), old);
+                } else {
+                    ctx.symbols.remove(binding);
+                }
+
+                if let Some(eb) = else_branch {
+                    let jump_to_end_idx = ctx.instructions.len();
+                    ctx.push(Instruction::Jump { target: 0 });
+
+                    let else_start_idx = ctx.instructions.len();
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        ctx.instructions[jump_to_else_idx]
+                    {
+                        *target = else_start_idx;
+                    }
+
+                    for s in eb {
+                        lower_spanned(ctx, s);
+                    }
+
+                    let end_idx = ctx.instructions.len();
+                    if let Instruction::Jump { ref mut target, .. } =
+                        ctx.instructions[jump_to_end_idx]
+                    {
+                        *target = end_idx;
+                    }
+                } else {
+                    let end_idx = ctx.instructions.len();
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        ctx.instructions[jump_to_else_idx]
+                    {
+                        *target = end_idx;
+                    }
+                }
+            } else {
+                panic!("Expected TypeAssertion expression inside IfLet statement");
+            }
+        }
         Statement::Watchdog {
             target,
             timeout_ms,
@@ -809,6 +1004,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         } => {
             let mut resolved_fields = HashMap::new();
             if let Some(ref base_name) = extends {
+                ctx.struct_extends.insert(name.clone(), base_name.clone());
                 if let Some(base_fields) = ctx.type_decls.get(base_name) {
                     resolved_fields = base_fields.clone();
                 }
@@ -909,7 +1105,7 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             }
             let dest = ctx.alloc_reg();
             if routine_name == "<dynamic>" {
-                let budget = resolved_budget.borrow().clone();
+                let budget = *resolved_budget.borrow();
                 ctx.push(Instruction::DynamicCall {
                     method: method.clone(),
                     args: arg_regs,

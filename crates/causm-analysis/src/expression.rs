@@ -143,9 +143,23 @@ pub(crate) fn infer_expression_type(
                 }
             }
 
-            let routine_name = format!("{}.{}", struct_name, method);
-            if let Some(info) = analyzer.routines.get(&routine_name) {
-                *resolved_routine.borrow_mut() = Some(routine_name);
+            let mut current_struct = struct_name.clone();
+            let mut resolved = None;
+            loop {
+                let routine_name = format!("{}.{}", current_struct, method);
+                if let Some(info) = analyzer.routines.get(&routine_name) {
+                    resolved = Some((routine_name, info.clone()));
+                    break;
+                }
+                if let Some(parent) = analyzer.struct_extends.get(&current_struct) {
+                    current_struct = parent.clone();
+                } else {
+                    break;
+                }
+            }
+
+            if let Some((resolved_name, info)) = resolved {
+                *resolved_routine.borrow_mut() = Some(resolved_name);
                 Ok(info.return_type.clone())
             } else {
                 Err(
@@ -406,6 +420,34 @@ pub(crate) fn analyze_expression(
                 *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
                 *resolved_budget.borrow_mut() = interface_method.taking_ms;
 
+                if let Some((ref param_name, ref expected_state)) =
+                    interface_method.state_constraint
+                {
+                    if param_name == "self" {
+                        if let Expression::Identifier(ref name) = &**target {
+                            let state = analyzer
+                                .branch_contexts
+                                .get(&analyzer.current_branch)
+                                .unwrap();
+                            let actual_state = if state.consumed.contains(name) {
+                                "Consumed"
+                            } else if state.decayed.contains(name) {
+                                "Decayed"
+                            } else {
+                                "Valid"
+                            };
+                            if actual_state != expected_state {
+                                return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                    format!(
+                                        "State constraint violated: receiver '{}' is in state '{}', but interface method '{}' expects state '{}'",
+                                        name, actual_state, method, expected_state
+                                    )
+                                )));
+                            }
+                        }
+                    }
+                }
+
                 for (i, arg) in args.iter().enumerate() {
                     let param_decl = &interface_method.params[i + 1];
                     let param_type = param_decl
@@ -497,20 +539,55 @@ pub(crate) fn analyze_expression(
                 }
             }
 
-            let routine_name = format!("{}.{}", struct_name, method);
-            let info =
-                analyzer
-                    .routines
-                    .get(&routine_name)
-                    .cloned()
-                    .ok_or_else(|| {
-                        analyzer.annotate(SemanticErrorKind::EntropyMismatch(
-                            format!(
-                                "unknown method {} on type {}",
-                                method, struct_name
-                            ),
-                        ))
-                    })?;
+            let mut current_struct = struct_name.clone();
+            let mut resolved = None;
+            loop {
+                let routine_name = format!("{}.{}", current_struct, method);
+                if let Some(info) = analyzer.routines.get(&routine_name) {
+                    resolved = Some((routine_name, info.clone()));
+                    break;
+                }
+                if let Some(parent) = analyzer.struct_extends.get(&current_struct) {
+                    current_struct = parent.clone();
+                } else {
+                    break;
+                }
+            }
+
+            let (resolved_name, info) = resolved.ok_or_else(|| {
+                analyzer.annotate(SemanticErrorKind::EntropyMismatch(format!(
+                    "unknown method {} on type {}",
+                    method, struct_name
+                )))
+            })?;
+            *resolved_routine.borrow_mut() = Some(resolved_name);
+
+            if let Some((ref param_name, ref expected_state)) = info.state_constraint
+            {
+                if param_name == "self" {
+                    if let Expression::Identifier(ref name) = &**target {
+                        let state = analyzer
+                            .branch_contexts
+                            .get(&analyzer.current_branch)
+                            .unwrap();
+                        let actual_state = if state.consumed.contains(name) {
+                            "Consumed"
+                        } else if state.decayed.contains(name) {
+                            "Decayed"
+                        } else {
+                            "Valid"
+                        };
+                        if actual_state != expected_state {
+                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                format!(
+                                    "State constraint violated: receiver '{}' is in state '{}', but method '{}' expects state '{}'",
+                                    name, actual_state, method, expected_state
+                                )
+                            )));
+                        }
+                    }
+                }
+            }
 
             if args.len() + 1 != info.params.len() {
                 return Err(analyzer.annotate(
@@ -602,7 +679,6 @@ pub(crate) fn analyze_expression(
                 }
             }
 
-            *resolved_routine.borrow_mut() = Some(routine_name);
             Ok(())
         }
         Expression::Call { routine, args } => {

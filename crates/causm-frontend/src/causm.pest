@@ -35,6 +35,7 @@ statement = {
     | await_stmt
     | await_chan_stmt
     | if_stmt
+    | if_let_stmt
     | break_stmt
     | loop_stmt
     | yield_stmt
@@ -68,7 +69,7 @@ fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ method_name ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit ~ "{" ~ statement* ~ "}" }
+routine_stmt = { "routine" ~ method_name ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ "{" ~ statement* ~ "}" }
 method_name = { identifier ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode ~ identifier ~ type_annotation? }
@@ -202,7 +203,10 @@ type_decl = { "type" ~ identifier ~ "=" ~ (identifier ~ "+")? ~ "struct" ~ decay
 interface_decl = { "interface" ~ identifier ~ ("=" ~ interface_sum)? ~ ("{" ~ interface_method* ~ "}")? }
 interface_sum = { interface_term ~ ("+" ~ interface_term)* }
 interface_term = { "interface" ~ "{" ~ interface_method* ~ "}" | identifier }
-interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? }
+interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ statement_block? }
+state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
+
+if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }

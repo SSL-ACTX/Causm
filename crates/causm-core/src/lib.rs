@@ -69,6 +69,8 @@ pub struct InterfaceMethod {
     pub params: Vec<ParamDecl>,
     pub return_type: Option<TypeName>,
     pub taking_ms: Option<u64>,
+    pub default_body: Option<Vec<SpannedStatement>>,
+    pub state_constraint: Option<(String, String)>,
 }
 
 #[macro_export]
@@ -214,6 +216,7 @@ macro_rules! statements {
                 params: Vec<ParamDecl>,
                 return_type: Option<TypeName>,
                 taking_ms: Option<u64>,
+                state_constraint: Option<(String, String)>,
                 body: Vec<SpannedStatement>
             },
             Return(Option<String>),
@@ -228,6 +231,12 @@ macro_rules! statements {
                 target: Expression,
                 field: String,
                 value: Expression
+            },
+            IfLet {
+                binding: String,
+                expr: Expression,
+                then_branch: Vec<SpannedStatement>,
+                else_branch: Option<Vec<SpannedStatement>>
             }
         }
     };

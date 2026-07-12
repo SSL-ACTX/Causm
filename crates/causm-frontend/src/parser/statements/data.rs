@@ -193,6 +193,8 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 let mut params = Vec::new();
                 let mut return_type = None;
                 let mut taking_ms = None;
+                let mut default_body = None;
+                let mut state_constraint = None;
 
                 for opt in m_inner {
                     match opt.as_rule() {
@@ -227,6 +229,24 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                 .next()
                                 .and_then(|p| p.as_str().parse::<u64>().ok());
                         }
+                        Rule::state_constraint => {
+                            let mut sc_inner = opt.into_inner();
+                            let var_name =
+                                sc_inner.next().unwrap().as_str().to_string();
+                            let state_name =
+                                sc_inner.next().unwrap().as_str().to_string();
+                            state_constraint = Some((var_name, state_name));
+                        }
+                        Rule::statement_block => {
+                            let body = opt
+                                .into_inner()
+                                .filter_map(|stmt_pair| {
+                                    stmt_pair.into_inner().next()
+                                })
+                                .map(parse_statement)
+                                .collect();
+                            default_body = Some(body);
+                        }
                         _ => {}
                     }
                 }
@@ -236,10 +256,12 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     params,
                     return_type,
                     taking_ms,
+                    default_body,
+                    state_constraint,
                 }
             };
 
-            while let Some(next_pair) = inner.next() {
+            for next_pair in inner {
                 match next_pair.as_rule() {
                     Rule::interface_sum => {
                         for term in next_pair.into_inner() {

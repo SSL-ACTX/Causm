@@ -131,6 +131,16 @@ pub enum SsaInstruction {
         src: SsaReg,
         type_name: String,
     },
+    AssertState {
+        src: SsaReg,
+        state: String,
+    },
+    TryTypeAssert {
+        dest: SsaReg,
+        src: SsaReg,
+        type_name: String,
+        success: SsaReg,
+    },
     Print {
         src: SsaReg,
     },
@@ -1006,6 +1016,34 @@ impl SsaTransformer {
                     type_name: type_name.clone(),
                 }
             }
+            Instruction::AssertState { src, state } => SsaInstruction::AssertState {
+                src: self.current_ssa_reg(*src),
+                state: state.clone(),
+            },
+            Instruction::TryTypeAssert {
+                dest,
+                src,
+                type_name,
+                success,
+            } => {
+                let src_ssa = self.current_ssa_reg(*src);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                let success_ver = self.next_version(success.0);
+                self.push_version(success.0, success_ver);
+                SsaInstruction::TryTypeAssert {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: src_ssa,
+                    type_name: type_name.clone(),
+                    success: SsaReg {
+                        reg: success.0,
+                        version: success_ver,
+                    },
+                }
+            }
             Instruction::Print { src } => SsaInstruction::Print {
                 src: self.current_ssa_reg(*src),
             },
@@ -1424,6 +1462,10 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Call { dest, .. } => f(*dest),
         Instruction::DynamicCall { dest, .. } => f(*dest),
         Instruction::TypeAssert { dest, .. } => f(*dest),
+        Instruction::TryTypeAssert { dest, success, .. } => {
+            f(*dest);
+            f(*success);
+        }
         Instruction::StructLit { dest, .. } => f(*dest),
         Instruction::TopologyLit { dest, .. } => f(*dest),
         Instruction::ArrayLit { dest, .. } => f(*dest),
