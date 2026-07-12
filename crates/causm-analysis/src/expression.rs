@@ -41,7 +41,10 @@ pub(crate) fn infer_expression_type(
             None => Err(analyzer
                 .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
         },
-        Expression::StructLit(_, fields) => {
+        Expression::StructLit(type_name, fields) => {
+            if let Some(ref name) = *type_name.borrow() {
+                return Ok(Type::Custom(name.clone()));
+            }
             let mut schema = std::collections::HashMap::new();
             for (k, v) in fields {
                 schema.insert(k.clone(), infer_expression_type(analyzer, v)?);
@@ -113,6 +116,16 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::FieldAccess { target, field } => {
+            if let Expression::Identifier(ref name) = &**target {
+                if analyzer.type_decls.contains_key(name) {
+                    let fields_map = &analyzer.type_decls[name];
+                    if let Some(field_def) = fields_map.get(field) {
+                        if field_def.is_const {
+                            return Ok(Type::from_typename(&field_def.typ));
+                        }
+                    }
+                }
+            }
             let t = infer_expression_type(analyzer, target)?;
             let mut resolved_t = analyzer.resolve_type(&t);
             if let Type::ConstantAccess { inner_type, .. } = resolved_t {
@@ -360,6 +373,14 @@ pub(crate) fn analyze_expression(
                     )));
                 }
 
+                if let Expression::StructLit(ref type_name, _) = arg_expr {
+                    if type_name.borrow().is_none() {
+                        if let Type::Custom(ref name) = expected_type {
+                            *type_name.borrow_mut() = Some(name.clone());
+                        }
+                    }
+                }
+
                 analyze_expression_nonconsuming(analyzer, arg_expr)?;
 
                 match mode {
@@ -411,7 +432,6 @@ pub(crate) fn analyze_expression(
                 args.iter().zip(info.params.iter())
             {
                 let arg_type = infer_expression_type(analyzer, arg_expr)?;
-
                 if !analyzer.types_compatible(expected_type, &arg_type) {
                     return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                         format!(
@@ -419,6 +439,14 @@ pub(crate) fn analyze_expression(
                             routine, expected_type, arg_type
                         ),
                     )));
+                }
+
+                if let Expression::StructLit(ref type_name, _) = arg_expr {
+                    if type_name.borrow().is_none() {
+                        if let Type::Custom(ref name) = expected_type {
+                            *type_name.borrow_mut() = Some(name.clone());
+                        }
+                    }
                 }
 
                 analyze_expression_nonconsuming(analyzer, arg_expr)?;

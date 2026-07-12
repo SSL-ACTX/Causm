@@ -132,6 +132,7 @@ pub struct EntropicAnalyzer {
     pub(crate) capability_stack: Vec<HashMap<String, causm_core::Capability>>,
     pub(crate) routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
+    pub(crate) type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     pub use_z3: bool,
     pub enforce_egc: bool,
     pub in_entropy_match: bool,
@@ -160,6 +161,7 @@ impl EntropicAnalyzer {
             capability_stack: Vec::new(),
             routines: HashMap::new(),
             span_states: HashMap::new(),
+            type_decls: HashMap::new(),
             use_z3: true,
             enforce_egc: false,
             in_entropy_match: false,
@@ -589,7 +591,54 @@ impl EntropicAnalyzer {
         message
     }
 
+    fn custom_struct_compatible(
+        &self,
+        name: &str,
+        act_struct: &causm_core::types::StructType,
+    ) -> bool {
+        if let Some(fields_map) = self.type_decls.get(name) {
+            for k in act_struct.fields.keys() {
+                if !fields_map.contains_key(k) {
+                    return false;
+                }
+            }
+            for (field_name, field_def) in fields_map {
+                if field_def.is_const {
+                    continue;
+                }
+                if let Some(act_field_type) = act_struct.fields.get(field_name) {
+                    let expected_type = Type::from_typename(&field_def.typ);
+                    if !self.types_compatible(&expected_type, act_field_type) {
+                        return false;
+                    }
+                } else {
+                    if field_def.default_value.is_none() {
+                        return false;
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn types_compatible(&self, expected: &Type, actual: &Type) -> bool {
+        if let Type::Custom(name) = expected {
+            if let Type::Struct(act_struct) = actual {
+                if self.custom_struct_compatible(name, act_struct) {
+                    return true;
+                }
+            }
+        }
+        if let Type::Custom(name) = actual {
+            if let Type::Struct(exp_struct) = expected {
+                if self.custom_struct_compatible(name, exp_struct) {
+                    return true;
+                }
+            }
+        }
+
         let expected = self.resolve_type(expected);
         let actual = self.resolve_type(actual);
 

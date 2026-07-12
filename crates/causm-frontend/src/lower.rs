@@ -1,4 +1,4 @@
-use causm_core::{Expression, Program, SpannedStatement, Statement};
+use causm_core::{Expression, Program, SpannedStatement, Statement, TypeFieldDef};
 use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
 
@@ -9,6 +9,7 @@ struct LoweringContext {
     spans: Vec<Option<causm_core::Span>>,
     routines: HashMap<String, IrRoutine>,
     type_decay_limits: HashMap<String, u64>,
+    type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     current_span: Option<causm_core::Span>,
 }
 
@@ -21,6 +22,7 @@ impl LoweringContext {
             spans: Vec::new(),
             routines: HashMap::new(),
             type_decay_limits: HashMap::new(),
+            type_decls: HashMap::new(),
             current_span: None,
         }
     }
@@ -90,6 +92,8 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
+            sub_ctx.type_decls = ctx.type_decls.clone();
+            sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
 
             // Map parameters to registers R0, R1, ...
             for (i, param) in params.iter().enumerate() {
@@ -796,12 +800,16 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         }
         Statement::TypeDecl {
             name,
+            fields,
             decay_after_ms: Some(limit),
             ..
         } => {
             ctx.type_decay_limits.insert(name.clone(), *limit);
+            ctx.type_decls.insert(name.clone(), fields.clone());
         }
-        Statement::TypeDecl { .. } => {}
+        Statement::TypeDecl { name, fields, .. } => {
+            ctx.type_decls.insert(name.clone(), fields.clone());
+        }
         _ => {
             // Other statements can be added as needed
         }
@@ -902,6 +910,21 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             dest
         }
         Expression::FieldAccess { target, field } => {
+            let mut const_expr = None;
+            if let Expression::Identifier(ref name) = &**target {
+                if let Some(fields_map) = ctx.type_decls.get(name) {
+                    if let Some(field_def) = fields_map.get(field) {
+                        if field_def.is_const {
+                            if let Some(ref val_expr) = field_def.default_value {
+                                const_expr = Some(val_expr.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(expr) = const_expr {
+                return lower_expression(ctx, &expr);
+            }
             let t = lower_expression(ctx, target);
             let dest = ctx.alloc_reg();
             ctx.push(Instruction::FieldAccess {
@@ -927,11 +950,32 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             for (name, expr) in fields {
                 field_regs.insert(name.clone(), lower_expression(ctx, expr));
             }
+            let type_name_opt = type_name.borrow().clone();
+            let mut defaults_to_lower = Vec::new();
+            if let Some(ref name) = type_name_opt {
+                if let Some(fields_map) = ctx.type_decls.get(name) {
+                    for (field_name, field_def) in fields_map {
+                        if !field_def.is_const
+                            && !field_regs.contains_key(field_name)
+                        {
+                            if let Some(ref default_expr) = field_def.default_value {
+                                defaults_to_lower.push((
+                                    field_name.clone(),
+                                    default_expr.clone(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            for (field_name, expr) in defaults_to_lower {
+                field_regs.insert(field_name, lower_expression(ctx, &expr));
+            }
             let dest = ctx.alloc_reg();
             ctx.push(Instruction::StructLit {
                 dest,
                 fields: field_regs,
-                type_name: type_name.clone(),
+                type_name: type_name_opt,
             });
             dest
         }

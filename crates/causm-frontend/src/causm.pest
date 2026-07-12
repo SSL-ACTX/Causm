@@ -186,13 +186,13 @@ array_lit = { "[" ~ expression ~ ("," ~ expression)* ~ "]" }
 
 integer_literal = @{ "-"? ~ ASCII_DIGIT+ }
 float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
-struct_lit = { "struct" ~ "{" ~ param_list ~ "}" }
-topology_lit = { "topology" ~ "{" ~ param_list ~ "}" }
+struct_lit = { "struct" ~ "{" ~ param_list? ~ "}" }
+topology_lit = { "topology" ~ "{" ~ param_list? ~ "}" }
 clone_op   = { "clone" ~ "(" ~ identifier ~ ")" }
 field_access = { identifier ~ "." ~ identifier }
 identifier_expr = { identifier }
 chan_recv_expr = { "chan_recv" ~ "(" ~ identifier ~ ")" }
-type_field = { identifier ~ ":" ~ type_name }
+type_field = { "const"? ~ identifier ~ ":" ~ type_name ~ ("=" ~ expression)? }
 type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }

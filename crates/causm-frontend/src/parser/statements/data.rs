@@ -73,12 +73,31 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     }
                     Rule::type_field_list => {
                         for field_pair in current.into_inner() {
+                            let is_const = field_pair
+                                .as_str()
+                                .trim_start()
+                                .starts_with("const");
                             let mut kv = field_pair.into_inner();
                             if let (Some(id), Some(type_name_pair)) =
                                 (kv.next(), kv.next())
                             {
                                 let field_type = parse_type_name(type_name_pair);
-                                fields.insert(id.as_str().to_string(), field_type);
+                                let mut default_value = None;
+                                if let Some(expr_pair) = kv.next() {
+                                    default_value = Some(
+                                        crate::parser::expressions::parse_expression(
+                                            expr_pair,
+                                        ),
+                                    );
+                                }
+                                fields.insert(
+                                    id.as_str().to_string(),
+                                    TypeFieldDef {
+                                        typ: field_type,
+                                        is_const,
+                                        default_value,
+                                    },
+                                );
                             }
                         }
                     }

@@ -35,6 +35,13 @@ impl EntropicAnalyzer {
                     ),
                 )));
             }
+            if let Expression::StructLit(ref type_name, _) = expr {
+                if type_name.borrow().is_none() {
+                    if let TypeName::Custom(ref name) = explicit_type_name {
+                        *type_name.borrow_mut() = Some(name.clone());
+                    }
+                }
+            }
             explicit_type
         } else if let Some(existing_type) = self.get_variable_type(target) {
             if !self.types_compatible(&existing_type, &inferred_type) {
@@ -44,6 +51,14 @@ impl EntropicAnalyzer {
                         target, existing_type, inferred_type
                     ),
                 )));
+            }
+            if let Expression::StructLit(ref type_name, _) = expr {
+                if type_name.borrow().is_none() {
+                    if let causm_core::types::Type::Custom(ref name) = existing_type
+                    {
+                        *type_name.borrow_mut() = Some(name.clone());
+                    }
+                }
             }
             existing_type
         } else {

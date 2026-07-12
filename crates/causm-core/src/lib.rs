@@ -88,7 +88,7 @@ macro_rules! statements {
             },
             TypeDecl {
                 name: String,
-                fields: std::collections::HashMap<String, TypeName>,
+                fields: std::collections::HashMap<String, TypeFieldDef>,
                 decay_after_ms: Option<u64>,
                 scoped_branch: Option<String>
             },
@@ -251,7 +251,7 @@ macro_rules! expressions {
                 field: String
             },
             CloneOp(String),
-            StructLit(Option<String>, std::collections::HashMap<String, Expression>),
+            StructLit(std::cell::RefCell<Option<String>>, std::collections::HashMap<String, Expression>),
             TopologyLit(std::collections::HashMap<String, Expression>),
             IndexAccess {
                 target: Box<Expression>,
@@ -354,6 +354,13 @@ pub struct SelectCase {
     pub binding: String,
     pub source: Expression,
     pub body: Vec<SpannedStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeFieldDef {
+    pub typ: TypeName,
+    pub is_const: bool,
+    pub default_value: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

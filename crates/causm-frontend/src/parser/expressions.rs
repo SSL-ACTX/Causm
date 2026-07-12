@@ -203,7 +203,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 }
             }
             if rule == Rule::struct_lit {
-                Expression::StructLit(type_name, fields)
+                Expression::StructLit(std::cell::RefCell::new(type_name), fields)
             } else {
                 Expression::TopologyLit(fields)
             }

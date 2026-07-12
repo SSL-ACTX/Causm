@@ -357,6 +357,7 @@ impl EntropicAnalyzer {
 
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
+        routine_analyzer.type_decls = self.type_decls.clone();
         if let Some(main_state) = self.branch_contexts.get("main") {
             let routine_main =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();
@@ -367,11 +368,18 @@ impl EntropicAnalyzer {
             let routine_state =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();
             routine_state.yields.insert(param.name.clone());
-            let param_type = param
+            let mut param_type = param
                 .typ
                 .as_ref()
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown);
+            if param.name == "self" && param.typ.is_none() {
+                if let Some(dot_idx) = name.find('.') {
+                    let struct_name = &name[..dot_idx];
+                    param_type =
+                        causm_core::types::Type::Custom(struct_name.to_string());
+                }
+            }
             routine_analyzer.set_variable_type(&param.name, param_type);
         }
 
@@ -409,14 +417,19 @@ impl EntropicAnalyzer {
         let routine_params = params
             .iter()
             .map(|p| {
-                (
-                    p.mode.clone(),
-                    p.name.clone(),
-                    p.typ
-                        .as_ref()
-                        .map(causm_core::types::Type::from_typename)
-                        .unwrap_or(causm_core::types::Type::Unknown),
-                )
+                let mut param_type = p
+                    .typ
+                    .as_ref()
+                    .map(causm_core::types::Type::from_typename)
+                    .unwrap_or(causm_core::types::Type::Unknown);
+                if p.name == "self" && p.typ.is_none() {
+                    if let Some(dot_idx) = name.find('.') {
+                        let struct_name = &name[..dot_idx];
+                        param_type =
+                            causm_core::types::Type::Custom(struct_name.to_string());
+                    }
+                }
+                (p.mode.clone(), p.name.clone(), param_type)
             })
             .collect();
         let routine_info = crate::analyzer::RoutineInfo {
