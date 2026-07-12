@@ -86,6 +86,7 @@ pub struct Vm {
     pub routines: HashMap<String, Routine>,
     pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
     pub type_decay_limits: HashMap<String, u64>,
+    pub struct_extends: HashMap<String, String>,
     pub speculation_stack: Vec<SpeculationContext>,
     pub entanglements: Vec<std::collections::HashSet<(String, u32)>>,
     pub causal_history: Vec<CausalEvent>,

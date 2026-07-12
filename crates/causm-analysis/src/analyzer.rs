@@ -778,31 +778,46 @@ impl EntropicAnalyzer {
         }
         let interface_methods = self.interfaces[interface_name].clone();
         for im in &interface_methods {
-            let concrete_method_name = format!("{}.{}", concrete_name, im.name);
-            if !self.routines.contains_key(&concrete_method_name) {
-                if let Some(ref default_body) = im.default_body {
-                    let mut params = im.params.clone();
-                    if !params.is_empty() && params[0].name == "self" {
-                        params[0].typ = None;
-                    }
-                    let routine_name = format!("{}.{}", concrete_name, im.name);
-                    if self
-                        .RoutineDef(
-                            &routine_name,
-                            &params,
-                            &im.return_type,
-                            &im.taking_ms,
-                            &im.state_constraint,
-                            default_body,
-                        )
-                        .is_err()
-                    {
-                        return false;
-                    }
+            let mut resolved_method = None;
+            let mut current_struct = concrete_name.to_string();
+            loop {
+                let r_name = format!("{}.{}", current_struct, im.name);
+                if self.routines.contains_key(&r_name) {
+                    resolved_method = Some(r_name);
+                    break;
+                }
+                if let Some(parent) = self.struct_extends.get(&current_struct) {
+                    current_struct = parent.clone();
                 } else {
-                    return false;
+                    break;
                 }
             }
+
+            let concrete_method_name = if let Some(resolved) = resolved_method {
+                resolved
+            } else if let Some(ref default_body) = im.default_body {
+                let mut params = im.params.clone();
+                if !params.is_empty() && params[0].name == "self" {
+                    params[0].typ = None;
+                }
+                let routine_name = format!("{}.{}", concrete_name, im.name);
+                if self
+                    .RoutineDef(
+                        &routine_name,
+                        &params,
+                        &im.return_type,
+                        &im.taking_ms,
+                        &im.state_constraint,
+                        default_body,
+                    )
+                    .is_err()
+                {
+                    return false;
+                }
+                routine_name
+            } else {
+                return false;
+            };
 
             let (cm_params, cm_return_type, cm_taking_ms) = {
                 let cm = &self.routines[&concrete_method_name];

@@ -94,6 +94,26 @@ impl Vm {
         dest: Reg,
         budget: Option<u64>,
     ) -> Result<(), TemporalError> {
+        let mut resolved_routine = routine.clone();
+        if !self.routines.contains_key(&resolved_routine)
+            && !self.is_intrinsic(&resolved_routine)
+        {
+            if let Some(dot_idx) = routine.find('.') {
+                let struct_name = &routine[..dot_idx];
+                let method_name = &routine[dot_idx + 1..];
+                let mut current = struct_name.to_string();
+                while let Some(parent) = self.struct_extends.get(&current) {
+                    let parent_routine = format!("{}.{}", parent, method_name);
+                    if self.routines.contains_key(&parent_routine) {
+                        resolved_routine = parent_routine;
+                        break;
+                    }
+                    current = parent.clone();
+                }
+            }
+        }
+        let routine = resolved_routine;
+
         if self.is_intrinsic(&routine) {
             let mut arg_values = Vec::new();
             for reg in &args {

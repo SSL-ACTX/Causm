@@ -78,37 +78,6 @@ pub fn lower_program(program: &Program) -> IrProgram {
         });
     }
 
-    let mut inherited_routines = HashMap::new();
-    for struct_name in ctx.type_decls.keys() {
-        let mut current = struct_name.clone();
-        while let Some(parent) = ctx.struct_extends.get(&current) {
-            let parent_prefix = format!("{}.", parent);
-            let mut parent_routines = Vec::new();
-            for r_name in ctx.routines.keys() {
-                if r_name.starts_with(&parent_prefix) {
-                    parent_routines.push(r_name.clone());
-                }
-            }
-
-            for parent_r_name in parent_routines {
-                let method_name = &parent_r_name[parent_prefix.len()..];
-                let target_r_name = format!("{}.{}", struct_name, method_name);
-                if !ctx.routines.contains_key(&target_r_name)
-                    && !inherited_routines.contains_key(&target_r_name)
-                {
-                    let mut r_clone = ctx.routines[&parent_r_name].clone();
-                    if !r_clone.params.is_empty() && r_clone.params[0].1 == "self" {
-                        r_clone.params[0].2 =
-                            causm_core::types::Type::Custom(struct_name.clone());
-                    }
-                    inherited_routines.insert(target_r_name, r_clone);
-                }
-            }
-            current = parent.clone();
-        }
-    }
-    ctx.routines.extend(inherited_routines);
-
     let mut default_methods = HashMap::new();
     for struct_name in ctx.type_decls.keys() {
         for methods in ctx.interfaces.values() {
@@ -191,6 +160,7 @@ pub fn lower_program(program: &Program) -> IrProgram {
         routines: ctx.routines,
         symbols: ctx.symbols,
         type_decay_limits: ctx.type_decay_limits,
+        struct_extends: ctx.struct_extends,
     }
 }
 

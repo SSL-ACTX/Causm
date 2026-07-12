@@ -28,6 +28,7 @@ impl Vm {
             routines: HashMap::new(),
             decay_handlers: HashMap::new(),
             type_decay_limits: HashMap::new(),
+            struct_extends: HashMap::new(),
             speculation_stack: Vec::new(),
             speculative_commit_mode: SpeculationCommitMode::Selective,
             entanglements: Vec::new(),
@@ -96,6 +97,7 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         self.symbols = program.symbols.clone();
         self.type_decay_limits = program.type_decay_limits.clone();
+        self.struct_extends = program.struct_extends.clone();
         // Register routines
         for (name, ir_routine) in &program.routines {
             let routine = Routine {
