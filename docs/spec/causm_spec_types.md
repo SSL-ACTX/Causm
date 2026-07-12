@@ -42,3 +42,24 @@ let val = p.x // 'p' is now Decayed. 'p.y' is still Valid.
 ```
 - A decayed structure cannot be moved or passed to a `consume` parameter.
 - The parent structure is reclaimed only when all constituent fields reach the `Consumed` state.
+
+## 6. Structural Subtyping and Composition
+
+Causm features structural subtyping. Two types are compatible if they share a compatible structural layout.
+
+### 6.1 Struct Composition
+Structs can be composed using the `+` operator, which combines their fields:
+```causm
+type Actor = struct {
+    name: string
+}
+type Robot = Actor + struct {
+    model: string
+}
+```
+This inherits all fields from `Actor` and adds `model` to `Robot`.
+
+### 6.2 Structural Compatibility Rules
+- **Struct Subtyping**: A struct `S1` is compatible with/assignable to another struct `S2` if `S1` contains at least all the fields of `S2` with compatible types.
+- **Interface Subtyping**: A struct `S` implicitly implements an interface `I` if `S` defines all the methods specified by `I` with matching signatures (names, parameters, parameter modes, return types, and temporal contracts).
+

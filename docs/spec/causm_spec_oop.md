@@ -75,3 +75,78 @@ Static methods are invoked using the `call` keyword followed by the dot-separate
 ```causm
 let p: Player = call Player.new(42)
 ```
+
+## 5. Struct Composition & Inheritance
+
+Causm supports struct subtyping and composition through the `+` operator.
+
+### 5.1 Inheritance & Field Composition
+A struct type can extend a base struct type:
+```causm
+type Actor = struct {
+    name: string
+}
+
+type Robot = Actor + struct decay_after 100ms {
+    model: string
+}
+```
+`Robot` contains both the `name` field from `Actor` and its own `model` field.
+
+### 5.2 Dynamic Method Inheritance & Overriding
+Derived types automatically inherit the methods defined on their base types. If the derived type defines a method with the same name, it overrides the base type's implementation:
+```causm
+// Inherited by Robot if not overridden
+routine Actor.introduce(peek self) -> int (taking 10ms) {
+    print("Hello, I am Actor: " + self.name)
+    yield 0
+}
+
+// Overridden by Robot
+routine Robot.introduce(peek self) -> int (taking 15ms) {
+    print("Robot Model " + self.model + " reporting.")
+    yield 0
+}
+```
+
+## 6. Interfaces & Dynamic Dispatch
+
+Interfaces define a set of methods that concrete types can implement.
+
+### 6.1 Interface Declarations
+```causm
+interface Worker {
+    routine work(consume self) -> int taking 20ms
+}
+```
+
+### 6.2 Default Method Implementations
+Interfaces can provide default method implementations:
+```causm
+interface PlayableWorker = Worker + interface {
+    routine play(peek self) -> int taking 20ms {
+        let bonus = 100
+        yield bonus
+    }
+}
+```
+
+### 6.3 Interface Subtyping & Implicit Implementation
+Causm uses structural subtyping: any struct that defines all methods required by an interface implicitly implements that interface.
+```causm
+let w: Worker = r // Struct subtyping assignment
+let bonus = w.play() // Dynamic dispatch (resolves to default implementation)
+```
+
+## 7. Guarded Type Assertions (Downcasting)
+
+Interface variables can be downcasted back to concrete structs using guarded `if let` blocks:
+```causm
+if let robot = w.(Robot) {
+    inspect r_temp = robot {
+        let model = r_temp.model
+        print("Model: " + model)
+    }
+    robot.work()
+}
+```

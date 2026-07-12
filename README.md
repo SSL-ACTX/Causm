@@ -134,6 +134,38 @@ routine process_packet(p: PacedIterable<int, 2ms>) taking 10ms {
 }
 ```
 
+### Object-Oriented Programming (OOP) & Entropic Safety
+```csm
+type Actor = struct {
+    name: string
+}
+
+type Robot = Actor + struct decay_after 100ms {
+    model: string
+}
+
+routine Actor.introduce(peek self) -> int taking 10ms {
+    let name = self.name
+    print("Hello, I am Actor: " + name)
+    yield 0
+}
+
+interface Worker {
+    routine work(consume self) -> int taking 20ms
+}
+
+routine Robot.work(consume self) -> int taking 20ms {
+    print("Robot " + self.name + " is working...")
+    yield 0
+}
+
+let r: Robot = struct { name = "T-800", model = "Model 101" }
+r.introduce() // Dynamic lookup resolves to Actor.introduce
+
+let w: Worker = r // Structural subtyping implementation
+w.work() // Polymorphic dispatch (consumes the robot structure)
+```
+
 ---
 
 ## License

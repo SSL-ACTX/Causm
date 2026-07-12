@@ -52,7 +52,7 @@ Defines structured data types with advanced temporal and entropic constraints.
 
 **Syntax:**
 ```causm
-type <name> = struct [decay_after <amount>ms] [scoped(@<branch>)] {
+type <name> = [<base_type> +] struct [decay_after <amount>ms] [scoped(@<branch>)] {
     <field_list>
 }
 ```
@@ -65,6 +65,17 @@ type <name> = struct [decay_after <amount>ms] [scoped(@<branch>)] {
 ```causm
 type SessionToken = struct decay_after 50ms {
     id: int
+}
+```
+
+### Interface Specifications (`interface`)
+Defines abstract behavior contracts and default method implementations.
+
+**Syntax:**
+```causm
+interface <name> [[= <base_interface>] + interface] {
+    [routine <method_name>(<params>) -> <return_type> taking <amount>ms [where <constraints>] [{ <body> }]]
+    ...
 }
 ```
 
@@ -94,17 +105,27 @@ assert_time(elapsed <relop> <amount>ms) [else <statement_block>]
 - **Static Analysis**: The analyzer calculates the Worst-Case Execution Time (WCET). If the limit is statically exceeded, a `Temporal Assertion Violation` occurs.
 - **Dynamic Verification**: The Register-based Temporal Virtual Machine (TVM) verifies the local clock during runtime. If the assertion fails, the `else` block is executed; otherwise, a runtime fault is triggered.
 
-### Conditional Execution (`if`)
-Facilitates speculative path evaluation followed by deterministic state reconciliation.
+### Conditional Execution (`if` / `if let`)
+Facilitates speculative path evaluation followed by deterministic state reconciliation, or dynamic downcasting of interfaces.
 
 **Syntax:**
 ```causm
 if (<expression>) <statement_block> [else <statement_block>] [reconcile (<resolution_rules> | auto)]
+if let <binding> = <expression>.(<type_name>) <statement_block> [else <statement_block>]
 ```
 
 **Semantics:**
 - Both execution paths undergo speculative analysis for entropic consistency.
 - `reconcile` rules define the resolution mechanism for variables consumed within a single path. The `auto` keyword automatically merges decayed states and enforces type consistency.
+- `if let` attempts to downcast an interface variable to a concrete type `type_name`. If successful, the `then` block executes with `binding` bound as the concrete type.
+
+### Scoped Inspection (`inspect`)
+Provides read-only access to struct fields without triggering entropic decay.
+
+**Syntax:**
+```causm
+inspect <binding> = <expression> <statement_block>
+```
 
 ### Speculative Execution (`speculate`)
 Creates a transient micro-timeline for trial computations with guaranteed zero-leakage rollback.

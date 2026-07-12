@@ -29,6 +29,28 @@ if (<condition>) <statement_block> [else <statement_block>] [reconcile (<resolut
 | **`priority(else)`** | Always prioritizes the value produced within the `else` branch.                                               |
 | **`decay`**          | Transitions the variable to the `Consumed` or `Decayed` state regardless of the executed path.                |
 
+### 1.2 Guarded Type Assertions (`if let`)
+
+The `if let` construct facilitates conditional branching based on the dynamic type of an interface variable (downcasting):
+```causm
+if let robot = worker.(Robot) {
+    // executed if 'worker' can be downcasted to 'Robot'
+    // 'robot' is bound as a concrete Robot in this block
+} else {
+    // executed if the downcast fails
+}
+```
+
+### 1.3 Scoped Non-Destructive Inspection (`inspect`)
+
+Accessing fields of a struct normally triggers structural decay of the parent container. The `inspect` block overrides this behavior by providing a scoped, read-only, non-decaying context:
+```causm
+inspect temp = robot {
+    let m = temp.model // Read-only access; 'robot' does not transition to Decayed state
+}
+// 'robot' remains in its Valid state outside this block
+```
+
 ---
 
 ## 2. Structural Pattern Matching (`match entropy`)
