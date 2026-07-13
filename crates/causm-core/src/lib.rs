@@ -166,6 +166,7 @@ macro_rules! statements {
             Await(String),
             AwaitChan(String),
             If {
+                binding: Option<String>,
                 condition: Expression,
                 then_branch: Vec<SpannedStatement>,
                 else_branch: Option<Vec<SpannedStatement>>,
@@ -231,12 +232,6 @@ macro_rules! statements {
                 target: Expression,
                 field: String,
                 value: Expression
-            },
-            IfLet {
-                binding: String,
-                expr: Expression,
-                then_branch: Vec<SpannedStatement>,
-                else_branch: Option<Vec<SpannedStatement>>
             }
         }
     };

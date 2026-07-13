@@ -908,8 +908,18 @@ impl EntropicAnalyzer {
                 _ => "relativistic block".to_string(),
             },
             Statement::Capability(cap) => format!("require {}(...)", cap.path),
-            Statement::If { condition, .. } => {
-                format!("if ({}) {{ ... }}", self.expr_snippet(condition))
+            Statement::If {
+                binding, condition, ..
+            } => {
+                if let Some(b) = binding {
+                    format!(
+                        "if let {} = {} {{ ... }}",
+                        b,
+                        self.expr_snippet(condition)
+                    )
+                } else {
+                    format!("if ({}) {{ ... }}", self.expr_snippet(condition))
+                }
             }
             Statement::Loop { max_ms, .. } => {
                 format!("loop (max {}ms) {{ ... }}", max_ms)

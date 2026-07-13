@@ -764,12 +764,43 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::Jump { target: start_pc });
         }
         Statement::If {
+            binding,
             condition,
             then_branch,
             else_branch,
             ..
         } => {
-            let cond_reg = lower_expression(ctx, condition);
+            let cond_reg;
+            let mut old_symbol = None;
+
+            if let Some(binding_name) = binding {
+                if let Expression::TypeAssertion { target, cast_type } = condition {
+                    let target_reg = lower_expression(ctx, target);
+                    let dest_reg = ctx.alloc_reg();
+                    let success_reg = ctx.alloc_reg();
+
+                    let type_name_str = match cast_type {
+                        causm_core::TypeName::Custom(ref s) => s.clone(),
+                        causm_core::TypeName::Builtin(b) => format!("{:?}", b),
+                        _ => format!("{:?}", cast_type),
+                    };
+
+                    ctx.push(Instruction::TryTypeAssert {
+                        dest: dest_reg,
+                        src: target_reg,
+                        type_name: type_name_str,
+                        success: success_reg,
+                    });
+
+                    let old = ctx.symbols.insert(binding_name.clone(), dest_reg);
+                    old_symbol = Some((binding_name.clone(), old));
+                    cond_reg = success_reg;
+                } else {
+                    panic!("Expected TypeAssertion expression inside If statement with binding");
+                }
+            } else {
+                cond_reg = lower_expression(ctx, condition);
+            }
 
             let jump_to_else_idx = ctx.instructions.len();
             ctx.push(Instruction::JumpIfNot {
@@ -779,6 +810,14 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             for s in then_branch {
                 lower_spanned(ctx, s);
+            }
+
+            if let Some((binding_name, old)) = old_symbol {
+                if let Some(o) = old {
+                    ctx.symbols.insert(binding_name, o);
+                } else {
+                    ctx.symbols.remove(&binding_name);
+                }
             }
 
             if let Some(eb) = else_branch {
@@ -809,81 +848,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 {
                     *target = end_idx;
                 }
-            }
-        }
-        Statement::IfLet {
-            binding,
-            expr,
-            then_branch,
-            else_branch,
-        } => {
-            if let Expression::TypeAssertion { target, cast_type } = expr {
-                let target_reg = lower_expression(ctx, target);
-                let dest_reg = ctx.alloc_reg();
-                let success_reg = ctx.alloc_reg();
-
-                let type_name_str = match cast_type {
-                    causm_core::TypeName::Custom(ref s) => s.clone(),
-                    causm_core::TypeName::Builtin(b) => format!("{:?}", b),
-                    _ => format!("{:?}", cast_type),
-                };
-
-                ctx.push(Instruction::TryTypeAssert {
-                    dest: dest_reg,
-                    src: target_reg,
-                    type_name: type_name_str,
-                    success: success_reg,
-                });
-
-                let old_symbol = ctx.symbols.insert(binding.clone(), dest_reg);
-
-                let jump_to_else_idx = ctx.instructions.len();
-                ctx.push(Instruction::JumpIfNot {
-                    cond: success_reg,
-                    target: 0,
-                });
-
-                for s in then_branch {
-                    lower_spanned(ctx, s);
-                }
-
-                if let Some(old) = old_symbol {
-                    ctx.symbols.insert(binding.clone(), old);
-                } else {
-                    ctx.symbols.remove(binding);
-                }
-
-                if let Some(eb) = else_branch {
-                    let jump_to_end_idx = ctx.instructions.len();
-                    ctx.push(Instruction::Jump { target: 0 });
-
-                    let else_start_idx = ctx.instructions.len();
-                    if let Instruction::JumpIfNot { ref mut target, .. } =
-                        ctx.instructions[jump_to_else_idx]
-                    {
-                        *target = else_start_idx;
-                    }
-
-                    for s in eb {
-                        lower_spanned(ctx, s);
-                    }
-
-                    let end_idx = ctx.instructions.len();
-                    if let Instruction::Jump { ref mut target, .. } =
-                        ctx.instructions[jump_to_end_idx]
-                    {
-                        *target = end_idx;
-                    }
-                } else {
-                    let end_idx = ctx.instructions.len();
-                    if let Instruction::JumpIfNot { ref mut target, .. } =
-                        ctx.instructions[jump_to_else_idx]
-                    {
-                        *target = end_idx;
-                    }
-                }
-            } else {
-                panic!("Expected TypeAssertion expression inside IfLet statement");
             }
         }
         Statement::Watchdog {

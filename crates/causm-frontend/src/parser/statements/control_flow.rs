@@ -20,26 +20,39 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             } else {
                 Vec::new()
             };
-            let else_branch = if let Some(next_pair) = inner.next() {
-                if next_pair.as_rule() == Rule::statement_block {
-                    Some(
-                        next_pair
-                            .into_inner()
-                            .filter_map(|stmt_pair| stmt_pair.into_inner().next())
-                            .map(parse_statement)
-                            .collect(),
-                    )
-                } else {
-                    None
+
+            let mut else_branch = None;
+            let mut reconcile_rules = None;
+
+            if let Some(next_pair) = inner.next() {
+                match next_pair.as_rule() {
+                    Rule::statement_block => {
+                        else_branch = Some(
+                            next_pair
+                                .into_inner()
+                                .filter_map(|stmt_pair| {
+                                    stmt_pair.into_inner().next()
+                                })
+                                .map(parse_statement)
+                                .collect(),
+                        );
+                        if let Some(rec_pair) = inner.next() {
+                            reconcile_rules = Some(parse_reconcile_clause(rec_pair));
+                        }
+                    }
+                    Rule::reconcile_clause => {
+                        reconcile_rules = Some(parse_reconcile_clause(next_pair));
+                    }
+                    _ => {}
                 }
-            } else {
-                None
-            };
-            Statement::IfLet {
-                binding,
-                expr,
+            }
+
+            Statement::If {
+                binding: Some(binding),
+                condition: expr,
                 then_branch,
                 else_branch,
+                reconcile: reconcile_rules,
             }
         }
         Rule::if_stmt => {
@@ -84,6 +97,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
 
             Statement::If {
+                binding: None,
                 condition,
                 then_branch,
                 else_branch,

@@ -706,3 +706,27 @@ fn causm_oop_guarded_type_assertions() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_oop_if_let_reconciliation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Actor {}
+        type Robot = struct { id: int }
+        let r: Robot = struct { id = 42 }
+        let a: Actor = r
+        
+        let x = struct { val = 1 }
+        
+        if let robot = a.(Robot) {
+            let temp = x.val
+        } else {
+            // x remains valid
+        } reconcile auto
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    Ok(())
+}

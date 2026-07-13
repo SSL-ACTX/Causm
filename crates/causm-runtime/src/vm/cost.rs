@@ -59,17 +59,6 @@ impl Vm {
                     ),
                 )
             }
-            Statement::IfLet {
-                then_branch,
-                else_branch,
-                ..
-            } => {
-                1 + self.estimate_block_cost(then_branch).max(
-                    self.estimate_block_cost(
-                        else_branch.as_ref().unwrap_or(&Vec::new()),
-                    ),
-                )
-            }
             Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
             Statement::Speculate { body, fallback, .. } => {
                 let fallback_cost = self

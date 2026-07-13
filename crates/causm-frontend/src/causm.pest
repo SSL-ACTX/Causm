@@ -209,7 +209,7 @@ interface_term = { "interface" ~ "{" ~ interface_method* ~ "}" | identifier }
 interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ statement_block? }
 state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
 
-if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? }
+if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }

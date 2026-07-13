@@ -290,6 +290,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 Ok(in_clock.clone())
             }
             Statement::If {
+                binding,
                 condition,
                 then_branch,
                 else_branch,
@@ -304,6 +305,14 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let then_pc = self.solver.bool_and(&[path_condition, &cond_bool]);
                 let one_int = self.solver.int_from_u64(1);
                 let branch_start_clock = self.solver.int_add(&[in_clock, &one_int]);
+
+                if let Some(binding_name) = binding {
+                    let is_valid = self.solver.bool_from_bool(true);
+                    let is_leased = self.solver.bool_from_bool(false);
+                    self.variable_validity
+                        .insert(binding_name.clone(), is_valid);
+                    self.variable_leased.insert(binding_name.clone(), is_leased);
+                }
 
                 let mut then_clock = branch_start_clock.clone();
                 for stmt in then_branch {

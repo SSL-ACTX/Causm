@@ -6,6 +6,7 @@ use causm_core::*;
 impl EntropicAnalyzer {
     pub(crate) fn If(
         &mut self,
+        binding: &Option<String>,
         condition: &Expression,
         then_branch: &[SpannedStatement],
         else_branch: &Option<Vec<SpannedStatement>>,
@@ -13,12 +14,24 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         let condition_type =
             crate::expression::infer_expression_type(self, condition)?;
-        if condition_type != causm_core::types::Type::Bool {
-            return Err(self.annotate(SemanticErrorKind::TypeMismatch(format!(
-                "if condition must be bool, got {:?}",
-                condition_type
-            ))));
+
+        if binding.is_some() {
+            match condition {
+                Expression::TypeAssertion { .. } => {}
+                _ => {
+                    return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                        "if let expression must be a type assertion".into(),
+                    )));
+                }
+            }
+        } else {
+            if condition_type != causm_core::types::Type::Bool {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    format!("if condition must be bool, got {:?}", condition_type),
+                )));
+            }
         }
+
         analyze_expression(self, condition)?;
 
         let original_state = self
@@ -32,14 +45,44 @@ impl EntropicAnalyzer {
         let previous_contexts =
             std::mem::replace(&mut self.branch_contexts, then_contexts);
 
+        if let Some(binding_name) = binding {
+            let cast_type = match condition {
+                Expression::TypeAssertion { cast_type, .. } => {
+                    causm_core::types::Type::from_typename(cast_type)
+                }
+                _ => unreachable!(),
+            };
+
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.types.insert(binding_name.clone(), cast_type);
+            branch.produced.insert(binding_name.clone());
+            branch
+                .instantiated_at
+                .insert(binding_name.clone(), branch.accumulated_cost);
+        }
+
         for inner_stmt in then_branch {
             self.analyze_statement(inner_stmt)?;
         }
-        let then_end_state = self
+
+        let mut then_end_state = self
             .branch_contexts
             .get(&self.current_branch)
             .cloned()
             .unwrap_or_default();
+
+        if let Some(binding_name) = binding {
+            if self.enforce_egc && !then_end_state.consumed.contains(binding_name) {
+                return Err(self.annotate(SemanticErrorKind::UnconsumedVariable(
+                    binding_name.clone(),
+                )));
+            }
+
+            then_end_state.types.remove(binding_name);
+            then_end_state.produced.remove(binding_name);
+            then_end_state.consumed.remove(binding_name);
+            then_end_state.instantiated_at.remove(binding_name);
+        }
 
         self.branch_contexts = previous_contexts.clone();
         let mut else_contexts = self.branch_contexts.clone();
@@ -61,91 +104,6 @@ impl EntropicAnalyzer {
         let merged = self.merge_states(then_end_state, else_end_state, reconcile)?;
         self.branch_contexts
             .insert(self.current_branch.clone(), merged);
-        Ok(())
-    }
-
-    pub(crate) fn IfLet(
-        &mut self,
-        binding: &String,
-        expr: &Expression,
-        then_branch: &[SpannedStatement],
-        else_branch: &Option<Vec<SpannedStatement>>,
-    ) -> Result<(), SemanticError> {
-        let cast_type = match expr {
-            Expression::TypeAssertion { cast_type, .. } => {
-                causm_core::types::Type::from_typename(cast_type)
-            }
-            _ => {
-                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
-                    "if let expression must be a type assertion".into(),
-                )));
-            }
-        };
-
-        analyze_expression(self, expr)?;
-
-        let original_state = self
-            .branch_contexts
-            .get(&self.current_branch)
-            .cloned()
-            .unwrap_or_default();
-
-        let mut then_contexts = self.branch_contexts.clone();
-        then_contexts.insert(self.current_branch.clone(), original_state.clone());
-        let previous_contexts =
-            std::mem::replace(&mut self.branch_contexts, then_contexts);
-
-        {
-            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-            branch.types.insert(binding.clone(), cast_type.clone());
-            branch.produced.insert(binding.clone());
-            branch
-                .instantiated_at
-                .insert(binding.clone(), branch.accumulated_cost);
-        }
-
-        for inner_stmt in then_branch {
-            self.analyze_statement(inner_stmt)?;
-        }
-
-        let mut then_end_state = self
-            .branch_contexts
-            .get(&self.current_branch)
-            .cloned()
-            .unwrap_or_default();
-
-        if self.enforce_egc && !then_end_state.consumed.contains(binding) {
-            return Err(self
-                .annotate(SemanticErrorKind::UnconsumedVariable(binding.clone())));
-        }
-
-        then_end_state.types.remove(binding);
-        then_end_state.produced.remove(binding);
-        then_end_state.consumed.remove(binding);
-        then_end_state.instantiated_at.remove(binding);
-
-        self.branch_contexts = previous_contexts.clone();
-        let mut else_contexts = self.branch_contexts.clone();
-        else_contexts.insert(self.current_branch.clone(), original_state.clone());
-        self.branch_contexts = else_contexts;
-
-        if let Some(else_stmts) = else_branch {
-            for inner_stmt in else_stmts {
-                self.analyze_statement(inner_stmt)?;
-            }
-        }
-
-        let else_end_state = self
-            .branch_contexts
-            .get(&self.current_branch)
-            .cloned()
-            .unwrap_or_default();
-
-        self.branch_contexts = previous_contexts;
-        let merged = self.merge_states(then_end_state, else_end_state, &None)?;
-        self.branch_contexts
-            .insert(self.current_branch.clone(), merged);
-
         Ok(())
     }
 
