@@ -737,6 +737,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             body,
         } => {
             let source_reg = ctx.get_reg(source);
+            let old_symbol = ctx.symbols.get(binding).cloned();
             let target_reg = ctx.get_reg(binding);
 
             ctx.push(Instruction::Lease {
@@ -753,6 +754,12 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 source_reg,
                 duration_ms: *duration_ms,
             });
+
+            if let Some(old) = old_symbol {
+                ctx.symbols.insert(binding.clone(), old);
+            } else {
+                ctx.symbols.remove(binding);
+            }
         }
         Statement::Loop { max_ms, body } => {
             let start_pc = ctx.instructions.len();

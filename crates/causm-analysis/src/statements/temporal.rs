@@ -192,6 +192,8 @@ impl EntropicAnalyzer {
             branch.lease_bindings.insert(binding.clone());
         }
 
+        let old_binding_type = self.get_variable_type(binding);
+
         // Set binding type
         self.set_variable_type(binding, source_type);
 
@@ -219,6 +221,13 @@ impl EntropicAnalyzer {
             branch.leased.remove(source);
             branch.lease_bindings.remove(binding);
             branch.accumulated_cost += *duration_ms; // Jump to end of lease duration
+        }
+
+        if let Some(old_ty) = old_binding_type {
+            self.set_variable_type(binding, old_ty);
+        } else {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.types.remove(binding);
         }
 
         Ok(())

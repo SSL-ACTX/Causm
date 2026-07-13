@@ -221,3 +221,26 @@ fn causm_lease_semantic_illegal_control_flow_fails() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_lease_scoping_isolation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      let state = struct { val = 10 }
+      lease view = state for 10ms {
+        let x = view.val
+      }
+      let y = view.val
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("Undefined variable: view"));
+
+    Ok(())
+}
