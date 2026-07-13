@@ -1014,3 +1014,23 @@ fn causm_semantic_use_after_consume_in_nonconsuming() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_semantic_inactive_timeline_error() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: { split main into [w1, w2] }
+    @w1: { let x = 1 }
+    @w2: { let y = 2 }
+    @0ms: { merge [w1, w2] into main reconcile auto }
+    @w1: { let z = 3 }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("inactive, has been merged, or has not been split"));
+
+    Ok(())
+}

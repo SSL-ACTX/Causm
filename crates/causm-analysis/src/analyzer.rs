@@ -59,6 +59,8 @@ pub enum SemanticErrorKind {
     UnconsumedVariable(String),
     #[error("Argument count mismatch: {0}")]
     ArgumentCountMismatch(String),
+    #[error("Timeline Violation: Branch '@{0}' is inactive, has been merged, or has not been split yet.")]
+    InactiveTimeline(String),
 }
 
 #[derive(Debug)]
@@ -142,6 +144,7 @@ pub struct EntropicAnalyzer {
     pub(crate) current_routine: Option<String>,
     pub(crate) interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
     pub(crate) struct_extends: HashMap<String, String>,
+    pub(crate) merged_branches: HashSet<String>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -174,6 +177,7 @@ impl EntropicAnalyzer {
             current_routine: None,
             interfaces: HashMap::new(),
             struct_extends: HashMap::new(),
+            merged_branches: HashSet::new(),
         };
         analyzer.register_intrinsics();
         analyzer
@@ -299,12 +303,23 @@ impl EntropicAnalyzer {
         self.routines.clear();
         self.struct_extends.clear();
         self.in_entropy_match = false;
+        self.merged_branches.clear();
         self.register_intrinsics();
 
         for block in &program.timelines {
             let old_branch = self.current_branch.clone();
             match &block.time {
                 TimeCoordinate::Branch(id) => {
+                    if id != "main" && !self.branch_contexts.contains_key(id) {
+                        return Err(self.annotate(
+                            SemanticErrorKind::InactiveTimeline(id.clone()),
+                        ));
+                    }
+                    if self.merged_branches.contains(id) {
+                        return Err(self.annotate(
+                            SemanticErrorKind::InactiveTimeline(id.clone()),
+                        ));
+                    }
                     self.current_branch = id.clone();
                 }
                 TimeCoordinate::Global(t) => {

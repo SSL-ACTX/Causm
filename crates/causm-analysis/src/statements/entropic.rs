@@ -11,6 +11,14 @@ impl EntropicAnalyzer {
         parent: &String,
         branches: &[String],
     ) -> Result<(), SemanticError> {
+        if !self.branch_contexts.contains_key(parent)
+            || self.merged_branches.contains(parent)
+        {
+            return Err(
+                self.annotate(SemanticErrorKind::InactiveTimeline(parent.clone()))
+            );
+        }
+
         let parent_state = self
             .branch_contexts
             .get(parent)
@@ -18,6 +26,7 @@ impl EntropicAnalyzer {
             .unwrap_or_default();
 
         for branch in branches {
+            self.merged_branches.remove(branch);
             self.branch_contexts.insert(
                 branch.clone(),
                 BranchState {
@@ -49,9 +58,15 @@ impl EntropicAnalyzer {
         let mut collisions = HashSet::new();
 
         for branch_name in branches {
+            if self.merged_branches.contains(branch_name) {
+                return Err(self.annotate(SemanticErrorKind::InactiveTimeline(
+                    branch_name.clone(),
+                )));
+            }
+
             let branch_state =
                 self.branch_contexts.get(branch_name).ok_or_else(|| {
-                    self.annotate(SemanticErrorKind::CrossBranchViolation(
+                    self.annotate(SemanticErrorKind::InactiveTimeline(
                         branch_name.clone(),
                     ))
                 })?;
@@ -100,6 +115,12 @@ impl EntropicAnalyzer {
             target_state.consumed.remove(&var);
         }
         target_state.consumed.remove(target);
+
+        for branch_name in branches {
+            self.merged_branches.insert(branch_name.clone());
+        }
+        self.merged_branches.remove(target);
+
         Ok(())
     }
 
