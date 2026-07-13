@@ -128,11 +128,20 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn Await(&mut self, target: &String) -> Result<(), SemanticError> {
-        let state = self.branch_contexts.get(&self.current_branch).unwrap();
-        if state.consumed.contains(target) {
-            return Err(
-                self.annotate(SemanticErrorKind::UseAfterConsume(target.clone()))
-            );
+        self.check_available(target)?;
+        let target_type = self
+            .get_variable_type(target)
+            .unwrap_or(causm_core::types::Type::Unknown);
+        match target_type {
+            causm_core::types::Type::Promise(inner) => {
+                self.set_variable_type(target, *inner);
+            }
+            causm_core::types::Type::Unknown => {}
+            other => {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    format!("await target must be a Promise, got {:?}", other),
+                )));
+            }
         }
         Ok(())
     }

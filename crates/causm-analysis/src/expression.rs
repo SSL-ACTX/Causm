@@ -79,7 +79,7 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::ChannelReceive(_) => Ok(Type::Unknown),
-        Expression::Deferred { .. } => Ok(Type::Unknown),
+        Expression::Deferred { .. } => Ok(Type::Promise(Box::new(Type::Unknown))),
         Expression::Call { routine, .. } => {
             if let Some(info) = analyzer.routines.get(routine) {
                 Ok(info.return_type.clone())

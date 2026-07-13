@@ -735,6 +735,9 @@ impl EntropicAnalyzer {
             (Type::Array(exp_inner), Type::Array(act_inner)) => {
                 self.types_compatible(&exp_inner, &act_inner)
             }
+            (Type::Promise(exp_inner), Type::Promise(act_inner)) => {
+                self.types_compatible(&exp_inner, &act_inner)
+            }
             (Type::Optional(exp_inner), Type::Optional(act_inner)) => {
                 self.types_compatible(&exp_inner, &act_inner)
             }

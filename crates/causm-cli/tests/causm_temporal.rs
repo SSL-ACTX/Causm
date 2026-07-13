@@ -385,3 +385,34 @@ fn causm_temporal_promises_example_integration() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_temporal_promise_type_safety() -> anyhow::Result<()> {
+    // 1. Valid promise and await type conversion
+    let source = r#"
+    @0ms: {
+      let promise_val: Promise<Integer> = defer System.NetworkFetch(url="api.data", latency="10") deadline 50ms
+      await(promise_val)
+      let resolved: Integer = promise_val
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    // 2. Await on non-promise type must fail type checking
+    let bad_source = r#"
+    @0ms: {
+      let x = 10
+      await(x)
+    }
+    "#;
+    let bad_program = parser::parse_causm(bad_source)?;
+    let mut bad_analyzer = EntropicAnalyzer::new();
+    let result = bad_analyzer.analyze_program(&bad_program);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("await target must be a Promise"));
+
+    Ok(())
+}

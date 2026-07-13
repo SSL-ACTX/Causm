@@ -33,6 +33,7 @@ pub enum Type {
         inner_type: Box<Type>,
         access_time_ms: u64,
     },
+    Promise(Box<Type>),
     Custom(String),
     Unknown,
 }
@@ -96,6 +97,15 @@ impl Type {
                         inner_type,
                         access_time_ms,
                     }
+                }
+                "Promise" => {
+                    let inner_type =
+                        if let Some(crate::TypeParam::Type(t)) = params.first() {
+                            Box::new(Type::from_typename(t))
+                        } else {
+                            Box::new(Type::Unknown)
+                        };
+                    Type::Promise(inner_type)
                 }
                 _ => Type::Custom(name.clone()),
             },
