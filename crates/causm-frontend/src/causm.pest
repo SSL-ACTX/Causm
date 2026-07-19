@@ -153,7 +153,7 @@ base_type = { identifier ~ ("<" ~ type_param_list ~ ">")? | "int" | "float" | "b
 type_param_list = { type_param ~ ("," ~ type_param)* }
 type_param = { type_name | amount ~ "ms" | amount }
 
-open_chan_stmt = { "open_chan" ~ identifier ~ "(" ~ amount ~ ")" }
+open_chan_stmt = { "open_chan" ~ identifier ~ "(" ~ amount ~ ")" ~ decay_opt? }
 chan_send_stmt = { "chan_send" ~ identifier ~ "(" ~ identifier ~ ")" }
 
 watchdog_stmt = { "watchdog" ~ identifier ~ "timeout" ~ amount ~ "ms" ~ ("recovery" ~ statement_block)? }

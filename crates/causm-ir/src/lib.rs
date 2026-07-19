@@ -178,7 +178,8 @@ macro_rules! instructions {
             // Channels & Communication
             OpenChan {
                 name: String,
-                capacity: usize
+                capacity: usize,
+                decay_after_ms: Option<u64>
             },
             ChanSend {
                 chan_id: String,

@@ -11,6 +11,7 @@ pub struct Message {
     pub sender: String,
     pub payload: Payload,
     pub sent_at: u64,
+    pub type_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,7 @@ pub struct Vm {
     pub capability_handlers: HashMap<String, CapHandler>,
     pub channels: HashMap<String, VecDeque<Message>>,
     pub pending_channels: HashMap<String, VecDeque<Message>>,
+    pub channel_decay_limits: HashMap<String, u64>,
     pub routines: HashMap<String, Routine>,
     pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
     pub type_decay_limits: HashMap<String, u64>,

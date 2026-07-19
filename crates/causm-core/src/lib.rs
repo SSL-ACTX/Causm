@@ -125,7 +125,8 @@ macro_rules! statements {
             Capability(Capability),
             ChannelOpen {
                 name: String,
-                capacity: usize
+                capacity: usize,
+                decay_after_ms: Option<u64>
             },
             ChannelSend {
                 chan_id: String,

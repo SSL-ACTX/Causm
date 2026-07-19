@@ -25,6 +25,7 @@ impl Vm {
             capability_handlers: HashMap::new(),
             channels: HashMap::new(),
             pending_channels: HashMap::new(),
+            channel_decay_limits: HashMap::new(),
             routines: HashMap::new(),
             decay_handlers: HashMap::new(),
             type_decay_limits: HashMap::new(),

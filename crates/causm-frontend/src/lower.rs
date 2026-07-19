@@ -820,10 +820,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::Commit { vars: Vec::new() });
         }
 
-        Statement::ChannelOpen { name, capacity } => {
+        Statement::ChannelOpen {
+            name,
+            capacity,
+            decay_after_ms,
+        } => {
             ctx.push(Instruction::OpenChan {
                 name: name.clone(),
                 capacity: *capacity,
+                decay_after_ms: *decay_after_ms,
             });
         }
         Statement::ChannelSend { chan_id, value_id } => {

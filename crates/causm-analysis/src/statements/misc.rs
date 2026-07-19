@@ -40,6 +40,7 @@ impl EntropicAnalyzer {
         &mut self,
         _name: &str,
         _capacity: &usize,
+        _decay_after_ms: &Option<u64>,
     ) -> Result<(), SemanticError> {
         if !self.capability_stack.is_empty()
             && !self.is_capability_allowed("Chan.Manage")

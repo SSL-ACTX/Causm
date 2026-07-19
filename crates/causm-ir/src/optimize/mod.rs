@@ -477,9 +477,14 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         SsaInstruction::SpeculationMode { mode } => {
             Instruction::SpeculationMode { mode: *mode }
         }
-        SsaInstruction::OpenChan { name, capacity } => Instruction::OpenChan {
+        SsaInstruction::OpenChan {
+            name,
+            capacity,
+            decay_after_ms,
+        } => Instruction::OpenChan {
             name: name.clone(),
             capacity: *capacity,
+            decay_after_ms: *decay_after_ms,
         },
         SsaInstruction::ChanSend { chan_id, src } => Instruction::ChanSend {
             chan_id: chan_id.clone(),

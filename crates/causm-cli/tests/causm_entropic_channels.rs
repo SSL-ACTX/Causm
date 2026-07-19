@@ -90,4 +90,52 @@ mod tests {
         assert!(res.is_ok());
         Ok(())
     }
+
+    #[test]
+    fn test_entropic_channel_message_lease_decay_and_handler() -> anyhow::Result<()>
+    {
+        let code = r#"
+@main: {
+  type Packet = struct { seq: int }
+  let decay_triggered = false
+  decay_handler for Packet {
+    decay_triggered = true
+  }
+  open_chan data(1) decay_after 5ms
+  split main into [sender, receiver]
+}
+
+@sender: {
+  let p: Packet = struct { seq = 1 }
+  chan_send data(p)
+}
+
+@receiver: {
+  let d1 = 1
+  let d2 = 2
+  let d3 = 3
+  let d4 = 4
+  let d5 = 5
+  let d6 = 6
+  let d7 = 7
+  await_chan(data)
+  let p_received = chan_recv(data)
+}
+"#;
+        let vm = run_causm(code)?;
+        let receiver = vm.active_branches.get("receiver").unwrap();
+        let decay_triggered_reg = vm
+            .symbols
+            .get("decay_triggered")
+            .expect("decay_triggered symbol not found")
+            .0;
+        let val = receiver.arena.peek(decay_triggered_reg);
+        match val {
+            Some(causm_core::value::Payload::Bool(b)) => {
+                assert!(b, "Expected decay_triggered to be true")
+            }
+            _ => panic!("Expected decay_triggered to be true bool, got {:?}", val),
+        }
+        Ok(())
+    }
 }

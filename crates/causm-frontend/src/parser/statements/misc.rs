@@ -17,7 +17,20 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                 .next()
                 .map(|p| p.as_str().parse::<usize>().unwrap_or(1))
                 .unwrap_or(1);
-            Statement::ChannelOpen { name, capacity }
+            let decay_after_ms = inner.next().and_then(|p| {
+                if p.as_rule() == Rule::decay_opt {
+                    p.into_inner()
+                        .next()
+                        .and_then(|p2| p2.as_str().parse::<u64>().ok())
+                } else {
+                    None
+                }
+            });
+            Statement::ChannelOpen {
+                name,
+                capacity,
+                decay_after_ms,
+            }
         }
         Rule::chan_send_stmt => {
             let mut inner = pair.into_inner();

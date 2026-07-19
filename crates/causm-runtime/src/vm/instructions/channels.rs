@@ -10,11 +10,15 @@ impl Vm {
         _branch_id: &str,
         name: String,
         capacity: usize,
+        decay_after_ms: Option<u64>,
     ) -> Result<(), TemporalError> {
         self.channels
             .insert(name.clone(), VecDeque::with_capacity(capacity));
         self.pending_channels
-            .insert(name, VecDeque::with_capacity(capacity));
+            .insert(name.clone(), VecDeque::with_capacity(capacity));
+        if let Some(decay) = decay_after_ms {
+            self.channel_decay_limits.insert(name, decay);
+        }
         Ok(())
     }
 
@@ -25,6 +29,17 @@ impl Vm {
         src: Reg,
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, src.0)?;
+        let type_name = {
+            let branch = self.get_branch_mut(branch_id)?;
+            let idx = src.0 as usize;
+            if idx < branch.arena.metadata.len() {
+                branch.arena.metadata[idx]
+                    .as_ref()
+                    .and_then(|m| m.type_name.clone())
+            } else {
+                None
+            }
+        };
         let sent_at = {
             let branch = self.get_branch_mut(branch_id)?;
             branch.birth_global_time + branch.local_clock
@@ -34,6 +49,7 @@ impl Vm {
             sender: branch_id.to_string(),
             payload: val,
             sent_at,
+            type_name,
         };
         self.next_payload_id += 1;
 
@@ -112,11 +128,56 @@ impl Vm {
             })?
         };
 
-        self.insert_reg(
-            branch_id,
-            dest.0,
-            causm_core::value::EntropicState::Valid(message.payload.clone()),
-        )?;
+        let current_global_time = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.birth_global_time + branch.local_clock
+        };
+
+        let elapsed = current_global_time.saturating_sub(message.sent_at);
+        let decay_limit = self.channel_decay_limits.get(&chan_id).cloned();
+        let is_decayed = if let Some(limit) = decay_limit {
+            elapsed >= limit
+        } else {
+            false
+        };
+
+        let final_state = if is_decayed {
+            causm_core::value::EntropicState::Valid(message.payload.clone())
+                .decay_recursive()
+        } else {
+            causm_core::value::EntropicState::Valid(message.payload.clone())
+        };
+
+        self.insert_reg(branch_id, dest.0, final_state)?;
+
+        // Populate metadata for the register in the receiver's arena.
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            let idx = dest.0 as usize;
+            if idx < branch.arena.metadata.len() {
+                branch.arena.metadata[idx] =
+                    Some(causm_core::value::ValueMetadata {
+                        instantiated_at: message.sent_at,
+                        type_name: message.type_name.clone(),
+                        decay_after_ms: decay_limit,
+                    });
+            }
+        }
+
+        // Execute recovery / decay handler if one is registered for the type.
+        if is_decayed {
+            if let Some(type_name) = &message.type_name {
+                if let Some(handler_instrs) =
+                    self.decay_handlers.get(type_name).cloned()
+                {
+                    self._is_decaying = true;
+                    let res = self.execute_instructions(branch_id, &handler_instrs);
+                    self._is_decaying = false;
+                    res?;
+                }
+            }
+        }
+
         self.causal_history.push(CausalEvent::ChannelRecv {
             branch_id: branch_id.to_string(),
             channel_id: chan_id,

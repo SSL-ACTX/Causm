@@ -927,7 +927,7 @@ impl EntropicAnalyzer {
             } => {
                 format!("send {} to {}", value_id, target_branch)
             }
-            Statement::ChannelOpen { name, capacity } => {
+            Statement::ChannelOpen { name, capacity, .. } => {
                 format!("open_chan {}({})", name, capacity)
             }
             Statement::ChannelSend { chan_id, value_id } => {

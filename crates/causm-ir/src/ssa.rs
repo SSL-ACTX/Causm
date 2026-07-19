@@ -223,6 +223,7 @@ pub enum SsaInstruction {
     OpenChan {
         name: String,
         capacity: usize,
+        decay_after_ms: Option<u64>,
     },
     ChanSend {
         chan_id: String,
@@ -1183,9 +1184,14 @@ impl SsaTransformer {
             Instruction::SpeculationMode { mode } => {
                 SsaInstruction::SpeculationMode { mode: *mode }
             }
-            Instruction::OpenChan { name, capacity } => SsaInstruction::OpenChan {
+            Instruction::OpenChan {
+                name,
+                capacity,
+                decay_after_ms,
+            } => SsaInstruction::OpenChan {
                 name: name.clone(),
                 capacity: *capacity,
+                decay_after_ms: *decay_after_ms,
             },
             Instruction::ChanSend { chan_id, src } => SsaInstruction::ChanSend {
                 chan_id: chan_id.clone(),
