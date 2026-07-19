@@ -834,11 +834,13 @@ pub(crate) fn analyze_expression(
         | Expression::Boolean(_)
         | Expression::ArrayLiteral(_) => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
-            analyze_expression(analyzer, left)?;
-            analyze_expression(analyzer, right)?;
+            analyze_expression_nonconsuming(analyzer, left)?;
+            analyze_expression_nonconsuming(analyzer, right)?;
             Ok(())
         }
-        Expression::UnaryOp { expr, .. } => analyze_expression(analyzer, expr),
+        Expression::UnaryOp { expr, .. } => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
         Expression::TypeAssertion { target, cast_type } => {
             let target_type = infer_expression_type(analyzer, target)?;
             let cast_type_resolved = Type::from_typename(cast_type);

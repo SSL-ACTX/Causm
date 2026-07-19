@@ -3,7 +3,7 @@
     let b = 3
     
     // Modulo
-    let mod = clone(a) % clone(b)
+    let mod = a % b
     print("10 % 3 =")
     debug(mod)
     
@@ -17,7 +17,7 @@
     debug(p2)
     
     // Unary Negation
-    let neg_a = -clone(a)
+    let neg_a = -a
     print("-10 =")
     debug(neg_a)
     
@@ -32,7 +32,7 @@
     debug(f)
     
     // Complex expression
-    let complex = -(clone(a) + clone(b)) * (2 ^ 2) % 7
+    let complex = -(a + b) * (2 ^ 2) % 7
     print("-(10 + 3) * (2 ^ 2) % 7 =")
     debug(complex)
     
