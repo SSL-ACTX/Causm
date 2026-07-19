@@ -257,3 +257,26 @@ fn test_z3_routine_call_propagation() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_z3_for_loop_budget_violation() -> anyhow::Result<()> {
+    let source = r#"
+        @main: {
+            let items = [1, 2, 3]
+            for item clone items pacing 15ms (max 10ms) {
+                let y = item
+            }
+        }
+    "#;
+
+    let program = parser::parse_causm(source).unwrap();
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.use_z3 = true;
+
+    let result = analyzer.analyze_program(&program);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("Temporal Assertion Violation"));
+
+    Ok(())
+}

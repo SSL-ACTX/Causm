@@ -758,7 +758,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 source,
                 body,
                 pacing_ms,
-                ..
+                max_ms,
             } => {
                 if let causm_core::ParamMode::Consume = mode {
                     self.check_available(source, path_condition)?;
@@ -827,7 +827,34 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     }
                     self.solver.pop(1);
                 }
-                Ok(in_clock.clone())
+                if let Some(max) = max_ms {
+                    let max_int = self.solver.int_from_u64(*max);
+                    let iteration_cost = if let Some(pacing) = pacing_ms {
+                        self.solver.int_from_u64(*pacing)
+                    } else {
+                        loop_clock.clone()
+                    };
+                    let violation = self.solver.int_gt(&iteration_cost, &max_int);
+                    self.solver.push();
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
+                    self.solver.assert(&cond_and);
+                    if self.solver.check() {
+                        let actual_wcet =
+                            self.solver.eval_u64(&iteration_cost).unwrap_or(0);
+                        self.solver.pop(1);
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                actual_wcet,
+                                *max,
+                            ),
+                        ));
+                    }
+                    self.solver.pop(1);
+                    Ok(self.solver.int_add(&[in_clock, &max_int]))
+                } else {
+                    Ok(in_clock.clone())
+                }
             }
             Statement::RoutineDef {
                 params,

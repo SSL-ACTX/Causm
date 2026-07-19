@@ -58,6 +58,7 @@ impl Vm {
             }
         };
 
+        let start_local_clock = self.get_branch(branch_id)?.local_clock;
         let mut elapsed = 0;
         let max_allowed = max_ms.unwrap_or(u64::MAX);
 
@@ -112,6 +113,18 @@ impl Vm {
 
             elapsed += paced;
         }
+
+        if let Some(max) = max_ms {
+            let total_elapsed =
+                self.get_branch(branch_id)?.local_clock - start_local_clock;
+            if total_elapsed < max {
+                let pad = max - total_elapsed;
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock += pad;
+                branch.consume_budget(pad)?;
+            }
+        }
+
         Ok(())
     }
 
