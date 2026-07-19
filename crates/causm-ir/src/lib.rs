@@ -268,17 +268,17 @@ macro_rules! instructions {
                 item_name: String,
                 mode: causm_core::ParamMode,
                 source: $crate::Reg,
-                body: Vec<$crate::Instruction>,
                 pacing_ms: Option<u64>,
                 max_ms: Option<u64>
             },
+            EndFor,
             SplitMap {
                 item_name: String,
                 mode: causm_core::ParamMode,
                 source: $crate::Reg,
-                body: Vec<$crate::Instruction>,
                 reconcile: Option<causm_core::MergeResolution>
             },
+            EndSplitMap,
             Defer {
                 dest: $crate::Reg,
                 cap: causm_core::Capability,
@@ -305,9 +305,9 @@ macro_rules! instructions {
             ForStep {
                 item_name: String,
                 source: $crate::Reg,
-                step_ms: u64,
-                body: Vec<$crate::Instruction>
+                step_ms: u64
             },
+            EndForStep,
             NetworkRequest {
                 domain: String
             }

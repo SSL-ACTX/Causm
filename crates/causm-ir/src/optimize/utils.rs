@@ -103,23 +103,14 @@ pub(crate) fn for_each_ssa_src_reg(
             f(*index);
             f(*src);
         }
-        SsaInstruction::For { source, body, .. } => {
+        SsaInstruction::For { source, .. } => {
             f(*source);
-            for b in body {
-                for_each_ssa_src_reg(b, f);
-            }
         }
-        SsaInstruction::ForStep { source, body, .. } => {
+        SsaInstruction::ForStep { source, .. } => {
             f(*source);
-            for b in body {
-                for_each_ssa_src_reg(b, f);
-            }
         }
-        SsaInstruction::SplitMap { source, body, .. } => {
+        SsaInstruction::SplitMap { source, .. } => {
             f(*source);
-            for b in body {
-                for_each_ssa_src_reg(b, f);
-            }
         }
         SsaInstruction::Await { target } => {
             f(*target);

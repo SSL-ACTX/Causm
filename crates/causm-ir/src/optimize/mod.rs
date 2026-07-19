@@ -338,36 +338,28 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             item_name,
             mode,
             source,
-            body,
             pacing_ms,
             max_ms,
-        } => {
-            let body_mapped = body.iter().map(ssa_instr_to_instr).collect();
-            Instruction::For {
-                item_name: item_name.clone(),
-                mode: mode.clone(),
-                source: ssa_reg_to_reg(*source),
-                body: body_mapped,
-                pacing_ms: *pacing_ms,
-                max_ms: *max_ms,
-            }
-        }
+        } => Instruction::For {
+            item_name: item_name.clone(),
+            mode: mode.clone(),
+            source: ssa_reg_to_reg(*source),
+            pacing_ms: *pacing_ms,
+            max_ms: *max_ms,
+        },
+        SsaInstruction::EndFor => Instruction::EndFor,
         SsaInstruction::SplitMap {
             item_name,
             mode,
             source,
-            body,
             reconcile,
-        } => {
-            let body_mapped = body.iter().map(ssa_instr_to_instr).collect();
-            Instruction::SplitMap {
-                item_name: item_name.clone(),
-                mode: mode.clone(),
-                source: ssa_reg_to_reg(*source),
-                body: body_mapped,
-                reconcile: reconcile.clone(),
-            }
-        }
+        } => Instruction::SplitMap {
+            item_name: item_name.clone(),
+            mode: mode.clone(),
+            source: ssa_reg_to_reg(*source),
+            reconcile: reconcile.clone(),
+        },
+        SsaInstruction::EndSplitMap => Instruction::EndSplitMap,
         SsaInstruction::Defer {
             dest,
             cap,
@@ -549,16 +541,12 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             item_name,
             source,
             step_ms,
-            body,
-        } => {
-            let body_mapped = body.iter().map(ssa_instr_to_instr).collect();
-            Instruction::ForStep {
-                item_name: item_name.clone(),
-                source: ssa_reg_to_reg(*source),
-                step_ms: *step_ms,
-                body: body_mapped,
-            }
-        }
+        } => Instruction::ForStep {
+            item_name: item_name.clone(),
+            source: ssa_reg_to_reg(*source),
+            step_ms: *step_ms,
+        },
+        SsaInstruction::EndForStep => Instruction::EndForStep,
         SsaInstruction::LoopTickOn { chan_id } => Instruction::LoopTickOn {
             chan_id: chan_id.clone(),
         },

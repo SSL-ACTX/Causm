@@ -1,5 +1,5 @@
 use crate::vm::error::TemporalError;
-use crate::vm::state::{Timeline, Vm};
+use crate::vm::state::{FlatLoopState, Timeline, Vm};
 use causm_core::value::{EntropicState, Payload};
 use causm_core::{MergeResolution, ParamMode};
 use causm_ir::{Instruction, Reg};
@@ -14,117 +14,176 @@ impl Vm {
         item_name: String,
         mode: ParamMode,
         source: Reg,
-        body: Vec<Instruction>,
         pacing_ms: Option<u64>,
         max_ms: Option<u64>,
     ) -> Result<(), TemporalError> {
-        let source_payload = match mode {
-            ParamMode::Consume | ParamMode::Decay => {
-                let payload = self.peek_reg(branch_id, source.0)?;
-                self.consume_reg(branch_id, source.0)?;
-                payload
-            }
-            ParamMode::Clone | ParamMode::Peek => {
-                self.peek_reg(branch_id, source.0)?
-            }
+        let (header_pc, loop_exists) = {
+            let branch = self.get_branch(branch_id)?;
+            let pc = branch.pc;
+            let header_pc = pc - 1;
+            let loop_exists = branch
+                .flat_loops
+                .last()
+                .map(|l| l.header_pc == header_pc)
+                .unwrap_or(false);
+            (header_pc, loop_exists)
         };
 
-        let elements = match source_payload {
-            Payload::Array(vec) => vec,
-            Payload::Struct(map) | Payload::Topology(map) => {
-                let mut vec = Vec::new();
-                let mut keys: Vec<_> = map.keys().collect();
-                keys.sort();
-                for k in keys {
-                    if let Some(EntropicState::Valid(p)) = map.get(k) {
-                        let mut fields = HashMap::new();
-                        fields.insert(
-                            "key".to_string(),
-                            EntropicState::Valid(Payload::String(k.clone())),
-                        );
-                        fields.insert(
-                            "value".to_string(),
-                            EntropicState::Valid(p.clone()),
-                        );
-                        vec.push(Payload::Struct(fields));
-                    }
+        if !loop_exists {
+            let source_payload = match mode {
+                ParamMode::Consume | ParamMode::Decay => {
+                    let payload = self.peek_reg(branch_id, source.0)?;
+                    self.consume_reg(branch_id, source.0)?;
+                    payload
                 }
-                vec
-            }
-            _ => {
-                return Err(TemporalError::EvalError(
-                    "for-source must be array or struct".into(),
-                ))
-            }
-        };
-
-        let start_local_clock = self.get_branch(branch_id)?.local_clock;
-        let mut elapsed = 0;
-        let max_allowed = max_ms.unwrap_or(u64::MAX);
-
-        let item_reg = self.symbols.get(&item_name).unwrap().0;
-
-        for item_value in elements.into_iter() {
-            if elapsed >= max_allowed {
-                break;
-            }
-
-            self.insert_reg(branch_id, item_reg, EntropicState::Valid(item_value))?;
-
-            let iteration_start = self.get_branch_mut(branch_id)?.local_clock;
-
-            // Execute body
-            let (old_pc, old_instrs) = {
-                let b = self.get_branch_mut(branch_id)?;
-                let pc = b.pc;
-                let instrs = b.instructions.clone();
-                b.instructions = body.clone();
-                b.pc = 0;
-                (pc, instrs)
+                ParamMode::Clone | ParamMode::Peek => {
+                    self.peek_reg(branch_id, source.0)?
+                }
             };
 
-            while {
-                let b = self.get_branch_mut(branch_id)?;
-                b.pc < b.instructions.len()
-            } {
-                self.execute_instruction(branch_id)?;
+            let elements = match source_payload {
+                Payload::Array(vec) => vec,
+                Payload::Struct(map) | Payload::Topology(map) => {
+                    let mut vec = Vec::new();
+                    let mut keys: Vec<_> = map.keys().collect();
+                    keys.sort();
+                    for k in keys {
+                        if let Some(EntropicState::Valid(p)) = map.get(k) {
+                            let mut fields = HashMap::new();
+                            fields.insert(
+                                "key".to_string(),
+                                EntropicState::Valid(Payload::String(k.clone())),
+                            );
+                            fields.insert(
+                                "value".to_string(),
+                                EntropicState::Valid(p.clone()),
+                            );
+                            vec.push(Payload::Struct(fields));
+                        }
+                    }
+                    vec
+                }
+                _ => {
+                    return Err(TemporalError::EvalError(
+                        "for-source must be array or struct".into(),
+                    ))
+                }
+            };
+
+            let branch = self.get_branch_mut(branch_id)?;
+            let pc = branch.pc;
+            // Find matching EndFor PC
+            let mut depth = 0;
+            let mut end_pc = None;
+            for i in pc..branch.instructions.len() {
+                match &branch.instructions[i] {
+                    Instruction::For { .. } => depth += 1,
+                    Instruction::EndFor => {
+                        if depth == 0 {
+                            end_pc = Some(i);
+                            break;
+                        } else {
+                            depth -= 1;
+                        }
+                    }
+                    _ => {}
+                }
             }
+            let end_pc =
+                end_pc.ok_or(TemporalError::EvalError("Missing EndFor".into()))?;
 
-            {
-                let b = self.get_branch_mut(branch_id)?;
-                b.instructions = old_instrs;
-                b.pc = old_pc;
-            }
-
-            let body_cost =
-                self.get_branch_mut(branch_id)?.local_clock - iteration_start;
-            let paced = pacing_ms.unwrap_or(body_cost);
-
-            if body_cost > paced {
-                return Err(TemporalError::PacingViolation);
-            }
-
-            let pad = paced - body_cost;
-            if pad > 0 {
-                let branch = self.get_branch_mut(branch_id)?;
-                branch.local_clock += pad;
-                branch.consume_budget(pad)?;
-            }
-
-            elapsed += paced;
+            let start_local_clock = branch.local_clock;
+            branch.flat_loops.push(FlatLoopState {
+                header_pc,
+                end_pc,
+                item_name: item_name.clone(),
+                elements,
+                index: 0,
+                pacing_ms,
+                max_ms,
+                start_local_clock,
+                iteration_start_clock: start_local_clock,
+            });
         }
 
-        if let Some(max) = max_ms {
-            let total_elapsed =
-                self.get_branch(branch_id)?.local_clock - start_local_clock;
-            if total_elapsed < max {
-                let pad = max - total_elapsed;
-                let branch = self.get_branch_mut(branch_id)?;
-                branch.local_clock += pad;
-                branch.consume_budget(pad)?;
+        let (
+            index,
+            elements_len,
+            max_allowed,
+            start_local_clock,
+            item_name_str,
+            end_pc,
+        ) = {
+            let branch = self.get_branch(branch_id)?;
+            let loop_state = branch.flat_loops.last().unwrap();
+            (
+                loop_state.index,
+                loop_state.elements.len(),
+                loop_state.max_ms.unwrap_or(u64::MAX),
+                loop_state.start_local_clock,
+                loop_state.item_name.clone(),
+                loop_state.end_pc,
+            )
+        };
+
+        let local_clock = self.get_branch(branch_id)?.local_clock;
+
+        if index < elements_len && (local_clock - start_local_clock) < max_allowed {
+            let item_reg = self.symbols.get(&item_name_str).unwrap().0;
+            let item_value = {
+                let branch = self.get_branch(branch_id)?;
+                branch.flat_loops.last().unwrap().elements[index].clone()
+            };
+            self.insert_reg(branch_id, item_reg, EntropicState::Valid(item_value))?;
+
+            let local_clock = self.get_branch(branch_id)?.local_clock;
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.flat_loops.last_mut().unwrap().iteration_start_clock =
+                local_clock;
+        } else {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.flat_loops.pop();
+
+            if let Some(max) = max_ms {
+                let total_elapsed = branch.local_clock - start_local_clock;
+                if total_elapsed < max {
+                    let pad = max - total_elapsed;
+                    branch.local_clock += pad;
+                    branch.consume_budget(pad)?;
+                }
             }
+
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = end_pc + 1;
         }
 
+        Ok(())
+    }
+
+    pub(crate) fn EndFor(&mut self, branch_id: &str) -> Result<(), TemporalError> {
+        let (paced, body_cost, header_pc) = {
+            let branch = self.get_branch(branch_id)?;
+            let loop_state = branch.flat_loops.last().ok_or_else(|| {
+                TemporalError::EvalError("Loop state underflow on EndFor".into())
+            })?;
+            let body_cost = branch.local_clock - loop_state.iteration_start_clock;
+            let paced = loop_state.pacing_ms.unwrap_or(body_cost);
+            (paced, body_cost, loop_state.header_pc)
+        };
+
+        if body_cost > paced {
+            return Err(TemporalError::PacingViolation);
+        }
+
+        let pad = paced - body_cost;
+        let branch = self.get_branch_mut(branch_id)?;
+        if pad > 0 {
+            branch.local_clock += pad;
+            branch.consume_budget(pad)?;
+        }
+
+        branch.flat_loops.last_mut().unwrap().index += 1;
+        branch.pc = header_pc;
         Ok(())
     }
 
@@ -134,7 +193,6 @@ impl Vm {
         item_name: String,
         mode: ParamMode,
         source: Reg,
-        body: Vec<Instruction>,
         _reconcile: Option<MergeResolution>,
     ) -> Result<(), TemporalError> {
         let source_payload = match mode {
@@ -176,6 +234,31 @@ impl Vm {
             }
         };
 
+        // Find matching EndSplitMap PC
+        let (pc, end_pc) = {
+            let branch = self.get_branch(branch_id)?;
+            let pc = branch.pc;
+            let mut depth = 0;
+            let mut end_pc = None;
+            for i in pc..branch.instructions.len() {
+                match &branch.instructions[i] {
+                    Instruction::SplitMap { .. } => depth += 1,
+                    Instruction::EndSplitMap => {
+                        if depth == 0 {
+                            end_pc = Some(i);
+                            break;
+                        } else {
+                            depth -= 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let end_pc = end_pc
+                .ok_or(TemporalError::EvalError("Missing EndSplitMap".into()))?;
+            (pc, end_pc)
+        };
+
         let mut results: Vec<Payload> = Vec::new();
         let item_reg = self.symbols.get(&item_name).unwrap().0;
 
@@ -190,13 +273,12 @@ impl Vm {
                 child_branch
                     .arena
                     .insert(item_reg, EntropicState::Valid(item_value))?;
-                child_branch.instructions = body.clone();
-                child_branch.pc = 0;
+                child_branch.pc = pc;
             }
 
             while {
                 let b = self.get_branch_mut(&child_name)?;
-                b.pc < b.instructions.len()
+                b.pc < end_pc
             } {
                 self.execute_instruction(&child_name)?;
             }
@@ -217,11 +299,22 @@ impl Vm {
             .get("splitmap_results")
             .expect("splitmap_results not found")
             .0;
+
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.pc = end_pc + 1;
+
         self.insert_reg(
             branch_id,
             out_reg,
             EntropicState::Valid(Payload::Array(results)),
         )
+    }
+
+    pub(crate) fn EndSplitMap(
+        &mut self,
+        _branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        Ok(())
     }
 
     pub(crate) fn Loop(
@@ -320,63 +413,125 @@ impl Vm {
         item_name: String,
         source: Reg,
         step_ms: u64,
-        body: Vec<Instruction>,
     ) -> Result<(), TemporalError> {
-        let source_payload = self.peek_reg(branch_id, source.0)?;
-
-        let elements = match source_payload {
-            Payload::Array(vec) => vec,
-            _ => {
-                return Err(TemporalError::EvalError(
-                    "for-step source must be array".into(),
-                ))
-            }
+        let (header_pc, loop_exists) = {
+            let branch = self.get_branch(branch_id)?;
+            let pc = branch.pc;
+            let header_pc = pc - 1;
+            let loop_exists = branch
+                .flat_loops
+                .last()
+                .map(|l| l.header_pc == header_pc)
+                .unwrap_or(false);
+            (header_pc, loop_exists)
         };
 
-        let item_reg = self.symbols.get(&item_name).unwrap().0;
-
-        for item_value in elements.into_iter() {
-            self.insert_reg(branch_id, item_reg, EntropicState::Valid(item_value))?;
-
-            let iteration_start = self.get_branch_mut(branch_id)?.local_clock;
-
-            let (old_pc, old_instrs) = {
-                let b = self.get_branch_mut(branch_id)?;
-                let pc = b.pc;
-                let instrs = b.instructions.clone();
-                b.instructions = body.clone();
-                b.pc = 0;
-                (pc, instrs)
+        if !loop_exists {
+            let source_payload = self.peek_reg(branch_id, source.0)?;
+            let elements = match source_payload {
+                Payload::Array(vec) => vec,
+                _ => {
+                    return Err(TemporalError::EvalError(
+                        "for-step source must be array".into(),
+                    ))
+                }
             };
 
-            while {
-                let b = self.get_branch_mut(branch_id)?;
-                b.pc < b.instructions.len()
-            } {
-                self.execute_instruction(branch_id)?;
+            let branch = self.get_branch_mut(branch_id)?;
+            let pc = branch.pc;
+            // Find matching EndForStep PC
+            let mut depth = 0;
+            let mut end_pc = None;
+            for i in pc..branch.instructions.len() {
+                match &branch.instructions[i] {
+                    Instruction::ForStep { .. } => depth += 1,
+                    Instruction::EndForStep => {
+                        if depth == 0 {
+                            end_pc = Some(i);
+                            break;
+                        } else {
+                            depth -= 1;
+                        }
+                    }
+                    _ => {}
+                }
             }
+            let end_pc = end_pc
+                .ok_or(TemporalError::EvalError("Missing EndForStep".into()))?;
 
-            {
-                let b = self.get_branch_mut(branch_id)?;
-                b.instructions = old_instrs;
-                b.pc = old_pc;
-            }
-
-            let body_cost =
-                self.get_branch_mut(branch_id)?.local_clock - iteration_start;
-
-            if body_cost > step_ms {
-                return Err(TemporalError::PacingViolation);
-            }
-
-            let pad = step_ms - body_cost;
-            if pad > 0 {
-                let branch = self.get_branch_mut(branch_id)?;
-                branch.local_clock += pad;
-                branch.consume_budget(pad)?;
-            }
+            let start_local_clock = branch.local_clock;
+            branch.flat_loops.push(FlatLoopState {
+                header_pc,
+                end_pc,
+                item_name: item_name.clone(),
+                elements,
+                index: 0,
+                pacing_ms: Some(step_ms),
+                max_ms: None,
+                start_local_clock,
+                iteration_start_clock: start_local_clock,
+            });
         }
 
+        let (index, elements_len, item_name_str, end_pc) = {
+            let branch = self.get_branch(branch_id)?;
+            let loop_state = branch.flat_loops.last().unwrap();
+            (
+                loop_state.index,
+                loop_state.elements.len(),
+                loop_state.item_name.clone(),
+                loop_state.end_pc,
+            )
+        };
+
+        if index < elements_len {
+            let item_reg = self.symbols.get(&item_name_str).unwrap().0;
+            let item_value = {
+                let branch = self.get_branch(branch_id)?;
+                branch.flat_loops.last().unwrap().elements[index].clone()
+            };
+            self.insert_reg(branch_id, item_reg, EntropicState::Valid(item_value))?;
+
+            let local_clock = self.get_branch(branch_id)?.local_clock;
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.flat_loops.last_mut().unwrap().iteration_start_clock =
+                local_clock;
+        } else {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.flat_loops.pop();
+            branch.pc = end_pc + 1;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn EndForStep(
+        &mut self,
+        branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        let (step_ms, body_cost, header_pc) = {
+            let branch = self.get_branch(branch_id)?;
+            let loop_state = branch.flat_loops.last().ok_or_else(|| {
+                TemporalError::EvalError("Loop state underflow on EndForStep".into())
+            })?;
+            let body_cost = branch.local_clock - loop_state.iteration_start_clock;
+            let step_ms = loop_state.pacing_ms.unwrap();
+            (step_ms, body_cost, loop_state.header_pc)
+        };
+
+        if body_cost > step_ms {
+            return Err(TemporalError::PacingViolation);
+        }
+
+        let pad = step_ms - body_cost;
+        let branch = self.get_branch_mut(branch_id)?;
+        if pad > 0 {
+            branch.local_clock += pad;
+            branch.consume_budget(pad)?;
+        }
+
+        branch.flat_loops.last_mut().unwrap().index += 1;
+        branch.pc = header_pc;
         Ok(())
     }
 }

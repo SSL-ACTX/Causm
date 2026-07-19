@@ -100,6 +100,19 @@ pub struct Vm {
     pub current_span: Option<causm_core::Span>,
 }
 
+#[derive(Clone, Debug)]
+pub struct FlatLoopState {
+    pub header_pc: usize,
+    pub end_pc: usize,
+    pub item_name: String,
+    pub elements: Vec<Payload>,
+    pub index: usize,
+    pub pacing_ms: Option<u64>,
+    pub max_ms: Option<u64>,
+    pub start_local_clock: u64,
+    pub iteration_start_clock: u64,
+}
+
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct Timeline {
@@ -117,6 +130,7 @@ pub struct Timeline {
     pub break_requested: bool,
     pub loop_depth: u32,
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
+    pub flat_loops: Vec<FlatLoopState>,
     pub pc: usize,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,

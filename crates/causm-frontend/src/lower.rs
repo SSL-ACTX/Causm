@@ -684,28 +684,18 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             max_ms,
         } => {
             let source_reg = ctx.get_reg(source);
-            let mut sub_ctx = LoweringContext::new();
-            sub_ctx.symbols = ctx.symbols.clone();
-            sub_ctx.next_reg = ctx.next_reg;
-
-            // Item name is in a register
-            let _ = sub_ctx.get_reg(item_name);
-
-            for s in body {
-                lower_spanned(&mut sub_ctx, s);
-            }
-
-            ctx.symbols = sub_ctx.symbols;
-            ctx.next_reg = sub_ctx.next_reg;
-
             ctx.push(Instruction::For {
                 item_name: item_name.clone(),
                 mode: mode.clone(),
                 source: source_reg,
-                body: sub_ctx.instructions,
                 pacing_ms: *pacing_ms,
                 max_ms: *max_ms,
             });
+            let _ = ctx.get_reg(item_name);
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+            ctx.push(Instruction::EndFor);
         }
         Statement::SplitMap {
             item_name,
@@ -715,30 +705,18 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             reconcile,
         } => {
             let source_reg = ctx.get_reg(source);
-            // Ensure splitmap_results is reserved in the parent context
             let _ = ctx.get_reg("splitmap_results");
-
-            let mut sub_ctx = LoweringContext::new();
-            sub_ctx.symbols = ctx.symbols.clone();
-            sub_ctx.next_reg = ctx.next_reg;
-
-            // Item name is in a register
-            let _ = sub_ctx.get_reg(item_name);
-
-            for s in body {
-                lower_spanned(&mut sub_ctx, s);
-            }
-
-            ctx.symbols = sub_ctx.symbols;
-            ctx.next_reg = sub_ctx.next_reg;
-
             ctx.push(Instruction::SplitMap {
                 item_name: item_name.clone(),
                 mode: mode.clone(),
                 source: source_reg,
-                body: sub_ctx.instructions,
                 reconcile: reconcile.clone(),
             });
+            let _ = ctx.get_reg(item_name);
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+            ctx.push(Instruction::EndSplitMap);
         }
         Statement::Split { parent, branches } => {
             ctx.push(Instruction::Split {
@@ -971,25 +949,16 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             body,
         } => {
             let source_reg = lower_expression(ctx, source);
-            let mut sub_ctx = LoweringContext::new();
-            sub_ctx.symbols = ctx.symbols.clone();
-            sub_ctx.next_reg = ctx.next_reg;
-
-            let _ = sub_ctx.get_reg(item_name);
-
-            for s in body {
-                lower_spanned(&mut sub_ctx, s);
-            }
-
-            ctx.symbols = sub_ctx.symbols;
-            ctx.next_reg = sub_ctx.next_reg;
-
             ctx.push(Instruction::ForStep {
                 item_name: item_name.clone(),
                 source: source_reg,
                 step_ms: *step_ms,
-                body: sub_ctx.instructions,
             });
+            let _ = ctx.get_reg(item_name);
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+            ctx.push(Instruction::EndForStep);
         }
         Statement::If {
             binding,

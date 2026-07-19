@@ -605,6 +605,7 @@ impl Timeline {
             break_requested: false,
             loop_depth: 0,
             loop_stack: Vec::new(),
+            flat_loops: Vec::new(),
             pc: 0,
             instructions: Vec::new(),
             spans: Vec::new(),

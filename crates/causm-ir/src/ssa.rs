@@ -283,17 +283,17 @@ pub enum SsaInstruction {
         item_name: String,
         mode: causm_core::ParamMode,
         source: SsaReg,
-        body: Vec<SsaInstruction>,
         pacing_ms: Option<u64>,
         max_ms: Option<u64>,
     },
+    EndFor,
     SplitMap {
         item_name: String,
         mode: causm_core::ParamMode,
         source: SsaReg,
-        body: Vec<SsaInstruction>,
         reconcile: Option<causm_core::MergeResolution>,
     },
+    EndSplitMap,
     Defer {
         dest: SsaReg,
         cap: causm_core::Capability,
@@ -335,8 +335,8 @@ pub enum SsaInstruction {
         item_name: String,
         source: SsaReg,
         step_ms: u64,
-        body: Vec<SsaInstruction>,
     },
+    EndForStep,
     LoopTickOn {
         chan_id: String,
     },
@@ -1378,50 +1378,28 @@ impl SsaTransformer {
                 item_name,
                 mode,
                 source,
-                body,
                 pacing_ms,
                 max_ms,
-            } => {
-                let source_ssa = self.current_ssa_reg(*source);
-                let body_ssa =
-                    body.iter().map(|i| self.rename_instruction(i)).collect();
-                for sub_instr in body {
-                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
-                        self.pop_version(dest.0);
-                    });
-                }
-                SsaInstruction::For {
-                    item_name: item_name.clone(),
-                    mode: mode.clone(),
-                    source: source_ssa,
-                    body: body_ssa,
-                    pacing_ms: *pacing_ms,
-                    max_ms: *max_ms,
-                }
-            }
+            } => SsaInstruction::For {
+                item_name: item_name.clone(),
+                mode: mode.clone(),
+                source: self.current_ssa_reg(*source),
+                pacing_ms: *pacing_ms,
+                max_ms: *max_ms,
+            },
+            Instruction::EndFor => SsaInstruction::EndFor,
             Instruction::SplitMap {
                 item_name,
                 mode,
                 source,
-                body,
                 reconcile,
-            } => {
-                let source_ssa = self.current_ssa_reg(*source);
-                let body_ssa =
-                    body.iter().map(|i| self.rename_instruction(i)).collect();
-                for sub_instr in body {
-                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
-                        self.pop_version(dest.0);
-                    });
-                }
-                SsaInstruction::SplitMap {
-                    item_name: item_name.clone(),
-                    mode: mode.clone(),
-                    source: source_ssa,
-                    body: body_ssa,
-                    reconcile: reconcile.clone(),
-                }
-            }
+            } => SsaInstruction::SplitMap {
+                item_name: item_name.clone(),
+                mode: mode.clone(),
+                source: self.current_ssa_reg(*source),
+                reconcile: reconcile.clone(),
+            },
+            Instruction::EndSplitMap => SsaInstruction::EndSplitMap,
             Instruction::Defer {
                 dest,
                 cap,
@@ -1472,23 +1450,12 @@ impl SsaTransformer {
                 item_name,
                 source,
                 step_ms,
-                body,
-            } => {
-                let source_ssa = self.current_ssa_reg(*source);
-                let body_ssa =
-                    body.iter().map(|i| self.rename_instruction(i)).collect();
-                for sub_instr in body {
-                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
-                        self.pop_version(dest.0);
-                    });
-                }
-                SsaInstruction::ForStep {
-                    item_name: item_name.clone(),
-                    source: source_ssa,
-                    step_ms: *step_ms,
-                    body: body_ssa,
-                }
-            }
+            } => SsaInstruction::ForStep {
+                item_name: item_name.clone(),
+                source: self.current_ssa_reg(*source),
+                step_ms: *step_ms,
+            },
+            Instruction::EndForStep => SsaInstruction::EndForStep,
             Instruction::LoopTickOn { chan_id } => SsaInstruction::LoopTickOn {
                 chan_id: chan_id.clone(),
             },
@@ -1567,17 +1534,7 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
 }
 
 fn for_each_dest_reg_recursive(instr: &Instruction, f: &mut impl FnMut(Reg)) {
-    for_each_dest_reg(instr, &mut *f);
-    match instr {
-        Instruction::For { body, .. }
-        | Instruction::SplitMap { body, .. }
-        | Instruction::ForStep { body, .. } => {
-            for sub_instr in body {
-                for_each_dest_reg_recursive(sub_instr, &mut *f);
-            }
-        }
-        _ => {}
-    }
+    for_each_dest_reg(instr, f);
 }
 
 #[cfg(test)]
