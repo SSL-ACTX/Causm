@@ -314,6 +314,17 @@ pub enum SsaInstruction {
     NetworkRequest {
         domain: String,
     },
+    Jump {
+        target: usize,
+    },
+    JumpIf {
+        cond: SsaReg,
+        target: usize,
+    },
+    JumpIfNot {
+        cond: SsaReg,
+        target: usize,
+    },
     Other(String),
 }
 
@@ -1417,6 +1428,15 @@ impl SsaTransformer {
                     domain: domain.clone(),
                 }
             }
+            Instruction::Jump { target } => SsaInstruction::Jump { target: *target },
+            Instruction::JumpIf { cond, target } => SsaInstruction::JumpIf {
+                cond: self.current_ssa_reg(*cond),
+                target: *target,
+            },
+            Instruction::JumpIfNot { cond, target } => SsaInstruction::JumpIfNot {
+                cond: self.current_ssa_reg(*cond),
+                target: *target,
+            },
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }

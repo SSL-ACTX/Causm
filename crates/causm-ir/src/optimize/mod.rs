@@ -532,6 +532,15 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         SsaInstruction::AwaitChan { chan_id } => Instruction::AwaitChan {
             chan_id: chan_id.clone(),
         },
+        SsaInstruction::Jump { target } => Instruction::Jump { target: *target },
+        SsaInstruction::JumpIf { cond, target } => Instruction::JumpIf {
+            cond: ssa_reg_to_reg(*cond),
+            target: *target,
+        },
+        SsaInstruction::JumpIfNot { cond, target } => Instruction::JumpIfNot {
+            cond: ssa_reg_to_reg(*cond),
+            target: *target,
+        },
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }
