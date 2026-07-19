@@ -159,7 +159,7 @@ macro_rules! statements {
             MatchEntropy {
                 target: Expression,
                 valid_branch: Option<(String, Vec<SpannedStatement>)>,
-                decayed_branch: Option<(String, Vec<SpannedStatement>)>,
+                decayed_branch: Option<(DecayedPattern, Vec<SpannedStatement>)>,
                 pending_branch: Option<Vec<SpannedStatement>>,
                 consumed_branch: Option<Vec<SpannedStatement>>
             },
@@ -441,4 +441,10 @@ pub enum BinaryOperator {
     Gt,
     Le,
     Ge,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DecayedPattern {
+    Binding(String),
+    Fields(std::collections::HashMap<String, String>),
 }

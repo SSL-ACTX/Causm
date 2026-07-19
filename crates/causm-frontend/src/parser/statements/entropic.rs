@@ -25,14 +25,56 @@ pub fn parse_entropic_stmt(pair: Pair<Rule>) -> Statement {
                     let mut branch_inner = element.into_inner();
                     let first_child = branch_inner.next();
                     let mut var_name = String::new();
+                    let mut decayed_pat = None;
                     let mut body_pair = None;
 
-                    if let Some(child) = first_child {
-                        if child.as_rule() == Rule::identifier {
-                            var_name = child.as_str().to_string();
-                            body_pair = branch_inner.next();
-                        } else {
-                            body_pair = Some(child);
+                    if is_decayed {
+                        if let Some(pat_pair) = first_child {
+                            if pat_pair.as_rule() == Rule::identifier_or_pattern {
+                                let inner_pat =
+                                    pat_pair.into_inner().next().unwrap();
+                                match inner_pat.as_rule() {
+                                    Rule::identifier => {
+                                        decayed_pat = Some(DecayedPattern::Binding(
+                                            inner_pat.as_str().to_string(),
+                                        ));
+                                    }
+                                    Rule::field_pattern_list => {
+                                        let mut fields =
+                                            std::collections::HashMap::new();
+                                        for field_pat in inner_pat.into_inner() {
+                                            let mut field_pat_inner =
+                                                field_pat.into_inner();
+                                            let field_name = field_pat_inner
+                                                .next()
+                                                .unwrap()
+                                                .as_str()
+                                                .to_string();
+                                            let state_name = field_pat_inner
+                                                .next()
+                                                .unwrap()
+                                                .as_str()
+                                                .to_string();
+                                            fields.insert(field_name, state_name);
+                                        }
+                                        decayed_pat =
+                                            Some(DecayedPattern::Fields(fields));
+                                    }
+                                    _ => unreachable!(),
+                                }
+                                body_pair = branch_inner.next();
+                            } else {
+                                body_pair = Some(pat_pair);
+                            }
+                        }
+                    } else {
+                        if let Some(child) = first_child {
+                            if child.as_rule() == Rule::identifier {
+                                var_name = child.as_str().to_string();
+                                body_pair = branch_inner.next();
+                            } else {
+                                body_pair = Some(child);
+                            }
                         }
                     }
 
@@ -49,7 +91,11 @@ pub fn parse_entropic_stmt(pair: Pair<Rule>) -> Statement {
                     if is_valid {
                         valid_branch = Some((var_name, body));
                     } else if is_decayed {
-                        decayed_branch = Some((var_name, body));
+                        decayed_branch = Some((
+                            decayed_pat
+                                .unwrap_or(DecayedPattern::Binding(String::new())),
+                            body,
+                        ));
                     } else if is_pending {
                         pending_branch = Some(body);
                     } else if is_consumed {

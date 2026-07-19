@@ -1,7 +1,8 @@
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use crate::solver::SolverBackend;
 use causm_core::{
-    BinaryOperator, Expression, IsolateBlock, Program, SpannedStatement, Statement,
+    BinaryOperator, DecayedPattern, Expression, IsolateBlock, Program,
+    SpannedStatement, Statement,
 };
 use std::collections::{HashMap, HashSet};
 use z3::{ast::Bool as Z3Bool, ast::Int as Z3Int, SatResult, Solver as Z3Solver};
@@ -492,28 +493,30 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut decayed_clock = branch_start_clock.clone();
-                if let Some((binding, branch_body)) = decayed_branch {
+                if let Some((pattern, branch_body)) = decayed_branch {
                     let decayed_pc =
                         self.solver.bool_and(&[path_condition, &decayed_cond]);
-                    if !binding.is_empty() {
-                        let is_valid = self.solver.bool_const(&format!(
-                            "{}_valid_{}",
-                            binding, spanned.span.start
-                        ));
-                        let impl_is_valid =
-                            self.solver.bool_implies(&decayed_pc, &is_valid);
-                        self.solver.assert(&impl_is_valid);
-                        self.variable_validity.insert(binding.clone(), is_valid);
+                    if let DecayedPattern::Binding(binding) = pattern {
+                        if !binding.is_empty() {
+                            let is_valid = self.solver.bool_const(&format!(
+                                "{}_valid_{}",
+                                binding, spanned.span.start
+                            ));
+                            let impl_is_valid =
+                                self.solver.bool_implies(&decayed_pc, &is_valid);
+                            self.solver.assert(&impl_is_valid);
+                            self.variable_validity.insert(binding.clone(), is_valid);
 
-                        let is_leased = self.solver.bool_const(&format!(
-                            "{}_leased_{}",
-                            binding, spanned.span.start
-                        ));
-                        let not_leased = self.solver.bool_not(&is_leased);
-                        let impl_not_leased =
-                            self.solver.bool_implies(&decayed_pc, &not_leased);
-                        self.solver.assert(&impl_not_leased);
-                        self.variable_leased.insert(binding.clone(), is_leased);
+                            let is_leased = self.solver.bool_const(&format!(
+                                "{}_leased_{}",
+                                binding, spanned.span.start
+                            ));
+                            let not_leased = self.solver.bool_not(&is_leased);
+                            let impl_not_leased =
+                                self.solver.bool_implies(&decayed_pc, &not_leased);
+                            self.solver.assert(&impl_not_leased);
+                            self.variable_leased.insert(binding.clone(), is_leased);
+                        }
                     }
 
                     for stmt in branch_body {

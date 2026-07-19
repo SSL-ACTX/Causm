@@ -78,10 +78,8 @@ impl EntropicAnalyzer {
                 )));
             }
 
-            then_end_state.types.remove(binding_name);
+            then_end_state.remove_variable_scope(binding_name);
             then_end_state.produced.remove(binding_name);
-            then_end_state.consumed.remove(binding_name);
-            then_end_state.instantiated_at.remove(binding_name);
         }
 
         self.branch_contexts = previous_contexts.clone();
@@ -236,7 +234,7 @@ impl EntropicAnalyzer {
         &mut self,
         target: &Expression,
         valid_branch: &Option<(String, Vec<SpannedStatement>)>,
-        decayed_branch: &Option<(String, Vec<SpannedStatement>)>,
+        decayed_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
         pending_branch: &Option<Vec<SpannedStatement>>,
         consumed_branch: &Option<Vec<SpannedStatement>>,
     ) -> Result<(), SemanticError> {
@@ -280,21 +278,53 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        if let Some((binding, branch_body)) = decayed_branch {
+        if let Some((pattern, branch_body)) = decayed_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
-            if !binding.is_empty() {
-                self.branch_contexts
-                    .get_mut(&self.current_branch)
-                    .unwrap()
-                    .yields
-                    .insert(binding.clone());
 
-                let case_type =
-                    crate::expression::infer_expression_type(self, target)?;
-                self.set_variable_type(binding, case_type);
+            match pattern {
+                DecayedPattern::Binding(binding) => {
+                    if !binding.is_empty() {
+                        self.branch_contexts
+                            .get_mut(&self.current_branch)
+                            .unwrap()
+                            .yields
+                            .insert(binding.clone());
+
+                        let case_type =
+                            crate::expression::infer_expression_type(self, target)?;
+                        self.set_variable_type(binding, case_type);
+                    }
+                }
+                DecayedPattern::Fields(fields) => {
+                    if let Expression::Identifier(ref target_name) = target {
+                        let branch_state = self
+                            .branch_contexts
+                            .get_mut(&self.current_branch)
+                            .unwrap();
+                        for (field_name, state_name) in fields {
+                            let field_path =
+                                format!("{}.{}", target_name, field_name);
+                            match state_name.as_str() {
+                                "Consumed" => {
+                                    branch_state.consumed.insert(field_path);
+                                }
+                                "Valid" => {
+                                    branch_state.consumed.remove(&field_path);
+                                    branch_state.decayed.remove(&field_path);
+                                }
+                                "Decayed" => {
+                                    branch_state.decayed.insert(field_path.clone());
+                                    branch_state.consumed.remove(&field_path);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             }
+
             self.in_entropy_match = true;
             let res =
                 crate::expression::analyze_expression_nonconsuming(self, target);

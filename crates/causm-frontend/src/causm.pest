@@ -84,7 +84,11 @@ select_case = { "case" ~ identifier ~ "=" ~ expression ~ ":" ~ statement_block }
 timeout_clause = { "timeout" ~ ":" ~ statement_block }
 
 match_entropy_stmt = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
-entropy_branch = { "Valid" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Decayed" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Pending" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Consumed" ~ ":" ~ statement_block }
+entropy_branch = { "Valid" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Decayed" ~ ("(" ~ identifier_or_pattern ~ ")")? ~ ":" ~ statement_block | "Pending" ~ ("(" ~ identifier ~ ")")? ~ ":" ~ statement_block | "Consumed" ~ ":" ~ statement_block }
+identifier_or_pattern = { identifier | "{" ~ field_pattern_list ~ "}" }
+field_pattern_list = { field_pattern ~ ("," ~ field_pattern)* ~ ","? }
+field_pattern = { identifier ~ "=" ~ entropic_state_name }
+entropic_state_name = { "Valid" | "Decayed" | "Pending" | "Consumed" }
 
 break_stmt = { "break" }
 

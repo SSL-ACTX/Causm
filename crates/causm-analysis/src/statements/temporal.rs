@@ -127,7 +127,7 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Await(&mut self, target: &String) -> Result<(), SemanticError> {
+    pub(crate) fn Await(&mut self, target: &str) -> Result<(), SemanticError> {
         self.check_available(target)?;
         let target_type = self
             .get_variable_type(target)
@@ -146,10 +146,7 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn AwaitChan(
-        &mut self,
-        chan_id: &String,
-    ) -> Result<(), SemanticError> {
+    pub(crate) fn AwaitChan(&mut self, chan_id: &str) -> Result<(), SemanticError> {
         if !self.capability_stack.is_empty()
             && !self.is_capability_allowed("Chan.Inbound")
         {
@@ -226,8 +223,7 @@ impl EntropicAnalyzer {
         if let Some(old_ty) = old_binding_type {
             self.set_variable_type(binding, old_ty);
         } else {
-            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-            branch.types.remove(binding);
+            self.remove_variable_scope(binding);
         }
 
         Ok(())

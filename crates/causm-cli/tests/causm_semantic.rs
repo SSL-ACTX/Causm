@@ -1034,3 +1034,73 @@ fn causm_semantic_inactive_timeline_error() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn causm_semantic_match_entropy_decayed_pattern_success() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      let user = struct { id = "1", name = "Alice" }
+      let _consumed_name = user.name
+      let out = ""
+      match entropy(user) {
+        Decayed({ id = Valid, name = Consumed }): {
+          out = user.id
+        }
+        Valid: {
+          out = "valid"
+        }
+        Consumed: {
+          out = "consumed"
+        }
+        Pending: {
+          out = "pending"
+        }
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let out_reg = ir.symbols.get("out").expect("out not found").0;
+    let out_val = vm.root_timeline.arena.peek(out_reg);
+    match out_val {
+        Some(Payload::String(s)) => assert_eq!(s, "1"),
+        _ => panic!("Expected out=1"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn causm_semantic_match_entropy_decayed_pattern_use_after_consume(
+) -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      let user = struct { id = "1", name = "Alice" }
+      let _consumed_name = user.name
+      match entropy(user) {
+        Decayed({ id = Valid, name = Consumed }): {
+          let test_use = user.name
+        }
+        Valid: {}
+        Consumed: {}
+        Pending: {}
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let result = analyzer.analyze_program(&program);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(err.contains("user.name"));
+
+    Ok(())
+}

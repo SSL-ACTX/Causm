@@ -1,4 +1,6 @@
-use causm_core::{Expression, Program, SpannedStatement, Statement, TypeFieldDef};
+use causm_core::{
+    DecayedPattern, Expression, Program, SpannedStatement, Statement, TypeFieldDef,
+};
 use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
 
@@ -444,7 +446,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Some((binding, body)) = decayed_branch {
+            if let Some((pattern, body)) = decayed_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut decayed_target,
@@ -454,12 +456,14 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *decayed_target = Some(start);
                 }
 
-                if !binding.is_empty() {
-                    let dest = ctx.get_reg(binding);
-                    ctx.push(Instruction::Move {
-                        dest,
-                        src: target_reg,
-                    });
+                if let DecayedPattern::Binding(binding) = pattern {
+                    if !binding.is_empty() {
+                        let dest = ctx.get_reg(binding);
+                        ctx.push(Instruction::Move {
+                            dest,
+                            src: target_reg,
+                        });
+                    }
                 }
 
                 for s in body {

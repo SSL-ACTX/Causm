@@ -754,10 +754,20 @@ pub(crate) fn analyze_expression(
             Ok(())
         }
         Expression::Identifier(name) => analyzer.mark_consumed(name),
-        Expression::FieldAccess { target, .. } => {
+        Expression::FieldAccess { target, field } => {
             if let Expression::Identifier(name) = &**target {
+                let field_path = format!("{}.{}", name, field);
+                let state = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .unwrap();
+                if state.consumed.contains(&field_path) {
+                    return Err(analyzer
+                        .annotate(SemanticErrorKind::UseAfterConsume(field_path)));
+                }
                 if analyzer.inspection_depth == 0 {
                     analyzer.mark_decayed(name)?;
+                    analyzer.mark_consumed(&field_path)?;
                 }
                 Ok(())
             } else {
@@ -878,7 +888,18 @@ pub(crate) fn analyze_expression_nonconsuming(
             }
             Ok(())
         }
-        Expression::FieldAccess { target, .. } => {
+        Expression::FieldAccess { target, field } => {
+            if let Expression::Identifier(name) = &**target {
+                let field_path = format!("{}.{}", name, field);
+                let state = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .unwrap();
+                if state.consumed.contains(&field_path) {
+                    return Err(analyzer
+                        .annotate(SemanticErrorKind::UseAfterConsume(field_path)));
+                }
+            }
             analyze_expression_nonconsuming(analyzer, target)
         }
         Expression::CloneOp(name) => {

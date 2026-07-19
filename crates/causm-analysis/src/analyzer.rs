@@ -117,6 +117,31 @@ pub struct BranchState {
     pub instantiated_at: HashMap<String, u64>,
 }
 
+impl BranchState {
+    pub fn remove_variable_scope(&mut self, name: &str) {
+        self.types.remove(name);
+        self.consumed.remove(name);
+        self.decayed.remove(name);
+        self.leased.remove(name);
+        self.lease_bindings.remove(name);
+        self.yields.remove(name);
+        self.produced.remove(name);
+        self.mutables.remove(name);
+        self.instantiated_at.remove(name);
+
+        let prefix = format!("{}.", name);
+        self.types.retain(|k, _| !k.starts_with(&prefix));
+        self.consumed.retain(|k| !k.starts_with(&prefix));
+        self.decayed.retain(|k| !k.starts_with(&prefix));
+        self.leased.retain(|k| !k.starts_with(&prefix));
+        self.lease_bindings.retain(|k| !k.starts_with(&prefix));
+        self.yields.retain(|k| !k.starts_with(&prefix));
+        self.produced.retain(|k| !k.starts_with(&prefix));
+        self.mutables.retain(|k| !k.starts_with(&prefix));
+        self.instantiated_at.retain(|k, _| !k.starts_with(&prefix));
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RoutineInfo {
     pub params: Vec<(causm_core::ParamMode, String, Type)>,
@@ -552,6 +577,11 @@ impl EntropicAnalyzer {
         }
         state.decayed.insert(name.to_string());
         Ok(())
+    }
+
+    pub(crate) fn remove_variable_scope(&mut self, name: &str) {
+        let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        branch.remove_variable_scope(name);
     }
 
     pub(crate) fn set_variable_type(&mut self, name: &str, vtype: Type) {
