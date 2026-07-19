@@ -453,30 +453,32 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let one_int = self.solver.int_from_u64(1);
                 let branch_start_clock = self.solver.int_add(&[in_clock, &one_int]);
 
-                // 1. Valid branch
+                // Valid branch
                 let mut valid_clock = branch_start_clock.clone();
-                if let Some((binding, branch_body)) = valid_branch {
+                if let Some((pattern, branch_body)) = valid_branch {
                     let valid_pc =
                         self.solver.bool_and(&[path_condition, &valid_cond]);
-                    if !binding.is_empty() {
-                        let is_valid = self.solver.bool_const(&format!(
-                            "{}_valid_{}",
-                            binding, spanned.span.start
-                        ));
-                        let impl_is_valid =
-                            self.solver.bool_implies(&valid_pc, &is_valid);
-                        self.solver.assert(&impl_is_valid);
-                        self.variable_validity.insert(binding.clone(), is_valid);
+                    if let DecayedPattern::Binding(binding) = pattern {
+                        if !binding.is_empty() {
+                            let is_valid = self.solver.bool_const(&format!(
+                                "{}_valid_{}",
+                                binding, spanned.span.start
+                            ));
+                            let impl_is_valid =
+                                self.solver.bool_implies(&valid_pc, &is_valid);
+                            self.solver.assert(&impl_is_valid);
+                            self.variable_validity.insert(binding.clone(), is_valid);
 
-                        let is_leased = self.solver.bool_const(&format!(
-                            "{}_leased_{}",
-                            binding, spanned.span.start
-                        ));
-                        let not_leased = self.solver.bool_not(&is_leased);
-                        let impl_not_leased =
-                            self.solver.bool_implies(&valid_pc, &not_leased);
-                        self.solver.assert(&impl_not_leased);
-                        self.variable_leased.insert(binding.clone(), is_leased);
+                            let is_leased = self.solver.bool_const(&format!(
+                                "{}_leased_{}",
+                                binding, spanned.span.start
+                            ));
+                            let not_leased = self.solver.bool_not(&is_leased);
+                            let impl_not_leased =
+                                self.solver.bool_implies(&valid_pc, &not_leased);
+                            self.solver.assert(&impl_not_leased);
+                            self.variable_leased.insert(binding.clone(), is_leased);
+                        }
                     }
 
                     for stmt in branch_body {
@@ -488,7 +490,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let post_val_leased = self.variable_leased.clone();
                 let post_val_horizon = self.causal_horizon.clone();
 
-                // 2. Decayed branch
+                // Decayed branch
                 self.variable_validity = pre_match_validity.clone();
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
@@ -531,14 +533,37 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let post_dec_leased = self.variable_leased.clone();
                 let post_dec_horizon = self.causal_horizon.clone();
 
-                // 3. Pending branch
+                // Pending branch
                 self.variable_validity = pre_match_validity.clone();
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut pending_clock = branch_start_clock.clone();
-                if let Some(branch_body) = pending_branch {
+                if let Some((pattern, branch_body)) = pending_branch {
                     let pending_pc =
                         self.solver.bool_and(&[path_condition, &pending_cond]);
+                    if let DecayedPattern::Binding(binding) = pattern {
+                        if !binding.is_empty() {
+                            let is_valid = self.solver.bool_const(&format!(
+                                "{}_valid_{}",
+                                binding, spanned.span.start
+                            ));
+                            let impl_is_valid =
+                                self.solver.bool_implies(&pending_pc, &is_valid);
+                            self.solver.assert(&impl_is_valid);
+                            self.variable_validity.insert(binding.clone(), is_valid);
+
+                            let is_leased = self.solver.bool_const(&format!(
+                                "{}_leased_{}",
+                                binding, spanned.span.start
+                            ));
+                            let not_leased = self.solver.bool_not(&is_leased);
+                            let impl_not_leased =
+                                self.solver.bool_implies(&pending_pc, &not_leased);
+                            self.solver.assert(&impl_not_leased);
+                            self.variable_leased.insert(binding.clone(), is_leased);
+                        }
+                    }
+
                     for stmt in branch_body {
                         pending_clock = self.verify_statement(
                             stmt,
@@ -551,7 +576,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let post_pen_leased = self.variable_leased.clone();
                 let post_pen_horizon = self.causal_horizon.clone();
 
-                // 4. Consumed branch
+                // Consumed branch
                 self.variable_validity = pre_match_validity.clone();
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();

@@ -54,11 +54,121 @@ impl Vm {
         self.speculative_commit_mode = mode;
     }
 
+    pub fn execute_instructions(
+        &mut self,
+        branch_id: &str,
+        instructions: &[causm_ir::Instruction],
+    ) -> Result<(), TemporalError> {
+        let (saved_pc, saved_instructions, saved_spans) = {
+            let branch = self.get_branch_mut(branch_id)?;
+            let pc = branch.pc;
+            let instrs = std::mem::take(&mut branch.instructions);
+            let spans = std::mem::take(&mut branch.spans);
+            (pc, instrs, spans)
+        };
+
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.instructions = instructions.to_vec();
+            branch.spans = vec![None; instructions.len()];
+            branch.pc = 0;
+        }
+
+        while {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc < branch.instructions.len()
+        } {
+            self.execute_instruction(branch_id)?;
+        }
+
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.instructions = saved_instructions;
+            branch.spans = saved_spans;
+            branch.pc = saved_pc;
+        }
+
+        Ok(())
+    }
+
+    pub fn check_and_apply_decay(
+        &mut self,
+        branch_id: &str,
+        reg: u32,
+    ) -> Result<(), TemporalError> {
+        if self._is_decaying {
+            return Ok(());
+        }
+
+        let has_decay = {
+            let branch = self.get_branch_mut(branch_id)?;
+            let idx = reg as usize;
+            if idx < branch.arena.registers.len() {
+                if let Some(meta) = &branch.arena.metadata[idx] {
+                    if let Some(decay_after_ms) = meta.decay_after_ms {
+                        let current_time =
+                            branch.birth_global_time + branch.local_clock;
+                        if current_time >= meta.instantiated_at {
+                            let elapsed = current_time - meta.instantiated_at;
+                            if elapsed >= decay_after_ms {
+                                matches!(
+                                    branch.arena.registers[idx],
+                                    EntropicState::Valid(_)
+                                )
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
+        if has_decay {
+            let type_name = {
+                let branch = self.get_branch_mut(branch_id)?;
+                let idx = reg as usize;
+                let old_state = std::mem::replace(
+                    &mut branch.arena.registers[idx],
+                    EntropicState::Consumed,
+                );
+                let decayed_state = old_state.decay_recursive();
+                branch.arena.registers[idx] = decayed_state;
+                branch.arena.compact_consumed();
+                branch.arena.metadata[idx]
+                    .as_ref()
+                    .and_then(|m| m.type_name.clone())
+            };
+
+            if let Some(type_name) = type_name {
+                if let Some(handler_instrs) =
+                    self.decay_handlers.get(&type_name).cloned()
+                {
+                    self._is_decaying = true;
+                    let res = self.execute_instructions(branch_id, &handler_instrs);
+                    self._is_decaying = false;
+                    res?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn peek_reg(
         &mut self,
         branch_id: &str,
         reg: u32,
     ) -> Result<Payload, TemporalError> {
+        self.check_and_apply_decay(branch_id, reg)?;
         let branch = self.get_branch_mut(branch_id)?;
         branch
             .arena
@@ -71,6 +181,7 @@ impl Vm {
         branch_id: &str,
         reg: u32,
     ) -> Result<EntropicState, TemporalError> {
+        self.check_and_apply_decay(branch_id, reg)?;
         let branch = self.get_branch_mut(branch_id)?;
         Ok(branch
             .arena
@@ -98,6 +209,7 @@ impl Vm {
         self.symbols = program.symbols.clone();
         self.type_decay_limits = program.type_decay_limits.clone();
         self.struct_extends = program.struct_extends.clone();
+        self.decay_handlers = program.decay_handlers.clone();
         // Register routines
         for (name, ir_routine) in &program.routines {
             let routine = Routine {

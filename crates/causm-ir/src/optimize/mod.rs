@@ -93,6 +93,21 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
         }
     }
 
+    let mut optimized_decay_handlers = HashMap::new();
+    for (name, instrs) in ir.decay_handlers {
+        if !instrs.is_empty() {
+            let cfg = CFG::from_flat_instructions(&instrs);
+            let ssa_transformer = SsaTransformer::new(cfg);
+            let mut ssa_cfg = ssa_transformer.transform();
+            manager.run(&mut ssa_cfg, &global_preserved_regs, false);
+            let destructed_cfg = destruct_ssa(ssa_cfg);
+            optimized_decay_handlers.insert(name, flatten_cfg(&destructed_cfg));
+        } else {
+            optimized_decay_handlers.insert(name, instrs);
+        }
+    }
+    ir.decay_handlers = optimized_decay_handlers;
+
     ir
 }
 

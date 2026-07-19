@@ -1,5 +1,6 @@
 use causm_core::{
-    DecayedPattern, Expression, Program, SpannedStatement, Statement, TypeFieldDef,
+    BinaryOperator, DecayedPattern, Expression, PatternValue, Program,
+    SpannedStatement, Statement, TypeFieldDef,
 };
 use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ struct LoweringContext {
     type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
     struct_extends: HashMap<String, String>,
+    decay_handlers: HashMap<String, Vec<Instruction>>,
     current_span: Option<causm_core::Span>,
 }
 
@@ -29,6 +31,7 @@ impl LoweringContext {
             type_decls: HashMap::new(),
             interfaces: HashMap::new(),
             struct_extends: HashMap::new(),
+            decay_handlers: HashMap::new(),
             current_span: None,
         }
     }
@@ -170,6 +173,7 @@ pub fn lower_program(program: &Program) -> IrProgram {
         symbols: ctx.symbols,
         type_decay_limits: ctx.type_decay_limits,
         struct_extends: ctx.struct_extends,
+        decay_handlers: ctx.decay_handlers,
     }
 }
 
@@ -420,8 +424,9 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             });
 
             let mut branch_jumps = Vec::new();
+            let mut mismatch_jumps = Vec::new();
 
-            if let Some((binding, body)) = valid_branch {
+            if let Some((pattern, body)) = valid_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut valid_target,
@@ -431,12 +436,43 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *valid_target = Some(start);
                 }
 
-                if !binding.is_empty() {
-                    let dest = ctx.get_reg(binding);
-                    ctx.push(Instruction::Move {
-                        dest,
-                        src: target_reg,
-                    });
+                match pattern {
+                    DecayedPattern::Binding(binding) => {
+                        if !binding.is_empty() {
+                            let dest = ctx.get_reg(binding);
+                            ctx.push(Instruction::Move {
+                                dest,
+                                src: target_reg,
+                            });
+                        }
+                    }
+                    DecayedPattern::Fields(fields) => {
+                        let mut sorted_fields: Vec<_> = fields.iter().collect();
+                        sorted_fields.sort_by_key(|(k, _)| *k);
+                        for (field_name, val) in sorted_fields {
+                            if let PatternValue::Expr(expr) = val {
+                                let val_reg = lower_expression(ctx, expr);
+                                let field_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::FieldAccess {
+                                    dest: field_reg,
+                                    target: target_reg,
+                                    field: field_name.clone(),
+                                });
+                                let cmp_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::BinaryOp {
+                                    dest: cmp_reg,
+                                    op: BinaryOperator::Eq,
+                                    left: field_reg,
+                                    right: val_reg,
+                                });
+                                mismatch_jumps.push(ctx.instructions.len());
+                                ctx.push(Instruction::JumpIfNot {
+                                    cond: cmp_reg,
+                                    target: 0,
+                                });
+                            }
+                        }
+                    }
                 }
 
                 for s in body {
@@ -456,13 +492,42 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *decayed_target = Some(start);
                 }
 
-                if let DecayedPattern::Binding(binding) = pattern {
-                    if !binding.is_empty() {
-                        let dest = ctx.get_reg(binding);
-                        ctx.push(Instruction::Move {
-                            dest,
-                            src: target_reg,
-                        });
+                match pattern {
+                    DecayedPattern::Binding(binding) => {
+                        if !binding.is_empty() {
+                            let dest = ctx.get_reg(binding);
+                            ctx.push(Instruction::Move {
+                                dest,
+                                src: target_reg,
+                            });
+                        }
+                    }
+                    DecayedPattern::Fields(fields) => {
+                        let mut sorted_fields: Vec<_> = fields.iter().collect();
+                        sorted_fields.sort_by_key(|(k, _)| *k);
+                        for (field_name, val) in sorted_fields {
+                            if let PatternValue::Expr(expr) = val {
+                                let val_reg = lower_expression(ctx, expr);
+                                let field_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::FieldAccess {
+                                    dest: field_reg,
+                                    target: target_reg,
+                                    field: field_name.clone(),
+                                });
+                                let cmp_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::BinaryOp {
+                                    dest: cmp_reg,
+                                    op: BinaryOperator::Eq,
+                                    left: field_reg,
+                                    right: val_reg,
+                                });
+                                mismatch_jumps.push(ctx.instructions.len());
+                                ctx.push(Instruction::JumpIfNot {
+                                    cond: cmp_reg,
+                                    target: 0,
+                                });
+                            }
+                        }
                     }
                 }
 
@@ -473,7 +538,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Some(body) = pending_branch {
+            if let Some((pattern, body)) = pending_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut pending_target,
@@ -482,6 +547,46 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 {
                     *pending_target = Some(start);
                 }
+
+                match pattern {
+                    DecayedPattern::Binding(binding) => {
+                        if !binding.is_empty() {
+                            let dest = ctx.get_reg(binding);
+                            ctx.push(Instruction::Move {
+                                dest,
+                                src: target_reg,
+                            });
+                        }
+                    }
+                    DecayedPattern::Fields(fields) => {
+                        let mut sorted_fields: Vec<_> = fields.iter().collect();
+                        sorted_fields.sort_by_key(|(k, _)| *k);
+                        for (field_name, val) in sorted_fields {
+                            if let PatternValue::Expr(expr) = val {
+                                let val_reg = lower_expression(ctx, expr);
+                                let field_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::FieldAccess {
+                                    dest: field_reg,
+                                    target: target_reg,
+                                    field: field_name.clone(),
+                                });
+                                let cmp_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::BinaryOp {
+                                    dest: cmp_reg,
+                                    op: BinaryOperator::Eq,
+                                    left: field_reg,
+                                    right: val_reg,
+                                });
+                                mismatch_jumps.push(ctx.instructions.len());
+                                ctx.push(Instruction::JumpIfNot {
+                                    cond: cmp_reg,
+                                    target: 0,
+                                });
+                            }
+                        }
+                    }
+                }
+
                 for s in body {
                     lower_spanned(ctx, s);
                 }
@@ -508,6 +613,13 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let end_idx = ctx.instructions.len();
             for jump_idx in branch_jumps {
                 if let Instruction::Jump { ref mut target, .. } =
+                    ctx.instructions[jump_idx]
+                {
+                    *target = end_idx;
+                }
+            }
+            for jump_idx in mismatch_jumps {
+                if let Instruction::JumpIfNot { ref mut target, .. } =
                     ctx.instructions[jump_idx]
                 {
                     *target = end_idx;
@@ -982,6 +1094,19 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             resolved_methods.extend(methods.clone());
             ctx.interfaces.insert(name.clone(), resolved_methods);
+        }
+        Statement::DecayHandler { type_name, body } => {
+            let mut sub_ctx = LoweringContext::new();
+            sub_ctx.symbols = ctx.symbols.clone();
+            sub_ctx.next_reg = ctx.next_reg;
+            sub_ctx.type_decls = ctx.type_decls.clone();
+            sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
+            sub_ctx.struct_extends = ctx.struct_extends.clone();
+            for s in body {
+                lower_spanned(&mut sub_ctx, s);
+            }
+            ctx.decay_handlers
+                .insert(type_name.clone(), sub_ctx.instructions);
         }
         _ => {
             // Other statements can be added as needed

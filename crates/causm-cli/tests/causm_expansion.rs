@@ -165,8 +165,7 @@ fn causm_expansion_loop_tick_double_buffer() -> anyhow::Result<()> {
             // First tick: nothing yet (double buffer)
             loop tick {
                 // try receive - should fail if it reads from current tick
-                // but chan_recv in Causm blocks or fails if empty?
-                // Spec says: "read exclusively from data committed during the PRECEDING tick"
+                // Reading exclusively from data committed during the PRECEDING tick.
                 break
             }
             // Second tick: should get '1'

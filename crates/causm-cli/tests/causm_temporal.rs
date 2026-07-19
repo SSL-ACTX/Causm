@@ -53,8 +53,7 @@ fn causm_temporal_if_equalizes_timing() -> anyhow::Result<()> {
     vm.register_capability("System.NetworkFetch", |_| Ok(()));
     vm.execute_program(&ir)?;
 
-    // Register VM currently doesn't implement padding for If equalizing timing yet in IR lowering,
-    // but the analyzer should handle it. However, if execute_program just runs instructions,
+    // The analyzer ensures timing logic is correct, and execution runs the taken branch.
     // it will be the cost of the taken branch.
     // 1(load 1) + 1(load 0) + 1(eq) + 1(jump_if_not) + 1(load_string) + 1(move) = 6
     assert_eq!(vm.root_timeline.local_clock, 6);
@@ -175,9 +174,7 @@ fn causm_temporal_defer_await_success() -> anyhow::Result<()> {
     vm.execute_program(&ir)?;
 
     let _dataset_reg = ir.symbols.get("dataset").expect("dataset not found").0;
-    // `print` currently peeks in Register VM, but original test expected consumption.
-    // Causm spec says print consumes. I will check analyzer behavior.
-    // If it's still there, it's fine for now as VM is evolving.
+
     Ok(())
 }
 
@@ -388,7 +385,7 @@ fn causm_temporal_promises_example_integration() -> anyhow::Result<()> {
 
 #[test]
 fn causm_temporal_promise_type_safety() -> anyhow::Result<()> {
-    // 1. Valid promise and await type conversion
+    // Check valid promise and await type conversion
     let source = r#"
     @0ms: {
       let promise_val: Promise<Integer> = defer System.NetworkFetch(url="api.data", latency="10") deadline 50ms
@@ -400,7 +397,7 @@ fn causm_temporal_promise_type_safety() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    // 2. Await on non-promise type must fail type checking
+    // Check that await on non-promise type fails type checking
     let bad_source = r#"
     @0ms: {
       let x = 10

@@ -50,8 +50,7 @@ fn causm_robust_await_chan_sync() -> anyhow::Result<()> {
     // Verify receiver clock synchronization
     // sender: load "msg"(1), move(1), slice(50), chan_send(1) = 53
     // receiver: await_chan(1) -> should align to 53ms + instruction cost?
-    // Wait, Instruction::AwaitChan itself advances clock by 1 BEFORE executing the handler in execute_instruction.
-    // Plus handler advances it more if it waits.
+    // AwaitChan advances the clock before executing the handler instructions.
 
     println!(
         "Sender clock: {}",

@@ -202,6 +202,7 @@ impl Vm {
         target: Reg,
         field: String,
     ) -> Result<(), TemporalError> {
+        self.check_and_apply_decay(branch_id, target.0)?;
         let field_state = {
             let branch = self.get_branch_mut(branch_id)?;
             branch
@@ -234,6 +235,7 @@ impl Vm {
         field: String,
         src: Reg,
     ) -> Result<(), TemporalError> {
+        self.check_and_apply_decay(branch_id, target.0)?;
         let val = self.peek_reg(branch_id, src.0)?;
         let branch = self.get_branch_mut(branch_id)?;
         branch.arena.update_field(target.0, &field, val)?;

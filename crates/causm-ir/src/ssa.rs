@@ -1514,7 +1514,7 @@ mod tests {
         // Block 3:
         // R2 = R1 + R1
         // Return R2
-        // Wait, let's write a simpler deterministic program for the unit test:
+        // Program structure for the SSA renaming and phi insertion unit test:
         // Block 0:
         // R0 = 5
         // JumpIf R0 target index 4

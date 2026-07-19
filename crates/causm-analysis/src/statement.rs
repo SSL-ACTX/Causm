@@ -148,7 +148,7 @@ pub fn estimate_statement_cost(
                 .unwrap_or(0);
             let pending_cost = pending_branch
                 .as_ref()
-                .map(|body| estimate_block_cost(analyzer, body))
+                .map(|(_, body)| estimate_block_cost(analyzer, body))
                 .unwrap_or(0);
             let consumed_cost = consumed_branch
                 .as_ref()

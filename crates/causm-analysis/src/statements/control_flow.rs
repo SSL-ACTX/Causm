@@ -230,12 +230,71 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    fn apply_pattern(
+        &mut self,
+        pattern: &DecayedPattern,
+        target: &Expression,
+    ) -> Result<(), SemanticError> {
+        match pattern {
+            DecayedPattern::Binding(binding) => {
+                if !binding.is_empty() {
+                    self.branch_contexts
+                        .get_mut(&self.current_branch)
+                        .unwrap()
+                        .yields
+                        .insert(binding.clone());
+
+                    let case_type =
+                        crate::expression::infer_expression_type(self, target)?;
+                    self.set_variable_type(binding, case_type);
+                }
+            }
+            DecayedPattern::Fields(fields) => {
+                if let Expression::Identifier(ref target_name) = target {
+                    let branch_state =
+                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                    for (field_name, val) in fields {
+                        let field_path = format!("{}.{}", target_name, field_name);
+                        match val {
+                            PatternValue::State(state_name) => {
+                                match state_name.as_str() {
+                                    "Consumed" => {
+                                        branch_state.consumed.insert(field_path);
+                                    }
+                                    "Valid" => {
+                                        branch_state.consumed.remove(&field_path);
+                                        branch_state.decayed.remove(&field_path);
+                                    }
+                                    "Decayed" => {
+                                        branch_state
+                                            .decayed
+                                            .insert(field_path.clone());
+                                        branch_state.consumed.remove(&field_path);
+                                    }
+                                    "Pending" => {
+                                        // Pending state
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            PatternValue::Expr(_) => {
+                                branch_state.consumed.remove(&field_path);
+                                branch_state.decayed.remove(&field_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn MatchEntropy(
         &mut self,
         target: &Expression,
-        valid_branch: &Option<(String, Vec<SpannedStatement>)>,
+        valid_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
         decayed_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
-        pending_branch: &Option<Vec<SpannedStatement>>,
+        pending_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
         consumed_branch: &Option<Vec<SpannedStatement>>,
     ) -> Result<(), SemanticError> {
         let original_state = self
@@ -245,21 +304,12 @@ impl EntropicAnalyzer {
             .unwrap_or_default();
         let mut context_candidates = Vec::new();
 
-        if let Some((binding, branch_body)) = valid_branch {
+        if let Some((pattern, branch_body)) = valid_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
-            if !binding.is_empty() {
-                self.branch_contexts
-                    .get_mut(&self.current_branch)
-                    .unwrap()
-                    .yields
-                    .insert(binding.clone());
+            self.apply_pattern(pattern, target)?;
 
-                let case_type =
-                    crate::expression::infer_expression_type(self, target)?;
-                self.set_variable_type(binding, case_type);
-            }
             self.in_entropy_match = true;
             let res =
                 crate::expression::analyze_expression_nonconsuming(self, target);
@@ -282,48 +332,7 @@ impl EntropicAnalyzer {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
-
-            match pattern {
-                DecayedPattern::Binding(binding) => {
-                    if !binding.is_empty() {
-                        self.branch_contexts
-                            .get_mut(&self.current_branch)
-                            .unwrap()
-                            .yields
-                            .insert(binding.clone());
-
-                        let case_type =
-                            crate::expression::infer_expression_type(self, target)?;
-                        self.set_variable_type(binding, case_type);
-                    }
-                }
-                DecayedPattern::Fields(fields) => {
-                    if let Expression::Identifier(ref target_name) = target {
-                        let branch_state = self
-                            .branch_contexts
-                            .get_mut(&self.current_branch)
-                            .unwrap();
-                        for (field_name, state_name) in fields {
-                            let field_path =
-                                format!("{}.{}", target_name, field_name);
-                            match state_name.as_str() {
-                                "Consumed" => {
-                                    branch_state.consumed.insert(field_path);
-                                }
-                                "Valid" => {
-                                    branch_state.consumed.remove(&field_path);
-                                    branch_state.decayed.remove(&field_path);
-                                }
-                                "Decayed" => {
-                                    branch_state.decayed.insert(field_path.clone());
-                                    branch_state.consumed.remove(&field_path);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            }
+            self.apply_pattern(pattern, target)?;
 
             self.in_entropy_match = true;
             let res =
@@ -343,10 +352,18 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        if let Some(branch_body) = pending_branch {
+        if let Some((pattern, branch_body)) = pending_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
+            self.apply_pattern(pattern, target)?;
+
+            self.in_entropy_match = true;
+            let res =
+                crate::expression::analyze_expression_nonconsuming(self, target);
+            self.in_entropy_match = false;
+            res?;
+
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
             }

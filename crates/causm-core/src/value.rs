@@ -234,6 +234,44 @@ impl EntropicState {
             EntropicState::Consumed => 8,
         }
     }
+
+    pub fn decay_recursive(self) -> Self {
+        match self {
+            EntropicState::Valid(Payload::Struct(mut fields)) => {
+                for val in fields.values_mut() {
+                    let old = std::mem::replace(val, EntropicState::Consumed);
+                    *val = old.decay_recursive();
+                }
+                EntropicState::Decayed(fields)
+            }
+            EntropicState::Valid(Payload::Topology(mut fields)) => {
+                for val in fields.values_mut() {
+                    let old = std::mem::replace(val, EntropicState::Consumed);
+                    *val = old.decay_recursive();
+                }
+                EntropicState::Decayed(fields)
+            }
+            EntropicState::Valid(_) => EntropicState::Decayed(HashMap::new()),
+            EntropicState::Leased {
+                original,
+                expiration_ms,
+            } => {
+                let decayed_orig = original.decay_recursive();
+                EntropicState::Leased {
+                    original: Box::new(decayed_orig),
+                    expiration_ms,
+                }
+            }
+            EntropicState::Decayed(mut fields) => {
+                for val in fields.values_mut() {
+                    let old = std::mem::replace(val, EntropicState::Consumed);
+                    *val = old.decay_recursive();
+                }
+                EntropicState::Decayed(fields)
+            }
+            s => s,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

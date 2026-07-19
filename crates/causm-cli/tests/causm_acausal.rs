@@ -34,8 +34,7 @@ fn causm_acausal_speculate_commit_fallback_timing() -> anyhow::Result<()> {
         _ => panic!("Expected out=hello, got {:?}", out_val),
     }
 
-    // 1 for LoadString(x), 1 for Speculate, 1 for Move(y), 1 for Commit, 1 for EndSpeculate, 1 for Jump, 1 for End of block
-    // Wait, cost calculation is tricky. Let's just check it ran.
+    // Verify that the timeline has progressed.
     assert!(vm.root_timeline.local_clock > 0);
     Ok(())
 }

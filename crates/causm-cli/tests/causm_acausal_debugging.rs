@@ -30,14 +30,14 @@ mod tests {
         let x_reg = ir.symbols.get("x").expect("x register not found").0;
         println!("x_reg: {}", x_reg);
 
-        // Step 1: execute 'let x = 100' (LoadInt + Move)
+        // Execute 'let x = 100' (LoadInt + Move)
         println!("Executing 1st let");
         vm.execute_instruction("main")?;
         vm.execute_instruction("main")?;
         let val1 = vm.peek_reg("main", x_reg)?;
         assert_eq!(val1, Payload::Integer(100));
 
-        // Step 2: execute 'let x = 200' (LoadInt + Move)
+        // Execute 'let x = 200' (LoadInt + Move)
         println!("Executing 2nd let");
         vm.execute_instruction("main")?;
         vm.execute_instruction("main")?;
@@ -45,8 +45,7 @@ mod tests {
         assert_eq!(val2, Payload::Integer(200));
 
         // Step back 1: should restore state before 'let x = 200' (which is x=100)
-        // Wait, step back once restores state before the LAST instruction (Move).
-        // To restore before the whole 'let x = 200', we need to step back TWICE.
+        // Step back twice to restore state before the assignment (Move and LoadInt instructions).
         println!("Stepping back twice to x=100");
         vm.step_back("main")?; // before Move
         vm.step_back("main")?; // before LoadInt

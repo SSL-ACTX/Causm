@@ -24,7 +24,9 @@ pub(crate) fn infer_expression_type(
                         let instantiated_at =
                             branch.instantiated_at.get(name).cloned().unwrap_or(0);
                         let current_cost = branch.accumulated_cost;
-                        if current_cost > instantiated_at + decay_ms {
+                        if current_cost > instantiated_at + decay_ms
+                            && !analyzer.in_entropy_match
+                        {
                             return Err(analyzer.annotate(
                                 SemanticErrorKind::UsedDecayedValue(
                                     name.clone(),

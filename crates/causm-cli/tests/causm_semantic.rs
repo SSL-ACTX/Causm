@@ -10,8 +10,7 @@ fn causm_semantic_arena_insert_overwrite_reclaims_previous_memory() {
     // Payload "abc" weight: 3 + 24 = 27
     // EntropicState::Valid overhead: 16
     // Total: 27 + 16 = 43
-    // Wait, the previous comment said 76 because it included "x" weight.
-    // In register VM, there is no key "x" weight in the arena, but registers are fixed overhead?
+    // In register VM, registers are fixed overhead, so only payload weight counts.
     // Let's see Arena::insert weight calculation:
     // potential_used = potential_used.saturating_sub(self.registers[idx].weight());
     // self.used = potential_used + state_weight;
@@ -586,29 +585,7 @@ fn causm_semantic_print_statement() -> anyhow::Result<()> {
     vm.register_capability("System.Log", |_| Ok(()));
     vm.execute_program(&ir)?;
 
-    // After print, msg has been consumed by expression semantics (it's a Move in IR for Print)
-    // Wait, let's see how lower_statement handles Print.
-    // ctx.push(Instruction::Print { src: lower_expression(ctx, expr) });
-    // lower_expression for Identifier returns the register.
-    // Instruction::Print in core.rs peeks the register, but doesn't consume it.
-    // However, the analyzer might consider it consumed if it's passed as a 'consume' arg?
-    // In Causm, print(msg) peeks by default.
-    // Let's re-verify the instruction handler for Print:
-    /*
-            causm_ir::Instruction::Print { src } => {
-                let val = {
-                    let branch = self.get_branch_mut(branch_id)?;
-                    branch.arena.peek(src.0).ok_or(TemporalError::MemoryFault(MemoryError::AlreadyConsumed))?
-                };
-                println!("{}", val);
-            }
-    */
-    // It peeks. So msg should still be there unless analyzer marked it as consumed.
-    // In the original test it said: "After print, msg has been consumed by expression semantics"
-    // and "assert!(vm.root_timeline.arena.peek("msg").is_none());"
-    // This depends on whether print in Causm is consuming or peeking.
-    // For now I will follow the original test expectation if possible, but if peek() doesn't consume, it will be Some.
-    // I'll check ir.symbols["msg"].
+    // print(msg) peeks the register and does not consume it, so it remains present in the arena.
     let msg_reg = ir.symbols.get("msg").expect("msg not found").0;
     assert!(vm.root_timeline.arena.peek(msg_reg).is_some());
 
@@ -1101,6 +1078,86 @@ fn causm_semantic_match_entropy_decayed_pattern_use_after_consume(
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("user.name"));
+
+    Ok(())
+}
+
+#[test]
+fn causm_semantic_temporal_decay_and_decay_handler() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Account = struct decay_after 2ms { id: string, balance: int }
+        let cleanup_executed = false
+        decay_handler for Account {
+            cleanup_executed = true
+        }
+        let act: Account = struct { id = "123", balance = 1000 }
+        slice 15ms
+        match entropy(act) {
+            Decayed: {}
+            Valid: {}
+            Pending: {}
+            Consumed: {}
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let cleanup_reg = ir
+        .symbols
+        .get("cleanup_executed")
+        .expect("cleanup_executed not found")
+        .0;
+    let cleanup_val = vm.root_timeline.arena.peek(cleanup_reg);
+    match cleanup_val {
+        Some(Payload::Bool(b)) => assert!(
+            b,
+            "Expected decay_handler to run and set cleanup_executed=true"
+        ),
+        _ => panic!("Expected cleanup_executed to be true bool"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn causm_semantic_valid_pattern_destructuring_literal() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let user = struct { id = "1", name = "Alice", balance = 100 }
+        let out = ""
+        match entropy(user) {
+            Valid({ balance = 100 }): {
+                out = "match_100"
+            }
+            Consumed: {}
+            Pending: {}
+            Decayed: {}
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let out_reg = ir.symbols.get("out").expect("out not found").0;
+    let out_val = vm.root_timeline.arena.peek(out_reg);
+    match out_val {
+        Some(Payload::String(s)) => assert_eq!(s, "match_100"),
+        _ => panic!("Expected out='match_100'"),
+    }
 
     Ok(())
 }

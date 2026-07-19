@@ -29,6 +29,7 @@ impl Vm {
         dest: Reg,
         src: Reg,
     ) -> Result<(), TemporalError> {
+        self.check_and_apply_decay(branch_id, src.0)?;
         let (val, metadata) = {
             let branch = self.get_branch_mut(branch_id)?;
             let payload =

@@ -317,6 +317,7 @@ pub struct IrProgram {
     pub symbols: HashMap<String, Reg>,
     pub type_decay_limits: HashMap<String, u64>,
     pub struct_extends: HashMap<String, String>,
+    pub decay_handlers: HashMap<String, Vec<Instruction>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

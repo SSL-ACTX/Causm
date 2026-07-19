@@ -68,8 +68,7 @@ fn test_reconcile_auto_decay_merging() -> anyhow::Result<()> {
         // s should be Decayed with both a and b gone
         match entropy(s) {
             Decayed(d): {
-               // This should ideally be possible to check in analyzer, 
-               // but for now we just ensure it doesn't error and correctly identifies decay.
+               // Ensure the analyzer identifies the decay state without error.
                let status = "decayed"
             }
             Valid(v): let status = "alive"

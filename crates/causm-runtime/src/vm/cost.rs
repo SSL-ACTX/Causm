@@ -100,7 +100,7 @@ impl Vm {
                     .unwrap_or(0);
                 let pending_cost = pending_branch
                     .as_ref()
-                    .map(|body| self.estimate_block_cost(body))
+                    .map(|(_, body)| self.estimate_block_cost(body))
                     .unwrap_or(0);
                 let consumed_cost = consumed_branch
                     .as_ref()
