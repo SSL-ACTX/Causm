@@ -36,24 +36,24 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
         }
     }
 
-    // 2. Optimize blocks
-    for block in ir.blocks.iter_mut() {
+    // 2. Scan all blocks to build a global set of registers that are read before being defined in their blocks.
+    let mut global_preserved_regs = HashSet::new();
+    for reg in ir.symbols.values() {
+        global_preserved_regs.insert(reg.0);
+    }
+    for block in &ir.blocks {
         if !block.instructions.is_empty() {
-            // Analyze the block to collect all read registers inside it (to feed globally_used_regs).
-            // Any register that is read before it is defined in the block (or is a parameter) must be preserved.
             let cfg = CFG::from_flat_instructions(&block.instructions);
             let ssa_transformer = SsaTransformer::new(cfg);
             let ssa_cfg = ssa_transformer.transform();
 
             let mut defined = HashSet::new();
-            let mut globally_used_regs = HashSet::new();
-
             for ssa_block in ssa_cfg.blocks.values() {
                 for phi in &ssa_block.phi_nodes {
                     defined.insert(phi.dest.reg);
                     for (_, incoming_reg) in &phi.incoming {
                         if !defined.contains(&incoming_reg.reg) {
-                            globally_used_regs.insert(incoming_reg.reg);
+                            global_preserved_regs.insert(incoming_reg.reg);
                         }
                     }
                 }
@@ -63,7 +63,7 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
                     }
                     utils::for_each_ssa_src_reg(instr, &mut |src| {
                         if !defined.contains(&src.reg) {
-                            globally_used_regs.insert(src.reg);
+                            global_preserved_regs.insert(src.reg);
                         }
                     });
                 }
@@ -71,17 +71,22 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
                     &ssa_block.terminator,
                     &mut |src| {
                         if !defined.contains(&src.reg) {
-                            globally_used_regs.insert(src.reg);
+                            global_preserved_regs.insert(src.reg);
                         }
                     },
                 );
             }
+        }
+    }
 
+    // 3. Optimize blocks using the global preserved registers set
+    for block in ir.blocks.iter_mut() {
+        if !block.instructions.is_empty() {
             let cfg = CFG::from_flat_instructions(&block.instructions);
             let ssa_transformer = SsaTransformer::new(cfg);
             let mut ssa_cfg = ssa_transformer.transform();
 
-            manager.run(&mut ssa_cfg, &globally_used_regs, false);
+            manager.run(&mut ssa_cfg, &global_preserved_regs, false);
 
             let destructed_cfg = destruct_ssa(ssa_cfg);
             block.instructions = flatten_cfg(&destructed_cfg);

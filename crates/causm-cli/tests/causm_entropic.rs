@@ -236,7 +236,8 @@ fn causm_entropic_topographical_merge_union() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let mut ir = causm_frontend::lower::lower_program(&program);
+    ir = causm_ir::optimize::optimize_program(ir);
 
     for (i, block) in ir.blocks.iter().enumerate() {
         println!("Block {}: {:?}", i, block.instructions);
@@ -299,7 +300,8 @@ fn causm_entropic_topographical_merge_union_on_invalid_clause() -> anyhow::Resul
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let mut ir = causm_frontend::lower::lower_program(&program);
+    ir = causm_ir::optimize::optimize_program(ir);
 
     // Verify AST parse of `on_invalid` rewinding behavior into topology_union
     let merge_stmt = &program.timelines[2].statements[0].stmt;
@@ -397,7 +399,8 @@ fn causm_entropic_topology2_dynamic_index_assignment_and_rewind(
 }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let mut ir = causm_frontend::lower::lower_program(&program);
+    ir = causm_ir::optimize::optimize_program(ir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
