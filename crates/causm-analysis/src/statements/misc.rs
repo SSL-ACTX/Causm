@@ -38,7 +38,7 @@ impl EntropicAnalyzer {
 
     pub(crate) fn ChannelOpen(
         &mut self,
-        _name: &str,
+        name: &str,
         _capacity: &usize,
         _decay_after_ms: &Option<u64>,
     ) -> Result<(), SemanticError> {
@@ -49,6 +49,7 @@ impl EntropicAnalyzer {
                 "Chan.Manage".to_string(),
             )));
         }
+        self.known_channels.insert(name.to_string());
         Ok(())
     }
 

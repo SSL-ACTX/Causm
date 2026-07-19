@@ -288,4 +288,95 @@ impl Vm {
         }
         Ok(())
     }
+
+    pub(crate) fn LoopTickOn(
+        &mut self,
+        branch_id: &str,
+        chan_id: String,
+    ) -> Result<(), TemporalError> {
+        self.AwaitChan(branch_id, chan_id)?;
+        self.LoopTick(branch_id)
+    }
+
+    pub(crate) fn While(
+        &mut self,
+        branch_id: &str,
+        max_ms: u64,
+    ) -> Result<(), TemporalError> {
+        self.Loop(branch_id, max_ms)
+    }
+
+    pub(crate) fn EndWhile(
+        &mut self,
+        branch_id: &str,
+        max_ms: u64,
+    ) -> Result<(), TemporalError> {
+        self.EndLoop(branch_id, max_ms)
+    }
+
+    pub(crate) fn ForStep(
+        &mut self,
+        branch_id: &str,
+        item_name: String,
+        source: Reg,
+        step_ms: u64,
+        body: Vec<Instruction>,
+    ) -> Result<(), TemporalError> {
+        let source_payload = self.peek_reg(branch_id, source.0)?;
+
+        let elements = match source_payload {
+            Payload::Array(vec) => vec,
+            _ => {
+                return Err(TemporalError::EvalError(
+                    "for-step source must be array".into(),
+                ))
+            }
+        };
+
+        let item_reg = self.symbols.get(&item_name).unwrap().0;
+
+        for item_value in elements.into_iter() {
+            self.insert_reg(branch_id, item_reg, EntropicState::Valid(item_value))?;
+
+            let iteration_start = self.get_branch_mut(branch_id)?.local_clock;
+
+            let (old_pc, old_instrs) = {
+                let b = self.get_branch_mut(branch_id)?;
+                let pc = b.pc;
+                let instrs = b.instructions.clone();
+                b.instructions = body.clone();
+                b.pc = 0;
+                (pc, instrs)
+            };
+
+            while {
+                let b = self.get_branch_mut(branch_id)?;
+                b.pc < b.instructions.len()
+            } {
+                self.execute_instruction(branch_id)?;
+            }
+
+            {
+                let b = self.get_branch_mut(branch_id)?;
+                b.instructions = old_instrs;
+                b.pc = old_pc;
+            }
+
+            let body_cost =
+                self.get_branch_mut(branch_id)?.local_clock - iteration_start;
+
+            if body_cost > step_ms {
+                return Err(TemporalError::PacingViolation);
+            }
+
+            let pad = step_ms - body_cost;
+            if pad > 0 {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock += pad;
+                branch.consume_budget(pad)?;
+            }
+        }
+
+        Ok(())
+    }
 }

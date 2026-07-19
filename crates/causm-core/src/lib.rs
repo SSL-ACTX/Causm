@@ -192,6 +192,22 @@ macro_rules! statements {
             LoopTick {
                 body: Vec<SpannedStatement>
             },
+            LoopTickOn {
+                channel: String,
+                body: Vec<SpannedStatement>
+            },
+            While {
+                condition: Expression,
+                is_valid_check: bool,
+                max_ms: u64,
+                body: Vec<SpannedStatement>
+            },
+            ForStep {
+                item_name: String,
+                source: Expression,
+                step_ms: u64,
+                body: Vec<SpannedStatement>
+            },
             Slice {
                 milliseconds: u64
             },

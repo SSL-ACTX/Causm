@@ -110,7 +110,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             if let Some(first) = first {
                 if first.as_rule() == Rule::duration_limit {
                     let max_value = parse_duration_limit(first);
-                    // consume duration_limit from inner
                     inner.next();
                     let mut body = Vec::new();
                     for stmt_pair in inner {
@@ -125,6 +124,19 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                         max_ms: max_value,
                         body,
                     }
+                } else if first.as_rule() == Rule::identifier {
+                    let channel = first.as_str().to_string();
+                    inner.next(); // consume channel identifier
+                    let mut body = Vec::new();
+                    for stmt_pair in inner {
+                        if stmt_pair.as_rule() == Rule::statement {
+                            if let Some(actual_stmt) = stmt_pair.into_inner().next()
+                            {
+                                body.push(parse_statement(actual_stmt));
+                            }
+                        }
+                    }
+                    Statement::LoopTickOn { channel, body }
                 } else {
                     let mut body = Vec::new();
                     for stmt_pair in inner {
@@ -139,6 +151,47 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 }
             } else {
                 Statement::LoopTick { body: Vec::new() }
+            }
+        }
+        Rule::while_stmt => {
+            let is_valid_check =
+                pair.as_str().trim_start().starts_with("while valid");
+            let mut inner = pair.into_inner();
+            let condition = parse_expression(inner.next().unwrap());
+            let max_ms = parse_duration_limit(inner.next().unwrap());
+            let mut body = Vec::new();
+            for stmt_pair in inner {
+                if stmt_pair.as_rule() == Rule::statement {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
+                }
+            }
+            Statement::While {
+                condition,
+                is_valid_check,
+                max_ms,
+                body,
+            }
+        }
+        Rule::for_step_stmt => {
+            let mut inner = pair.into_inner();
+            let item_name = inner.next().unwrap().as_str().to_string();
+            let source = parse_expression(inner.next().unwrap());
+            let step_ms = inner.next().unwrap().as_str().parse::<u64>().unwrap_or(0);
+            let mut body = Vec::new();
+            for stmt_pair in inner {
+                if stmt_pair.as_rule() == Rule::statement {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
+                }
+            }
+            Statement::ForStep {
+                item_name,
+                source,
+                step_ms,
+                body,
             }
         }
         Rule::for_stmt => {

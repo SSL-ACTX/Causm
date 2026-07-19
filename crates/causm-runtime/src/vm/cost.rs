@@ -60,6 +60,7 @@ impl Vm {
                 )
             }
             Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
+            Statement::ForStep { step_ms, .. } => *step_ms,
             Statement::Speculate { body, fallback, .. } => {
                 let fallback_cost = self
                     .estimate_block_cost(fallback.as_ref().unwrap_or(&Vec::new()));
@@ -119,6 +120,8 @@ impl Vm {
             Statement::RoutineDef { taking_ms, .. } => taking_ms.unwrap_or(0),
             Statement::Loop { max_ms, .. } => *max_ms,
             Statement::LoopTick { .. } => 1,
+            Statement::LoopTickOn { .. } => 1,
+            Statement::While { max_ms, .. } => *max_ms,
             Statement::Slice { .. } => 0,
             Statement::SpeculationMode(_) => 0,
             Statement::Await(_) => 1,

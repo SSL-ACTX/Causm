@@ -103,6 +103,7 @@ pub fn estimate_statement_cost(
             ))
         }
         Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
+        Statement::ForStep { step_ms, .. } => *step_ms,
         Statement::Print(expr) | Statement::Debug(expr) => {
             1 + crate::expression::estimate_expression_cost(analyzer, expr)
         }
@@ -164,6 +165,8 @@ pub fn estimate_statement_cost(
         Statement::Yield(_) => 0,
         Statement::Loop { max_ms, .. } => *max_ms,
         Statement::LoopTick { .. } => 1,
+        Statement::LoopTickOn { .. } => 1,
+        Statement::While { max_ms, .. } => *max_ms,
         Statement::Slice { .. } => 0,
         Statement::Await(_) => 1,
         Statement::AwaitChan(_) => 1,

@@ -891,6 +891,106 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::EndLoop { max_ms: *max_ms });
             ctx.push(Instruction::Jump { target: start_pc });
         }
+        Statement::LoopTickOn { channel, body } => {
+            ctx.push(Instruction::LoopTickOn {
+                chan_id: channel.clone(),
+            });
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+            ctx.push(Instruction::EndLoopTick);
+        }
+        Statement::While {
+            condition,
+            is_valid_check,
+            max_ms,
+            body,
+        } => {
+            let start_pc = ctx.instructions.len();
+            ctx.push(Instruction::While { max_ms: *max_ms });
+
+            if *is_valid_check {
+                let cond_reg = lower_expression(ctx, condition);
+                let match_entropy_idx = ctx.instructions.len();
+                ctx.push(Instruction::MatchEntropy {
+                    target: cond_reg,
+                    valid_target: None,
+                    decayed_target: None,
+                    pending_target: None,
+                    consumed_target: None,
+                });
+
+                for s in body {
+                    lower_spanned(ctx, s);
+                }
+
+                ctx.push(Instruction::EndWhile { max_ms: *max_ms });
+                ctx.push(Instruction::Jump { target: start_pc });
+
+                let end_pc = ctx.instructions.len();
+                if let Instruction::MatchEntropy {
+                    ref mut valid_target,
+                    ref mut decayed_target,
+                    ref mut pending_target,
+                    ref mut consumed_target,
+                    ..
+                } = ctx.instructions[match_entropy_idx]
+                {
+                    *valid_target = Some(match_entropy_idx + 1);
+                    *decayed_target = Some(end_pc);
+                    *pending_target = Some(end_pc);
+                    *consumed_target = Some(end_pc);
+                }
+            } else {
+                let cond_reg = lower_expression(ctx, condition);
+                let jump_to_end_idx = ctx.instructions.len();
+                ctx.push(Instruction::JumpIfNot {
+                    cond: cond_reg,
+                    target: 0,
+                });
+
+                for s in body {
+                    lower_spanned(ctx, s);
+                }
+
+                ctx.push(Instruction::EndWhile { max_ms: *max_ms });
+                ctx.push(Instruction::Jump { target: start_pc });
+
+                let end_pc = ctx.instructions.len();
+                if let Instruction::JumpIfNot { ref mut target, .. } =
+                    ctx.instructions[jump_to_end_idx]
+                {
+                    *target = end_pc;
+                }
+            }
+        }
+        Statement::ForStep {
+            item_name,
+            source,
+            step_ms,
+            body,
+        } => {
+            let source_reg = lower_expression(ctx, source);
+            let mut sub_ctx = LoweringContext::new();
+            sub_ctx.symbols = ctx.symbols.clone();
+            sub_ctx.next_reg = ctx.next_reg;
+
+            let _ = sub_ctx.get_reg(item_name);
+
+            for s in body {
+                lower_spanned(&mut sub_ctx, s);
+            }
+
+            ctx.symbols = sub_ctx.symbols;
+            ctx.next_reg = sub_ctx.next_reg;
+
+            ctx.push(Instruction::ForStep {
+                item_name: item_name.clone(),
+                source: source_reg,
+                step_ms: *step_ms,
+                body: sub_ctx.instructions,
+            });
+        }
         Statement::If {
             binding,
             condition,

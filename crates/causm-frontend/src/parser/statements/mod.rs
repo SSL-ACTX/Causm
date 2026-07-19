@@ -38,6 +38,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::if_let_stmt
         | Rule::loop_stmt
         | Rule::for_stmt
+        | Rule::while_stmt
+        | Rule::for_step_stmt
         | Rule::split_stmt
         | Rule::merge_stmt
         | Rule::select_stmt

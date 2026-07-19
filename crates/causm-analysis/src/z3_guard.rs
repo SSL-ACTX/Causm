@@ -748,6 +748,113 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let slice_int = self.solver.int_from_u64(slice_ms);
                 Ok(self.solver.int_add(&[in_clock, &slice_int]))
             }
+            Statement::LoopTickOn { channel: _, body } => {
+                let slice_ms = self.current_slice_ms.unwrap_or(0);
+                let mut loop_clock = self.solver.int_from_u64(0);
+                for stmt in body {
+                    loop_clock =
+                        self.verify_statement(stmt, path_condition, &loop_clock)?;
+                }
+                let mut unroll_clock = loop_clock.clone();
+                for stmt in body {
+                    unroll_clock =
+                        self.verify_statement(stmt, path_condition, &unroll_clock)?;
+                }
+                let slice_int = self.solver.int_from_u64(slice_ms);
+                Ok(self.solver.int_add(&[in_clock, &slice_int]))
+            }
+            Statement::While {
+                condition: _,
+                is_valid_check: _,
+                max_ms,
+                body,
+            } => {
+                let mut loop_clock = self.solver.int_from_u64(0);
+                for stmt in body {
+                    loop_clock =
+                        self.verify_statement(stmt, path_condition, &loop_clock)?;
+                }
+                let mut unroll_clock = loop_clock.clone();
+                for stmt in body {
+                    unroll_clock =
+                        self.verify_statement(stmt, path_condition, &unroll_clock)?;
+                }
+                let limit_int = self.solver.int_from_u64(*max_ms);
+                let violation = self.solver.int_gt(&loop_clock, &limit_int);
+                self.solver.push();
+                let cond_and = self.solver.bool_and(&[path_condition, &violation]);
+                self.solver.assert(&cond_and);
+                if self.solver.check() {
+                    let actual_wcet = self.solver.eval_u64(&loop_clock).unwrap_or(0);
+                    self.solver.pop(1);
+                    return Err(self.analyzer.annotate(
+                        SemanticErrorKind::TemporalAssertionViolation(
+                            actual_wcet,
+                            *max_ms,
+                        ),
+                    ));
+                }
+                self.solver.pop(1);
+                Ok(self.solver.int_add(&[in_clock, &limit_int]))
+            }
+            Statement::ForStep {
+                item_name,
+                source: _,
+                step_ms,
+                body,
+            } => {
+                let mut loop_clock = self.solver.int_from_u64(0);
+                {
+                    let item_valid = self.solver.bool_const(&format!(
+                        "{}_v1_{}",
+                        item_name, spanned.span.start
+                    ));
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &item_valid);
+                    self.solver.assert(&impl_valid);
+                    self.variable_validity.insert(item_name.clone(), item_valid);
+                    for stmt in body {
+                        loop_clock = self.verify_statement(
+                            stmt,
+                            path_condition,
+                            &loop_clock,
+                        )?;
+                    }
+                }
+                {
+                    let item_valid = self.solver.bool_const(&format!(
+                        "{}_v2_{}",
+                        item_name, spanned.span.start
+                    ));
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &item_valid);
+                    self.solver.assert(&impl_valid);
+                    self.variable_validity.insert(item_name.clone(), item_valid);
+                    let mut unroll_clock = loop_clock.clone();
+                    for stmt in body {
+                        unroll_clock = self.verify_statement(
+                            stmt,
+                            path_condition,
+                            &unroll_clock,
+                        )?;
+                    }
+                }
+                self.variable_validity.remove(item_name);
+
+                let step_int = self.solver.int_from_u64(*step_ms);
+                let violation = self.solver.int_gt(&loop_clock, &step_int);
+                self.solver.push();
+                let cond_and = self.solver.bool_and(&[path_condition, &violation]);
+                self.solver.assert(&cond_and);
+                if self.solver.check() {
+                    self.solver.pop(1);
+                    return Err(self
+                        .analyzer
+                        .annotate(SemanticErrorKind::PacingViolation));
+                }
+                self.solver.pop(1);
+                Ok(self.solver.int_add(&[in_clock, &step_int]))
+            }
             Statement::Slice { milliseconds } => {
                 self.current_slice_ms = Some(*milliseconds);
                 Ok(in_clock.clone())

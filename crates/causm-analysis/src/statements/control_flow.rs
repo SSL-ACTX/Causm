@@ -154,6 +154,119 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn LoopTickOn(
+        &mut self,
+        channel: &String,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        if !self.known_channels.contains(channel.as_str()) {
+            return Err(
+                self.annotate(SemanticErrorKind::UndefinedVariable(channel.clone()))
+            );
+        }
+
+        let slice_ms = self
+            .current_slice_ms
+            .ok_or_else(|| self.annotate(SemanticErrorKind::TickLoopWithoutSlice))?;
+
+        let body_cost = crate::statement::estimate_block_cost(self, body);
+        if body_cost > slice_ms {
+            return Err(self.annotate(SemanticErrorKind::TickLoopBudgetExceeded(
+                body_cost, slice_ms,
+            )));
+        }
+
+        let has_break = body
+            .iter()
+            .any(|inner_stmt| matches!(inner_stmt.stmt, Statement::Break));
+
+        if !has_break {
+            return Err(self.annotate(SemanticErrorKind::TickLoopNeedsBreak));
+        }
+
+        for inner_stmt in body {
+            self.analyze_statement(inner_stmt)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn While(
+        &mut self,
+        condition: &Expression,
+        is_valid_check: &bool,
+        max_ms: &u64,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        if *max_ms == 0 {
+            return Err(self.annotate(SemanticErrorKind::InvalidLoopBudget));
+        }
+
+        crate::expression::analyze_expression_nonconsuming(self, condition)?;
+
+        if !*is_valid_check {
+            let cond_type =
+                crate::expression::infer_expression_type(self, condition)?;
+            if cond_type != causm_core::types::Type::Bool {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    "While condition must be a boolean".to_string(),
+                )));
+            }
+        }
+
+        let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        branch.accumulated_cost += *max_ms;
+
+        for inner_stmt in body {
+            self.analyze_statement(inner_stmt)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ForStep(
+        &mut self,
+        item_name: &String,
+        source: &Expression,
+        step_ms: &u64,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        crate::expression::analyze_expression_nonconsuming(self, source)?;
+
+        let source_type = crate::expression::infer_expression_type(self, source)?;
+        let item_type = match source_type {
+            causm_core::types::Type::Array(inner) => *inner,
+            _ => {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    "ForStep source must be an array".to_string(),
+                )));
+            }
+        };
+
+        let body_cost = crate::statement::estimate_block_cost(self, body);
+        if body_cost > *step_ms {
+            return Err(self.annotate(SemanticErrorKind::TickLoopBudgetExceeded(
+                body_cost, *step_ms,
+            )));
+        }
+
+        let old_type = {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.produced.insert(item_name.clone());
+            branch.types.insert(item_name.clone(), item_type)
+        };
+
+        for inner_stmt in body {
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        branch.remove_variable_scope(item_name);
+        if let Some(old) = old_type {
+            branch.types.insert(item_name.clone(), old);
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn Select(
         &mut self,
         _max_ms: &u64,

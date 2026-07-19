@@ -293,6 +293,21 @@ macro_rules! instructions {
             EndLoop {
                 max_ms: u64
             },
+            LoopTickOn {
+                chan_id: String
+            },
+            While {
+                max_ms: u64
+            },
+            EndWhile {
+                max_ms: u64
+            },
+            ForStep {
+                item_name: String,
+                source: $crate::Reg,
+                step_ms: u64,
+                body: Vec<$crate::Instruction>
+            },
             NetworkRequest {
                 domain: String
             }

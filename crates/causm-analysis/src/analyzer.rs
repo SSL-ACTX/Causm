@@ -170,6 +170,7 @@ pub struct EntropicAnalyzer {
     pub(crate) interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
     pub(crate) struct_extends: HashMap<String, String>,
     pub(crate) merged_branches: HashSet<String>,
+    pub(crate) known_channels: HashSet<String>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -203,6 +204,7 @@ impl EntropicAnalyzer {
             interfaces: HashMap::new(),
             struct_extends: HashMap::new(),
             merged_branches: HashSet::new(),
+            known_channels: HashSet::new(),
         };
         analyzer.register_intrinsics();
         analyzer

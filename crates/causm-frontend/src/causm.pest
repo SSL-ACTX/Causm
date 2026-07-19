@@ -38,6 +38,8 @@ statement = {
     | if_let_stmt
     | break_stmt
     | loop_stmt
+    | while_stmt
+    | for_step_stmt
     | yield_stmt
     | type_decl
     | interface_decl
@@ -102,7 +104,9 @@ pacing_opt = { "pacing" ~ duration_limit }
 debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
 if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
-loop_stmt = { "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
+loop_stmt = { "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
+while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
+for_step_stmt = { "for" ~ identifier ~ "in" ~ expression ~ "step" ~ amount ~ "ms" ~ "{" ~ statement* ~ "}" }
 
 slice_stmt = { "slice" ~ amount ~ "ms" }
 

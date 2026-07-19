@@ -264,7 +264,9 @@ impl Vm {
                         };
                         match instr {
                             causm_ir::Instruction::Loop { .. }
-                            | causm_ir::Instruction::LoopTick => {
+                            | causm_ir::Instruction::LoopTick
+                            | causm_ir::Instruction::LoopTickOn { .. }
+                            | causm_ir::Instruction::While { .. } => {
                                 let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth += 1;
                             }
@@ -274,6 +276,26 @@ impl Vm {
                                 if b.loop_depth < target_depth {
                                     let max_ms_val = max_ms;
                                     self.EndLoop(branch_id, max_ms_val)?;
+                                    let b = self.get_branch_mut(branch_id)?;
+                                    b.pc += 1;
+                                    // Skip the following Jump if present
+                                    if b.pc < b.instructions.len() {
+                                        if let causm_ir::Instruction::Jump {
+                                            ..
+                                        } = b.instructions[b.pc]
+                                        {
+                                            b.pc += 1;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                            causm_ir::Instruction::EndWhile { max_ms } => {
+                                let b = self.get_branch_mut(branch_id)?;
+                                b.loop_depth -= 1;
+                                if b.loop_depth < target_depth {
+                                    let max_ms_val = max_ms;
+                                    self.EndWhile(branch_id, max_ms_val)?;
                                     let b = self.get_branch_mut(branch_id)?;
                                     b.pc += 1;
                                     // Skip the following Jump if present
