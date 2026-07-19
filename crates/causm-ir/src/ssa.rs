@@ -325,6 +325,21 @@ pub enum SsaInstruction {
         cond: SsaReg,
         target: usize,
     },
+    While {
+        max_ms: u64,
+    },
+    EndWhile {
+        max_ms: u64,
+    },
+    ForStep {
+        item_name: String,
+        source: SsaReg,
+        step_ms: u64,
+        body: Vec<SsaInstruction>,
+    },
+    LoopTickOn {
+        chan_id: String,
+    },
     Other(String),
 }
 
@@ -585,6 +600,16 @@ impl SsaTransformer {
             &mut inserted_phis,
             &mut renamed_blocks,
         );
+
+        for (block_id, phis) in inserted_phis {
+            if let Some(block) = renamed_blocks.get_mut(&block_id) {
+                for (i, p) in phis.into_iter().enumerate() {
+                    if i < block.phi_nodes.len() {
+                        block.phi_nodes[i].incoming = p.incoming;
+                    }
+                }
+            }
+        }
 
         SsaCFG {
             entry_block: self.cfg.entry_block,
@@ -1437,6 +1462,36 @@ impl SsaTransformer {
                 cond: self.current_ssa_reg(*cond),
                 target: *target,
             },
+            Instruction::While { max_ms } => {
+                SsaInstruction::While { max_ms: *max_ms }
+            }
+            Instruction::EndWhile { max_ms } => {
+                SsaInstruction::EndWhile { max_ms: *max_ms }
+            }
+            Instruction::ForStep {
+                item_name,
+                source,
+                step_ms,
+                body,
+            } => {
+                let source_ssa = self.current_ssa_reg(*source);
+                let body_ssa =
+                    body.iter().map(|i| self.rename_instruction(i)).collect();
+                for sub_instr in body {
+                    for_each_dest_reg_recursive(sub_instr, &mut |dest| {
+                        self.pop_version(dest.0);
+                    });
+                }
+                SsaInstruction::ForStep {
+                    item_name: item_name.clone(),
+                    source: source_ssa,
+                    step_ms: *step_ms,
+                    body: body_ssa,
+                }
+            }
+            Instruction::LoopTickOn { chan_id } => SsaInstruction::LoopTickOn {
+                chan_id: chan_id.clone(),
+            },
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }
@@ -1514,7 +1569,9 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
 fn for_each_dest_reg_recursive(instr: &Instruction, f: &mut impl FnMut(Reg)) {
     for_each_dest_reg(instr, &mut *f);
     match instr {
-        Instruction::For { body, .. } | Instruction::SplitMap { body, .. } => {
+        Instruction::For { body, .. }
+        | Instruction::SplitMap { body, .. }
+        | Instruction::ForStep { body, .. } => {
             for sub_instr in body {
                 for_each_dest_reg_recursive(sub_instr, &mut *f);
             }

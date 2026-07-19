@@ -541,6 +541,27 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             cond: ssa_reg_to_reg(*cond),
             target: *target,
         },
+        SsaInstruction::While { max_ms } => Instruction::While { max_ms: *max_ms },
+        SsaInstruction::EndWhile { max_ms } => {
+            Instruction::EndWhile { max_ms: *max_ms }
+        }
+        SsaInstruction::ForStep {
+            item_name,
+            source,
+            step_ms,
+            body,
+        } => {
+            let body_mapped = body.iter().map(ssa_instr_to_instr).collect();
+            Instruction::ForStep {
+                item_name: item_name.clone(),
+                source: ssa_reg_to_reg(*source),
+                step_ms: *step_ms,
+                body: body_mapped,
+            }
+        }
+        SsaInstruction::LoopTickOn { chan_id } => Instruction::LoopTickOn {
+            chan_id: chan_id.clone(),
+        },
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }

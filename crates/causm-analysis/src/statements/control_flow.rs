@@ -156,13 +156,13 @@ impl EntropicAnalyzer {
 
     pub(crate) fn LoopTickOn(
         &mut self,
-        channel: &String,
+        channel: &str,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
-        if !self.known_channels.contains(channel.as_str()) {
-            return Err(
-                self.annotate(SemanticErrorKind::UndefinedVariable(channel.clone()))
-            );
+        if !self.known_channels.contains(channel) {
+            return Err(self.annotate(SemanticErrorKind::UndefinedVariable(
+                channel.to_owned(),
+            )));
         }
 
         let slice_ms = self
@@ -224,7 +224,7 @@ impl EntropicAnalyzer {
 
     pub(crate) fn ForStep(
         &mut self,
-        item_name: &String,
+        item_name: &str,
         source: &Expression,
         step_ms: &u64,
         body: &[SpannedStatement],
@@ -250,8 +250,8 @@ impl EntropicAnalyzer {
 
         let old_type = {
             let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-            branch.produced.insert(item_name.clone());
-            branch.types.insert(item_name.clone(), item_type)
+            branch.produced.insert(item_name.to_owned());
+            branch.types.insert(item_name.to_owned(), item_type)
         };
 
         for inner_stmt in body {
@@ -261,7 +261,7 @@ impl EntropicAnalyzer {
         let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
         branch.remove_variable_scope(item_name);
         if let Some(old) = old_type {
-            branch.types.insert(item_name.clone(), old);
+            branch.types.insert(item_name.to_owned(), old);
         }
 
         Ok(())

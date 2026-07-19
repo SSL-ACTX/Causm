@@ -813,6 +813,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
+                    let item_leased = self.solver.bool_from_bool(false);
+                    self.variable_leased.insert(item_name.clone(), item_leased);
                     for stmt in body {
                         loop_clock = self.verify_statement(
                             stmt,
@@ -830,6 +832,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
+                    let item_leased = self.solver.bool_from_bool(false);
+                    self.variable_leased.insert(item_name.clone(), item_leased);
                     let mut unroll_clock = loop_clock.clone();
                     for stmt in body {
                         unroll_clock = self.verify_statement(
@@ -840,6 +844,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     }
                 }
                 self.variable_validity.remove(item_name);
+                self.variable_leased.remove(item_name);
 
                 let step_int = self.solver.int_from_u64(*step_ms);
                 let violation = self.solver.int_gt(&loop_clock, &step_int);
@@ -892,6 +897,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
+                    let item_leased = self.solver.bool_from_bool(false);
+                    self.variable_leased.insert(item_name.clone(), item_leased);
                     for stmt in body {
                         loop_clock = self.verify_statement(
                             stmt,
@@ -909,6 +916,8 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         self.solver.bool_implies(path_condition, &item_valid);
                     self.solver.assert(&impl_valid);
                     self.variable_validity.insert(item_name.clone(), item_valid);
+                    let item_leased = self.solver.bool_from_bool(false);
+                    self.variable_leased.insert(item_name.clone(), item_leased);
                     let mut unroll_clock = loop_clock.clone();
                     for stmt in body {
                         unroll_clock = self.verify_statement(
@@ -919,6 +928,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     }
                 }
                 self.variable_validity.remove(item_name);
+                self.variable_leased.remove(item_name);
                 if let Some(pacing) = pacing_ms {
                     let pacing_int = self.solver.int_from_u64(*pacing);
                     let violation = self.solver.int_gt(&loop_clock, &pacing_int);

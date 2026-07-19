@@ -109,6 +109,12 @@ pub(crate) fn for_each_ssa_src_reg(
                 for_each_ssa_src_reg(b, f);
             }
         }
+        SsaInstruction::ForStep { source, body, .. } => {
+            f(*source);
+            for b in body {
+                for_each_ssa_src_reg(b, f);
+            }
+        }
         SsaInstruction::SplitMap { source, body, .. } => {
             f(*source);
             for b in body {
