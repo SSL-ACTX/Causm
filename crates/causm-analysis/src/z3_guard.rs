@@ -165,14 +165,68 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         self.entanglements.clear();
         self.current_slice_ms = None;
 
-        for timeline in &program.timelines {
+        for (idx, timeline) in program.timelines.iter().enumerate() {
             let mut clock = self.solver.int_from_u64(0);
             let path_cond = self.solver.bool_from_bool(true);
             for spanned in &timeline.statements {
                 clock = self.verify_statement(spanned, &path_cond, &clock)?;
             }
+            let wcet = self.find_max_value(&clock, &path_cond);
+            self.analyzer
+                .analyzed_wcet
+                .borrow_mut()
+                .insert(format!("Timeline {}", idx), wcet);
         }
         Ok(())
+    }
+
+    pub fn find_max_value(&mut self, val: &S::Int, path_cond: &S::Bool) -> u64 {
+        self.solver.push();
+        self.solver.assert(path_cond);
+
+        let mut low = 0;
+        let mut high = 100_000;
+
+        if !self.solver.check() {
+            self.solver.pop(1);
+            return 0;
+        }
+
+        if let Some(initial_val) = self.solver.eval_u64(val) {
+            low = initial_val;
+            if low > high {
+                high = low * 2;
+            }
+        }
+
+        let mut max_val = low;
+
+        while low <= high {
+            let mid = low + (high - low) / 2;
+            self.solver.push();
+            let mid_int = self.solver.int_from_u64(mid);
+            let check_gt = self.solver.int_ge(val, &mid_int);
+            self.solver.assert(&check_gt);
+
+            if self.solver.check() {
+                max_val = mid;
+                if let Some(eval_val) = self.solver.eval_u64(val) {
+                    if eval_val > max_val {
+                        max_val = eval_val;
+                        low = eval_val + 1;
+                        self.solver.pop(1);
+                        continue;
+                    }
+                }
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+            self.solver.pop(1);
+        }
+
+        self.solver.pop(1);
+        max_val
     }
 
     fn verify_statement(
@@ -974,6 +1028,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
             }
             Statement::RoutineDef {
+                name,
                 params,
                 taking_ms,
                 body,
@@ -1000,6 +1055,13 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         &body_clock,
                     )?;
                 }
+
+                let wcet = routine_verifier.find_max_value(&body_clock, &true_bool);
+                self.analyzer
+                    .analyzed_wcet
+                    .borrow_mut()
+                    .insert(name.clone(), wcet);
+
                 if let Some(limit) = taking_ms {
                     let limit_int = routine_verifier.solver.int_from_u64(*limit);
                     let violation =

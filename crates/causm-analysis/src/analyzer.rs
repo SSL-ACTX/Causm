@@ -160,7 +160,7 @@ pub struct EntropicAnalyzer {
     pub source: Option<String>,
     pub(crate) filename: Option<String>,
     pub(crate) capability_stack: Vec<HashMap<String, causm_core::Capability>>,
-    pub(crate) routines: HashMap<String, RoutineInfo>,
+    pub routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
     pub(crate) type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     pub use_z3: bool,
@@ -171,6 +171,7 @@ pub struct EntropicAnalyzer {
     pub(crate) struct_extends: HashMap<String, String>,
     pub(crate) merged_branches: HashSet<String>,
     pub(crate) known_channels: HashSet<String>,
+    pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -205,6 +206,7 @@ impl EntropicAnalyzer {
             struct_extends: HashMap::new(),
             merged_branches: HashSet::new(),
             known_channels: HashSet::new(),
+            analyzed_wcet: std::cell::RefCell::new(HashMap::new()),
         };
         analyzer.register_intrinsics();
         analyzer

@@ -84,4 +84,43 @@ mod tests {
             "Expected folded instruction LoadInt with value 15"
         );
     }
+
+    #[test]
+    fn test_cfg_simplification_pass_unreachable() {
+        use crate::optimize::cfg_simp::CfgSimplificationPass;
+
+        let instrs = vec![
+            Instruction::LoadBool {
+                dest: Reg(0),
+                value: true,
+            },
+            Instruction::JumpIf {
+                cond: Reg(0),
+                target: 4,
+            },
+            Instruction::LoadInt {
+                dest: Reg(1),
+                value: 10,
+            },
+            Instruction::Return { src: Some(Reg(1)) },
+            Instruction::LoadInt {
+                dest: Reg(2),
+                value: 20,
+            },
+            Instruction::Return { src: Some(Reg(2)) },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        assert_eq!(ssa_cfg.blocks.len(), 3);
+
+        let pass = CfgSimplificationPass;
+        let empty_used = HashSet::new();
+        let changed = pass.run(&mut ssa_cfg, &empty_used, false);
+
+        assert!(changed);
+        assert_eq!(ssa_cfg.blocks.len(), 2);
+    }
 }

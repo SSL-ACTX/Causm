@@ -1,3 +1,4 @@
+pub mod cfg_simp;
 pub mod coalescing;
 pub mod constant_prop;
 pub mod copy_prop;
@@ -13,6 +14,7 @@ use crate::ssa::{SsaCFG, SsaInstruction, SsaReg, SsaTerminator, SsaTransformer};
 use crate::{Instruction, IrProgram, Reg};
 use std::collections::{HashMap, HashSet};
 
+use cfg_simp::CfgSimplificationPass;
 use coalescing::BlockCoalescingPass;
 use constant_prop::ConstantPropagationPass;
 use copy_prop::CopyPropagationPass;
@@ -23,6 +25,7 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     let mut manager = PassManager::new();
     manager.add_pass(Box::new(ConstantPropagationPass));
     manager.add_pass(Box::new(CopyPropagationPass));
+    manager.add_pass(Box::new(CfgSimplificationPass));
     manager.add_pass(Box::new(EntropyOptimizationPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));

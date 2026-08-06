@@ -235,6 +235,29 @@ fn main() -> anyhow::Result<()> {
 
         println!("\x1b[1;32m{}: analysis ok\x1b[0m", path.display());
 
+        let wcet_map = analyzer.analyzed_wcet.borrow();
+        if !wcet_map.is_empty() {
+            println!("\x1b[1;35mStatic Temporal Analysis (WCET bounds):\x1b[0m");
+            let mut keys: Vec<&String> = wcet_map.keys().collect();
+            keys.sort();
+            for key in keys {
+                // If it is a routine, check if it has a taking_ms budget
+                let budget_str = if let Some(ref_info) = analyzer.routines.get(key) {
+                    if ref_info.taking_ms > 0 {
+                        format!(" [budget: {}ms]", ref_info.taking_ms)
+                    } else {
+                        "".to_string()
+                    }
+                } else {
+                    "".to_string()
+                };
+                println!(
+                    "  - \x1b[36m{}\x1b[0m: {}ms{}",
+                    key, wcet_map[key], budget_str
+                );
+            }
+        }
+
         if dump_ir {
             let ir_program = lower::lower_program(&program);
             println!(
