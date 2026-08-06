@@ -31,8 +31,15 @@ impl OptimizationPass for BlockCoalescingPass {
                                 && predecessors_list[0] == id
                                 && successor_b != ssa_cfg.entry_block
                             {
-                                merge_candidate = Some((id, successor_b));
-                                break;
+                                let block_a = ssa_cfg.blocks.get(&id).unwrap();
+                                let block_b =
+                                    ssa_cfg.blocks.get(&successor_b).unwrap();
+                                if !block_has_loop_instructions(block_a)
+                                    && !block_has_loop_instructions(block_b)
+                                {
+                                    merge_candidate = Some((id, successor_b));
+                                    break;
+                                }
                             }
                         }
                     }
@@ -150,4 +157,23 @@ fn redirect_predecessor(ssa_cfg: &mut SsaCFG, old_pred: BlockId, new_pred: Block
             }
         }
     }
+}
+
+fn block_has_loop_instructions(block: &crate::ssa::SsaBasicBlock) -> bool {
+    block.instructions.iter().any(|inst| {
+        matches!(
+            inst,
+            SsaInstruction::Loop { .. }
+                | SsaInstruction::EndLoop { .. }
+                | SsaInstruction::LoopTick
+                | SsaInstruction::EndLoopTick
+                | SsaInstruction::LoopTickOn { .. }
+                | SsaInstruction::While { .. }
+                | SsaInstruction::EndWhile { .. }
+                | SsaInstruction::For { .. }
+                | SsaInstruction::EndFor
+                | SsaInstruction::ForStep { .. }
+                | SsaInstruction::EndForStep
+        )
+    })
 }

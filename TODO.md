@@ -57,14 +57,14 @@
 
 ## CFG
 
-- [ ] Normalize all structured control flow.
+- [x] Normalize all structured control flow.
   - Ensure loops always become:
     - header
     - body
     - backedge
     - exit
 
-- [ ] Reduce embedded control-flow instructions inside IR nodes.
+- [x] Reduce embedded control-flow instructions inside IR nodes.
 
 ---
 

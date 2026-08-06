@@ -138,6 +138,19 @@ impl CFG {
                     leaders.insert(*block_pc + *block_len);
                     leaders.insert(idx + 1);
                 }
+                Instruction::Loop { .. }
+                | Instruction::EndLoop { .. }
+                | Instruction::LoopTick
+                | Instruction::EndLoopTick
+                | Instruction::LoopTickOn { .. }
+                | Instruction::While { .. }
+                | Instruction::EndWhile { .. }
+                | Instruction::For { .. }
+                | Instruction::EndFor
+                | Instruction::ForStep { .. }
+                | Instruction::EndForStep => {
+                    leaders.insert(idx);
+                }
                 _ => {}
             }
         }
