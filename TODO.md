@@ -2,11 +2,11 @@
 
 ## High Priority
 
-- [ ] Lower structured loop bodies (`ForStep`, `LoopTickOn`, possibly `For`) into explicit CFG blocks instead of embedding instruction arrays.
+- [x] Lower structured loop bodies (`ForStep`, `LoopTickOn`, possibly `For`) into explicit CFG blocks instead of embedding instruction arrays.
   - Current IR mixes SSA and AST.
   - Optimizers (GVN, LICM, DCE, PRE, etc.) work much better over normal CFG.
 
-- [ ] Preserve temporal semantics while lowering.
+- [x] Preserve temporal semantics while lowering.
   - Keep instructions like:
     - `While { max_ms }`
     - `EndWhile`
@@ -19,7 +19,7 @@
 
 ## SSA Cleanup
 
-- [ ] Remove unnecessary `Move` instructions after SSA construction.
+- [x] Remove unnecessary `Move` instructions after SSA construction.
   - Example:
     ```
     LoadInt R1 = 5
@@ -34,12 +34,12 @@
     R2 = 5
     ```
 
-- [ ] Add a copy-propagation pass.
+- [x] Add a copy-propagation pass.
   - Eliminate redundant SSA copies.
   - Reduce register count.
   - Improve readability.
 
-- [ ] Add dead instruction elimination after SSA generation.
+- [x] Add dead instruction elimination after SSA generation.
   - Many temporary registers become unused after propagation.
 
 ---
@@ -195,7 +195,7 @@ Potential pass order:
 
 ---
 
-# Things That Already Look Good ✅
+# Things That Already Look Good So Far ;)
 
 - Proper SSA with phi nodes.
 - Explicit CFG.

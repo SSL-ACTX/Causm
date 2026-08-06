@@ -122,3 +122,25 @@ fn test_loop_tick_on_channel() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_advanced_loop_showcase() -> anyhow::Result<()> {
+    let source = include_str!("../../../examples/advanced_loop_sc.csm");
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.register_capability("System.Log", |_| Ok(()));
+    vm.execute_program(&ir)?;
+
+    let main = &vm.root_timeline;
+    let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
+    let peak_reg = ir.symbols.get("peak").expect("peak not found").0;
+    assert_eq!(main.arena.peek(sum_reg), Some(Payload::Integer(191)));
+    assert_eq!(main.arena.peek(peak_reg), Some(Payload::Integer(93)));
+
+    Ok(())
+}

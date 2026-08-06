@@ -1,5 +1,6 @@
 pub mod coalescing;
 pub mod constant_prop;
+pub mod copy_prop;
 pub mod dead_code;
 pub(crate) mod utils;
 
@@ -13,11 +14,13 @@ use std::collections::{HashMap, HashSet};
 
 use coalescing::BlockCoalescingPass;
 use constant_prop::ConstantPropagationPass;
+use copy_prop::CopyPropagationPass;
 use dead_code::DeadCodeEliminationPass;
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     let mut manager = PassManager::new();
     manager.add_pass(Box::new(ConstantPropagationPass));
+    manager.add_pass(Box::new(CopyPropagationPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));
 
@@ -335,12 +338,16 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             Instruction::Capability { cap: cap.clone() }
         }
         SsaInstruction::For {
+            dest_cond,
+            item_reg,
             item_name,
             mode,
             source,
             pacing_ms,
             max_ms,
         } => Instruction::For {
+            dest_cond: ssa_reg_to_reg(*dest_cond),
+            item_reg: ssa_reg_to_reg(*item_reg),
             item_name: item_name.clone(),
             mode: mode.clone(),
             source: ssa_reg_to_reg(*source),
@@ -349,11 +356,13 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         },
         SsaInstruction::EndFor => Instruction::EndFor,
         SsaInstruction::SplitMap {
+            item_reg,
             item_name,
             mode,
             source,
             reconcile,
         } => Instruction::SplitMap {
+            item_reg: ssa_reg_to_reg(*item_reg),
             item_name: item_name.clone(),
             mode: mode.clone(),
             source: ssa_reg_to_reg(*source),
@@ -538,10 +547,14 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             Instruction::EndWhile { max_ms: *max_ms }
         }
         SsaInstruction::ForStep {
+            dest_cond,
+            item_reg,
             item_name,
             source,
             step_ms,
         } => Instruction::ForStep {
+            dest_cond: ssa_reg_to_reg(*dest_cond),
+            item_reg: ssa_reg_to_reg(*item_reg),
             item_name: item_name.clone(),
             source: ssa_reg_to_reg(*source),
             step_ms: *step_ms,

@@ -280,7 +280,7 @@ fn causm_temporal_for_loop_pacing_and_bounds() -> anyhow::Result<()> {
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
-    assert_eq!(vm.root_timeline.local_clock, 26);
+    assert_eq!(vm.root_timeline.local_clock, 27);
     Ok(())
 }
 

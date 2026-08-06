@@ -280,6 +280,8 @@ pub enum SsaInstruction {
         cap: causm_core::Capability,
     },
     For {
+        dest_cond: SsaReg,
+        item_reg: SsaReg,
         item_name: String,
         mode: causm_core::ParamMode,
         source: SsaReg,
@@ -288,6 +290,7 @@ pub enum SsaInstruction {
     },
     EndFor,
     SplitMap {
+        item_reg: SsaReg,
         item_name: String,
         mode: causm_core::ParamMode,
         source: SsaReg,
@@ -332,6 +335,8 @@ pub enum SsaInstruction {
         max_ms: u64,
     },
     ForStep {
+        dest_cond: SsaReg,
+        item_reg: SsaReg,
         item_name: String,
         source: SsaReg,
         step_ms: u64,
@@ -1375,30 +1380,55 @@ impl SsaTransformer {
                 SsaInstruction::Capability { cap: cap.clone() }
             }
             Instruction::For {
+                dest_cond,
+                item_reg,
                 item_name,
                 mode,
                 source,
                 pacing_ms,
                 max_ms,
-            } => SsaInstruction::For {
-                item_name: item_name.clone(),
-                mode: mode.clone(),
-                source: self.current_ssa_reg(*source),
-                pacing_ms: *pacing_ms,
-                max_ms: *max_ms,
-            },
+            } => {
+                let dest_ver = self.next_version(dest_cond.0);
+                self.push_version(dest_cond.0, dest_ver);
+                let item_ver = self.next_version(item_reg.0);
+                self.push_version(item_reg.0, item_ver);
+                SsaInstruction::For {
+                    dest_cond: SsaReg {
+                        reg: dest_cond.0,
+                        version: dest_ver,
+                    },
+                    item_reg: SsaReg {
+                        reg: item_reg.0,
+                        version: item_ver,
+                    },
+                    item_name: item_name.clone(),
+                    mode: mode.clone(),
+                    source: self.current_ssa_reg(*source),
+                    pacing_ms: *pacing_ms,
+                    max_ms: *max_ms,
+                }
+            }
             Instruction::EndFor => SsaInstruction::EndFor,
             Instruction::SplitMap {
+                item_reg,
                 item_name,
                 mode,
                 source,
                 reconcile,
-            } => SsaInstruction::SplitMap {
-                item_name: item_name.clone(),
-                mode: mode.clone(),
-                source: self.current_ssa_reg(*source),
-                reconcile: reconcile.clone(),
-            },
+            } => {
+                let item_ver = self.next_version(item_reg.0);
+                self.push_version(item_reg.0, item_ver);
+                SsaInstruction::SplitMap {
+                    item_reg: SsaReg {
+                        reg: item_reg.0,
+                        version: item_ver,
+                    },
+                    item_name: item_name.clone(),
+                    mode: mode.clone(),
+                    source: self.current_ssa_reg(*source),
+                    reconcile: reconcile.clone(),
+                }
+            }
             Instruction::EndSplitMap => SsaInstruction::EndSplitMap,
             Instruction::Defer {
                 dest,
@@ -1447,14 +1477,30 @@ impl SsaTransformer {
                 SsaInstruction::EndWhile { max_ms: *max_ms }
             }
             Instruction::ForStep {
+                dest_cond,
+                item_reg,
                 item_name,
                 source,
                 step_ms,
-            } => SsaInstruction::ForStep {
-                item_name: item_name.clone(),
-                source: self.current_ssa_reg(*source),
-                step_ms: *step_ms,
-            },
+            } => {
+                let dest_ver = self.next_version(dest_cond.0);
+                self.push_version(dest_cond.0, dest_ver);
+                let item_ver = self.next_version(item_reg.0);
+                self.push_version(item_reg.0, item_ver);
+                SsaInstruction::ForStep {
+                    dest_cond: SsaReg {
+                        reg: dest_cond.0,
+                        version: dest_ver,
+                    },
+                    item_reg: SsaReg {
+                        reg: item_reg.0,
+                        version: item_ver,
+                    },
+                    item_name: item_name.clone(),
+                    source: self.current_ssa_reg(*source),
+                    step_ms: *step_ms,
+                }
+            }
             Instruction::EndForStep => SsaInstruction::EndForStep,
             Instruction::LoopTickOn { chan_id } => SsaInstruction::LoopTickOn {
                 chan_id: chan_id.clone(),
@@ -1524,6 +1570,23 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::ChanRecv { dest, .. } => f(*dest),
         Instruction::FieldUpdate { target, .. } => f(*target),
         Instruction::IndexFieldUpdate { target, .. } => f(*target),
+        Instruction::For {
+            dest_cond,
+            item_reg,
+            ..
+        } => {
+            f(*dest_cond);
+            f(*item_reg);
+        }
+        Instruction::ForStep {
+            dest_cond,
+            item_reg,
+            ..
+        } => {
+            f(*dest_cond);
+            f(*item_reg);
+        }
+        Instruction::SplitMap { item_reg, .. } => f(*item_reg),
         Instruction::Select { cases, .. } => {
             for case in cases {
                 f(case.dest);

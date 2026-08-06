@@ -265,6 +265,8 @@ macro_rules! instructions {
                 cap: causm_core::Capability
             },
             For {
+                dest_cond: $crate::Reg,
+                item_reg: $crate::Reg,
                 item_name: String,
                 mode: causm_core::ParamMode,
                 source: $crate::Reg,
@@ -273,6 +275,7 @@ macro_rules! instructions {
             },
             EndFor,
             SplitMap {
+                item_reg: $crate::Reg,
                 item_name: String,
                 mode: causm_core::ParamMode,
                 source: $crate::Reg,
@@ -303,6 +306,8 @@ macro_rules! instructions {
                 max_ms: u64
             },
             ForStep {
+                dest_cond: $crate::Reg,
+                item_reg: $crate::Reg,
                 item_name: String,
                 source: $crate::Reg,
                 step_ms: u64

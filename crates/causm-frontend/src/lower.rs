@@ -684,18 +684,39 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             max_ms,
         } => {
             let source_reg = ctx.get_reg(source);
+            let start_pc = ctx.instructions.len();
+            let cond_reg = ctx.alloc_reg();
+            let item_reg = ctx.get_reg(item_name);
+
             ctx.push(Instruction::For {
+                dest_cond: cond_reg,
+                item_reg,
                 item_name: item_name.clone(),
                 mode: mode.clone(),
                 source: source_reg,
                 pacing_ms: *pacing_ms,
                 max_ms: *max_ms,
             });
-            let _ = ctx.get_reg(item_name);
+
+            let jump_to_end_idx = ctx.instructions.len();
+            ctx.push(Instruction::JumpIfNot {
+                cond: cond_reg,
+                target: 0,
+            });
+
             for s in body {
                 lower_spanned(ctx, s);
             }
+
             ctx.push(Instruction::EndFor);
+            ctx.push(Instruction::Jump { target: start_pc });
+
+            let end_pc = ctx.instructions.len();
+            if let Instruction::JumpIfNot { ref mut target, .. } =
+                ctx.instructions[jump_to_end_idx]
+            {
+                *target = end_pc;
+            }
         }
         Statement::SplitMap {
             item_name,
@@ -705,8 +726,10 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             reconcile,
         } => {
             let source_reg = ctx.get_reg(source);
+            let item_reg = ctx.get_reg(item_name);
             let _ = ctx.get_reg("splitmap_results");
             ctx.push(Instruction::SplitMap {
+                item_reg,
                 item_name: item_name.clone(),
                 mode: mode.clone(),
                 source: source_reg,
@@ -949,16 +972,37 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             body,
         } => {
             let source_reg = lower_expression(ctx, source);
+            let start_pc = ctx.instructions.len();
+            let cond_reg = ctx.alloc_reg();
+            let item_reg = ctx.get_reg(item_name);
+
             ctx.push(Instruction::ForStep {
+                dest_cond: cond_reg,
+                item_reg,
                 item_name: item_name.clone(),
                 source: source_reg,
                 step_ms: *step_ms,
             });
-            let _ = ctx.get_reg(item_name);
+
+            let jump_to_end_idx = ctx.instructions.len();
+            ctx.push(Instruction::JumpIfNot {
+                cond: cond_reg,
+                target: 0,
+            });
+
             for s in body {
                 lower_spanned(ctx, s);
             }
+
             ctx.push(Instruction::EndForStep);
+            ctx.push(Instruction::Jump { target: start_pc });
+
+            let end_pc = ctx.instructions.len();
+            if let Instruction::JumpIfNot { ref mut target, .. } =
+                ctx.instructions[jump_to_end_idx]
+            {
+                *target = end_pc;
+            }
         }
         Statement::If {
             binding,
