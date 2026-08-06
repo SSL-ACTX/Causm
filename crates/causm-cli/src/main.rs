@@ -16,7 +16,8 @@ fn usage(program: &str) {
     eprintln!("\x1b[1mOptions:\x1b[0m");
     eprintln!("  \x1b[36m--check\x1b[0m                 Perform semantic & entropic analysis only");
     eprintln!("  \x1b[36m--run\x1b[0m                   Execute program after analysis (default)");
-    eprintln!("  \x1b[36m--dump <ast|ir|cfg|ssa>\x1b[0m Print compiler representation and continue");
+    eprintln!("  \x1b[36m--dump <format>\x1b[0m         Print compiler representation and continue");
+    eprintln!("                          Formats: ast, ir, cfg, cfg-dot, ssa, ssa-opt, ssa-dot, ssa-dot-opt");
     eprintln!("  \x1b[36m--trace-entropy\x1b[0m         Trace entropic state transitions during execution");
     eprintln!("  \x1b[36m--dump-causal-history\x1b[0m   Print causal trace events after execution");
     eprintln!("  \x1b[36m--help\x1b[0m                  Display this help message");
@@ -85,7 +86,11 @@ fn main() -> anyhow::Result<()> {
     let mut dump_ast = false;
     let mut dump_ir = false;
     let mut dump_cfg = false;
+    let mut dump_cfg_dot = false;
     let mut dump_ssa = false;
+    let mut dump_ssa_opt = false;
+    let mut dump_ssa_dot = false;
+    let mut dump_ssa_dot_opt = false;
     let mut trace_entropy = false;
     let mut dump_causal_history = false;
 
@@ -111,16 +116,20 @@ fn main() -> anyhow::Result<()> {
                     "ast" => dump_ast = true,
                     "ir" => dump_ir = true,
                     "cfg" => dump_cfg = true,
+                    "cfg-dot" => dump_cfg_dot = true,
                     "ssa" => dump_ssa = true,
+                    "ssa-opt" => dump_ssa_opt = true,
+                    "ssa-dot" => dump_ssa_dot = true,
+                    "ssa-dot-opt" => dump_ssa_dot_opt = true,
                     other => {
-                        eprintln!("\x1b[1;31merror:\x1b[0m Unknown dump format '{}'. Valid formats are: ast, ir, cfg, ssa.", other);
+                        eprintln!("\x1b[1;31merror:\x1b[0m Unknown dump format '{}'. Valid formats are: ast, ir, cfg, cfg-dot, ssa, ssa-opt, ssa-dot, ssa-dot-opt.", other);
                         std::process::exit(1);
                     }
                 }
                 args.remove(0);
                 continue;
             } else {
-                eprintln!("\x1b[1;31merror:\x1b[0m --dump requires a format argument (ast, ir, cfg, ssa).");
+                eprintln!("\x1b[1;31merror:\x1b[0m --dump requires a format argument (ast, ir, cfg, cfg-dot, ssa, ssa-opt, ssa-dot, ssa-dot-opt).");
                 std::process::exit(1);
             }
         }
@@ -139,8 +148,28 @@ fn main() -> anyhow::Result<()> {
             args.remove(0);
             continue;
         }
+        if arg == "--dump-cfg-dot" {
+            dump_cfg_dot = true;
+            args.remove(0);
+            continue;
+        }
         if arg == "--dump-ssa" {
             dump_ssa = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-ssa-opt" {
+            dump_ssa_opt = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-ssa-dot" {
+            dump_ssa_dot = true;
+            args.remove(0);
+            continue;
+        }
+        if arg == "--dump-ssa-dot-opt" {
+            dump_ssa_dot_opt = true;
             args.remove(0);
             continue;
         }
@@ -252,6 +281,95 @@ fn main() -> anyhow::Result<()> {
                 let ssa_cfg = transformer.transform();
                 println!("  \x1b[1;33mBlock @{}\x1b[0m:", block.time);
                 println!("{}", ssa_cfg);
+            }
+        }
+
+        if dump_cfg_dot {
+            let ir_program = lower::lower_program(&program);
+            println!("\x1b[1;35mCFG DOT for {}:\x1b[0m", path.display());
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                println!("// Routine {}", name);
+                println!("{}", cfg.to_dot());
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                println!("// Block @{}", block.time);
+                println!("{}", cfg.to_dot());
+            }
+        }
+
+        if dump_ssa_opt {
+            let mut ir_program = lower::lower_program(&program);
+            ir_program = causm_ir::optimize::optimize_program(ir_program);
+            println!("\x1b[1;35mOptimized SSA CFG for {}:\x1b[0m", path.display());
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("  \x1b[1;33mRoutine {}\x1b[0m:", name);
+                println!("{}", ssa_cfg);
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("  \x1b[1;33mBlock @{}\x1b[0m:", block.time);
+                println!("{}", ssa_cfg);
+            }
+        }
+
+        if dump_ssa_dot {
+            let ir_program = lower::lower_program(&program);
+            println!("\x1b[1;35mSSA CFG DOT for {}:\x1b[0m", path.display());
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("// Routine {}", name);
+                println!("{}", ssa_cfg.to_dot());
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("// Block @{}", block.time);
+                println!("{}", ssa_cfg.to_dot());
+            }
+        }
+
+        if dump_ssa_dot_opt {
+            let mut ir_program = lower::lower_program(&program);
+            ir_program = causm_ir::optimize::optimize_program(ir_program);
+            println!(
+                "\x1b[1;35mOptimized SSA CFG DOT for {}:\x1b[0m",
+                path.display()
+            );
+            for (name, routine) in &ir_program.routines {
+                let cfg = causm_ir::cfg::CFG::from_flat_instructions(
+                    &routine.instructions,
+                );
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("// Routine {}", name);
+                println!("{}", ssa_cfg.to_dot());
+            }
+            for block in &ir_program.blocks {
+                let cfg =
+                    causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
+                let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
+                let ssa_cfg = transformer.transform();
+                println!("// Block @{}", block.time);
+                println!("{}", ssa_cfg.to_dot());
             }
         }
 

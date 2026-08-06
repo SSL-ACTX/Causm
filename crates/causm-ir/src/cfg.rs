@@ -298,6 +298,105 @@ impl CFG {
             original_pc_to_block_id,
         }
     }
+
+    pub fn to_dot(&self) -> String {
+        let mut dot = String::new();
+        dot.push_str("digraph CFG {\n");
+        dot.push_str("  node [shape=box, fontname=\"Courier\"];\n");
+
+        let mut block_ids: Vec<&BlockId> = self.blocks.keys().collect();
+        block_ids.sort();
+
+        for &id in &block_ids {
+            let block = &self.blocks[id];
+            let mut label = format!("Block {}\\n", id);
+            for instr in &block.instructions {
+                let clean_instr = format!("{:?}", instr)
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n");
+                label.push_str(&format!("  {}\\n", clean_instr));
+            }
+            let clean_term = format!("{:?}", block.terminator)
+                .replace('"', "\\\"")
+                .replace('\n', "\\n");
+            label.push_str(&format!("  Terminator: {}\\n", clean_term));
+
+            dot.push_str(&format!("  block_{} [label=\"{}\"];\n", id, label));
+
+            match &block.terminator {
+                Terminator::Jump { target } => {
+                    dot.push_str(&format!("  block_{} -> block_{};\n", id, target));
+                }
+                Terminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    dot.push_str(&format!(
+                        "  block_{} -> block_{} [label=\"then\"];\n",
+                        id, then_block
+                    ));
+                    dot.push_str(&format!(
+                        "  block_{} -> block_{} [label=\"else\"];\n",
+                        id, else_block
+                    ));
+                }
+                Terminator::MatchEntropy {
+                    valid_block,
+                    decayed_block,
+                    pending_block,
+                    consumed_block,
+                    ..
+                } => {
+                    if let Some(t) = valid_block {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"valid\"];\n",
+                            id, t
+                        ));
+                    }
+                    if let Some(t) = decayed_block {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"decayed\"];\n",
+                            id, t
+                        ));
+                    }
+                    if let Some(t) = pending_block {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"pending\"];\n",
+                            id, t
+                        ));
+                    }
+                    if let Some(t) = consumed_block {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"consumed\"];\n",
+                            id, t
+                        ));
+                    }
+                }
+                Terminator::Select {
+                    cases,
+                    timeout_block,
+                    ..
+                } => {
+                    for case in cases {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"case {}\"];\n",
+                            id, case.target_block, case.chan_id
+                        ));
+                    }
+                    if let Some(t) = timeout_block {
+                        dot.push_str(&format!(
+                            "  block_{} -> block_{} [label=\"timeout\"];\n",
+                            id, t
+                        ));
+                    }
+                }
+                Terminator::Return { .. } | Terminator::Unreachable => {}
+            }
+        }
+        dot.push_str("}\n");
+        dot
+    }
 }
 
 impl std::fmt::Display for CFG {

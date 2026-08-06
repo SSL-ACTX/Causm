@@ -26,8 +26,8 @@ This document outlines the core architectural constraints, design patterns, deve
 ## 2. Rust Codebase Rules
 
 ### 2.1 Fast Feedback Loop (Compile Limits)
-*   **Parallel Compilation Limit:** If executing on Termux or other resource-constrained host environments, limit cargo processes to 4 jobs (`-j 4`) (e.g., `cargo check -j 4`, `cargo test -j 4`) to prevent CPU exhaustion. On standard developer environments, do NOT use `-j` limits.
-*   **Dev Mode Speed:** Utilize `cargo check` (optionally with `-j 2` if on Termux) for fast feedback during iteration. Only invoke the full `cargo test` suite when modifications are stable and ready for validation.
+*   **Parallel Compilation Limit:** If executing on Termux or other resource-constrained host environments, limit cargo processes to 3 jobs (`-j 3`) (e.g., `cargo check -j 3`, `cargo test -j 3`) to prevent CPU exhaustion. On standard developer environments, do NOT use `-j` limits.
+*   **Dev Mode Speed:** Utilize `cargo check` (optionally with `-j 3` if on Termux) for fast feedback during iteration. Only invoke the full `cargo test` suite when modifications are stable and ready for validation.
 
 ### 2.2 Zero Warnings Policy
 *   **Clean Builds:** We maintain a strict zero-warning policy. All unused imports, variables, and dead code must be resolved or removed before committing.

@@ -159,11 +159,11 @@ Potential additions:
 
 ## Pretty Printer
 
-- [ ] Reduce SSA verbosity.
-- [ ] Collapse trivial copy chains.
-- [ ] Print constants inline when possible.
-- [ ] Optional "optimized SSA" dump after cleanup passes.
-- [ ] Optional CFG visualization.
+- [x] Reduce SSA verbosity.
+- [x] Collapse trivial copy chains.
+- [x] Print constants inline when possible.
+- [x] Optional "optimized SSA" dump after cleanup passes.
+- [x] Optional CFG visualization.
 
 ---
 
