@@ -96,6 +96,25 @@ pub enum SsaInstruction {
     LoadNull {
         dest: SsaReg,
     },
+    ConstInt {
+        dest: SsaReg,
+        value: i64,
+    },
+    ConstFloat {
+        dest: SsaReg,
+        value: u64,
+    },
+    ConstBool {
+        dest: SsaReg,
+        value: bool,
+    },
+    ConstString {
+        dest: SsaReg,
+        value: String,
+    },
+    ConstNull {
+        dest: SsaReg,
+    },
     Move {
         dest: SsaReg,
         src: SsaReg,
@@ -958,6 +977,60 @@ impl SsaTransformer {
                     },
                 }
             }
+            Instruction::ConstInt { dest, value } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConstInt {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    value: *value,
+                }
+            }
+            Instruction::ConstFloat { dest, value } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConstFloat {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    value: *value,
+                }
+            }
+            Instruction::ConstBool { dest, value } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConstBool {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    value: *value,
+                }
+            }
+            Instruction::ConstString { dest, value } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConstString {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    value: value.clone(),
+                }
+            }
+            Instruction::ConstNull { dest } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConstNull {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                }
+            }
             Instruction::Move { dest, src } => {
                 let src_ver = self.current_version(src.0);
                 let dest_ver = self.next_version(dest.0);
@@ -1551,6 +1624,11 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::LoadBool { dest, .. } => f(*dest),
         Instruction::LoadString { dest, .. } => f(*dest),
         Instruction::LoadNull { dest } => f(*dest),
+        Instruction::ConstInt { dest, .. } => f(*dest),
+        Instruction::ConstFloat { dest, .. } => f(*dest),
+        Instruction::ConstBool { dest, .. } => f(*dest),
+        Instruction::ConstString { dest, .. } => f(*dest),
+        Instruction::ConstNull { dest } => f(*dest),
         Instruction::Move { dest, .. } => f(*dest),
         Instruction::Clone { dest, .. } => f(*dest),
         Instruction::Call { dest, .. } => f(*dest),

@@ -9,6 +9,11 @@ pub(crate) fn get_ssa_dest_reg(instr: &SsaInstruction) -> Option<SsaReg> {
         | SsaInstruction::LoadBool { dest, .. }
         | SsaInstruction::LoadString { dest, .. }
         | SsaInstruction::LoadNull { dest }
+        | SsaInstruction::ConstInt { dest, .. }
+        | SsaInstruction::ConstFloat { dest, .. }
+        | SsaInstruction::ConstBool { dest, .. }
+        | SsaInstruction::ConstString { dest, .. }
+        | SsaInstruction::ConstNull { dest }
         | SsaInstruction::Move { dest, .. }
         | SsaInstruction::Clone { dest, .. }
         | SsaInstruction::Call { dest, .. }
@@ -170,6 +175,11 @@ pub(crate) fn has_side_effects(instr: &SsaInstruction) -> bool {
             | SsaInstruction::LoadBool { .. }
             | SsaInstruction::LoadString { .. }
             | SsaInstruction::LoadNull { .. }
+            | SsaInstruction::ConstInt { .. }
+            | SsaInstruction::ConstFloat { .. }
+            | SsaInstruction::ConstBool { .. }
+            | SsaInstruction::ConstString { .. }
+            | SsaInstruction::ConstNull { .. }
             | SsaInstruction::Move { .. }
             | SsaInstruction::Clone { .. }
             | SsaInstruction::StructLit { .. }

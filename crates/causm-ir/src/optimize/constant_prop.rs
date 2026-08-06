@@ -142,7 +142,8 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
         for block in ssa_cfg.blocks.values() {
             for inst in &block.instructions {
                 match inst {
-                    SsaInstruction::LoadInt { dest, value } => {
+                    SsaInstruction::LoadInt { dest, value }
+                    | SsaInstruction::ConstInt { dest, value } => {
                         if constants
                             .insert(*dest, SsaConstant::Int(*value))
                             .is_none()
@@ -150,7 +151,8 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                             changed = true;
                         }
                     }
-                    SsaInstruction::LoadFloat { dest, value } => {
+                    SsaInstruction::LoadFloat { dest, value }
+                    | SsaInstruction::ConstFloat { dest, value } => {
                         if constants
                             .insert(*dest, SsaConstant::Float(*value))
                             .is_none()
@@ -158,7 +160,8 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                             changed = true;
                         }
                     }
-                    SsaInstruction::LoadBool { dest, value } => {
+                    SsaInstruction::LoadBool { dest, value }
+                    | SsaInstruction::ConstBool { dest, value } => {
                         if constants
                             .insert(*dest, SsaConstant::Bool(*value))
                             .is_none()
@@ -166,7 +169,8 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                             changed = true;
                         }
                     }
-                    SsaInstruction::LoadString { dest, value } => {
+                    SsaInstruction::LoadString { dest, value }
+                    | SsaInstruction::ConstString { dest, value } => {
                         if constants
                             .insert(*dest, SsaConstant::String(value.clone()))
                             .is_none()
@@ -174,7 +178,8 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                             changed = true;
                         }
                     }
-                    SsaInstruction::LoadNull { dest } => {
+                    SsaInstruction::LoadNull { dest }
+                    | SsaInstruction::ConstNull { dest } => {
                         if constants.insert(*dest, SsaConstant::Null).is_none() {
                             changed = true;
                         }
@@ -391,4 +396,52 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
     }
 
     any_modified
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cfg::{BasicBlock, Terminator, CFG};
+    use crate::Instruction;
+    use crate::Reg;
+
+    #[test]
+    fn test_dedicated_const_instructions_propagation() {
+        let instrs = vec![
+            Instruction::ConstInt {
+                dest: Reg(1),
+                value: 10,
+            },
+            Instruction::ConstInt {
+                dest: Reg(2),
+                value: 20,
+            },
+            Instruction::BinaryOp {
+                dest: Reg(3),
+                op: causm_core::BinaryOperator::Add,
+                left: Reg(1),
+                right: Reg(2),
+            },
+            Instruction::ConstString {
+                dest: Reg(4),
+                value: "hello".to_string(),
+            },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = crate::ssa::SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        let modified = constant_propagation(&mut ssa_cfg);
+        assert!(modified);
+
+        let entry = ssa_cfg.blocks.get(&ssa_cfg.entry_block).unwrap();
+        // The binary op adding 10 + 20 should be folded into ConstInt 30 or LoadInt 30
+        let has_folded_add = entry.instructions.iter().any(|i| match i {
+            SsaInstruction::LoadInt { value: 30, .. }
+            | SsaInstruction::ConstInt { value: 30, .. } => true,
+            _ => false,
+        });
+        assert!(has_folded_add);
+    }
 }

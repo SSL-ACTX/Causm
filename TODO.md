@@ -46,12 +46,12 @@
 
 ## Constants
 
-- [ ] Consider introducing dedicated constant instructions.
+- [x] Consider introducing dedicated constant instructions.
   - `ConstInt`
   - `ConstBool`
   - `ConstFloat`
   - `ConstString`
-  instead of generic `Load*` followed by `Move`.
+  - `ConstNull`
 
 ---
 

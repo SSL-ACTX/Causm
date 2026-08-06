@@ -54,6 +54,25 @@ macro_rules! instructions {
             LoadNull {
                 dest: $crate::Reg
             },
+            ConstInt {
+                dest: $crate::Reg,
+                value: i64
+            },
+            ConstFloat {
+                dest: $crate::Reg,
+                value: u64
+            },
+            ConstBool {
+                dest: $crate::Reg,
+                value: bool
+            },
+            ConstString {
+                dest: $crate::Reg,
+                value: String
+            },
+            ConstNull {
+                dest: $crate::Reg
+            },
             Move {
                 dest: $crate::Reg,
                 src: $crate::Reg

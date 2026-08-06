@@ -199,6 +199,25 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         SsaInstruction::LoadNull { dest } => Instruction::LoadNull {
             dest: ssa_reg_to_reg(*dest),
         },
+        SsaInstruction::ConstInt { dest, value } => Instruction::ConstInt {
+            dest: ssa_reg_to_reg(*dest),
+            value: *value,
+        },
+        SsaInstruction::ConstFloat { dest, value } => Instruction::ConstFloat {
+            dest: ssa_reg_to_reg(*dest),
+            value: *value,
+        },
+        SsaInstruction::ConstBool { dest, value } => Instruction::ConstBool {
+            dest: ssa_reg_to_reg(*dest),
+            value: *value,
+        },
+        SsaInstruction::ConstString { dest, value } => Instruction::ConstString {
+            dest: ssa_reg_to_reg(*dest),
+            value: value.clone(),
+        },
+        SsaInstruction::ConstNull { dest } => Instruction::ConstNull {
+            dest: ssa_reg_to_reg(*dest),
+        },
         SsaInstruction::Move { dest, src } => Instruction::Move {
             dest: ssa_reg_to_reg(*dest),
             src: ssa_reg_to_reg(*src),

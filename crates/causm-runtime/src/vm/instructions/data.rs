@@ -65,6 +65,50 @@ impl Vm {
         self.insert_reg(branch_id, dest.0, EntropicState::Valid(Payload::Null))
     }
 
+    pub(crate) fn ConstInt(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: i64,
+    ) -> Result<(), TemporalError> {
+        self.LoadInt(branch_id, dest, value)
+    }
+
+    pub(crate) fn ConstFloat(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: u64,
+    ) -> Result<(), TemporalError> {
+        self.LoadFloat(branch_id, dest, value)
+    }
+
+    pub(crate) fn ConstBool(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: bool,
+    ) -> Result<(), TemporalError> {
+        self.LoadBool(branch_id, dest, value)
+    }
+
+    pub(crate) fn ConstString(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: String,
+    ) -> Result<(), TemporalError> {
+        self.LoadString(branch_id, dest, value)
+    }
+
+    pub(crate) fn ConstNull(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+    ) -> Result<(), TemporalError> {
+        self.LoadNull(branch_id, dest)
+    }
+
     pub(crate) fn Move(
         &mut self,
         branch_id: &str,
