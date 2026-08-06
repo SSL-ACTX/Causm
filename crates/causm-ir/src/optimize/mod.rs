@@ -2,6 +2,7 @@ pub mod coalescing;
 pub mod constant_prop;
 pub mod copy_prop;
 pub mod dead_code;
+pub mod entropy;
 pub(crate) mod utils;
 
 #[cfg(test)]
@@ -16,11 +17,13 @@ use coalescing::BlockCoalescingPass;
 use constant_prop::ConstantPropagationPass;
 use copy_prop::CopyPropagationPass;
 use dead_code::DeadCodeEliminationPass;
+use entropy::EntropyOptimizationPass;
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     let mut manager = PassManager::new();
     manager.add_pass(Box::new(ConstantPropagationPass));
     manager.add_pass(Box::new(CopyPropagationPass));
+    manager.add_pass(Box::new(EntropyOptimizationPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));
 

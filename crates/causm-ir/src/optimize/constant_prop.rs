@@ -401,7 +401,7 @@ fn constant_propagation(ssa_cfg: &mut SsaCFG) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cfg::{BasicBlock, Terminator, CFG};
+    use crate::cfg::CFG;
     use crate::Instruction;
     use crate::Reg;
 

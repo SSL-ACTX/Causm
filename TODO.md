@@ -98,9 +98,9 @@ These preserve semantic information that would otherwise disappear.
 
 Possible additions:
 
-- [ ] Entropy propagation analysis.
-- [ ] Dead entropy-state elimination.
-- [ ] Detect redundant `MatchEntropy`.
+- [x] Entropy propagation analysis.
+- [x] Dead entropy-state elimination.
+- [x] Detect redundant `MatchEntropy`.
 
 ---
 
