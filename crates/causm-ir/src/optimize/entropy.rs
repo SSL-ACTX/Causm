@@ -49,6 +49,40 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
                 SsaInstruction::Consume { src } => {
                     known_consumed.insert(*src);
                 }
+                SsaInstruction::ConsumeField { src, .. } => {
+                    known_consumed.insert(*src);
+                }
+                SsaInstruction::ConsumeFieldDynamic { target, .. } => {
+                    known_consumed.insert(*target);
+                }
+                SsaInstruction::FieldUpdate { target, .. } => {
+                    known_consumed.insert(*target);
+                }
+                SsaInstruction::IndexFieldUpdate { target, .. } => {
+                    known_consumed.insert(*target);
+                }
+                SsaInstruction::ChanSend { src, .. } => {
+                    known_consumed.insert(*src);
+                }
+                SsaInstruction::For { source, .. } => {
+                    known_consumed.insert(*source);
+                }
+                SsaInstruction::ForStep { source, .. } => {
+                    known_consumed.insert(*source);
+                }
+                SsaInstruction::SplitMap { source, .. } => {
+                    known_consumed.insert(*source);
+                }
+                SsaInstruction::Call { args, .. } => {
+                    for arg in args {
+                        known_consumed.insert(*arg);
+                    }
+                }
+                SsaInstruction::DynamicCall { args, .. } => {
+                    for arg in args {
+                        known_consumed.insert(*arg);
+                    }
+                }
                 _ => {}
             }
         }
@@ -81,13 +115,15 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
             }
 
             // 2. Fold known state targets
-            if known_valid.contains(target) {
+            if known_valid.contains(target) && !known_consumed.contains(target) {
                 if let Some(vt) = valid_block {
                     block.terminator = SsaTerminator::Jump { target: *vt };
                     changed = true;
                     continue;
                 }
-            } else if known_consumed.contains(target) {
+            } else if known_consumed.contains(target)
+                && !known_valid.contains(target)
+            {
                 if let Some(ct) = consumed_block {
                     block.terminator = SsaTerminator::Jump { target: *ct };
                     changed = true;

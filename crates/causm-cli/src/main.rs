@@ -8,28 +8,68 @@ use std::fs;
 use std::path::PathBuf;
 
 fn usage(program: &str) {
+    eprintln!("\x1b[1;36mCausm Runtime Environment\x1b[0m v0.1.0");
     eprintln!(
-        "Usage: {} [--check] [--run] [--dump ast/ir/cfg/ssa] [--trace-entropy] [--dump-causal-history] <file1.csm> [file2.csm ...]",
+        "\x1b[1;33mUsage:\x1b[0m {} [options] <file1.csm> [file2.csm ...]\n",
         program
     );
-    eprintln!("  --check                Perform semantic analysis only");
-    eprintln!("  --run                  Execute program after analysis (default)");
-    eprintln!("  --dump <format>        Print compiler representation (ast, ir, cfg, ssa) and continue");
-    eprintln!(
-        "  --trace-entropy        Show entropic decay map after every instruction"
-    );
-    eprintln!("  --dump-causal-history  Print the causal trace events at the end of execution");
+    eprintln!("\x1b[1mOptions:\x1b[0m");
+    eprintln!("  \x1b[36m--check\x1b[0m                 Perform semantic & entropic analysis only");
+    eprintln!("  \x1b[36m--run\x1b[0m                   Execute program after analysis (default)");
+    eprintln!("  \x1b[36m--dump <ast|ir|cfg|ssa>\x1b[0m Print compiler representation and continue");
+    eprintln!("  \x1b[36m--trace-entropy\x1b[0m         Trace entropic state transitions during execution");
+    eprintln!("  \x1b[36m--dump-causal-history\x1b[0m   Print causal trace events after execution");
+    eprintln!("  \x1b[36m--help\x1b[0m                  Display this help message");
 }
 
 fn format_entropic_state(state: &EntropicState) -> String {
     match state {
-        EntropicState::Valid(p) => format!("{}", p),
+        EntropicState::Valid(p) => format!("\x1b[32m{}\x1b[0m", p),
         EntropicState::Leased { expiration_ms, .. } => {
-            format!("<leased until {}ms>", expiration_ms)
+            format!("\x1b[33m<leased until {}ms>\x1b[0m", expiration_ms)
         }
-        EntropicState::Decayed(_) => "<decayed>".to_string(),
-        EntropicState::Pending(_) => "<pending>".to_string(),
-        EntropicState::Consumed => "Consumed".to_string(),
+        EntropicState::Decayed(_) => "\x1b[90m<decayed>\x1b[0m".to_string(),
+        EntropicState::Pending(_) => "\x1b[35m<pending>\x1b[0m".to_string(),
+        EntropicState::Consumed => "\x1b[31m<consumed>\x1b[0m".to_string(),
+    }
+}
+
+fn format_causal_event(event: &causm_runtime::vm::state::CausalEvent) -> String {
+    use causm_runtime::vm::state::CausalEvent::*;
+    match event {
+        ChannelSend {
+            branch_id,
+            channel_id,
+            payload_id,
+        } => {
+            format!("\x1b[36mChanSend\x1b[0m  branch: \x1b[33m{}\x1b[0m | chan: \x1b[33m{}\x1b[0m | id: #{}", branch_id, channel_id, payload_id)
+        }
+        ChannelRecv {
+            branch_id,
+            channel_id,
+            message,
+        } => {
+            format!("\x1b[32mChanRecv\x1b[0m  branch: \x1b[33m{}\x1b[0m | chan: \x1b[33m{}\x1b[0m | val: {}", branch_id, channel_id, message.payload)
+        }
+        InterBranchMove {
+            source_branch,
+            target_branch,
+            reg,
+            ..
+        } => {
+            format!(
+                "\x1b[35mMove\x1b[0m      {} ➔ {} | R{}",
+                source_branch, target_branch, reg
+            )
+        }
+        Decay {
+            branch_id,
+            reg,
+            field,
+            time,
+        } => {
+            format!("\x1b[31mDecay\x1b[0m     branch: \x1b[33m{}\x1b[0m | R{}.{} at {}ms", branch_id, reg, field, time)
+        }
     }
 }
 
@@ -50,6 +90,10 @@ fn main() -> anyhow::Result<()> {
     let mut dump_causal_history = false;
 
     while let Some(arg) = args.first() {
+        if arg == "--help" || arg == "-h" {
+            usage(&env::args().next().unwrap_or_else(|| "causm".to_string()));
+            std::process::exit(0);
+        }
         if arg == "--check" {
             check_only = true;
             args.remove(0);
@@ -69,16 +113,14 @@ fn main() -> anyhow::Result<()> {
                     "cfg" => dump_cfg = true,
                     "ssa" => dump_ssa = true,
                     other => {
-                        eprintln!("Error: Unknown dump format '{}'. Valid formats are: ast, ir, cfg, ssa.", other);
+                        eprintln!("\x1b[1;31merror:\x1b[0m Unknown dump format '{}'. Valid formats are: ast, ir, cfg, ssa.", other);
                         std::process::exit(1);
                     }
                 }
                 args.remove(0);
                 continue;
             } else {
-                eprintln!(
-                    "Error: --dump requires a format argument (ast, ir, cfg, ssa)."
-                );
+                eprintln!("\x1b[1;31merror:\x1b[0m --dump requires a format argument (ast, ir, cfg, ssa).");
                 std::process::exit(1);
             }
         }
@@ -134,7 +176,7 @@ fn main() -> anyhow::Result<()> {
             Ok(p) => p,
             Err(e) => {
                 eprintln!(
-                    "error: failed to parse {}\n  --> {}\n      {}",
+                    "\x1b[1;31merror: failed to parse {}\x1b[0m\n  \x1b[90m--> {}\x1b[0m\n      {}",
                     path.display(),
                     path.display(),
                     e
@@ -144,7 +186,11 @@ fn main() -> anyhow::Result<()> {
         };
 
         if dump_ast {
-            println!("AST for {}:\n{:#?}", path.display(), program);
+            println!(
+                "\x1b[1;35mAST for {}:\x1b[0m\n{:#?}",
+                path.display(),
+                program
+            );
         }
 
         let mut analyzer = EntropicAnalyzer::new();
@@ -154,7 +200,7 @@ fn main() -> anyhow::Result<()> {
             &path.display().to_string(),
         ) {
             let formatted = analyzer.format_semantic_error(&err);
-            eprintln!("error: {}", formatted);
+            eprintln!("\x1b[1;31merror:\x1b[0m {}", formatted);
             continue;
         }
 
@@ -162,37 +208,41 @@ fn main() -> anyhow::Result<()> {
 
         if dump_ir {
             let ir_program = lower::lower_program(&program);
-            println!("IR for {}:\n{}", path.display(), ir_program);
+            println!(
+                "\x1b[1;35mIR for {}:\x1b[0m\n{}",
+                path.display(),
+                ir_program
+            );
         }
 
         if dump_cfg {
             let ir_program = lower::lower_program(&program);
-            println!("CFG for {}:", path.display());
+            println!("\x1b[1;35mCFG for {}:\x1b[0m", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
                     &routine.instructions,
                 );
-                println!("  Routine {}:", name);
+                println!("  \x1b[1;33mRoutine {}\x1b[0m:", name);
                 println!("{}", cfg);
             }
             for block in &ir_program.blocks {
                 let cfg =
                     causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
-                println!("  Block @{}:", block.time);
+                println!("  \x1b[1;33mBlock @{}\x1b[0m:", block.time);
                 println!("{}", cfg);
             }
         }
 
         if dump_ssa {
             let ir_program = lower::lower_program(&program);
-            println!("SSA CFG for {}:", path.display());
+            println!("\x1b[1;35mSSA CFG for {}:\x1b[0m", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
                     &routine.instructions,
                 );
                 let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
                 let ssa_cfg = transformer.transform();
-                println!("  Routine {}:", name);
+                println!("  \x1b[1;33mRoutine {}\x1b[0m:", name);
                 println!("{}", ssa_cfg);
             }
             for block in &ir_program.blocks {
@@ -200,7 +250,7 @@ fn main() -> anyhow::Result<()> {
                     causm_ir::cfg::CFG::from_flat_instructions(&block.instructions);
                 let transformer = causm_ir::ssa::SsaTransformer::new(cfg);
                 let ssa_cfg = transformer.transform();
-                println!("  Block @{}:", block.time);
+                println!("  \x1b[1;33mBlock @{}\x1b[0m:", block.time);
                 println!("{}", ssa_cfg);
             }
         }
@@ -246,17 +296,21 @@ fn main() -> anyhow::Result<()> {
             }
 
             println!("\x1b[1;32m{}: run ok\x1b[0m", path.display());
-            println!("\x1b[1;36m┌─ Execution Summary ──┐\x1b[0m");
-            println!("\x1b[1;36m│\x1b[0m Global clock:    {}", vm.global_clock);
+            println!("\x1b[1;36mExecution Summary:\x1b[0m");
             println!(
-                "\x1b[1;36m│\x1b[0m Main local clock: {}",
+                "  \x1b[90mGlobal clock:\x1b[0m     \x1b[1;33m{}\x1b[0m",
+                vm.global_clock
+            );
+            println!(
+                "  \x1b[90mMain local clock:\x1b[0m \x1b[1;33m{}\x1b[0m",
                 vm.root_timeline.local_clock
             );
             println!(
-                "\x1b[1;36m│\x1b[0m Arena memory:    {}/{} bytes used",
-                vm.root_timeline.arena.used, vm.root_timeline.arena.capacity
+                "  \x1b[90mArena memory:\x1b[0m     \x1b[1;32m{}/{} bytes used\x1b[0m",
+                vm.root_timeline.arena.used,
+                vm.root_timeline.arena.capacity
             );
-            println!("\x1b[1;36m└──────────────────────┘\x1b[0m");
+
             println!("\x1b[1;35mFinal Arena State:\x1b[0m");
             for (i, state) in vm.root_timeline.arena.registers.iter().enumerate() {
                 if !matches!(state, EntropicState::Consumed) {
@@ -271,7 +325,11 @@ fn main() -> anyhow::Result<()> {
             if dump_causal_history {
                 println!("\x1b[1;35mCausal Trace History:\x1b[0m");
                 for (i, event) in vm.causal_history.iter().enumerate() {
-                    println!("  \x1b[1;30m[{:04}]\x1b[0m {:?}", i, event);
+                    println!(
+                        "  \x1b[1;30m[{:04}]\x1b[0m {}",
+                        i,
+                        format_causal_event(event)
+                    );
                 }
             }
         }
