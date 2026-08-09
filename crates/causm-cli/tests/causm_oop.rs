@@ -3,6 +3,57 @@ use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 
 #[test]
+fn causm_oop_generic_struct() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Buffer<T: Consumable> = struct { capacity: int }
+
+        let b: Buffer<int> = struct { capacity = 100 }
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_method_lease_receiver() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Vault = struct { code: int }
+
+        routine Vault.read_code(lease self for 50ms) -> int (taking 5ms) {
+            let c = self.code
+            yield c
+        }
+
+        let v: Vault = struct { code = 9999 }
+        let c = v.read_code()
+        let _c = c
+        let _v = v
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
 fn causm_oop_basic_method_call() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {

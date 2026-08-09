@@ -65,4 +65,31 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn test_temporal_method_contract_budget_exceeded() -> anyhow::Result<()> {
+        let code = r#"
+@main: {
+  type SensorStream = struct { rate: int }
+
+  routine SensorStream.sample(peek self) -> int (taking 2ms) {
+    let x = self.rate + 1
+    let y = x + 1
+    let z = y + 1
+    yield z
+  }
+}
+"#;
+        let res = run_causm(code);
+        match res {
+            Err(e) => {
+                let err = e.to_string();
+                assert!(err.contains("Routine temporal contract violated"));
+            }
+            Ok(_) => {
+                panic!("Should have failed analysis due to WCET contract violation")
+            }
+        }
+        Ok(())
+    }
 }

@@ -53,14 +53,24 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
 
+            if let Some(p) = inner.peek() {
+                if p.as_rule() == Rule::generic_param_list {
+                    inner.next(); // Consume generic_param_list
+                }
+            }
+
             let mut extends = None;
             if let Some(p) = inner.peek() {
-                if p.as_rule() == Rule::identifier {
-                    extends = Some(p.as_str().to_string());
+                if p.as_rule() == Rule::base_type || p.as_rule() == Rule::identifier
+                {
+                    let text = p.as_str();
+                    let base_name =
+                        text.split('<').next().unwrap_or(text).trim().to_string();
+                    extends = Some(base_name);
                 }
             }
             if extends.is_some() {
-                inner.next(); // Consume the extends identifier
+                inner.next(); // Consume the extends base_type/identifier
             }
 
             let mut decay_after_ms = None;

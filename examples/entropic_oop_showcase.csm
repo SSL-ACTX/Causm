@@ -1,0 +1,81 @@
+@0ms: {
+    // 1. Generic Base Type with Entropic Lifecycle Limit
+    type SecurityNode<T: Consumable> = struct decay_after 1000ms {
+        node_id: int,
+        status: string
+    }
+
+    // 2. Struct Inheritance & Entropic Composition
+    type QuantumVault = SecurityNode<int> + struct {
+        vault_code: int,
+        clearance_level: int
+    }
+
+    // 3. Composed Interface with Default Method
+    interface Encryptable {
+        routine encrypt_payload(peek self) -> int taking 15ms
+    }
+
+    interface AuditNode = Encryptable + interface {
+        routine audit(peek self) -> int taking 10ms {
+            print("Audit log recorded.")
+            let ok = 1
+            yield ok
+        }
+    }
+
+    // 4. Entropic Method Receivers & Temporal Contracts
+    // Leased Receiver method with explicit lease duration and WCET contract
+    routine QuantumVault.inspect_secure(lease self for 100ms) -> int taking 20ms {
+        let code = self.vault_code
+        print("Quantum Vault leased. Decrypted Code: " + code)
+        yield code
+    }
+
+    // Entropic State-Gated Method
+    routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
+        let level = self.clearance_level
+        print("Clearance Verified Level: " + level)
+        yield level
+    }
+
+    // Implement Interface Method
+    routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
+        let code = self.vault_code
+        print("Payload Encrypted successfully.")
+        yield code
+    }
+
+    // Destructive Consuming Method Receiver
+    routine QuantumVault.purge(consume self) taking 15ms {
+        print("Quantum Vault purged and entropic state reclaimed.")
+    }
+
+    // 5. Construct Instance
+    let v: QuantumVault = struct {
+        node_id = 4096,
+        status = "ACTIVE",
+        vault_code = 987654,
+        clearance_level = 5
+    }
+
+    // 6. Execute Leased Method & State-Gated Verification
+    let code = v.inspect_secure()
+    let level = v.verify_clearance()
+
+    // 7. Polymorphic Interface Assignment & Default Method Call
+    let node: AuditNode = v
+    let log_status = node.audit()
+
+    // 8. Downcasting (Guarded Type Assertion)
+    if let target_vault = node.(QuantumVault) {
+        inspect vault_ref = target_vault {
+            let id = vault_ref.node_id
+            print("Downcast successful! Node ID: " + id)
+        }
+        // Satisfy EGC via Destructive Purge
+        target_vault.purge()
+    } else {
+        print("Downcast failed.")
+    }
+}

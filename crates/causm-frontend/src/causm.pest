@@ -74,11 +74,12 @@ fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ method_name ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ "{" ~ statement* ~ "}" }
+routine_stmt = { "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ "{" ~ statement* ~ "}" }
+method_receiver = { param_mode ~ "self" ~ ("for" ~ amount ~ "ms")? }
 method_name = { identifier ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode ~ identifier ~ type_annotation? }
-param_mode = { "consume" | "clone" | "decay" | "peek" }
+param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" }
 return_annotation = { "->" ~ type_name }
 
 select_stmt = { "select" ~ duration_limit ~ "{" ~ select_case* ~ timeout_clause? ~ "}" ~ reconcile_clause? }
@@ -210,7 +211,9 @@ type_field = { "const"? ~ identifier ~ ":" ~ type_name ~ ("=" ~ expression)? }
 type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
-type_decl = { "type" ~ identifier ~ "=" ~ (identifier ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
+generic_param = { identifier ~ (":" ~ identifier)? }
+generic_param_list = { "<" ~ generic_param ~ ("," ~ generic_param)* ~ ">" }
+type_decl = { "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
 interface_decl = { "interface" ~ identifier ~ ("=" ~ interface_sum)? ~ ("{" ~ interface_method* ~ "}")? }
 interface_sum = { interface_term ~ ("+" ~ interface_term)* }
 interface_term = { "interface" ~ "{" ~ interface_method* ~ "}" | identifier }

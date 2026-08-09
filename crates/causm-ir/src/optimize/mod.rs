@@ -7,8 +7,8 @@ pub mod copy_prop;
 pub mod dead_code;
 pub mod entropy;
 pub mod lease;
-pub mod verifier;
 pub(crate) mod utils;
+pub mod verifier;
 
 #[cfg(test)]
 mod tests;

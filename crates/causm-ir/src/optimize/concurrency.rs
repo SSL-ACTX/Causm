@@ -1,5 +1,5 @@
-use crate::ssa::{SsaCFG, SsaInstruction};
 use crate::optimize::OptimizationPass;
+use crate::ssa::{SsaCFG, SsaInstruction};
 use std::collections::{HashMap, HashSet};
 
 /// Concurrency analysis pass.
@@ -8,14 +8,8 @@ pub struct ConcurrencyAnalysisPass;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConcurrencyError {
-    UnmergedBranch {
-        branch: String,
-        parent: String,
-    },
-    MismatchedMerge {
-        branch: String,
-        target: String,
-    },
+    UnmergedBranch { branch: String, parent: String },
+    MismatchedMerge { branch: String, target: String },
 }
 
 impl OptimizationPass for ConcurrencyAnalysisPass {
@@ -31,7 +25,10 @@ impl OptimizationPass for ConcurrencyAnalysisPass {
     ) -> bool {
         if let Err(errors) = analyze_concurrency(ssa_cfg) {
             for err in errors {
-                eprintln!("\x1b[1;33m[concurrency-verifier warning]\x1b[0m {:?}", err);
+                eprintln!(
+                    "\x1b[1;33m[concurrency-verifier warning]\x1b[0m {:?}",
+                    err
+                );
             }
         }
         false
@@ -51,7 +48,9 @@ pub fn analyze_concurrency(ssa_cfg: &SsaCFG) -> Result<(), Vec<ConcurrencyError>
                         .or_default()
                         .extend(branches.clone());
                 }
-                SsaInstruction::Merge { branches, target, .. } => {
+                SsaInstruction::Merge {
+                    branches, target, ..
+                } => {
                     for branch in branches {
                         if let Some(active) = active_splits.get_mut(target) {
                             if !active.remove(branch) {

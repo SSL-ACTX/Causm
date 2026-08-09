@@ -82,8 +82,30 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
 
             for current in inner {
                 match current.as_rule() {
-                    Rule::param_decl_list => {
-                        for p in current.into_inner() {
+                    Rule::method_receiver => {
+                        let mut decl = current.into_inner();
+                        if let Some(mode) = decl.next() {
+                            let mode = match mode.as_str() {
+                                "consume" => ParamMode::Consume,
+                                "clone" => ParamMode::Clone,
+                                "decay" => ParamMode::Decay,
+                                _ => ParamMode::Peek,
+                            };
+                            params.push(ParamDecl {
+                                mode,
+                                name: "self".to_string(),
+                                typ: None,
+                            });
+                        }
+                    }
+                    Rule::param_decl | Rule::param_decl_list => {
+                        let pairs_to_process: Vec<_> =
+                            if current.as_rule() == Rule::param_decl {
+                                vec![current]
+                            } else {
+                                current.into_inner().collect()
+                            };
+                        for p in pairs_to_process {
                             let mut decl = p.into_inner();
                             if let Some(mode) = decl.next() {
                                 if let Some(param_name) = decl.next() {

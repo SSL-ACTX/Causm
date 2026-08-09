@@ -1,5 +1,5 @@
-use crate::ssa::{SsaCFG, SsaInstruction};
 use crate::optimize::OptimizationPass;
+use crate::ssa::{SsaCFG, SsaInstruction};
 use std::collections::HashSet;
 
 /// Lease optimization pass.
@@ -44,24 +44,26 @@ impl OptimizationPass for LeaseOptimizationPass {
         let mut changed = false;
         for block in ssa_cfg.blocks.values_mut() {
             let before_len = block.instructions.len();
-            block.instructions.retain(|instr| {
-                match instr {
-                    SsaInstruction::Lease { target_reg, duration_ms, .. } => {
-                        if *duration_ms == 0 || !used_regs.contains(&target_reg.reg) {
-                            false
-                        } else {
-                            true
-                        }
+            block.instructions.retain(|instr| match instr {
+                SsaInstruction::Lease {
+                    target_reg,
+                    duration_ms,
+                    ..
+                } => {
+                    if *duration_ms == 0 || !used_regs.contains(&target_reg.reg) {
+                        false
+                    } else {
+                        true
                     }
-                    SsaInstruction::EndLease { duration_ms, .. } => {
-                        if *duration_ms == 0 {
-                            false
-                        } else {
-                            true
-                        }
-                    }
-                    _ => true,
                 }
+                SsaInstruction::EndLease { duration_ms, .. } => {
+                    if *duration_ms == 0 {
+                        false
+                    } else {
+                        true
+                    }
+                }
+                _ => true,
             });
             if block.instructions.len() != before_len {
                 changed = true;

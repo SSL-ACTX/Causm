@@ -41,6 +41,24 @@ pub enum EntropicState {
     Consumed,
 }
 
+impl EntropicState {
+    pub fn is_readable(&self) -> bool {
+        !matches!(self, EntropicState::Consumed)
+    }
+
+    pub fn is_consumed(&self) -> bool {
+        matches!(self, EntropicState::Consumed)
+    }
+
+    pub fn is_leased(&self) -> bool {
+        matches!(self, EntropicState::Leased { .. })
+    }
+
+    pub fn can_mutate(&self) -> bool {
+        !matches!(self, EntropicState::Consumed | EntropicState::Leased { .. })
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Payload {

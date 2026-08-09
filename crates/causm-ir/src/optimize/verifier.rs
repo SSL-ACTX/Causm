@@ -1,6 +1,6 @@
 use crate::cfg::BlockId;
-use crate::ssa::{SsaCFG, SsaInstruction, SsaTerminator};
 use crate::optimize::OptimizationPass;
+use crate::ssa::{SsaCFG, SsaInstruction, SsaTerminator};
 use std::collections::{HashMap, HashSet};
 
 /// Verification pass for SSA invariants and temporal rules.
@@ -8,18 +8,9 @@ pub struct VerifierPass;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VerificationError {
-    InvalidDominance {
-        block: BlockId,
-        reg: u32,
-    },
-    InvalidPhiPredecessor {
-        block: BlockId,
-        pred: BlockId,
-    },
-    UnbalancedTemporalBlock {
-        block: BlockId,
-        reason: String,
-    },
+    InvalidDominance { block: BlockId, reg: u32 },
+    InvalidPhiPredecessor { block: BlockId, pred: BlockId },
+    UnbalancedTemporalBlock { block: BlockId, reason: String },
 }
 
 impl OptimizationPass for VerifierPass {
@@ -58,15 +49,30 @@ fn get_ssa_terminator_successors(term: &SsaTerminator) -> Vec<BlockId> {
             ..
         } => {
             let mut succs = Vec::new();
-            if let Some(b) = valid_block { succs.push(*b); }
-            if let Some(b) = decayed_block { succs.push(*b); }
-            if let Some(b) = pending_block { succs.push(*b); }
-            if let Some(b) = consumed_block { succs.push(*b); }
+            if let Some(b) = valid_block {
+                succs.push(*b);
+            }
+            if let Some(b) = decayed_block {
+                succs.push(*b);
+            }
+            if let Some(b) = pending_block {
+                succs.push(*b);
+            }
+            if let Some(b) = consumed_block {
+                succs.push(*b);
+            }
             succs
         }
-        SsaTerminator::Select { cases, timeout_block, .. } => {
-            let mut succs: Vec<BlockId> = cases.iter().map(|c| c.target as BlockId).collect();
-            if let Some(b) = timeout_block { succs.push(*b); }
+        SsaTerminator::Select {
+            cases,
+            timeout_block,
+            ..
+        } => {
+            let mut succs: Vec<BlockId> =
+                cases.iter().map(|c| c.target as BlockId).collect();
+            if let Some(b) = timeout_block {
+                succs.push(*b);
+            }
             succs
         }
         SsaTerminator::Return { .. } | SsaTerminator::Unreachable => Vec::new(),

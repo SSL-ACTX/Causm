@@ -1,5 +1,5 @@
-use crate::ssa::{SsaCFG, SsaInstruction, SsaTerminator};
 use crate::optimize::OptimizationPass;
+use crate::ssa::{SsaCFG, SsaInstruction, SsaTerminator};
 use std::collections::HashSet;
 
 /// Channel liveness analysis & dead channel elimination pass.

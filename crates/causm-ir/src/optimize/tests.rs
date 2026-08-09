@@ -226,7 +226,9 @@ mod tests {
 
     #[test]
     fn test_concurrency_analysis_unmerged_branch() {
-        use crate::optimize::concurrency::{analyze_concurrency, ConcurrencyAnalysisPass, ConcurrencyError};
+        use crate::optimize::concurrency::{
+            analyze_concurrency, ConcurrencyAnalysisPass, ConcurrencyError,
+        };
 
         let instrs = vec![
             Instruction::Split {
