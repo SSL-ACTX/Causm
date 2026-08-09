@@ -1,10 +1,12 @@
 pub mod cfg_simp;
 pub mod channels;
 pub mod coalescing;
+pub mod concurrency;
 pub mod constant_prop;
 pub mod copy_prop;
 pub mod dead_code;
 pub mod entropy;
+pub mod lease;
 pub mod verifier;
 pub(crate) mod utils;
 
@@ -19,10 +21,12 @@ use std::collections::{HashMap, HashSet};
 use cfg_simp::CfgSimplificationPass;
 use channels::ChannelLivenessPass;
 use coalescing::BlockCoalescingPass;
+use concurrency::ConcurrencyAnalysisPass;
 use constant_prop::ConstantPropagationPass;
 use copy_prop::CopyPropagationPass;
 use dead_code::DeadCodeEliminationPass;
 use entropy::EntropyOptimizationPass;
+use lease::LeaseOptimizationPass;
 use verifier::VerifierPass;
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
@@ -32,6 +36,8 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     manager.add_pass(Box::new(CfgSimplificationPass));
     manager.add_pass(Box::new(EntropyOptimizationPass));
     manager.add_pass(Box::new(ChannelLivenessPass));
+    manager.add_pass(Box::new(LeaseOptimizationPass));
+    manager.add_pass(Box::new(ConcurrencyAnalysisPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));
     manager.add_pass(Box::new(VerifierPass));

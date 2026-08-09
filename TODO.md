@@ -137,8 +137,8 @@ Keep:
 
 Potential analyses:
 
-- [ ] Branch lifetime analysis.
-- [ ] Merge correctness verification.
+- [x] Branch lifetime analysis.
+- [x] Merge correctness verification.
 - [ ] Parallel dependency analysis.
 - [ ] Race detection (if mutable state exists).
 
@@ -150,10 +150,10 @@ Current implementation looks solid.
 
 Potential additions:
 
-- [ ] Nested lease optimization.
-- [ ] Lease lifetime verification.
-- [ ] Lease escape analysis.
-- [ ] Automatic redundant lease removal.
+- [x] Nested lease optimization.
+- [x] Lease lifetime verification.
+- [x] Lease escape analysis.
+- [x] Automatic redundant lease removal.
 
 ---
 
@@ -189,9 +189,9 @@ Potential pass order:
 - [x] Verify every CFG block has valid SSA dominance.
 - [x] Verify phi nodes only contain predecessor values.
 - [x] Verify structured temporal constructs lower correctly.
-- [ ] Verify `Split`/`Merge` branch consistency.
+- [x] Verify `Split`/`Merge` branch consistency.
 - [ ] Verify entropy state transitions.
-- [ ] Verify lease lifetimes.
+- [x] Verify lease lifetimes.
 
 ---
 

@@ -188,7 +188,75 @@ mod tests {
         let res = verify_ssa_cfg(&ssa_cfg);
         assert!(res.is_err());
         let errs = res.unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, VerificationError::UnbalancedTemporalBlock { .. })));
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            VerificationError::UnbalancedTemporalBlock { .. }
+        )));
+    }
+
+    #[test]
+    fn test_lease_optimization_pass() {
+        use crate::optimize::lease::LeaseOptimizationPass;
+
+        let instrs = vec![
+            Instruction::Lease {
+                target_reg: Reg(1),
+                source_reg: Reg(0),
+                duration_ms: 0,
+            },
+            Instruction::EndLease {
+                source_reg: Reg(0),
+                duration_ms: 0,
+            },
+            Instruction::Return { src: None },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        let pass = LeaseOptimizationPass;
+        let empty_used = HashSet::new();
+        let changed = pass.run(&mut ssa_cfg, &empty_used, false);
+
+        assert!(changed);
+        let block0 = ssa_cfg.blocks.get(&0).unwrap();
+        assert!(block0.instructions.is_empty());
+    }
+
+    #[test]
+    fn test_concurrency_analysis_unmerged_branch() {
+        use crate::optimize::concurrency::{analyze_concurrency, ConcurrencyAnalysisPass, ConcurrencyError};
+
+        let instrs = vec![
+            Instruction::Split {
+                parent: "main".to_string(),
+                branches: vec!["b1".to_string(), "b2".to_string()],
+            },
+            Instruction::Merge {
+                branches: vec!["b1".to_string()],
+                target: "main".to_string(),
+                resolution: causm_core::MergeResolution {
+                    rules: std::collections::HashMap::new(),
+                    auto: true,
+                    fallback: None,
+                    taking_ms: None,
+                },
+            },
+            Instruction::Return { src: None },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        let pass = ConcurrencyAnalysisPass;
+        let empty_used = HashSet::new();
+        let _ = pass.run(&mut ssa_cfg, &empty_used, false);
+
+        let res = analyze_concurrency(&ssa_cfg);
+        assert!(res.is_err());
+        let errs = res.unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e, ConcurrencyError::UnmergedBranch { ref branch, .. } if branch == "b2")));
     }
 }
-
