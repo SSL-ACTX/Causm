@@ -35,59 +35,59 @@ pub fn parse_type_name(pair: Pair<Rule>) -> TypeName {
             }
         }
         Rule::base_type => {
-            let mut inner = pair.into_inner();
-            let first = inner.next().unwrap();
-            match first.as_rule() {
-                Rule::identifier => {
-                    let name = first.as_str().to_string();
-                    if let Some(params_pair) = inner.next() {
-                        let params = params_pair
-                            .into_inner()
-                            .map(|p| {
-                                let is_duration = p.as_str().contains("ms");
-                                let inner_p = p.into_inner().next().unwrap();
-                                match inner_p.as_rule() {
-                                    Rule::type_name => {
-                                        TypeParam::Type(parse_type_name(inner_p))
-                                    }
-                                    Rule::amount => {
-                                        let text = inner_p.as_str();
-                                        let val = text.parse::<u64>().unwrap_or(0);
-                                        if is_duration {
-                                            TypeParam::Duration(val)
-                                        } else {
-                                            TypeParam::Amount(val)
-                                        }
-                                    }
-                                    _ => TypeParam::Amount(0),
-                                }
-                            })
-                            .collect();
-                        TypeName::Generic(name, params)
-                    } else {
-                        match name.as_str() {
-                            "int" => TypeName::Builtin(BuiltinType::Integer),
-                            "float" => TypeName::Builtin(BuiltinType::Float),
-                            "bool" => TypeName::Builtin(BuiltinType::Bool),
-                            "string" => TypeName::Builtin(BuiltinType::String),
-                            "struct" => TypeName::Builtin(BuiltinType::Struct),
-                            "topology" => TypeName::Builtin(BuiltinType::Topology),
-                            "array" => TypeName::Builtin(BuiltinType::Array),
-                            _ => TypeName::Custom(name),
-                        }
-                    }
-                }
+            let text = pair.as_str().trim();
+            match text {
+                "int" => TypeName::Builtin(BuiltinType::Integer),
+                "i8" => TypeName::Builtin(BuiltinType::I8),
+                "i16" => TypeName::Builtin(BuiltinType::I16),
+                "i32" => TypeName::Builtin(BuiltinType::I32),
+                "i64" => TypeName::Builtin(BuiltinType::I64),
+                "u8" => TypeName::Builtin(BuiltinType::U8),
+                "u16" => TypeName::Builtin(BuiltinType::U16),
+                "u32" => TypeName::Builtin(BuiltinType::U32),
+                "u64" => TypeName::Builtin(BuiltinType::U64),
+                "float" => TypeName::Builtin(BuiltinType::Float),
+                "f32" => TypeName::Builtin(BuiltinType::F32),
+                "f64" => TypeName::Builtin(BuiltinType::F64),
+                "bool" => TypeName::Builtin(BuiltinType::Bool),
+                "string" => TypeName::Builtin(BuiltinType::String),
+                "struct" => TypeName::Builtin(BuiltinType::Struct),
+                "topology" => TypeName::Builtin(BuiltinType::Topology),
+                "array" => TypeName::Builtin(BuiltinType::Array),
                 _ => {
-                    let text = first.as_str();
-                    match text {
-                        "int" => TypeName::Builtin(BuiltinType::Integer),
-                        "float" => TypeName::Builtin(BuiltinType::Float),
-                        "bool" => TypeName::Builtin(BuiltinType::Bool),
-                        "string" => TypeName::Builtin(BuiltinType::String),
-                        "struct" => TypeName::Builtin(BuiltinType::Struct),
-                        "topology" => TypeName::Builtin(BuiltinType::Topology),
-                        "array" => TypeName::Builtin(BuiltinType::Array),
-                        _ => TypeName::Custom(text.to_string()),
+                    let mut inner = pair.into_inner();
+                    if let Some(first) = inner.next() {
+                        let name = first.as_str().to_string();
+                        if let Some(params_pair) = inner.next() {
+                            let params = params_pair
+                                .into_inner()
+                                .map(|p| {
+                                    let is_duration = p.as_str().contains("ms");
+                                    let inner_p = p.into_inner().next().unwrap();
+                                    match inner_p.as_rule() {
+                                        Rule::type_name => {
+                                            TypeParam::Type(parse_type_name(inner_p))
+                                        }
+                                        Rule::amount => {
+                                            let text = inner_p.as_str();
+                                            let val =
+                                                text.parse::<u64>().unwrap_or(0);
+                                            if is_duration {
+                                                TypeParam::Duration(val)
+                                            } else {
+                                                TypeParam::Amount(val)
+                                            }
+                                        }
+                                        _ => TypeParam::Amount(0),
+                                    }
+                                })
+                                .collect();
+                            TypeName::Generic(name, params)
+                        } else {
+                            TypeName::Custom(name)
+                        }
+                    } else {
+                        TypeName::Custom(text.to_string())
                     }
                 }
             }

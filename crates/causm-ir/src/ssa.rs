@@ -150,6 +150,11 @@ pub enum SsaInstruction {
         src: SsaReg,
         type_name: String,
     },
+    TypeCast {
+        dest: SsaReg,
+        src: SsaReg,
+        target_type: causm_core::TypeName,
+    },
     AssertState {
         src: SsaReg,
         state: String,
@@ -458,6 +463,13 @@ impl std::fmt::Display for SsaInstruction {
                 type_name,
             } => {
                 write!(f, "{} = {} as {}", dest, src, type_name)
+            }
+            SsaInstruction::TypeCast {
+                dest,
+                src,
+                target_type,
+            } => {
+                write!(f, "{} = {} as {:?}", dest, src, target_type)
             }
             SsaInstruction::AssertState { src, state } => {
                 write!(f, "AssertState {} is {}", src, state)
@@ -983,6 +995,13 @@ impl std::fmt::Display for SsaCFG {
                     type_name,
                 } => {
                     format!("{} = {} as {}", dest, resolve_reg(*src), type_name)
+                }
+                SsaInstruction::TypeCast {
+                    dest,
+                    src,
+                    target_type,
+                } => {
+                    format!("{} = {} as {:?}", dest, resolve_reg(*src), target_type)
                 }
                 SsaInstruction::AssertState { src, state } => {
                     format!("AssertState {} is {}", resolve_reg(*src), state)
@@ -2254,6 +2273,23 @@ impl SsaTransformer {
                     type_name: type_name.clone(),
                 }
             }
+            Instruction::TypeCast {
+                dest,
+                src,
+                target_type,
+            } => {
+                let src_ssa = self.current_ssa_reg(*src);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::TypeCast {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: src_ssa,
+                    target_type: target_type.clone(),
+                }
+            }
             Instruction::AssertState { src, state } => SsaInstruction::AssertState {
                 src: self.current_ssa_reg(*src),
                 state: state.clone(),
@@ -2757,6 +2793,7 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Call { dest, .. } => f(*dest),
         Instruction::DynamicCall { dest, .. } => f(*dest),
         Instruction::TypeAssert { dest, .. } => f(*dest),
+        Instruction::TypeCast { dest, .. } => f(*dest),
         Instruction::TryTypeAssert { dest, success, .. } => {
             f(*dest);
             f(*success);

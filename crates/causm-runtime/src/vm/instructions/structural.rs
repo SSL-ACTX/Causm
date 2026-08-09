@@ -83,6 +83,63 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn TypeCast(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+        target_type: causm_core::TypeName,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, src.0)?;
+        let target_ty = causm_core::types::Type::from_typename(&target_type);
+
+        fn cast_payload(
+            p: Payload,
+            target_ty: &causm_core::types::Type,
+        ) -> Result<Payload, TemporalError> {
+            match (p, target_ty) {
+                (
+                    Payload::Integer(i),
+                    causm_core::types::Type::Float
+                    | causm_core::types::Type::F32
+                    | causm_core::types::Type::F64,
+                ) => Ok(Payload::Float((i as f64).to_bits())),
+                (
+                    Payload::Float(bits),
+                    causm_core::types::Type::Integer
+                    | causm_core::types::Type::I8
+                    | causm_core::types::Type::I16
+                    | causm_core::types::Type::I32
+                    | causm_core::types::Type::I64
+                    | causm_core::types::Type::U8
+                    | causm_core::types::Type::U16
+                    | causm_core::types::Type::U32
+                    | causm_core::types::Type::U64,
+                ) => {
+                    let f = f64::from_bits(bits);
+                    Ok(Payload::Integer(f as i64))
+                }
+                (Payload::Integer(i), causm_core::types::Type::Bool) => {
+                    Ok(Payload::Bool(i != 0))
+                }
+                (Payload::Bool(b), causm_core::types::Type::Integer) => {
+                    Ok(Payload::Integer(if b { 1 } else { 0 }))
+                }
+                (Payload::Array(vec), causm_core::types::Type::Array(inner)) => {
+                    let mut casted = Vec::new();
+                    for elem in vec {
+                        casted.push(cast_payload(elem, inner)?);
+                    }
+                    Ok(Payload::Array(casted))
+                }
+                (other, _) => Ok(other),
+            }
+        }
+
+        let res = cast_payload(val, &target_ty)?;
+        self.insert_reg(branch_id, dest.0, EntropicState::Valid(res))
+    }
+
     pub(crate) fn AssertState(
         &mut self,
         branch_id: &str,

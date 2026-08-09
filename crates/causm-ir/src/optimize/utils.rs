@@ -23,6 +23,7 @@ pub(crate) fn get_ssa_dest_reg(instr: &SsaInstruction) -> Option<SsaReg> {
         | SsaInstruction::ArrayLit { dest, .. }
         | SsaInstruction::FieldAccess { dest, .. }
         | SsaInstruction::IndexAccess { dest, .. }
+        | SsaInstruction::TypeCast { dest, .. }
         | SsaInstruction::Defer { dest, .. } => Some(*dest),
 
         SsaInstruction::FieldUpdate { target, .. }
@@ -97,6 +98,9 @@ pub(crate) fn for_each_ssa_src_reg(
         SsaInstruction::IndexAccess { target, index, .. } => {
             f(*target);
             f(*index);
+        }
+        SsaInstruction::TypeCast { src, .. } => {
+            f(*src);
         }
         SsaInstruction::IndexFieldUpdate {
             old_target,
@@ -189,5 +193,6 @@ pub(crate) fn has_side_effects(instr: &SsaInstruction) -> bool {
             | SsaInstruction::IndexAccess { .. }
             | SsaInstruction::FieldUpdate { .. }
             | SsaInstruction::IndexFieldUpdate { .. }
+            | SsaInstruction::TypeCast { .. }
     )
 }

@@ -1492,5 +1492,15 @@ fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::TypeCast { expr, target_type } => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(Instruction::TypeCast {
+                dest,
+                src,
+                target_type: target_type.clone(),
+            });
+            dest
+        }
     }
 }

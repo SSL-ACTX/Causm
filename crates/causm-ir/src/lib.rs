@@ -252,6 +252,11 @@ macro_rules! instructions {
                 src: $crate::Reg,
                 type_name: String
             },
+            TypeCast {
+                dest: $crate::Reg,
+                src: $crate::Reg,
+                target_type: causm_core::TypeName
+            },
             AssertState {
                 src: $crate::Reg,
                 state: String

@@ -12,7 +12,17 @@ pub struct StructType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Integer,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
     Float,
+    F32,
+    F64,
     Bool,
     String,
     Struct(StructType),
@@ -43,7 +53,17 @@ impl Type {
         match type_name {
             TypeName::Builtin(b) => match b {
                 BuiltinType::Integer => Type::Integer,
+                BuiltinType::I8 => Type::I8,
+                BuiltinType::I16 => Type::I16,
+                BuiltinType::I32 => Type::I32,
+                BuiltinType::I64 => Type::I64,
+                BuiltinType::U8 => Type::U8,
+                BuiltinType::U16 => Type::U16,
+                BuiltinType::U32 => Type::U32,
+                BuiltinType::U64 => Type::U64,
                 BuiltinType::Float => Type::Float,
+                BuiltinType::F32 => Type::F32,
+                BuiltinType::F64 => Type::F64,
                 BuiltinType::Bool => Type::Bool,
                 BuiltinType::String => Type::String,
                 BuiltinType::Struct => Type::Struct(StructType {

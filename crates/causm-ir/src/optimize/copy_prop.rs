@@ -155,6 +155,13 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                         changed = true;
                     }
                 }
+                SsaInstruction::TypeCast { src, .. } => {
+                    let new_src = resolve(*src);
+                    if *src != new_src {
+                        *src = new_src;
+                        changed = true;
+                    }
+                }
                 SsaInstruction::TryTypeAssert { src, .. } => {
                     let new_src = resolve(*src);
                     if *src != new_src {

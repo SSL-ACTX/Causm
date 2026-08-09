@@ -316,6 +316,10 @@ macro_rules! expressions {
                 target: Box<Expression>,
                 cast_type: TypeName
             },
+            TypeCast {
+                expr: Box<Expression>,
+                target_type: TypeName
+            },
             Null
         }
     };
@@ -422,7 +426,17 @@ pub enum TypeParam {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltinType {
     Integer,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
     Float,
+    F32,
+    F64,
     Bool,
     String,
     Struct,

@@ -4,6 +4,66 @@ use causm_frontend::parser;
 use causm_runtime::vm::{TemporalError, Vm};
 
 #[test]
+fn test_causm_sized_primitive_types() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mask: u8 = 255
+        let count: u32 = 1000
+        let temp: i16 = -50
+        let ratio: f32 = 3.14
+        let _mask = mask
+        let _count = count
+        let _temp = temp
+        let _ratio = ratio
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_causm_type_casting_and_broadcasting() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x: int = 42
+        let y: float = x as float
+        let z: int = 3.14 as int
+        let arr = [1, 2, 3] * 10
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let arr_reg = ir.symbols.get("arr").expect("arr not found").0;
+    let arr_val = vm.root_timeline.arena.peek(arr_reg);
+    match arr_val {
+        Some(Payload::Array(vec)) => {
+            assert_eq!(vec.len(), 3);
+            assert_eq!(vec[0], Payload::Integer(10));
+            assert_eq!(vec[1], Payload::Integer(20));
+            assert_eq!(vec[2], Payload::Integer(30));
+        }
+        other => panic!("Expected broadcasted array [10, 20, 30], got {:?}", other),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn causm_semantic_arena_insert_overwrite_reclaims_previous_memory() {
     let mut arena = Arena::new(200);
     // Key register: 0

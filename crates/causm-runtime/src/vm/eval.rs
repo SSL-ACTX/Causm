@@ -84,6 +84,42 @@ impl Vm {
         op: &BinaryOperator,
     ) -> Result<Payload, TemporalError> {
         let result = match (left_value, right_value) {
+            (Payload::Array(l_elems), Payload::Array(r_elems)) => {
+                if l_elems.len() != r_elems.len() {
+                    return Err(TemporalError::EvalError(format!(
+                        "Array broadcasting dimension mismatch: {} and {}",
+                        l_elems.len(),
+                        r_elems.len()
+                    )));
+                }
+                let mut res = Vec::new();
+                for (l, r) in l_elems.into_iter().zip(r_elems.into_iter()) {
+                    res.push(self.evaluate_binary_operation(l, r, op)?);
+                }
+                Payload::Array(res)
+            }
+            (Payload::Array(l_elems), r_val) => {
+                let mut res = Vec::new();
+                for l in l_elems {
+                    res.push(self.evaluate_binary_operation(
+                        l,
+                        r_val.clone(),
+                        op,
+                    )?);
+                }
+                Payload::Array(res)
+            }
+            (l_val, Payload::Array(r_elems)) => {
+                let mut res = Vec::new();
+                for r in r_elems {
+                    res.push(self.evaluate_binary_operation(
+                        l_val.clone(),
+                        r,
+                        op,
+                    )?);
+                }
+                Payload::Array(res)
+            }
             (Payload::String(l), r) if op == &BinaryOperator::Add => {
                 Payload::String(format!("{}{}", l, r))
             }

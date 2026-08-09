@@ -251,7 +251,16 @@ pub(crate) fn infer_expression_type(
             let right_type = infer_expression_type(analyzer, right)?;
             match op {
                 causm_core::BinaryOperator::Add => {
-                    if left_type == Type::String || right_type == Type::String {
+                    if let (Type::Array(l_elem), Type::Array(_r_elem)) =
+                        (&left_type, &right_type)
+                    {
+                        Ok(Type::Array(l_elem.clone()))
+                    } else if let Type::Array(elem) = &left_type {
+                        Ok(Type::Array(elem.clone()))
+                    } else if let Type::Array(elem) = &right_type {
+                        Ok(Type::Array(elem.clone()))
+                    } else if left_type == Type::String || right_type == Type::String
+                    {
                         Ok(Type::String)
                     } else if left_type == Type::Integer
                         && right_type == Type::Integer
@@ -277,7 +286,17 @@ pub(crate) fn infer_expression_type(
                 | causm_core::BinaryOperator::Div
                 | causm_core::BinaryOperator::Rem
                 | causm_core::BinaryOperator::Pow => {
-                    if left_type == Type::Integer && right_type == Type::Integer {
+                    if let (Type::Array(l_elem), Type::Array(_r_elem)) =
+                        (&left_type, &right_type)
+                    {
+                        Ok(Type::Array(l_elem.clone()))
+                    } else if let Type::Array(elem) = &left_type {
+                        Ok(Type::Array(elem.clone()))
+                    } else if let Type::Array(elem) = &right_type {
+                        Ok(Type::Array(elem.clone()))
+                    } else if left_type == Type::Integer
+                        && right_type == Type::Integer
+                    {
                         Ok(Type::Integer)
                     } else if left_type.is_numeric() && right_type.is_numeric() {
                         Ok(Type::Float)
@@ -364,6 +383,10 @@ pub(crate) fn infer_expression_type(
                 }
             }
             Ok(Type::from_typename(cast_type))
+        }
+        Expression::TypeCast { expr, target_type } => {
+            let _src_type = infer_expression_type(analyzer, expr)?;
+            Ok(Type::from_typename(target_type))
         }
     }
 }
@@ -888,6 +911,10 @@ pub(crate) fn analyze_expression(
             analyze_expression(analyzer, target)?;
             Ok(())
         }
+        Expression::TypeCast { expr, .. } => {
+            analyze_expression(analyzer, expr)?;
+            Ok(())
+        }
     }
 }
 
@@ -995,6 +1022,10 @@ pub(crate) fn analyze_expression_nonconsuming(
         }
         Expression::TypeAssertion { target, .. } => {
             analyze_expression_nonconsuming(analyzer, target)?;
+            Ok(())
+        }
+        Expression::TypeCast { expr, .. } => {
+            analyze_expression_nonconsuming(analyzer, expr)?;
             Ok(())
         }
     }
@@ -1106,7 +1137,8 @@ pub fn estimate_expression_cost(
         | Expression::Boolean(_)
         | Expression::Null
         | Expression::Deferred { .. } => 1,
-        Expression::TypeAssertion { target, .. } => {
+        Expression::TypeAssertion { target, .. }
+        | Expression::TypeCast { expr: target, .. } => {
             1 + estimate_expression_cost(analyzer, target)
         }
     }

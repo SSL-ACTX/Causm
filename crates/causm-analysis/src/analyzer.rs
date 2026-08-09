@@ -739,10 +739,31 @@ impl EntropicAnalyzer {
         }
 
         match (expected, actual) {
-            (Type::Integer, Type::Integer)
-            | (Type::Float, Type::Float)
-            | (Type::Bool, Type::Bool)
-            | (Type::String, Type::String) => true,
+            (
+                Type::Integer
+                | Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64,
+                Type::Integer
+                | Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64,
+            ) => true,
+            (
+                Type::Float | Type::F32 | Type::F64,
+                Type::Float | Type::F32 | Type::F64,
+            ) => true,
+            (Type::Bool, Type::Bool) | (Type::String, Type::String) => true,
             (Type::Struct(exp_struct), Type::Struct(act_struct)) => {
                 if exp_struct.fields.is_empty() {
                     true
@@ -1084,6 +1105,9 @@ impl EntropicAnalyzer {
             }
             Expression::TypeAssertion { target, cast_type } => {
                 format!("{}.({:?})", self.expr_snippet(target), cast_type)
+            }
+            Expression::TypeCast { expr, target_type } => {
+                format!("{} as {:?}", self.expr_snippet(expr), target_type)
             }
         }
     }

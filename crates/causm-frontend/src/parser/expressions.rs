@@ -103,6 +103,23 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                             cast_type,
                         };
                     }
+                    Rule::type_cast_tail => {
+                        let mut inner = access_pair.into_inner();
+                        let type_name_pair = if inner.len() == 2 {
+                            let _ = inner.next();
+                            inner.next().unwrap()
+                        } else {
+                            inner.next().unwrap()
+                        };
+                        let target_type =
+                            crate::parser::statements::utils::parse_type_name(
+                                type_name_pair,
+                            );
+                        expr = Expression::TypeCast {
+                            expr: Box::new(expr),
+                            target_type,
+                        };
+                    }
                     Rule::field_access_tail => {
                         let field = access_pair
                             .into_inner()
@@ -171,6 +188,11 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 }
             }
             Expression::Call { routine, args }
+        }
+        Rule::duration_literal => {
+            let s = pair.as_str().trim_end_matches("ms");
+            let val = s.parse::<i64>().unwrap_or(0);
+            Expression::Integer(val)
         }
         Rule::integer_literal => {
             let val = pair.as_str().parse::<i64>().unwrap_or(0);

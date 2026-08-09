@@ -600,6 +600,15 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         SsaInstruction::LoopTickOn { chan_id } => Instruction::LoopTickOn {
             chan_id: chan_id.clone(),
         },
+        SsaInstruction::TypeCast {
+            dest,
+            src,
+            target_type,
+        } => Instruction::TypeCast {
+            dest: ssa_reg_to_reg(*dest),
+            src: ssa_reg_to_reg(*src),
+            target_type: target_type.clone(),
+        },
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }
