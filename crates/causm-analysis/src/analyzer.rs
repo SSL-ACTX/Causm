@@ -612,9 +612,12 @@ impl EntropicAnalyzer {
 
     pub(crate) fn resolve_type(&self, typ: &Type) -> Type {
         match typ {
-            Type::Custom(name) => self
-                .get_custom_type(name)
-                .unwrap_or(Type::Custom(name.clone())),
+            Type::Custom(name) => {
+                let base_name = name.split('<').next().unwrap_or(name).trim();
+                self.get_custom_type(base_name)
+                    .or_else(|| self.get_custom_type(name))
+                    .unwrap_or_else(|| Type::Custom(name.clone()))
+            }
             Type::Struct(s) => {
                 let resolved_fields: std::collections::HashMap<String, Type> = s
                     .fields

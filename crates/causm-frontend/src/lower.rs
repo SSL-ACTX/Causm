@@ -232,7 +232,22 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 instructions: sub_ctx.instructions,
                 spans: sub_ctx.spans,
             };
-            ctx.routines.insert(name.clone(), routine);
+            let base_name = if let Some(angle_idx) = name.find('<') {
+                if let Some(dot_idx) = name.find('.') {
+                    let struct_part = &name[..angle_idx];
+                    let method_part = &name[dot_idx..];
+                    format!("{}{}", struct_part, method_part)
+                } else {
+                    name.clone()
+                }
+            } else {
+                name.clone()
+            };
+
+            ctx.routines.insert(name.clone(), routine.clone());
+            if base_name != *name {
+                ctx.routines.insert(base_name, routine);
+            }
         }
         Statement::Yield(name) => {
             let src = ctx.get_reg(name);

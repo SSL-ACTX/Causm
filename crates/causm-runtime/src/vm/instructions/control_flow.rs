@@ -98,17 +98,30 @@ impl Vm {
         if !self.routines.contains_key(&resolved_routine)
             && !self.is_intrinsic(&resolved_routine)
         {
-            if let Some(dot_idx) = routine.find('.') {
-                let struct_name = &routine[..dot_idx];
-                let method_name = &routine[dot_idx + 1..];
-                let mut current = struct_name.to_string();
-                while let Some(parent) = self.struct_extends.get(&current) {
-                    let parent_routine = format!("{}.{}", parent, method_name);
-                    if self.routines.contains_key(&parent_routine) {
-                        resolved_routine = parent_routine;
-                        break;
+            if let Some(angle_idx) = routine.find('<') {
+                if let Some(dot_idx) = routine.find('.') {
+                    let base_struct = &routine[..angle_idx];
+                    let method_name = &routine[dot_idx..];
+                    let base_routine = format!("{}{}", base_struct, method_name);
+                    if self.routines.contains_key(&base_routine) {
+                        resolved_routine = base_routine;
                     }
-                    current = parent.clone();
+                }
+            }
+
+            if !self.routines.contains_key(&resolved_routine) {
+                if let Some(dot_idx) = routine.find('.') {
+                    let struct_name = &routine[..dot_idx];
+                    let method_name = &routine[dot_idx + 1..];
+                    let mut current = struct_name.to_string();
+                    while let Some(parent) = self.struct_extends.get(&current) {
+                        let parent_routine = format!("{}.{}", parent, method_name);
+                        if self.routines.contains_key(&parent_routine) {
+                            resolved_routine = parent_routine;
+                            break;
+                        }
+                        current = parent.clone();
+                    }
                 }
             }
         }
@@ -171,7 +184,8 @@ impl Vm {
             match mode {
                 causm_core::ParamMode::Consume
                 | causm_core::ParamMode::Clone
-                | causm_core::ParamMode::Peek => {
+                | causm_core::ParamMode::Peek
+                | causm_core::ParamMode::Lease => {
                     child.arena.insert(
                         i as u32,
                         causm_core::value::EntropicState::Valid(val),

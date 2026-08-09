@@ -196,6 +196,12 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             let mut extends = Vec::new();
             let mut methods = Vec::new();
 
+            if let Some(p) = inner.peek() {
+                if p.as_rule() == Rule::generic_param_list {
+                    inner.next(); // Consume generic_param_list
+                }
+            }
+
             let parse_method = |m_pair: Pair<Rule>| -> causm_core::InterfaceMethod {
                 let mut m_inner = m_pair.into_inner();
                 let m_name = m_inner.next().unwrap().as_str().to_string();
@@ -217,6 +223,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                     "clone" => causm_core::ParamMode::Clone,
                                     "decay" => causm_core::ParamMode::Decay,
                                     "peek" => causm_core::ParamMode::Peek,
+                                    "lease" => causm_core::ParamMode::Lease,
                                     _ => causm_core::ParamMode::Peek,
                                 };
                                 let p_name =
@@ -278,14 +285,30 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                             match term.as_rule() {
                                 Rule::interface_term => {
                                     let mut term_inner = term.into_inner();
-                                    if let Some(first) = term_inner.next() {
-                                        if first.as_rule() == Rule::identifier {
-                                            extends.push(first.as_str().to_string());
-                                        } else {
-                                            methods.push(parse_method(first));
-                                            for m_pair in term_inner {
-                                                methods.push(parse_method(m_pair));
+                                    while let Some(item) = term_inner.next() {
+                                        if item.as_rule() == Rule::identifier {
+                                            let id_str = item.as_str();
+                                            if id_str != "interface" {
+                                                extends.push(id_str.to_string());
                                             }
+                                        } else if item.as_rule()
+                                            == Rule::interface_item
+                                        {
+                                            if let Some(inner_item) =
+                                                item.into_inner().next()
+                                            {
+                                                if inner_item.as_rule()
+                                                    == Rule::interface_method
+                                                {
+                                                    methods.push(parse_method(
+                                                        inner_item,
+                                                    ));
+                                                }
+                                            }
+                                        } else if item.as_rule()
+                                            == Rule::interface_method
+                                        {
+                                            methods.push(parse_method(item));
                                         }
                                     }
                                 }
@@ -293,6 +316,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                     extends.push(term.as_str().to_string());
                                 }
                                 _ => {}
+                            }
+                        }
+                    }
+                    Rule::interface_item => {
+                        if let Some(inner_item) = next_pair.into_inner().next() {
+                            if inner_item.as_rule() == Rule::interface_method {
+                                methods.push(parse_method(inner_item));
                             }
                         }
                     }

@@ -38,7 +38,7 @@ impl Vm {
                     self.consume_reg(branch_id, source.0)?;
                     payload
                 }
-                ParamMode::Clone | ParamMode::Peek => {
+                ParamMode::Clone | ParamMode::Peek | ParamMode::Lease => {
                     self.peek_reg(branch_id, source.0)?
                 }
             };
@@ -187,7 +187,7 @@ impl Vm {
                 self.consume_reg(branch_id, source.0)?;
                 payload
             }
-            ParamMode::Clone | ParamMode::Peek => {
+            ParamMode::Clone | ParamMode::Peek | ParamMode::Lease => {
                 self.peek_reg(branch_id, source.0)?
             }
         };

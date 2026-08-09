@@ -541,7 +541,12 @@ pub(crate) fn analyze_expression(
                 }
             }
 
-            let mut current_struct = struct_name.clone();
+            let mut current_struct = struct_name
+                .split('<')
+                .next()
+                .unwrap_or(&struct_name)
+                .trim()
+                .to_string();
             let mut resolved = None;
             loop {
                 let routine_name = format!("{}.{}", current_struct, method);
@@ -603,7 +608,21 @@ pub(crate) fn analyze_expression(
             }
 
             let (self_mode, _self_name, self_type) = &info.params[0];
-            if !analyzer.types_compatible(self_type, &target_type) {
+            let self_type_normalized = match self_type {
+                Type::Custom(name) => Type::Custom(
+                    name.split('<').next().unwrap_or(name).trim().to_string(),
+                ),
+                other => other.clone(),
+            };
+            let target_type_normalized = match &target_type {
+                Type::Custom(name) => Type::Custom(
+                    name.split('<').next().unwrap_or(name).trim().to_string(),
+                ),
+                other => other.clone(),
+            };
+            if !analyzer
+                .types_compatible(&self_type_normalized, &target_type_normalized)
+            {
                 return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                     format!(
                         "method {} self type mismatch: expected {:?}, got {:?}",
@@ -750,7 +769,7 @@ pub(crate) fn analyze_expression(
                             analyzer.mark_consumed(name)?;
                         }
                     }
-                    ParamMode::Peek => {}
+                    ParamMode::Peek | ParamMode::Lease => {}
                 }
             }
             Ok(())

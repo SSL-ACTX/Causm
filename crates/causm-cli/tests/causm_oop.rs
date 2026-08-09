@@ -3,6 +3,69 @@ use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 
 #[test]
+fn causm_oop_interface_associated_type_decl() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        interface Streamable<T: Consumable> decay_after 500ms {
+            type Item: Consumable
+            routine next(peek self) -> int (taking 10ms)
+        }
+
+        type NumberStream = struct { current: int }
+
+        routine NumberStream.next(peek self) -> int (taking 5ms) {
+            let c = self.current
+            yield c
+        }
+
+        let ns: NumberStream = struct { current = 42 }
+        let s: Streamable<int> = ns
+        let n = s.next()
+        let _n = n
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
+fn causm_oop_generic_method_dispatch() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Box<T: Consumable> = struct { val: int }
+
+        routine Box<int>.get_val(peek self) -> int (taking 5ms) {
+            let v = self.val
+            yield v
+        }
+
+        let b: Box<int> = struct { val = 777 }
+        let v = b.get_val()
+        let _v = v
+        let _b = b
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}
+
+#[test]
 fn causm_oop_generic_struct() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {

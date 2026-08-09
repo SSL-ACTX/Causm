@@ -436,6 +436,7 @@ pub enum ParamMode {
     Clone,
     Decay,
     Peek,
+    Lease,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

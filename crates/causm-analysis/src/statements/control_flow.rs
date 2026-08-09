@@ -648,7 +648,22 @@ impl EntropicAnalyzer {
             state_constraint: state_constraint.clone(),
         };
 
-        self.routines.insert(name.clone(), routine_info);
+        let base_name = if let Some(angle_idx) = name.find('<') {
+            if let Some(dot_idx) = name.find('.') {
+                let struct_part = &name[..angle_idx];
+                let method_part = &name[dot_idx..];
+                format!("{}{}", struct_part, method_part)
+            } else {
+                name.clone()
+            }
+        } else {
+            name.clone()
+        };
+
+        self.routines.insert(name.clone(), routine_info.clone());
+        if base_name != *name {
+            self.routines.insert(base_name, routine_info);
+        }
         Ok(())
     }
 
