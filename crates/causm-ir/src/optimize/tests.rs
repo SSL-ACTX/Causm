@@ -123,4 +123,72 @@ mod tests {
         assert!(changed);
         assert_eq!(ssa_cfg.blocks.len(), 2);
     }
+
+    #[test]
+    fn test_channel_liveness_pass() {
+        use crate::optimize::channels::ChannelLivenessPass;
+
+        let instrs = vec![
+            Instruction::OpenChan {
+                name: "dead_chan".to_string(),
+                capacity: 10,
+                decay_after_ms: None,
+            },
+            Instruction::OpenChan {
+                name: "live_chan".to_string(),
+                capacity: 10,
+                decay_after_ms: None,
+            },
+            Instruction::ChanSend {
+                chan_id: "live_chan".to_string(),
+                src: Reg(0),
+            },
+            Instruction::Return { src: None },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let mut ssa_cfg = transformer.transform();
+
+        let pass = ChannelLivenessPass;
+        let empty_used = HashSet::new();
+        let changed = pass.run(&mut ssa_cfg, &empty_used, false);
+
+        assert!(changed);
+        let block0 = ssa_cfg.blocks.get(&0).unwrap();
+        let remaining_open_chans: Vec<_> = block0
+            .instructions
+            .iter()
+            .filter_map(|i| match i {
+                SsaInstruction::OpenChan { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(remaining_open_chans, vec!["live_chan"]);
+    }
+
+    #[test]
+    fn test_verifier_pass_unclosed_temporal_block() {
+        use crate::optimize::verifier::{verify_ssa_cfg, VerificationError};
+
+        let instrs = vec![
+            Instruction::While { max_ms: 100 },
+            Instruction::LoadInt {
+                dest: Reg(0),
+                value: 42,
+            },
+            Instruction::Return { src: Some(Reg(0)) },
+        ];
+
+        let cfg = CFG::from_flat_instructions(&instrs);
+        let transformer = SsaTransformer::new(cfg);
+        let ssa_cfg = transformer.transform();
+
+        let res = verify_ssa_cfg(&ssa_cfg);
+        assert!(res.is_err());
+        let errs = res.unwrap_err();
+        assert!(errs.iter().any(|e| matches!(e, VerificationError::UnbalancedTemporalBlock { .. })));
+    }
 }
+

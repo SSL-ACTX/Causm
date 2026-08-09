@@ -1,9 +1,11 @@
 pub mod cfg_simp;
+pub mod channels;
 pub mod coalescing;
 pub mod constant_prop;
 pub mod copy_prop;
 pub mod dead_code;
 pub mod entropy;
+pub mod verifier;
 pub(crate) mod utils;
 
 #[cfg(test)]
@@ -15,11 +17,13 @@ use crate::{Instruction, IrProgram, Reg};
 use std::collections::{HashMap, HashSet};
 
 use cfg_simp::CfgSimplificationPass;
+use channels::ChannelLivenessPass;
 use coalescing::BlockCoalescingPass;
 use constant_prop::ConstantPropagationPass;
 use copy_prop::CopyPropagationPass;
 use dead_code::DeadCodeEliminationPass;
 use entropy::EntropyOptimizationPass;
+use verifier::VerifierPass;
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     let mut manager = PassManager::new();
@@ -27,8 +31,10 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     manager.add_pass(Box::new(CopyPropagationPass));
     manager.add_pass(Box::new(CfgSimplificationPass));
     manager.add_pass(Box::new(EntropyOptimizationPass));
+    manager.add_pass(Box::new(ChannelLivenessPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
     manager.add_pass(Box::new(DeadCodeEliminationPass));
+    manager.add_pass(Box::new(VerifierPass));
 
     // 1. Optimize routines (routines are self-contained, no global usage tracking needed)
     let empty_set = HashSet::new();

@@ -70,7 +70,7 @@
 
 ## Temporal Analysis
 
-- [ ] Keep temporal instructions visible for later optimization.
+- [x] Keep temporal instructions visible for later optimization.
   - Do **not** lower them into runtime calls too early.
 
 Useful analyses:
@@ -118,8 +118,8 @@ Keep as first-class IR instructions:
 
 Potential future optimizations:
 
-- [ ] Channel liveness analysis.
-- [ ] Dead channel elimination.
+- [x] Channel liveness analysis.
+- [x] Dead channel elimination.
 - [ ] Queue occupancy analysis.
 - [ ] Static capacity verification.
 
@@ -186,9 +186,9 @@ Potential pass order:
 
 ## Verification
 
-- [ ] Verify every CFG block has valid SSA dominance.
-- [ ] Verify phi nodes only contain predecessor values.
-- [ ] Verify structured temporal constructs lower correctly.
+- [x] Verify every CFG block has valid SSA dominance.
+- [x] Verify phi nodes only contain predecessor values.
+- [x] Verify structured temporal constructs lower correctly.
 - [ ] Verify `Split`/`Merge` branch consistency.
 - [ ] Verify entropy state transitions.
 - [ ] Verify lease lifetimes.
