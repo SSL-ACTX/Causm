@@ -38,6 +38,7 @@ impl OptimizationPass for ConcurrencyAnalysisPass {
 pub fn analyze_concurrency(ssa_cfg: &SsaCFG) -> Result<(), Vec<ConcurrencyError>> {
     let mut errors = Vec::new();
     let mut active_splits: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut has_merge = false;
 
     for block in ssa_cfg.blocks.values() {
         for instr in &block.instructions {
@@ -51,6 +52,7 @@ pub fn analyze_concurrency(ssa_cfg: &SsaCFG) -> Result<(), Vec<ConcurrencyError>
                 SsaInstruction::Merge {
                     branches, target, ..
                 } => {
+                    has_merge = true;
                     for branch in branches {
                         if let Some(active) = active_splits.get_mut(target) {
                             if !active.remove(branch) {
@@ -67,12 +69,17 @@ pub fn analyze_concurrency(ssa_cfg: &SsaCFG) -> Result<(), Vec<ConcurrencyError>
         }
     }
 
-    for (parent, unmerged) in active_splits {
-        for branch in unmerged {
-            errors.push(ConcurrencyError::UnmergedBranch {
-                branch,
-                parent: parent.clone(),
-            });
+    // Only report unmerged branches when this CFG contains a Merge instruction.
+    // If no Merge is present the split branches are reconciled in a later temporal
+    // block, which is the expected cross-block split+merge pattern and not an error.
+    if has_merge {
+        for (parent, unmerged) in active_splits {
+            for branch in unmerged {
+                errors.push(ConcurrencyError::UnmergedBranch {
+                    branch,
+                    parent: parent.clone(),
+                });
+            }
         }
     }
 

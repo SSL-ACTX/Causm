@@ -150,7 +150,7 @@ mod tests {
         let transformer = SsaTransformer::new(cfg);
         let mut ssa_cfg = transformer.transform();
 
-        let pass = ChannelLivenessPass;
+        let pass = ChannelLivenessPass::new(HashSet::new());
         let empty_used = HashSet::new();
         let changed = pass.run(&mut ssa_cfg, &empty_used, false);
 

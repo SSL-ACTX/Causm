@@ -4,8 +4,24 @@ use std::collections::HashSet;
 
 /// Channel liveness analysis & dead channel elimination pass.
 /// Removes unused `OpenChan` instructions if the channel is never sent to, received from,
-/// or used in `AwaitChan` / `LoopTickOn` / `Select`.
-pub struct ChannelLivenessPass;
+/// or used in `AwaitChan` / `LoopTickOn` / `Select` **across the entire program**.
+///
+/// The `globally_referenced_channels` set is pre-populated by `optimize_program` with
+/// all channel names that are referenced in any IR block or routine — not just the one
+/// currently being optimized. This prevents incorrect elimination of `OpenChan` when the
+/// open is in one temporal block (e.g. `@40ms`) and the corresponding send/recv are in a
+/// different block (e.g. `@50ms` or a branch block).
+pub struct ChannelLivenessPass {
+    pub globally_referenced_channels: HashSet<String>,
+}
+
+impl ChannelLivenessPass {
+    pub fn new(globally_referenced_channels: HashSet<String>) -> Self {
+        Self {
+            globally_referenced_channels,
+        }
+    }
+}
 
 impl OptimizationPass for ChannelLivenessPass {
     fn name(&self) -> &str {
@@ -18,9 +34,12 @@ impl OptimizationPass for ChannelLivenessPass {
         _globally_used_regs: &HashSet<u32>,
         _is_routine: bool,
     ) -> bool {
-        let mut used_channels = HashSet::new();
+        // Build the union of channels used locally within this CFG and the globally
+        // referenced channels collected from the entire program.
+        let mut used_channels = self.globally_referenced_channels.clone();
 
         // 1. Scan for used channel names across all instructions and terminators
+        //    in this specific CFG (in case an OpenChan and its uses are co-located).
         for block in ssa_cfg.blocks.values() {
             for instr in &block.instructions {
                 match instr {

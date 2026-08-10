@@ -30,12 +30,20 @@ use lease::LeaseOptimizationPass;
 use verifier::VerifierPass;
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
+    // 0. Pre-scan all IR blocks and routines to build a global set of channel names
+    //    that are referenced (send/recv/await/loop-tick/select) anywhere in the program.
+    //    This is required so that ChannelLivenessPass never eliminates an `OpenChan`
+    //    whose uses happen to live in a *different* temporal block.
+    let globally_referenced_channels = collect_globally_referenced_channels(&ir);
+
     let mut manager = PassManager::new();
     manager.add_pass(Box::new(ConstantPropagationPass));
     manager.add_pass(Box::new(CopyPropagationPass));
     manager.add_pass(Box::new(CfgSimplificationPass));
     manager.add_pass(Box::new(EntropyOptimizationPass));
-    manager.add_pass(Box::new(ChannelLivenessPass));
+    manager.add_pass(Box::new(ChannelLivenessPass::new(
+        globally_referenced_channels,
+    )));
     manager.add_pass(Box::new(LeaseOptimizationPass));
     manager.add_pass(Box::new(ConcurrencyAnalysisPass));
     manager.add_pass(Box::new(BlockCoalescingPass));
@@ -130,6 +138,49 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     ir.decay_handlers = optimized_decay_handlers;
 
     ir
+}
+
+/// Scan all flat IR instructions across every top-level block and routine to collect
+/// the names of every channel that is sent to, received from, awaited on, or used in
+/// a `loop tick on` / `select` statement.  The resulting set is passed to
+/// `ChannelLivenessPass` so that `OpenChan` instructions are never eliminated just
+/// because their users happen to reside in a *different* temporal block.
+fn collect_globally_referenced_channels(ir: &IrProgram) -> HashSet<String> {
+    let mut referenced = HashSet::new();
+
+    // Helper closure: inspect a single flat instruction and record any channel name.
+    let mut record = |instr: &Instruction| match instr {
+        Instruction::ChanSend { chan_id, .. }
+        | Instruction::ChanRecv { chan_id, .. }
+        | Instruction::AwaitChan { chan_id }
+        | Instruction::LoopTickOn { chan_id } => {
+            referenced.insert(chan_id.clone());
+        }
+        Instruction::Select { cases, .. } => {
+            for c in cases {
+                referenced.insert(c.chan_id.clone());
+            }
+        }
+        _ => {}
+    };
+
+    for block in &ir.blocks {
+        for instr in &block.instructions {
+            record(instr);
+        }
+    }
+    for routine in ir.routines.values() {
+        for instr in &routine.instructions {
+            record(instr);
+        }
+    }
+    for instrs in ir.decay_handlers.values() {
+        for instr in instrs {
+            record(instr);
+        }
+    }
+
+    referenced
 }
 
 pub trait OptimizationPass {
