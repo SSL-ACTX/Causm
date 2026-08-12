@@ -478,3 +478,46 @@ fn test_stdlib_and_tracer_integration() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_uninitialized_let_and_expression_entropy_match() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      isolate gateway {
+        require System.NetworkFetch
+        require System.Log
+        let status
+        let req = defer System.NetworkFetch(url="https://httpbin.org/get") deadline 1000ms
+      }
+    }
+    @10ms: {
+      isolate handler {
+        require System.Log
+        await(req)
+        status = match entropy(req) {
+          Valid(v): "resolved"
+          Consumed: "failed"
+        }
+        print(status)
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let status_reg = ir.symbols.get("status").expect("status symbol found").0;
+    let val = vm.root_timeline.arena.peek(status_reg);
+    assert!(
+        val == Some(causm_core::value::Payload::String("resolved".into()))
+            || val == Some(causm_core::value::Payload::String("failed".into()))
+    );
+
+    Ok(())
+}

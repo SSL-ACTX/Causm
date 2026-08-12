@@ -213,6 +213,23 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
+        Rule::match_entropy_expr => {
+            let stmt =
+                crate::parser::statements::entropic::parse_entropic_stmt(pair);
+            if let Statement::MatchEntropy { target, .. } = stmt {
+                target
+            } else {
+                Expression::Null
+            }
+        }
+        Rule::await_expr => {
+            let inner_expr = parse_expression(pair.into_inner().next().unwrap());
+            if let Expression::Identifier(ref id) = inner_expr {
+                Expression::Identifier(id.clone())
+            } else {
+                inner_expr
+            }
+        }
         Rule::chan_recv_expr => Expression::ChannelReceive(
             pair.into_inner()
                 .next()

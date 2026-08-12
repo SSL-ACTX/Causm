@@ -37,7 +37,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             let expr = inner
                 .next()
                 .map(parse_expression)
-                .unwrap_or(Expression::Literal("void".into()));
+                .unwrap_or(Expression::Null);
 
             Statement::Assignment {
                 target,
@@ -149,9 +149,101 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             Statement::DecayHandler { type_name, body }
         }
         Rule::field_update_stmt => {
-            let mut inner = pair.into_inner();
-            let target_expr = parse_expression(inner.next().unwrap());
-            let value = parse_expression(inner.next().unwrap());
+            let mut inner = pair.clone().into_inner();
+            let target_pair = inner.next().unwrap();
+            let value_pair = inner.next().unwrap();
+
+            // Descend through expression wrapper rules to find the actual inner rule.
+            // Grammar: expression -> relational_expr -> ... -> primary_expr -> base_expr -> match_entropy_expr
+            fn unwrap_to_inner(
+                p: pest::iterators::Pair<Rule>,
+            ) -> pest::iterators::Pair<Rule> {
+                match p.as_rule() {
+                    Rule::expression
+                    | Rule::relational_expr
+                    | Rule::additive_expr
+                    | Rule::multiplicative_expr
+                    | Rule::power_expr
+                    | Rule::unary_expr
+                    | Rule::primary_expr
+                    | Rule::base_expr => {
+                        if let Some(child) = p.into_inner().next() {
+                            unwrap_to_inner(child)
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    _ => p,
+                }
+            }
+
+            let inner_val = unwrap_to_inner(value_pair.clone());
+            if inner_val.as_rule() == Rule::match_entropy_expr {
+                let lhs_name = target_pair.as_str().trim().to_string();
+                let mut match_stmt =
+                    crate::parser::statements::entropic::parse_entropic_stmt(
+                        inner_val,
+                    );
+                if let Statement::MatchEntropy {
+                    ref mut valid_branch,
+                    ref mut decayed_branch,
+                    ref mut pending_branch,
+                    ref mut consumed_branch,
+                    ..
+                } = match_stmt
+                {
+                    let inject = |branch: &mut Option<(
+                        DecayedPattern,
+                        Vec<SpannedStatement>,
+                    )>| {
+                        if let Some((_, ref mut body)) = branch {
+                            if body.len() == 1 {
+                                if let Statement::Expression(expr) =
+                                    body[0].stmt.clone()
+                                {
+                                    *body = vec![SpannedStatement {
+                                        stmt: Statement::Assignment {
+                                            target: lhs_name.clone(),
+                                            mutable: false,
+                                            var_type: None,
+                                            expr,
+                                        },
+                                        span: body[0].span.clone(),
+                                    }];
+                                }
+                            }
+                        }
+                    };
+                    let inject_consumed =
+                        |branch: &mut Option<Vec<SpannedStatement>>| {
+                            if let Some(ref mut body) = branch {
+                                if body.len() == 1 {
+                                    if let Statement::Expression(expr) =
+                                        body[0].stmt.clone()
+                                    {
+                                        *body = vec![SpannedStatement {
+                                            stmt: Statement::Assignment {
+                                                target: lhs_name.clone(),
+                                                mutable: false,
+                                                var_type: None,
+                                                expr,
+                                            },
+                                            span: body[0].span.clone(),
+                                        }];
+                                    }
+                                }
+                            }
+                        };
+                    inject(valid_branch);
+                    inject(decayed_branch);
+                    inject(pending_branch);
+                    inject_consumed(consumed_branch);
+                }
+                return match_stmt;
+            }
+
+            let target_expr = parse_expression(target_pair);
+            let value = parse_expression(value_pair);
             if let Expression::FieldAccess { target, field } = target_expr {
                 Statement::FieldUpdate {
                     target: *target,

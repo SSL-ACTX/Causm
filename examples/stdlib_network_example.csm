@@ -1,37 +1,46 @@
 @0ms: {
-  isolate gateway_init {
+  isolate primary_gateway {
     enable cpu(100ms)
-    enable memory(5KB)
+    enable memory(10KB)
     require System.NetworkFetch
     require System.Log
 
-    let api_endpoint = "https://httpbin.org/get"
-    let req = defer System.NetworkFetch(url=api_endpoint, latency="10") deadline 5000ms
+    let primary_url = "https://httpbin.org/get"
+    let backup_url  = "https://httpbin.org/status/200"
 
-    let res = ""
+    let primary_req = defer System.NetworkFetch(url=primary_url, latency="10") deadline 3000ms
+    let backup_req  = defer System.NetworkFetch(url=backup_url, latency="15") deadline 5000ms
 
-    debug("Initiating live HTTP NetworkFetch via causm-stdlib...")
+    let status_summary
+    let body_payload
+
+    debug("Gateway Initialized: Parallel network deferrals active...")
   }
 }
 
-@10ms: {
-  isolate handler {
+@15ms: {
+  isolate failover_handler {
     require System.Log
-    await(req)
 
-    match entropy(req) {
-      Valid(val): {
-        res = "HTTP Fetch Succeeded"
-      }
-      Pending(p): {
-        res = "HTTP Fetch Pending"
-      }
-      Consumed: {
-        res = "HTTP Fetch Breached Deadline"
-      }
+    await(primary_req)
+
+    status_summary = match entropy(primary_req) {
+      Valid(val): "Primary Gateway Connected [HTTP 200]"
+      Pending(p): "Primary Pending - Failing over to Backup"
+      Consumed:   "Primary Timed Out / Breached 3000ms Deadline"
     }
 
-    print("HTTP Request Status:")
-    print(res)
+    print("Primary Pipeline State:")
+    print(status_summary)
+
+    await(backup_req)
+
+    body_payload = match entropy(backup_req) {
+      Valid(data): "Fallback Service Active"
+      Consumed:   "All Gateway Routes Breached Temporal Bounds"
+    }
+
+    print("Final Resolved Payload:")
+    print(body_payload)
   }
 }

@@ -6,7 +6,7 @@ use pest::iterators::Pair;
 
 pub fn parse_entropic_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
-        Rule::match_entropy_stmt => {
+        Rule::match_entropy_stmt | Rule::match_entropy_expr => {
             let mut inner = pair.into_inner();
             let target = parse_expression(inner.next().unwrap());
             let mut valid_branch = None;
