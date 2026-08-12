@@ -359,14 +359,29 @@ pub fn parse_reconcile_clause(pair: Pair<Rule>) -> MergeResolution {
 
 pub fn parse_duration_limit(pair: Pair<Rule>) -> u64 {
     assert_eq!(pair.as_rule(), Rule::duration_limit);
-    if let Some(amount_pair) = pair.clone().into_inner().next() {
-        amount_pair.as_str().parse::<u64>().unwrap_or(0)
+    let str_val = pair.as_str().trim_matches(|c| c == '(' || c == ')');
+    let mut num_str = String::new();
+    let mut unit_str = String::new();
+    for c in str_val.chars() {
+        if c.is_ascii_digit() {
+            num_str.push(c);
+        } else if c.is_ascii_alphabetic() {
+            unit_str.push(c);
+        }
+    }
+    let num = num_str.parse::<u64>().unwrap_or(0);
+    if unit_str.contains("ns") {
+        num / 1_000_000
+    } else if unit_str.contains("us") {
+        num / 1000
+    } else if unit_str.contains("ms") {
+        num
+    } else if unit_str.ends_with('s')
+        && !unit_str.contains("taking")
+        && !unit_str.contains("deadline")
+    {
+        num * 1000
     } else {
-        pair.as_str()
-            .chars()
-            .filter(|c| c.is_ascii_digit())
-            .collect::<String>()
-            .parse::<u64>()
-            .unwrap_or(0)
+        num
     }
 }

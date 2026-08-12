@@ -521,3 +521,47 @@ fn test_uninitialized_let_and_expression_entropy_match() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_duration_units_and_pipeline_operator() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      isolate duration_test {
+        require System.NetworkFetch
+        require System.Log
+        let t1 = 5s
+        let t2 = 500ms
+        let t3 = 1000us
+        let req = defer System.NetworkFetch(url="https://httpbin.org/get") deadline 2s
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let t1_reg = ir.symbols.get("t1").unwrap().0;
+    let t2_reg = ir.symbols.get("t2").unwrap().0;
+    let t3_reg = ir.symbols.get("t3").unwrap().0;
+
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(t1_reg),
+        Some(causm_core::value::Payload::Integer(5000))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(t2_reg),
+        Some(causm_core::value::Payload::Integer(500))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(t3_reg),
+        Some(causm_core::value::Payload::Integer(1))
+    );
+
+    Ok(())
+}

@@ -4,6 +4,25 @@ use std::collections::HashMap;
 
 pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression {
     match pair.as_rule() {
+        Rule::pipeline_expr => {
+            let mut inner = pair.into_inner();
+            let mut left = parse_expression(inner.next().unwrap());
+            for stage in inner {
+                let stage_expr = parse_expression(stage);
+                left = match stage_expr {
+                    Expression::Identifier(fn_name) => Expression::Call {
+                        routine: fn_name,
+                        args: vec![left],
+                    },
+                    Expression::Call { routine, mut args } => {
+                        args.insert(0, left);
+                        Expression::Call { routine, args }
+                    }
+                    _ => left,
+                };
+            }
+            left
+        }
         Rule::expression
         | Rule::relational_expr
         | Rule::additive_expr
@@ -151,13 +170,24 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 if p.as_rule() == Rule::param_list {
                     for param in p.clone().into_inner() {
                         let mut param_inner = param.into_inner();
-                        if let (Some(key), Some(value)) =
+                        if let (Some(key), Some(value_pair)) =
                             (param_inner.next(), param_inner.next())
                         {
-                            params.insert(
-                                key.as_str().replace("\"", ""),
-                                value.as_str().replace("\"", ""),
-                            );
+                            let key_str = key.as_str().trim_matches('"').to_string();
+                            let val_expr = parse_expression(value_pair.clone());
+                            let val_str = match val_expr {
+                                Expression::Literal(s) => s,
+                                Expression::Identifier(id) => id,
+                                Expression::Integer(i) => i.to_string(),
+                                Expression::Float(bits) => {
+                                    f64::from_bits(bits).to_string()
+                                }
+                                Expression::Boolean(b) => b.to_string(),
+                                _ => {
+                                    value_pair.as_str().trim_matches('"').to_string()
+                                }
+                            };
+                            params.insert(key_str, val_str);
                         }
                     }
                     next = inner.next();
@@ -190,8 +220,19 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             Expression::Call { routine, args }
         }
         Rule::duration_literal => {
-            let s = pair.as_str().trim_end_matches("ms");
-            let val = s.parse::<i64>().unwrap_or(0);
+            let str_val = pair.as_str();
+            let val = if str_val.ends_with("ns") {
+                str_val.trim_end_matches("ns").parse::<i64>().unwrap_or(0)
+                    / 1_000_000
+            } else if str_val.ends_with("us") {
+                str_val.trim_end_matches("us").parse::<i64>().unwrap_or(0) / 1000
+            } else if str_val.ends_with("ms") {
+                str_val.trim_end_matches("ms").parse::<i64>().unwrap_or(0)
+            } else if str_val.ends_with('s') {
+                str_val.trim_end_matches('s').parse::<i64>().unwrap_or(0) * 1000
+            } else {
+                0
+            };
             Expression::Integer(val)
         }
         Rule::integer_literal => {

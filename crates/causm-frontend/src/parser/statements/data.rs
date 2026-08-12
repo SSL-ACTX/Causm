@@ -160,6 +160,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             ) -> pest::iterators::Pair<Rule> {
                 match p.as_rule() {
                     Rule::expression
+                    | Rule::pipeline_expr
                     | Rule::relational_expr
                     | Rule::additive_expr
                     | Rule::multiplicative_expr

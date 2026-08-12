@@ -273,7 +273,14 @@ impl Vm {
         let latency = cap
             .parameters
             .get("latency")
-            .and_then(|l| l.parse::<u64>().ok())
+            .and_then(|l| {
+                l.trim_end_matches("ms")
+                    .trim_end_matches("us")
+                    .trim_end_matches("ns")
+                    .trim_end_matches('s')
+                    .parse::<u64>()
+                    .ok()
+            })
             .unwrap_or(10);
 
         let promise = causm_core::value::PendingPromise {
