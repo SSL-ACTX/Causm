@@ -170,7 +170,7 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                     }
                 }
                 SsaInstruction::StructLit { fields, .. } => {
-                    for (_, val_reg) in fields {
+                    for val_reg in fields.values_mut() {
                         let new_val = resolve(*val_reg);
                         if *val_reg != new_val {
                             *val_reg = new_val;
@@ -179,7 +179,7 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                     }
                 }
                 SsaInstruction::TopologyLit { fields, .. } => {
-                    for (_, val_reg) in fields {
+                    for val_reg in fields.values_mut() {
                         let new_val = resolve(*val_reg);
                         if *val_reg != new_val {
                             *val_reg = new_val;
@@ -294,13 +294,11 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                     changed = true;
                 }
             }
-            SsaTerminator::Return { src } => {
-                if let Some(r) = src {
-                    let new_r = resolve(*r);
-                    if *r != new_r {
-                        *r = new_r;
-                        changed = true;
-                    }
+            SsaTerminator::Return { src: Some(r) } => {
+                let new_r = resolve(*r);
+                if *r != new_r {
+                    *r = new_r;
+                    changed = true;
                 }
             }
             SsaTerminator::MatchEntropy { target, .. } => {

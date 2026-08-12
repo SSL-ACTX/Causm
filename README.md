@@ -45,18 +45,26 @@ Causm employs a multi-pass pipeline to ensure programs are only executed if thei
 graph TD
     Source[".csm Source Code"] --> Parser["Causm Parser (Pest)"]
     Parser --> AST["Abstract Syntax Tree"]
-    
+
     subgraph "Correctness Kernel"
         AST --> Analyzer["Entropic Analyzer"]
         Analyzer --> Z3Guard["Formal Verification Guard (Z3)"]
-        Z3Guard --> Proofs{{"Symbolic Proofs"}}
+        Z3Guard --> Proofs{{"Symbolic Proofs + WCET Bounds"}}
     end
-    
+
     Proofs -- "UNSAT (Violation)" --> Error["Semantic Error"]
     Proofs -- "SAT (Safe)" --> Lowering["IR Lowering"]
-    
-    Lowering --> TVM["Register-based TVM"]
-    
+
+    subgraph "IR Optimization Pipeline"
+        Lowering --> CfgSimp["CfgSimplificationPass"]
+        CfgSimp --> ChanLive["ChannelLivenessPass"]
+        ChanLive --> LeaseOpt["LeaseOptimizationPass"]
+        LeaseOpt --> ConcurAn["ConcurrencyAnalysisPass"]
+        ConcurAn --> Verifier["VerifierPass (SSA Phi)"]
+    end
+
+    Verifier --> TVM["Register-based TVM"]
+
     subgraph "TVM Execution"
         TVM --> Sched["Isochronous Scheduler"]
         TVM --> Arena["Entropic Arena"]
@@ -76,6 +84,7 @@ Technical specifications and research documentation are in the `docs/` directory
 - **Correctness**: [Formal Verification Guard](docs/spec/causm_spec_formal_verification.md), [Routine Contracts](docs/spec/causm_spec_routines.md)
 - **Temporal Mechanics**: [Isochronous Scheduling](docs/spec/causm_spec_isochronous_scheduling.md), [Iteration & Pacing](docs/spec/causm_spec_iteration.md)
 - **Concurrency & State**: [Entropic Channels](docs/spec/causm_spec_channels.md), [Timeline Routing](docs/spec/causm_spec_temporal_routing.md), [Asynchronous Promises](docs/spec/causm_spec_promises.md)
+- **OOP & Generics**: [Object-Oriented Programming](docs/spec/causm_spec_oop.md), [Temporal Leases](docs/spec/causm_spec_leases.md)
 
 ### TVM Internals (`docs/tvm/`)
 - [Acausal Debugging](docs/tvm/causm_tvm_debugging.md): Diagnostics and trace logs.
@@ -92,15 +101,23 @@ Technical specifications and research documentation are in the `docs/` directory
 
 ### Execution Interface
 
+The `causm` CLI uses subcommands:
+
 ```bash
 # Analyze and run a source file
-cargo run -- examples/time_travel_showcase.csm
+causm run examples/time_travel_showcase.csm
 
-# Perform formal verification without execution
-cargo run -- --check examples/sample.csm
+# Perform formal verification only (no execution)
+causm check examples/sample.csm
 
-# Execute with full entropic tracing
-cargo run -- --run --trace-entropy examples/sample.csm
+# Emit IR or diagnostic output
+causm emit examples/sample.csm
+
+# Run with verbose metrics, arena tables, and WCET bounds
+causm run -v examples/sample.csm
+
+# Run with full causal history tracing
+causm run --trace-causal examples/sample.csm
 ```
 
 ---
@@ -162,8 +179,38 @@ routine Robot.work(consume self) -> int taking 20ms {
 let r: Robot = struct { name = "T-800", model = "Model 101" }
 r.introduce() // Dynamic lookup resolves to Actor.introduce
 
-let w: Worker = r // Structural subtyping implementation
+let w: Worker = r // Structural subtyping
 w.work() // Polymorphic dispatch (consumes the robot structure)
+```
+
+### Generic Structs & Monomorphized Dispatch
+```csm
+type Container<T: Consumable> = struct {
+    value: T
+}
+
+routine Container<T>.take_inner(consume self) -> T taking 10ms {
+    let inner = self.value
+    yield inner
+}
+
+let c: Container<int> = struct { value = 42 }
+let v: int = c.take_inner() // monomorphized to Container<int>.take_inner
+```
+
+### Type Casting & Array Broadcasting
+```csm
+// Explicit numeric type casting with `as`
+let val: f64 = 42 as f64
+let truncated: i32 = 3.14159 as i32  // yields 3
+
+// Scalar-to-array broadcasting
+let scaled: array<int> = [1, 2, 3] * 10  // yields [10, 20, 30]
+
+// Array-to-array elementwise operations
+let a: array<int> = [1, 2, 3]
+let b: array<int> = [10, 20, 30]
+let sum: array<int> = a + b  // yields [11, 22, 33]
 ```
 
 ---

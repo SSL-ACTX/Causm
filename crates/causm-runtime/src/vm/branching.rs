@@ -128,6 +128,8 @@ impl Vm {
             for (idx, state) in branch.arena.registers.iter().enumerate() {
                 if let Some(existing) = &merged_registers[idx] {
                     let resolved = if idx >= base_arena_len {
+                        // Register was introduced inside a branch, not pre-existing in target.
+                        // Always prefer Valid/Decayed over Consumed when merging branch-local regs.
                         match (existing, state) {
                             (EntropicState::Consumed, other) => other.clone(),
                             (other, EntropicState::Consumed) => other.clone(),
@@ -269,6 +271,15 @@ impl Vm {
                 ResolutionStrategy::FirstWins => {
                     return (existing.clone(), None);
                 }
+                ResolutionStrategy::Auto => match (existing, incoming) {
+                    (EntropicState::Consumed, other) => {
+                        return (other.clone(), None)
+                    }
+                    (other, EntropicState::Consumed) => {
+                        return (other.clone(), None)
+                    }
+                    _ => return (EntropicState::Consumed, None),
+                },
                 _ => {
                     return (EntropicState::Consumed, None);
                 }

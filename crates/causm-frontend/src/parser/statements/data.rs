@@ -284,8 +284,8 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                         for term in next_pair.into_inner() {
                             match term.as_rule() {
                                 Rule::interface_term => {
-                                    let mut term_inner = term.into_inner();
-                                    while let Some(item) = term_inner.next() {
+                                    let term_inner = term.into_inner();
+                                    for item in term_inner {
                                         if item.as_rule() == Rule::identifier {
                                             let id_str = item.as_str();
                                             if id_str != "interface" {

@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod test {
     use crate::cfg::CFG;
     use crate::optimize::coalescing::BlockCoalescingPass;
     use crate::optimize::constant_prop::ConstantPropagationPass;

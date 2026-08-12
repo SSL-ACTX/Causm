@@ -37,8 +37,9 @@ Methods are routines associated with a struct type. They are defined using dot-n
 
 ### 3.1 Receiver Parameter
 The first parameter of a method must be `self`, which represents the instance receiver. The type of `self` is automatically inferred to be the struct type.
-The receiver parameter requires a parameter mode (`consume`, `peek`, or `clone`):
-*   `consume self`: Consumes the instance, moving ownership into the method.
+The receiver parameter requires a parameter mode (`consume`, `lease`, `peek`, or `clone`):
+*   `consume self`: Consumes the instance, moving ownership into the method. The caller cannot use the instance after this call.
+*   `lease self`: Borrows the instance under a temporal lease for the duration of the method's WCET budget. Equivalent to a time-bounded read-write borrow — the instance is returned to the caller's scope automatically when the lease expires.
 *   `peek self`: Grants read-only access (borrow) without consuming or copying.
 *   `clone self`: Automatically clones the instance.
 
@@ -109,6 +110,32 @@ routine Robot.introduce(peek self) -> int (taking 15ms) {
 }
 ```
 
+## 5a. Generic Structs & Monomorphized Dispatch
+
+Structs can declare generic type parameters with entropic bounds. The compiler monomorphizes each instantiation into specialized IR at compile time.
+
+```causm
+type Container<T: Consumable> = struct {
+    value: T
+}
+
+routine Container<T>.take_inner(consume self) -> T taking 10ms {
+    let inner = self.value
+    yield inner
+}
+
+let c: Container<int>   = struct { value = 42 }
+let v: int = c.take_inner() // resolved to monomorphized Container<int>.take_inner
+```
+
+### Supported Type Bounds
+| Bound | Meaning |
+|-------|---------|
+| `Consumable` | The type parameter can be consumed (moved) |
+| `Leasable` | The type parameter supports temporal lease borrowing |
+
+See [Type System spec](causm_spec_types.md#4a-generic-type-parameters) for full bounds reference.
+
 ## 6. Interfaces & Dynamic Dispatch
 
 Interfaces define a set of methods that concrete types can implement.
@@ -131,7 +158,21 @@ interface PlayableWorker = Worker + interface {
 }
 ```
 
-### 6.3 Interface Subtyping & Implicit Implementation
+### 6.3 Associated Lifecycle Types in Interfaces
+Interfaces can declare associated entropic types and decay constraints, allowing generic contract specifications:
+```causm
+interface Streamable {
+    type PayloadType: Consumable
+    decay_after 500ms
+
+    routine next(peek self) -> PayloadType taking 10ms
+}
+```
+- `type PayloadType: Consumable` declares an associated type with an entropic bound.
+- `decay_after 500ms` constrains implementing structs to an entropic lifetime.
+- Implementing structs must concretely specify `PayloadType` when satisfying the interface.
+
+### 6.4 Interface Subtyping & Implicit Implementation
 Causm uses structural subtyping: any struct that defines all methods required by an interface implicitly implements that interface.
 ```causm
 let w: Worker = r // Struct subtyping assignment

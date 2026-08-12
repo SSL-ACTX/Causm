@@ -1,42 +1,31 @@
 @0ms: {
-    print("-- 1. Bounded while loop (max 20ms) --")
+    let counter: int = 0
+    let total: int = 0
 
-    let counter = 0
-    let total   = 0
-
-    while (counter < 5) (max 20ms) {
-        total   = total + counter
+    while (counter < 5) (max 25ms) {
+        total = total + counter
         counter = counter + 1
     }
+    debug(counter)
+    debug(total)
 
-    // counter == 5, total == 0+1+2+3+4 == 10
-    print("counter after loop: " + counter)   // 5
-    print("sum 0..4:           " + total)    
-    print("-- 2. while valid — entropic guard loop (max 30ms) --")
-
-    let buffer    = "live_payload"
-    let attempts  = 0
+    let buffer = "sensor_stream_payload"
+    let ticks = 0
 
     while valid (buffer) (max 30ms) {
-        attempts = attempts + 1
-
-        if (attempts == 3) {
-            // Consuming 'buffer' terminates the validity guard
-            let result = buffer
-            print("Consumed payload on attempt: " + attempts)
-            print("Result: " + result)
+        ticks = ticks + 1
+        if (ticks == 3) {
+            let extracted = buffer
+            debug(extracted)
         } reconcile auto
     }
-
-    print("Total attempts before exhaustion: " + attempts)   // 3
+    debug(ticks)
 }
 
 @40ms: {
-    print("-- 3. for … step — paced isochronous iteration (10ms/element) --")
-
-    let readings = [12, 47, 8, 93, 31]
-    let sum      = 0
-    let peak     = 0
+    let readings = [15, 42, 88, 23, 99]
+    let sum = 0
+    let peak = 0
 
     for val in readings step 10ms {
         sum = sum + val
@@ -44,59 +33,42 @@
             peak = val
         } reconcile auto
     }
+    debug(sum)
+    debug(peak)
 
-    // Each of the 5 elements consumed exactly 5ms → clock += 25ms min
-    print("Sensor readings: [12, 47, 8, 93, 31]")
-    print("Sum:  " + sum)    // 191
-    print("Peak: " + peak)   // 93
-    print("-- 4. loop tick on channel — reactive event loop --")
-
-    open_chan events_bus(8)
-
+    open_chan signal_bus(8)
     split main into [producer, consumer]
 }
 
 @50ms: {
     @producer: {
-        // Emit three discrete events onto the shared bus
-        let ev1 = "TEMPERATURE_HIGH"
-        let ev2 = "PRESSURE_NOMINAL"
-        let ev3 = "SHUTDOWN"
+        let msg1 = "CRITICAL_ALERT"
+        let msg2 = "SYSTEM_SYNC"
+        let msg3 = "TERMINATE"
 
-        chan_send events_bus(ev1)
-        chan_send events_bus(ev2)
-        chan_send events_bus(ev3)
-
-        print("Producer: emitted 3 events.")
+        chan_send signal_bus(msg1)
+        chan_send signal_bus(msg2)
+        chan_send signal_bus(msg3)
     }
 
     @consumer: {
-        // The slice sets the per-tick watchdog budget.
         slice 20ms
+        let count = 0
+        let terminated = false
 
-        let processed = 0
-        let done      = false
-
-        loop tick on events_bus {
-            let ev = chan_recv(events_bus)
-            processed = processed + 1
-
-            print("Consumer received event: " + ev)
-
-            // Exit cleanly on terminal event
-            if (ev == "SHUTDOWN") {
-                done = true
+        loop tick on signal_bus {
+            let msg = chan_recv(signal_bus)
+            count = count + 1
+            if (msg == "TERMINATE") {
+                terminated = true
             } reconcile auto
-
             break
         }
-
-        print("Consumer: processed " + processed + " event(s).")
-        print("Shutdown received: " + done)
+        debug(count)
+        debug(terminated)
     }
 }
 
 @70ms: {
     merge [producer, consumer] into main reconcile auto
-    print("=== Showcase complete. ===")
 }

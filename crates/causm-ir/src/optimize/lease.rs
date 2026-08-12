@@ -49,20 +49,8 @@ impl OptimizationPass for LeaseOptimizationPass {
                     target_reg,
                     duration_ms,
                     ..
-                } => {
-                    if *duration_ms == 0 || !used_regs.contains(&target_reg.reg) {
-                        false
-                    } else {
-                        true
-                    }
-                }
-                SsaInstruction::EndLease { duration_ms, .. } => {
-                    if *duration_ms == 0 {
-                        false
-                    } else {
-                        true
-                    }
-                }
+                } => !(*duration_ms == 0 || !used_regs.contains(&target_reg.reg)),
+                SsaInstruction::EndLease { duration_ms, .. } => *duration_ms != 0,
                 _ => true,
             });
             if block.instructions.len() != before_len {

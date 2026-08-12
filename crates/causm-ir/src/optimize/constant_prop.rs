@@ -437,10 +437,12 @@ mod tests {
 
         let entry = ssa_cfg.blocks.get(&ssa_cfg.entry_block).unwrap();
         // The binary op adding 10 + 20 should be folded into ConstInt 30 or LoadInt 30
-        let has_folded_add = entry.instructions.iter().any(|i| match i {
-            SsaInstruction::LoadInt { value: 30, .. }
-            | SsaInstruction::ConstInt { value: 30, .. } => true,
-            _ => false,
+        let has_folded_add = entry.instructions.iter().any(|i| {
+            matches!(
+                i,
+                SsaInstruction::LoadInt { value: 30, .. }
+                    | SsaInstruction::ConstInt { value: 30, .. }
+            )
         });
         assert!(has_folded_add);
     }

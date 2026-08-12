@@ -70,12 +70,12 @@ impl CfgSimplificationPass {
                             preserved.insert(b);
                         }
                     }
-                    SsaInstruction::Watchdog { recovery_jump, .. } => {
-                        if let Some(pc) = recovery_jump {
-                            if let Some(&b) = ssa_cfg.original_pc_to_block_id.get(pc)
-                            {
-                                preserved.insert(b);
-                            }
+                    SsaInstruction::Watchdog {
+                        recovery_jump: Some(pc),
+                        ..
+                    } => {
+                        if let Some(&b) = ssa_cfg.original_pc_to_block_id.get(pc) {
+                            preserved.insert(b);
                         }
                     }
                     SsaInstruction::Speculate {
@@ -159,23 +159,20 @@ impl CfgSimplificationPass {
         for id in ids {
             let mut folded_to_jump = None;
             if let Some(block) = ssa_cfg.blocks.get(&id) {
-                match &block.terminator {
-                    SsaTerminator::Branch {
-                        cond,
-                        then_block,
-                        else_block,
-                    } => {
-                        if then_block == else_block {
-                            folded_to_jump = Some((*then_block, None));
-                        } else if let Some(val) = const_bools.get(cond) {
-                            let target =
-                                if *val { *then_block } else { *else_block };
-                            let dead_branch =
-                                if *val { *else_block } else { *then_block };
-                            folded_to_jump = Some((target, Some(dead_branch)));
-                        }
+                if let SsaTerminator::Branch {
+                    cond,
+                    then_block,
+                    else_block,
+                } = &block.terminator
+                {
+                    if then_block == else_block {
+                        folded_to_jump = Some((*then_block, None));
+                    } else if let Some(val) = const_bools.get(cond) {
+                        let target = if *val { *then_block } else { *else_block };
+                        let dead_branch =
+                            if *val { *else_block } else { *then_block };
+                        folded_to_jump = Some((target, Some(dead_branch)));
                     }
-                    _ => {}
                 }
             }
 

@@ -34,14 +34,19 @@ Historical design documents and the standard RFC process.
 - **[Entropic GC Proposal](./proposals/causm_prop_egc.md)**: Original design for deterministic reclamation.
 - **[Advanced Mechanics](./proposals/causm_prop_advanced_mechanics.md)**: Refinements for channels, contracts, and diagnostics.
 - **[Advanced Routing](./proposals/causm_prop_advanced_routing.md)**: Early designs for complex timeline topologies.
+- **[Advanced Data Structures](./proposals/causm_prop_advanced_data_structures.md)**: Proposals for complex entropic collection types.
+- **[Advanced Loops](./proposals/causm_prop_advanced_loops.md)**: Extended iteration and pacing mechanisms.
 - **[Developer Ergonomics](./proposals/causm_prop_dev_ergonomics.md)**: Strategies for improving language usability.
 - **[If/Else Speculation](./proposals/causm_prop_if_else.md)**: Design for speculative conditional branches.
 - **[Isochronous Matrix](./proposals/causm_prop_isochronous_matrix.md)**: Mathematical foundations for temporal scheduling.
 - **[Iterative Paced Loops](./proposals/causm_prop_iter_paced_loop.md)**: Proposal for time-constrained iteration.
+- **[Primitive Types](./proposals/causm_prop_primitive_types.md)**: Specification for primitive numeric type extensions.
 - **[Promises & Causality](./proposals/causm_prop_promises.md)**: Design for acausal synchronization.
 - **[Routine TP Contracts](./proposals/causm_prop_routines_tp_contract.md)**: Temporal performance contracts for routines.
 - **[Speculative Branches Proposal](./proposals/causm_prop_speculative_branches.md)**: Early research on speculative execution.
 - **[Temporal Leases Proposal](./proposals/causm_prop_temporal_leases.md)**: Design for time-bound resource ownership.
+- **[Type Casting & Broadcasting](./proposals/causm_prop_casting_and_broadcasting.md)**: Design for the `as` casting operator and elementwise array broadcasting.
+- **[Advanced Entropic OOP](./proposals/causm_prop_advanced_entropic_oop.md)**: Monomorphized generic method dispatch, associated lifecycle types, and entropic interface constraints.
 
 ---
 *This index is maintained as the authoritative source for Causm documentation.*

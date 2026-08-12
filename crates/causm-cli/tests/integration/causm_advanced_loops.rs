@@ -125,7 +125,40 @@ fn test_loop_tick_on_channel() -> anyhow::Result<()> {
 
 #[test]
 fn test_advanced_loop_showcase() -> anyhow::Result<()> {
-    let source = include_str!("../../../examples/advanced_loop_sc.csm");
+    let source = r#"
+    @0ms: {
+        let counter: int = 0
+        let total: int = 0
+
+        while (counter < 5) (max 25ms) {
+            total = total + counter
+            counter = counter + 1
+        }
+
+        let buffer = "sensor_stream_payload"
+        let ticks = 0
+
+        while valid (buffer) (max 30ms) {
+            ticks = ticks + 1
+            if (ticks == 3) {
+                let extracted = buffer
+            } reconcile auto
+        }
+    }
+
+    @40ms: {
+        let readings = [15, 42, 88, 23, 23]
+        let sum = 0
+        let peak = 0
+
+        for val in readings step 10ms {
+            sum = sum + val
+            if (val > peak) {
+                peak = val
+            } reconcile auto
+        }
+    }
+    "#;
     let program = parser::parse_causm(source)?;
     let ir = causm_frontend::lower::lower_program(&program);
 
@@ -133,14 +166,13 @@ fn test_advanced_loop_showcase() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_| Ok(()));
     vm.execute_program(&ir)?;
 
     let main = &vm.root_timeline;
     let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
     let peak_reg = ir.symbols.get("peak").expect("peak not found").0;
     assert_eq!(main.arena.peek(sum_reg), Some(Payload::Integer(191)));
-    assert_eq!(main.arena.peek(peak_reg), Some(Payload::Integer(93)));
+    assert_eq!(main.arena.peek(peak_reg), Some(Payload::Integer(88)));
 
     Ok(())
 }

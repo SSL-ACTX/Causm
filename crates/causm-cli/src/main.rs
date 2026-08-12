@@ -403,7 +403,7 @@ fn main() -> anyhow::Result<()> {
 fn emit_format(
     fmt: DumpFormat,
     program: &causm_core::Program,
-    path: &PathBuf,
+    path: &std::path::Path,
 ) -> anyhow::Result<()> {
     match fmt {
         DumpFormat::Ast => {}

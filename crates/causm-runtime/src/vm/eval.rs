@@ -93,7 +93,7 @@ impl Vm {
                     )));
                 }
                 let mut res = Vec::new();
-                for (l, r) in l_elems.into_iter().zip(r_elems.into_iter()) {
+                for (l, r) in l_elems.into_iter().zip(r_elems) {
                     res.push(self.evaluate_binary_operation(l, r, op)?);
                 }
                 Payload::Array(res)

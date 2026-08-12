@@ -310,6 +310,8 @@ impl Vm {
         consumed_target: Option<usize>,
     ) -> Result<(), TemporalError> {
         let state = self.peek_state(branch_id, target.0)?;
+        eprintln!("[TRACE MatchEntropy] branch={} R{}={:?} valid={:?} decayed={:?} pending={:?} consumed={:?}",
+            branch_id, target.0, state, valid_target, decayed_target, pending_target, consumed_target);
         let maybe_jump = match &state {
             causm_core::value::EntropicState::Valid(_) => valid_target,
             causm_core::value::EntropicState::Leased { original, .. } => {
@@ -318,13 +320,14 @@ impl Vm {
                     causm_core::value::EntropicState::Decayed(_) => decayed_target,
                     causm_core::value::EntropicState::Pending(_) => pending_target,
                     causm_core::value::EntropicState::Consumed => consumed_target,
-                    causm_core::value::EntropicState::Leased { .. } => valid_target, // Should not happen due to analysis
+                    causm_core::value::EntropicState::Leased { .. } => valid_target,
                 }
             }
             causm_core::value::EntropicState::Decayed(_) => decayed_target,
             causm_core::value::EntropicState::Pending(_) => pending_target,
             causm_core::value::EntropicState::Consumed => consumed_target,
         };
+        eprintln!("[TRACE MatchEntropy] jumping to pc={:?}", maybe_jump);
 
         if let Some(target_pc) = maybe_jump {
             let branch = self.get_branch_mut(branch_id)?;

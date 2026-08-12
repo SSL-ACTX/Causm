@@ -1348,9 +1348,8 @@ impl std::fmt::Display for SsaCFG {
                     )
                 }
                 SsaTerminator::Return { src } => {
-                    let src_str = src
-                        .map(|s| resolve_reg(s))
-                        .unwrap_or_else(|| "void".to_string());
+                    let src_str =
+                        src.map(&resolve_reg).unwrap_or_else(|| "void".to_string());
                     format!("Return {}", src_str)
                 }
                 SsaTerminator::MatchEntropy {
