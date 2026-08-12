@@ -1,154 +1,7 @@
-// src/analysis/analyzer.rs
+use super::types::*;
 use causm_core::types::{StructType, Type};
 use causm_core::*;
 use std::collections::{HashMap, HashSet};
-use thiserror::Error;
-
-#[allow(dead_code)]
-#[derive(Debug, Error)]
-pub enum SemanticErrorKind {
-    #[error("Compile-Time Entropic Violation: '{0}' has been consumed or decayed and cannot be moved/reused.")]
-    UseAfterConsume(String),
-    #[error("Entropy Violation: Variable '{0}' has decayed after {1}ms (instantiated at {2}ms, currently at {3}ms)")]
-    UsedDecayedValue(String, u64, u64, u64),
-    #[error("Timeline Violation: Variable '{0}' is scoped to branch '@{1}' and cannot be moved to branch '@{2}'.")]
-    InvalidTimelineMove(String, String, String),
-    #[error("Merge Collision: Variable '{0}' produced in multiple branches requires a resolution strategy.")]
-    UnresolvedMerge(String),
-    #[error("Branch Leak: Variable '{0}' is consumed in one branch but accessed in a parallel timeline.")]
-    CrossBranchViolation(String),
-    #[error("Entropy Mismatch: variables require reconcile: {0}")]
-    EntropyMismatch(String),
-    #[error("Invalid 'loop' budget: max must be >0")]
-    InvalidLoopBudget,
-    #[error("Tick loop requires a fixed slice via slice <N>ms")]
-    TickLoopWithoutSlice,
-    #[error("Type mismatch: {0}")]
-    TypeMismatch(String),
-    #[error("Undefined variable: {0}")]
-    UndefinedVariable(String),
-    #[error("Tick loop body cost {0}ms exceeds slice budget {1}ms")]
-    TickLoopBudgetExceeded(u64, u64),
-    #[error("Tick loop must include a break statement")]
-    TickLoopNeedsBreak,
-    #[error("Routine temporal contract violated: {0} requires {1}ms but body costs {2}ms")]
-    RoutineBudgetExceeded(String, u64, u64),
-    #[error("Pacing violation: loop body exceeds pacing window")]
-    PacingViolation,
-    #[error("Invalid Access: '{0}' is not a structure or has decayed.")]
-    InvalidStructuralAccess(String),
-    #[error("Capability violation: Required capability '{0}' is not declared in this isolate.")]
-    MissingCapability(String),
-    #[error("Temporal Assertion Violation: WCET to this point is {0}ms, which exceeds the limit of {1}ms")]
-    TemporalAssertionViolation(u64, u64),
-    #[error("Chaos Mode enabled: Rewinds and anchors are disabled because non-deterministic entropy was requested.")]
-    ChaosModePreventsRewind,
-    #[error(
-        "Lease Violation: Attempted to mutate or transmit leased variable '{0}'"
-    )]
-    LeaseViolation(String),
-    #[error("Lease Duration Exceeded: WCET of lease block ({0}ms) exceeds requested duration ({1}ms)")]
-    LeaseDurationExceeded(u64, u64),
-    #[error(
-        "Nested Leasing: Cannot lease a variable '{0}' that is already leased."
-    )]
-    NestedLeasing(String),
-    #[error("Illegal Control Flow: Lease blocks cannot contain 'break' or 'return' statements.")]
-    IllegalLeaseControlFlow,
-    #[error("Compile-Time Entropic Leak: Variable '{0}' remains Valid or Decayed at program termination without being consumed.")]
-    UnconsumedVariable(String),
-    #[error("Argument count mismatch: {0}")]
-    ArgumentCountMismatch(String),
-    #[error("Timeline Violation: Branch '@{0}' is inactive, has been merged, or has not been split yet.")]
-    InactiveTimeline(String),
-}
-
-#[derive(Debug)]
-pub struct SemanticError {
-    pub kind: Box<SemanticErrorKind>,
-    pub branch: String,
-    pub statement: Option<String>,
-    pub file: Option<String>,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-}
-
-impl std::fmt::Display for SemanticError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let location_prefix = match (&self.file, self.line, self.column) {
-            (Some(file), Some(line), Some(col)) => {
-                format!("{}:{}:{}", file, line, col)
-            }
-            _ => "<unknown>".to_string(),
-        };
-
-        write!(f, "error: {}\n  --> {}\n   |\n", self.kind, location_prefix)?;
-
-        if let Some(ref stmt) = self.statement {
-            writeln!(f, "{:>4} | {}", self.line.unwrap_or(0), stmt)?;
-            if let Some(col) = self.column {
-                let marker_line = " ".repeat(col.saturating_sub(1));
-                writeln!(f, "   | {}^", marker_line)?;
-            }
-        }
-
-        write!(f, "   |\n   = note: branch '{}'\n", self.branch)
-    }
-}
-
-impl std::error::Error for SemanticError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct BranchState {
-    pub consumed: HashSet<String>,
-    pub decayed: HashSet<String>,
-    pub yields: HashSet<String>,
-    pub produced: HashSet<String>,
-    pub leased: HashSet<String>,
-    pub lease_bindings: HashSet<String>,
-    pub mutables: HashSet<String>,
-    pub types: HashMap<String, Type>,
-    pub custom_types: HashMap<String, Type>,
-    pub accumulated_cost: u64,
-    pub instantiated_at: HashMap<String, u64>,
-}
-
-impl BranchState {
-    pub fn remove_variable_scope(&mut self, name: &str) {
-        self.types.remove(name);
-        self.consumed.remove(name);
-        self.decayed.remove(name);
-        self.leased.remove(name);
-        self.lease_bindings.remove(name);
-        self.yields.remove(name);
-        self.produced.remove(name);
-        self.mutables.remove(name);
-        self.instantiated_at.remove(name);
-
-        let prefix = format!("{}.", name);
-        self.types.retain(|k, _| !k.starts_with(&prefix));
-        self.consumed.retain(|k| !k.starts_with(&prefix));
-        self.decayed.retain(|k| !k.starts_with(&prefix));
-        self.leased.retain(|k| !k.starts_with(&prefix));
-        self.lease_bindings.retain(|k| !k.starts_with(&prefix));
-        self.yields.retain(|k| !k.starts_with(&prefix));
-        self.produced.retain(|k| !k.starts_with(&prefix));
-        self.mutables.retain(|k| !k.starts_with(&prefix));
-        self.instantiated_at.retain(|k, _| !k.starts_with(&prefix));
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RoutineInfo {
-    pub params: Vec<(causm_core::ParamMode, String, Type)>,
-    pub return_type: Type,
-    pub taking_ms: u64,
-    pub state_constraint: Option<(String, String)>,
-}
 
 pub struct EntropicAnalyzer {
     pub branch_contexts: HashMap<String, BranchState>,
@@ -253,13 +106,9 @@ impl EntropicAnalyzer {
 
     pub(crate) fn is_capability_allowed(&self, cap: &str) -> bool {
         self.capability_stack.iter().rev().any(|map| {
-            // 1. Direct match
             if map.contains_key(cap) {
                 return true;
             }
-
-            // 2. Wildcard ID match (e.g., if cap is "Chan.Outbound[id=sensors]",
-            // check for "Chan.Outbound[id=*]")
             if cap.contains("[id=") {
                 let base = cap.split('[').next().unwrap();
                 let wildcard_key = format!("{}[id=*]", base);
@@ -267,10 +116,6 @@ impl EntropicAnalyzer {
                     return true;
                 }
             }
-
-            // 3. Base capability match (e.g., if cap is "Chan.Outbound",
-            // return true if any "Chan.Outbound[id=...]" exists)
-            // This allows broad 'require Chan.Outbound' to cover all IDs.
             map.keys()
                 .any(|k| k == cap || k.starts_with(&(cap.to_string() + "[id=")))
         })
@@ -320,7 +165,6 @@ impl EntropicAnalyzer {
         &mut self,
         program: &Program,
     ) -> Result<(), SemanticError> {
-        // Reset mutable analysis state for each run.
         self.branch_contexts.clear();
         self.branch_contexts
             .insert("main".to_string(), BranchState::default());
@@ -370,7 +214,6 @@ impl EntropicAnalyzer {
                 let old_span = self.current_span.clone();
                 self.current_statement = Some(self.statement_snippet(stmt));
                 self.current_span = Some(stmt.span.clone());
-                self.current_span = Some(stmt.span.clone());
                 self.analyze_statement(stmt)?;
                 self.record_state(stmt.span.clone());
                 self.current_statement = old_stmt;
@@ -380,7 +223,6 @@ impl EntropicAnalyzer {
             self.current_branch = old_branch;
         }
 
-        // Entropic Terminal Check
         if self.enforce_egc {
             for state in self.branch_contexts.values() {
                 for var in &state.produced {
@@ -396,11 +238,9 @@ impl EntropicAnalyzer {
             }
         }
 
-        // Formal Verification Guard
         if self.use_z3 {
-            let mut verifier = crate::z3_guard::FormalVerifier::<
-                crate::z3_guard::Z3Backend,
-            >::new(self);
+            let mut verifier =
+                crate::z3::FormalVerifier::<crate::z3::Z3Backend>::new(self);
             verifier.verify(program)?;
         }
 
@@ -478,9 +318,7 @@ impl EntropicAnalyzer {
 
         if !type_conflicts.is_empty() {
             match reconcile {
-                // `reconcile auto` — widening to Unknown is sufficient, no error.
                 Some(r) if r.auto => {}
-                // Manual reconcile rules — only error for vars not covered.
                 Some(r) => {
                     let uncovered: Vec<_> = type_conflicts
                         .iter()
@@ -496,7 +334,6 @@ impl EntropicAnalyzer {
                         ));
                     }
                 }
-                // No reconcile clause at all — error on any type conflict.
                 None => {
                     return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
                         format!("divergent types for {}", type_conflicts.join(", ")),
@@ -688,10 +525,8 @@ impl EntropicAnalyzer {
                     if !self.types_compatible(&expected_type, act_field_type) {
                         return false;
                     }
-                } else {
-                    if field_def.default_value.is_none() {
-                        return false;
-                    }
+                } else if field_def.default_value.is_none() {
+                    return false;
                 }
             }
             true
@@ -800,7 +635,6 @@ impl EntropicAnalyzer {
                 self.types_compatible(&exp_inner, &act_inner)
             }
             (Type::Optional(exp_inner), act_ty) => {
-                // optional can accept inner type (nullable semantics)
                 self.types_compatible(&exp_inner, &act_ty)
             }
             (act_ty, Type::Optional(exp_inner)) => {

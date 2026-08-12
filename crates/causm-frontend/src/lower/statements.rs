@@ -1,183 +1,20 @@
+use super::context::LoweringContext;
+use super::expressions::lower_expression;
 use causm_core::{
-    BinaryOperator, DecayedPattern, Expression, PatternValue, Program,
-    SpannedStatement, Statement, TypeFieldDef,
+    BinaryOperator, DecayedPattern, Expression, PatternValue, SpannedStatement,
+    Statement,
 };
-use causm_ir::{Instruction, IrBlock, IrProgram, IrRoutine, IrSelectCase, Reg};
+use causm_ir::{Instruction, IrRoutine, IrSelectCase, Reg};
 use std::collections::HashMap;
 
-struct LoweringContext {
-    next_reg: u32,
-    symbols: HashMap<String, Reg>,
-    instructions: Vec<Instruction>,
-    spans: Vec<Option<causm_core::Span>>,
-    routines: HashMap<String, IrRoutine>,
-    type_decay_limits: HashMap<String, u64>,
-    type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
-    interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
-    struct_extends: HashMap<String, String>,
-    decay_handlers: HashMap<String, Vec<Instruction>>,
-    current_span: Option<causm_core::Span>,
-}
-
-impl LoweringContext {
-    fn new() -> Self {
-        Self {
-            next_reg: 0,
-            symbols: HashMap::new(),
-            instructions: Vec::new(),
-            spans: Vec::new(),
-            routines: HashMap::new(),
-            type_decay_limits: HashMap::new(),
-            type_decls: HashMap::new(),
-            interfaces: HashMap::new(),
-            struct_extends: HashMap::new(),
-            decay_handlers: HashMap::new(),
-            current_span: None,
-        }
-    }
-
-    fn alloc_reg(&mut self) -> Reg {
-        let r = Reg(self.next_reg);
-        self.next_reg += 1;
-        r
-    }
-
-    fn get_reg(&mut self, name: &str) -> Reg {
-        if let Some(r) = self.symbols.get(name) {
-            *r
-        } else {
-            let r = self.alloc_reg();
-            self.symbols.insert(name.to_string(), r);
-            r
-        }
-    }
-
-    fn push(&mut self, instr: Instruction) {
-        self.instructions.push(instr);
-        self.spans.push(self.current_span.clone());
-    }
-}
-
-fn lower_spanned(ctx: &mut LoweringContext, spanned: &SpannedStatement) {
+pub fn lower_spanned(ctx: &mut LoweringContext, spanned: &SpannedStatement) {
     let old_span = ctx.current_span.clone();
     ctx.current_span = Some(spanned.span.clone());
     lower_statement(ctx, &spanned.stmt);
     ctx.current_span = old_span;
 }
 
-pub fn lower_program(program: &Program) -> IrProgram {
-    let mut blocks = Vec::new();
-    let mut ctx = LoweringContext::new();
-
-    for tb in &program.timelines {
-        let start_idx = ctx.instructions.len();
-        for stmt in &tb.statements {
-            lower_spanned(&mut ctx, stmt);
-        }
-        let block_instrs = ctx.instructions.split_off(start_idx);
-        let block_spans = ctx.spans.split_off(start_idx);
-        blocks.push(IrBlock {
-            time: tb.time.clone(),
-            instructions: block_instrs,
-            spans: block_spans,
-        });
-    }
-
-    let mut default_methods = HashMap::new();
-    let mut sorted_struct_names: Vec<&String> = ctx.type_decls.keys().collect();
-    sorted_struct_names.sort();
-    for struct_name in sorted_struct_names {
-        let mut sorted_interfaces: Vec<(
-            &String,
-            &Vec<causm_core::InterfaceMethod>,
-        )> = ctx.interfaces.iter().collect();
-        sorted_interfaces.sort_by_key(|(name, _)| *name);
-        for (_interface_name, methods) in sorted_interfaces {
-            let mut implements = true;
-            for im in methods {
-                let r_name = format!("{}.{}", struct_name, im.name);
-                if !ctx.routines.contains_key(&r_name) && im.default_body.is_none() {
-                    implements = false;
-                    break;
-                }
-            }
-
-            if implements {
-                for im in methods {
-                    let r_name = format!("{}.{}", struct_name, im.name);
-                    if !ctx.routines.contains_key(&r_name)
-                        && !default_methods.contains_key(&r_name)
-                    {
-                        if let Some(ref default_body) = im.default_body {
-                            let mut sub_ctx = LoweringContext::new();
-                            sub_ctx.type_decls = ctx.type_decls.clone();
-                            sub_ctx.type_decay_limits =
-                                ctx.type_decay_limits.clone();
-
-                            for (i, param) in im.params.iter().enumerate() {
-                                sub_ctx
-                                    .symbols
-                                    .insert(param.name.clone(), Reg(i as u32));
-                                sub_ctx.next_reg = (i + 1) as u32;
-                            }
-
-                            if let Some((ref param_name, ref expected_state)) =
-                                im.state_constraint
-                            {
-                                if let Some(&reg) = sub_ctx.symbols.get(param_name) {
-                                    sub_ctx.push(Instruction::AssertState {
-                                        src: reg,
-                                        state: expected_state.clone(),
-                                    });
-                                }
-                            }
-
-                            for s in default_body {
-                                lower_spanned(&mut sub_ctx, s);
-                            }
-
-                            let routine = IrRoutine {
-                                params: im.params
-                                    .iter()
-                                    .map(|p| {
-                                        let mut t = p.typ
-                                            .as_ref()
-                                            .map(causm_core::types::Type::from_typename)
-                                            .unwrap_or(causm_core::types::Type::Unknown);
-                                        if p.name == "self" {
-                                            t = causm_core::types::Type::Custom(struct_name.clone());
-                                        }
-                                        (p.mode.clone(), p.name.clone(), t)
-                                    })
-                                    .collect(),
-                                return_type: im.return_type
-                                    .as_ref()
-                                    .map(causm_core::types::Type::from_typename)
-                                    .unwrap_or(causm_core::types::Type::Unknown),
-                                taking_ms: im.taking_ms,
-                                instructions: sub_ctx.instructions,
-                                spans: sub_ctx.spans,
-                            };
-                            default_methods.insert(r_name, routine);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    ctx.routines.extend(default_methods);
-
-    IrProgram {
-        blocks,
-        routines: ctx.routines,
-        symbols: ctx.symbols,
-        type_decay_limits: ctx.type_decay_limits,
-        struct_extends: ctx.struct_extends,
-        decay_handlers: ctx.decay_handlers,
-    }
-}
-
-fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
+pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
     match stmt {
         Statement::RoutineDef {
             name,
@@ -191,7 +28,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             sub_ctx.type_decls = ctx.type_decls.clone();
             sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
 
-            // Map parameters to registers R0, R1, ...
             for (i, param) in params.iter().enumerate() {
                 sub_ctx.symbols.insert(param.name.clone(), Reg(i as u32));
                 sub_ctx.next_reg = (i + 1) as u32;
@@ -251,7 +87,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         }
         Statement::Yield(name) => {
             let src = ctx.get_reg(name);
-            // By convention, Move src to R0 for return
             ctx.push(Instruction::Move { dest: Reg(0), src });
             ctx.push(Instruction::Return { src: Some(Reg(0)) });
         }
@@ -263,7 +98,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let spec_idx = ctx.instructions.len();
             ctx.push(Instruction::Speculate {
                 max_ms: *max_ms,
-                fallback_target: 0, // Placeholder
+                fallback_target: 0,
             });
 
             for s in body {
@@ -273,11 +108,11 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let end_spec_idx = ctx.instructions.len();
             ctx.push(Instruction::EndSpeculate {
                 max_ms: *max_ms,
-                fallback_target: 0, // Placeholder
+                fallback_target: 0,
             });
 
             let jump_over_fallback_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Placeholder
+            ctx.push(Instruction::Jump { target: 0 });
 
             let fallback_start_idx = ctx.instructions.len();
             if let Instruction::Speculate {
@@ -323,7 +158,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let select_idx = ctx.instructions.len();
             ctx.push(Instruction::Select {
                 max_ms: *max_ms,
-                cases: Vec::new(), // Will fill in below
+                cases: Vec::new(),
                 timeout_target: None,
             });
 
@@ -333,7 +168,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             for case in cases {
                 let chan_id = match &case.source {
                     Expression::ChannelReceive(id) => id.clone(),
-                    _ => "".to_string(), // Error handling?
+                    _ => "".to_string(),
                 };
                 let dest = ctx.get_reg(&case.binding);
                 let target = ctx.instructions.len();
@@ -342,7 +177,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     lower_spanned(ctx, s);
                 }
                 case_jumps.push(ctx.instructions.len());
-                ctx.push(Instruction::Jump { target: 0 }); // Jump to end of select
+                ctx.push(Instruction::Jump { target: 0 });
 
                 ir_cases.push(IrSelectCase {
                     chan_id,
@@ -386,16 +221,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 _ => "main".to_string(),
             };
 
-            // Use a placeholder for the block start PC
             let rb_instr_idx = ctx.instructions.len();
             ctx.push(Instruction::RelativisticBlock {
                 target: target.clone(),
-                block_pc: 0,  // Placeholder
-                block_len: 0, // Placeholder
+                block_pc: 0,
+                block_len: 0,
             });
 
             let jump_over_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Jump over body
+            ctx.push(Instruction::Jump { target: 0 });
 
             let start_pc = ctx.instructions.len();
             for s in body {
@@ -403,7 +237,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             let len = ctx.instructions.len() - start_pc;
 
-            // Fill in placeholders
             if let Instruction::RelativisticBlock {
                 ref mut block_pc,
                 ref mut block_len,
@@ -646,7 +479,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let dest = ctx.get_reg(target);
             ctx.push(Instruction::Move { dest, src });
 
-            // Consuming move by default in Causm
             match expr {
                 Expression::Identifier(_) => {
                     ctx.push(Instruction::Consume { src });
@@ -657,9 +489,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 } => {
                     let graph_reg = lower_expression(ctx, inner_target);
                     let index_reg = lower_expression(ctx, index);
-                    // We need to know the field name/index at runtime.
-                    // For now, let's assume it's a string index.
-                    // Instruction::ConsumeIndex { target, index }
                     ctx.push(Instruction::ConsumeFieldDynamic {
                         target: graph_reg,
                         index: index_reg,
@@ -778,9 +607,8 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::Anchor { name: name.clone() });
         }
         Statement::Rewind(name) => {
-            // Acausal reset/rewind
             ctx.push(Instruction::Rewind {
-                target: "self".to_string(), // Default to current branch for rewind
+                target: "self".to_string(),
                 anchor: name.clone(),
             });
         }
@@ -827,9 +655,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         }
 
         Statement::Commit(body) => {
-            // Simplified commit: we collect modified vars.
-            // In a real compiler we'd track what's assigned in the body.
-            // For now, let's just lower the body and use a placeholder for vars.
             for s in body {
                 lower_spanned(ctx, s);
             }
@@ -1062,7 +887,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::JumpIfNot {
                 cond: cond_reg,
                 target: 0,
-            }); // Placeholder
+            });
 
             for s in then_branch {
                 lower_spanned(ctx, s);
@@ -1078,7 +903,7 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             if let Some(eb) = else_branch {
                 let jump_to_end_idx = ctx.instructions.len();
-                ctx.push(Instruction::Jump { target: 0 }); // Placeholder
+                ctx.push(Instruction::Jump { target: 0 });
 
                 let else_start_idx = ctx.instructions.len();
                 if let Instruction::JumpIfNot { ref mut target, .. } =
@@ -1111,17 +936,15 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             timeout_ms,
             recovery,
         } => {
-            // For watchdog, recovery is a block. We use Jump for simplicity in this flat IR.
             let jump_over_recovery_idx = ctx.instructions.len();
             ctx.push(Instruction::Watchdog {
                 target: target.clone(),
                 timeout_ms: *timeout_ms,
-                recovery_jump: Some(0), // Placeholder
+                recovery_jump: Some(0),
             });
 
-            // Jump over recovery by default if watchdog doesn't bite
             let skip_recovery_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 }); // Placeholder
+            ctx.push(Instruction::Jump { target: 0 });
 
             let recovery_start_idx = ctx.instructions.len();
             if let Instruction::Watchdog {
@@ -1241,266 +1064,6 @@ fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.decay_handlers
                 .insert(type_name.clone(), sub_ctx.instructions);
         }
-        _ => {
-            // Other statements can be added as needed
-        }
-    }
-}
-
-fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
-    match expr {
-        Expression::Integer(v) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadInt { dest, value: *v });
-            dest
-        }
-        Expression::Float(v) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadFloat { dest, value: *v });
-            dest
-        }
-        Expression::Boolean(v) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadBool { dest, value: *v });
-            dest
-        }
-        Expression::Literal(s) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadString {
-                dest,
-                value: s.clone(),
-            });
-            dest
-        }
-        Expression::Null => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::LoadNull { dest });
-            dest
-        }
-        Expression::Identifier(name) => ctx.get_reg(name),
-        Expression::BinaryOp { left, op, right } => {
-            let l = lower_expression(ctx, left);
-            let r = lower_expression(ctx, right);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::BinaryOp {
-                dest,
-                op: *op,
-                left: l,
-                right: r,
-            });
-            dest
-        }
-        Expression::UnaryOp { op, expr } => {
-            let src = lower_expression(ctx, expr);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::UnaryOp { dest, op: *op, src });
-            dest
-        }
-
-        Expression::MethodCall {
-            target,
-            method,
-            args,
-            resolved_routine,
-            resolved_budget,
-        } => {
-            let routine_name =
-                resolved_routine.borrow().clone().unwrap_or_else(|| {
-                    panic!("MethodCall was not resolved during semantic analysis");
-                });
-            let mut arg_regs = Vec::new();
-            arg_regs.push(lower_expression(ctx, target));
-            for arg in args {
-                arg_regs.push(lower_expression(ctx, arg));
-            }
-            let dest = ctx.alloc_reg();
-            if routine_name == "<dynamic>" {
-                let budget = *resolved_budget.borrow();
-                ctx.push(Instruction::DynamicCall {
-                    method: method.clone(),
-                    args: arg_regs,
-                    dest,
-                    budget,
-                });
-            } else {
-                ctx.push(Instruction::Call {
-                    routine: routine_name,
-                    args: arg_regs,
-                    dest,
-                });
-            }
-            dest
-        }
-
-        Expression::Call { routine, args } => {
-            let mut arg_regs = Vec::new();
-            for arg in args {
-                arg_regs.push(lower_expression(ctx, arg));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::Call {
-                routine: routine.clone(),
-                args: arg_regs,
-                dest,
-            });
-            dest
-        }
-        Expression::CloneOp(name) => {
-            let src = ctx.get_reg(name);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::Clone { dest, src });
-            dest
-        }
-        Expression::FieldAccess { target, field } => {
-            let mut const_expr = None;
-            if let Expression::Identifier(ref name) = &**target {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
-                    if let Some(field_def) = fields_map.get(field) {
-                        if field_def.is_const {
-                            if let Some(ref val_expr) = field_def.default_value {
-                                const_expr = Some(val_expr.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            if let Some(expr) = const_expr {
-                return lower_expression(ctx, &expr);
-            }
-            let t = lower_expression(ctx, target);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::FieldAccess {
-                dest,
-                target: t,
-                field: field.clone(),
-            });
-            dest
-        }
-        Expression::IndexAccess { target, index } => {
-            let t = lower_expression(ctx, target);
-            let i = lower_expression(ctx, index);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::IndexAccess {
-                dest,
-                target: t,
-                index: i,
-            });
-            dest
-        }
-        Expression::StructLit(type_name, fields) => {
-            let mut field_regs = HashMap::new();
-            let mut sorted_fields: Vec<(&String, &Expression)> =
-                fields.iter().collect();
-            sorted_fields.sort_by_key(|(name, _)| *name);
-            for (name, expr) in sorted_fields {
-                field_regs.insert(name.clone(), lower_expression(ctx, expr));
-            }
-            let type_name_opt = type_name.borrow().clone();
-            let mut defaults_to_lower = Vec::new();
-            if let Some(ref name) = type_name_opt {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
-                    let mut sorted_fields_map: Vec<(&String, &TypeFieldDef)> =
-                        fields_map.iter().collect();
-                    sorted_fields_map.sort_by_key(|(name, _)| *name);
-                    for (field_name, field_def) in sorted_fields_map {
-                        if !field_def.is_const
-                            && !field_regs.contains_key(field_name)
-                        {
-                            if let Some(ref default_expr) = field_def.default_value {
-                                defaults_to_lower.push((
-                                    field_name.clone(),
-                                    default_expr.clone(),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            for (field_name, expr) in defaults_to_lower {
-                field_regs.insert(field_name, lower_expression(ctx, &expr));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::StructLit {
-                dest,
-                fields: field_regs,
-                type_name: type_name_opt,
-            });
-            dest
-        }
-        Expression::TopologyLit(fields) => {
-            let mut field_regs = HashMap::new();
-            let mut sorted_fields: Vec<(&String, &Expression)> =
-                fields.iter().collect();
-            sorted_fields.sort_by_key(|(name, _)| *name);
-            for (name, expr) in sorted_fields {
-                field_regs.insert(name.clone(), lower_expression(ctx, expr));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::TopologyLit {
-                dest,
-                fields: field_regs,
-            });
-            dest
-        }
-        Expression::ArrayLiteral(elements) => {
-            let mut elem_regs = Vec::new();
-            for e in elements {
-                elem_regs.push(lower_expression(ctx, e));
-            }
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::ArrayLit {
-                dest,
-                elements: elem_regs,
-            });
-            dest
-        }
-        Expression::ChannelReceive(chan_id) => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::ChanRecv {
-                dest,
-                chan_id: chan_id.clone(),
-            });
-            dest
-        }
-        Expression::Deferred {
-            capability,
-            params,
-            deadline_ms,
-        } => {
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::Defer {
-                dest,
-                cap: causm_core::Capability {
-                    path: capability.clone(),
-                    parameters: params.clone(),
-                },
-                deadline_ms: *deadline_ms,
-            });
-            dest
-        }
-        Expression::TypeAssertion { target, cast_type } => {
-            let src = lower_expression(ctx, target);
-            let dest = ctx.alloc_reg();
-            let type_name = match cast_type {
-                causm_core::TypeName::Custom(ref s) => s.clone(),
-                _ => panic!("Type assertion target must be a custom type name"),
-            };
-            ctx.push(Instruction::TypeAssert {
-                dest,
-                src,
-                type_name,
-            });
-            dest
-        }
-        Expression::TypeCast { expr, target_type } => {
-            let src = lower_expression(ctx, expr);
-            let dest = ctx.alloc_reg();
-            ctx.push(Instruction::TypeCast {
-                dest,
-                src,
-                target_type: target_type.clone(),
-            });
-            dest
-        }
+        _ => {}
     }
 }
