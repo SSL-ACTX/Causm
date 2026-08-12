@@ -313,21 +313,18 @@ fn main() -> anyhow::Result<()> {
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
             vm.trace_entropy = config.trace_entropy;
-            vm.register_capability("System.Log", |params| {
-                if let Some(msg) = params.get("message") {
-                    println!("{}", msg);
-                }
-                Ok(())
-            });
-            vm.register_capability("System.NetworkFetch", |params| {
-                if let Some(url) = params.get("url") {
-                    println!(
-                        "\x1b[1;34m[System.NetworkFetch]\x1b[0m Fetching {}",
-                        url
-                    );
-                }
-                Ok(())
-            });
+
+            let tracer =
+                causm_tracer::Tracer::new(config.verbose || config.trace_entropy);
+            tracer.emit(
+                0,
+                "main",
+                causm_tracer::TraceLayer::Runtime,
+                None,
+                "Initializing TVM Runtime Engine",
+            );
+
+            causm_stdlib::register_all(&mut vm);
 
             if let Err(e) = vm.execute_program(&ir_program) {
                 let location_info = if let Some(ref span) = vm.current_span {

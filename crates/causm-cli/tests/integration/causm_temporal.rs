@@ -413,3 +413,45 @@ fn causm_temporal_promise_type_safety() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_stdlib_and_tracer_integration() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      isolate init {
+        require System.NetworkFetch
+        require System.Log
+        let req = defer System.NetworkFetch(url="https://httpbin.org/get", latency="5") deadline 100ms
+        let status = "pending"
+      }
+    }
+    @10ms: {
+      isolate run {
+        require System.Log
+        await(req)
+        match entropy(req) {
+          Valid(v): { status = "success" }
+          Consumed: { status = "timeout" }
+        }
+        print(status)
+      }
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let tracer = causm_tracer::Tracer::new(false);
+    tracer.emit(0, "main", causm_tracer::TraceLayer::Runtime, Some("init"), "Test tracer emission");
+
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let status_reg = ir.symbols.get("status").expect("status reg not found").0;
+    let status_val = vm.root_timeline.arena.peek(status_reg);
+    assert_eq!(status_val, Some(causm_core::value::Payload::String("success".to_string())));
+
+    Ok(())
+}

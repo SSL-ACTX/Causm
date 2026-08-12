@@ -10,5 +10,7 @@ causm-frontend = { path = "../causm-frontend" }
 causm-analysis = { path = "../causm-analysis" }
 causm-runtime = { path = "../causm-runtime" }
 causm-ir = { path = "../causm-ir" }
+causm-stdlib = { path = "../causm-stdlib" }
+causm-tracer = { path = "../causm-tracer" }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }

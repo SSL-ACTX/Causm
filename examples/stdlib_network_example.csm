@@ -1,0 +1,37 @@
+@0ms: {
+  isolate gateway_init {
+    enable cpu(100ms)
+    enable memory(5KB)
+    require System.NetworkFetch
+    require System.Log
+
+    let api_endpoint = "https://httpbin.org/get"
+    let req = defer System.NetworkFetch(url=api_endpoint, latency="10") deadline 5000ms
+
+    let res = ""
+
+    debug("Initiating live HTTP NetworkFetch via causm-stdlib...")
+  }
+}
+
+@10ms: {
+  isolate handler {
+    require System.Log
+    await(req)
+
+    match entropy(req) {
+      Valid(val): {
+        res = "HTTP Fetch Succeeded"
+      }
+      Pending(p): {
+        res = "HTTP Fetch Pending"
+      }
+      Consumed: {
+        res = "HTTP Fetch Breached Deadline"
+      }
+    }
+
+    print("HTTP Request Status:")
+    print(res)
+  }
+}
