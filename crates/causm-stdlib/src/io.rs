@@ -5,6 +5,6 @@ pub fn register_io_capabilities(vm: &mut Vm) {
         if let Some(msg) = params.get("message") {
             println!("{}", msg);
         }
-        Ok(())
+        Ok(causm_core::value::Payload::Null)
     });
 }

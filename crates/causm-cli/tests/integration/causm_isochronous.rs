@@ -133,7 +133,9 @@ fn causm_isochronous_matrix_complex_integration() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
 
     vm.execute_program(&ir)?;
 

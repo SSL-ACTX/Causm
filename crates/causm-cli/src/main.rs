@@ -110,7 +110,7 @@ fn format_entropic_state(state: &EntropicState) -> String {
         EntropicState::Leased { expiration_ms, .. } => {
             format!("\x1b[33m<leased until {}ms>\x1b[0m", expiration_ms)
         }
-        EntropicState::Decayed(_) => "\x1b[90m<decayed>\x1b[0m".to_string(),
+        EntropicState::Decayed(_) => "\x1b[35m<decayed>\x1b[0m".to_string(),
         EntropicState::Pending(_) => "\x1b[35m<pending>\x1b[0m".to_string(),
         EntropicState::Consumed => "\x1b[31m<consumed>\x1b[0m".to_string(),
     }
@@ -245,7 +245,7 @@ fn main() -> anyhow::Result<()> {
             Ok(p) => p,
             Err(e) => {
                 eprintln!(
-                    "\x1b[1;31merror: failed to parse {}\x1b[0m\n  \x1b[90m--> {}\x1b[0m\n      {}",
+                    "\x1b[1;31merror: failed to parse {}\x1b[0m\n  \x1b[36m--> {}\x1b[0m\n      {}",
                     path.display(),
                     path.display(),
                     e
@@ -297,7 +297,7 @@ fn main() -> anyhow::Result<()> {
                             "".to_string()
                         };
                     eprintln!(
-                        "  - \x1b[36m{}\x1b[0m: {}ms{}",
+                        "  - \x1b[1;36m{}\x1b[0m: \x1b[1;37m{}ms\x1b[0m\x1b[33m{}\x1b[0m",
                         key, wcet_map[key], budget_str
                     );
                 }
@@ -351,15 +351,15 @@ fn main() -> anyhow::Result<()> {
                 eprintln!("\x1b[1;32m{}: run ok\x1b[0m", path.display());
                 eprintln!("\x1b[1;36mExecution Summary:\x1b[0m");
                 eprintln!(
-                    "  \x1b[90mGlobal clock:\x1b[0m     \x1b[1;33m{}\x1b[0m",
+                    "  \x1b[1;37mGlobal clock:\x1b[0m     \x1b[1;33m{}\x1b[0m",
                     vm.global_clock
                 );
                 eprintln!(
-                    "  \x1b[90mMain local clock:\x1b[0m \x1b[1;33m{}\x1b[0m",
+                    "  \x1b[1;37mMain local clock:\x1b[0m \x1b[1;33m{}\x1b[0m",
                     vm.root_timeline.local_clock
                 );
                 eprintln!(
-                    "  \x1b[90mArena memory:\x1b[0m     \x1b[1;32m{}/{} bytes used\x1b[0m",
+                    "  \x1b[1;37mArena memory:\x1b[0m     \x1b[1;32m{}/{} bytes used\x1b[0m",
                     vm.root_timeline.arena.used,
                     vm.root_timeline.arena.capacity
                 );

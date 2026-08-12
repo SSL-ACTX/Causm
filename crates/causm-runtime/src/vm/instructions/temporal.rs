@@ -329,16 +329,18 @@ impl Vm {
             path: promise.capability,
             parameters: promise.params,
         };
-        self._execute_capability(branch_id, &cap)?;
-
-        // For now, let's say it returns Null
-        self.insert_reg(
-            branch_id,
-            target.0,
-            causm_core::value::EntropicState::Valid(
-                causm_core::value::Payload::Null,
+        match self._execute_capability(branch_id, &cap) {
+            Ok(payload) => self.insert_reg(
+                branch_id,
+                target.0,
+                causm_core::value::EntropicState::Valid(payload),
             ),
-        )
+            Err(_) => self.insert_reg(
+                branch_id,
+                target.0,
+                causm_core::value::EntropicState::Consumed,
+            ),
+        }
     }
 
     pub(crate) fn Lease(

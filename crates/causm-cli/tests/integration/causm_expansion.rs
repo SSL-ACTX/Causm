@@ -32,7 +32,7 @@ fn causm_expansion_split_map_topology() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;
@@ -97,7 +97,7 @@ fn causm_expansion_speculate_inside_split_map() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;
@@ -191,7 +191,7 @@ fn causm_expansion_loop_tick_double_buffer() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;
@@ -243,7 +243,7 @@ fn causm_expansion_entanglement_speculation_rollback() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;
@@ -293,7 +293,7 @@ fn causm_expansion_select_timing_determinism() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;
@@ -334,7 +334,7 @@ fn causm_expansion_loop_tick_padding() -> anyhow::Result<()> {
             if let Some(msg) = params.get("message") {
                 println!("[LOG] {}", msg);
             }
-            Ok(())
+            Ok(causm_core::value::Payload::Null)
         }),
     );
     vm.execute_program(&ir)?;

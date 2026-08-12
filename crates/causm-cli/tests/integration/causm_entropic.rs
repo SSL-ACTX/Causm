@@ -405,7 +405,9 @@ fn causm_entropic_topology2_dynamic_index_assignment_and_rewind(
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
 
     vm.execute_program(&ir)?;
 

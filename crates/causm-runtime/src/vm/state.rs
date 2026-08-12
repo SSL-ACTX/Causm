@@ -2,7 +2,8 @@ use causm_core::value::{Arena, Payload};
 use causm_core::{Manifest, ParamMode, SpeculationCommitMode};
 use std::collections::{HashMap, VecDeque};
 
-pub type CapHandler = Box<dyn Fn(&HashMap<String, String>) -> Result<(), String>>;
+pub type CapHandler =
+    Box<dyn Fn(&HashMap<String, String>) -> Result<Payload, String>>;
 
 #[derive(Debug, Clone)]
 pub struct Message {

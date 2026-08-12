@@ -565,7 +565,9 @@ fn causm_oop_dynamic_budget_enforcement() -> anyhow::Result<()> {
     let ir = causm_frontend::lower::lower_program(&program);
 
     let mut vm = Vm::new();
-    vm.register_capability("System.NetworkFetch", |_params| Ok(()));
+    vm.register_capability("System.NetworkFetch", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
     let res = vm.execute_program(&ir);
     assert!(res.is_err());
     let err_msg = format!("{:?}", res.err().unwrap());

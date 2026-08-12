@@ -16,7 +16,8 @@ impl Vm {
             path: "System.Log".to_string(),
             parameters: [("message".to_string(), message)].into(),
         };
-        self._execute_capability(branch_id, &cap)
+        self._execute_capability(branch_id, &cap)?;
+        Ok(())
     }
 
     pub(crate) fn Debug(
@@ -34,7 +35,8 @@ impl Vm {
         branch_id: &str,
         cap: causm_core::Capability,
     ) -> Result<(), TemporalError> {
-        self._execute_capability(branch_id, &cap)
+        self._execute_capability(branch_id, &cap)?;
+        Ok(())
     }
 
     pub(crate) fn NetworkRequest(

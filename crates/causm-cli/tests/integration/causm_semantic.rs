@@ -537,7 +537,9 @@ fn causm_semantic_isolate_print_with_system_log() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
     vm.execute_program(&ir)?;
 
     Ok(())
@@ -618,7 +620,9 @@ fn causm_semantic_file_input_pipeline() -> anyhow::Result<()> {
     analyzer.analyze_program_with_source(&program, source, "example.csm")?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
     vm.execute_program(&ir)?;
 
     let x_reg = ir.symbols.get("x").expect("x not found").0;
@@ -642,7 +646,7 @@ fn causm_semantic_print_statement() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_| Ok(()));
+    vm.register_capability("System.Log", |_| Ok(causm_core::value::Payload::Null));
     vm.execute_program(&ir)?;
 
     // print(msg) peeks the register and does not consume it, so it remains present in the arena.
@@ -670,7 +674,7 @@ fn causm_semantic_debug_log_non_consuming() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_| Ok(()));
+    vm.register_capability("System.Log", |_| Ok(causm_core::value::Payload::Null));
     vm.execute_program(&ir)?;
 
     let x_reg = ir.symbols.get("x").expect("x not found").0;
@@ -838,8 +842,12 @@ fn causm_semantic_capability_require_outbound_and_use() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("Net.Outbound", |_params| Ok(()));
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("Net.Outbound", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
 
     let res = vm.execute_program(&ir);
     assert!(res.is_ok());
@@ -985,7 +993,9 @@ fn causm_semantic_capability_budget_enforcement() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.Log", |_params| Ok(()));
+    vm.register_capability("System.Log", |_params| {
+        Ok(causm_core::value::Payload::Null)
+    });
 
     let result = vm.execute_program(&ir);
     match result {

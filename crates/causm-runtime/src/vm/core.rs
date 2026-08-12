@@ -45,7 +45,7 @@ impl Vm {
 
     pub fn register_capability<F>(&mut self, path: &str, handler: F)
     where
-        F: Fn(&HashMap<String, String>) -> Result<(), String> + 'static,
+        F: Fn(&HashMap<String, String>) -> Result<Payload, String> + 'static,
     {
         self.capability_handlers
             .insert(path.to_string(), Box::new(handler));
@@ -442,7 +442,7 @@ impl Vm {
         &mut self,
         branch_id: &str,
         cap: &Capability,
-    ) -> Result<(), TemporalError> {
+    ) -> Result<Payload, TemporalError> {
         let mut resolved_params = cap.parameters.clone();
         for (k, v) in &cap.parameters {
             let reg_opt = self.symbols.get(v).copied();
@@ -476,11 +476,10 @@ impl Vm {
         }
 
         if let Some(handler) = self.capability_handlers.get(&cap.path) {
-            handler(&resolved_params).map_err(TemporalError::CapabilityViolation)?;
-            Ok(())
+            handler(&resolved_params).map_err(TemporalError::CapabilityViolation)
         } else if cap.path == "System.Entropy" {
             // System.Entropy is a built-in mode that does not require host handler.
-            Ok(())
+            Ok(Payload::Null)
         } else {
             Err(TemporalError::MissingCapability(cap.path.clone()))
         }
