@@ -565,3 +565,42 @@ fn test_duration_units_and_pipeline_operator() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_try_operator_and_time_step_loops() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+      isolate loop_test {
+        require System.Log
+        let count = 0
+        for i in [1, 2, 3] step 1s {
+          count = count + i
+        }
+        let val = count?
+      }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let count_reg = ir.symbols.get("count").unwrap().0;
+    let val_reg = ir.symbols.get("val").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(count_reg),
+        Some(causm_core::value::Payload::Integer(6))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(val_reg),
+        Some(causm_core::value::Payload::Integer(6))
+    );
+
+    Ok(())
+}

@@ -110,7 +110,8 @@ pub fn estimate_expression_cost(
         | Expression::Null
         | Expression::Deferred { .. } => 1,
         Expression::TypeAssertion { target, .. }
-        | Expression::TypeCast { expr: target, .. } => {
+        | Expression::TypeCast { expr: target, .. }
+        | Expression::TryUnwrap(target) => {
             1 + estimate_expression_cost(analyzer, target)
         }
     }

@@ -108,7 +108,7 @@ debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
 loop_stmt = { "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
 while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
-for_step_stmt = { "for" ~ identifier ~ "in" ~ expression ~ "step" ~ amount ~ "ms" ~ "{" ~ statement* ~ "}" }
+for_step_stmt = { "for" ~ identifier ~ "in" ~ expression ~ "step" ~ duration_literal ~ "{" ~ statement* ~ "}" }
 
 slice_stmt = { "slice" ~ amount ~ "ms" }
 
@@ -188,7 +188,8 @@ powop = { "^" }
 unary_expr = { neg_expr | not_expr | primary_expr }
 neg_expr = { "-" ~ unary_expr }
 not_expr = { "!" ~ unary_expr }
-primary_expr = { base_expr ~ (index_access | method_call_tail | type_assertion_tail | type_cast_tail | field_access_tail)* }
+primary_expr = { base_expr ~ (try_tail | index_access | method_call_tail | type_assertion_tail | type_cast_tail | field_access_tail)* }
+try_tail = { "?" }
 method_call_tail = { "." ~ identifier ~ "(" ~ expression_list? ~ ")" }
 type_assertion_tail = { "." ~ "(" ~ type_name ~ ")" }
 as_keyword = @{ "as" ~ !ASCII_ALPHANUMERIC ~ !"_" }

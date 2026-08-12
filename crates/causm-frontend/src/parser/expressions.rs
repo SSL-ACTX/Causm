@@ -81,6 +81,9 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut expr = parse_expression(inner.next().unwrap());
             for access_pair in inner {
                 match access_pair.as_rule() {
+                    Rule::try_tail => {
+                        expr = Expression::TryUnwrap(Box::new(expr));
+                    }
                     Rule::index_access => {
                         let index = parse_expression(
                             access_pair.into_inner().next().unwrap(),

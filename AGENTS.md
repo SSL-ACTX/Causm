@@ -35,20 +35,22 @@ This document outlines the core architectural constraints, design patterns, deve
 
 ### 2.3 Adding New Features & Instructions
 When adding new syntax, instructions, or VM capabilities:
-1.  Extend the grammar in `src/frontend/causm.pest`.
-2.  Implement AST traversal/visitor in `src/frontend/parser.rs`.
-3.  Add IR lowering mapping in `src/frontend/ir.rs` or `causm-ir`.
-4.  Update dominance/SSA transformation logic in `causm-ir/src/ssa.rs` if registers or control flow terminators change.
-5.  Add entropic verification checks in `crates/causm-analysis/src/analyzer.rs`.
-6.  Wire VM execution logic in `crates/causm-runtime/src/vm/core.rs`.
-7.  Add targeted parser, analyzer, and integration tests to verify the pipeline.
+1.  Extend the grammar in `crates/causm-frontend/src/causm.pest`.
+2.  Implement AST types in `crates/causm-core/src/lib.rs` and parser visitors in `crates/causm-frontend/src/parser/`.
+3.  Add IR lowering mapping in `crates/causm-frontend/src/lower/`.
+4.  Update SSA/CFG transformation logic in `crates/causm-ir/src/ssa/` if registers or control flow terminators change.
+5.  Add entropic verification, cost estimation, type inference, and validation passes in `crates/causm-analysis/src/`.
+6.  Wire VM execution logic in `crates/causm-runtime/src/vm/`.
+7.  Add targeted parser, analyzer, and integration tests in `crates/causm-cli/tests/integration/` to verify the pipeline.
 
 ---
 
 ## 3. AI Agent Execution Mandates (Strict & Non-Negotiable)
 
-### 3.1 Obey the User Exactly
+### 3.1 Obey the User Exactly & Absolute Truthfulness
 *   **Absolute Law:** If the user points to a specific bug, file, or line, investigate that path immediately. The user's diagnosis is the highest priority signal.
+*   **No False Completion Claims:** NEVER claim a feature, syntax, or bug fix is done or fully implemented until every single layer of the pipeline (AST, parser, analyzer passes, IR lowering, VM execution, and tests) is completely wired up and empirically verified.
+*   **No Obfuscated Command Output:** NEVER pipe commands with `2>&1 | tail -N` or swallow error outputs. Run build and test commands cleanly so all compiler diagnostics and test backtraces are fully visible.
 *   **Do Not Stall or Loop:** Do not run redundant check loops, fallback on generic boilerplate diagnostics, or examine irrelevant folders to stall. Follow user directions proactively.
 
 ### 3.2 Read Rules Before Acting

@@ -271,5 +271,12 @@ pub(crate) fn infer_expression_type(
         Expression::TypeCast { target_type, .. } => {
             Ok(Type::from_typename(target_type))
         }
+        Expression::TryUnwrap(expr) => {
+            let inner_ty = infer_expression_type(analyzer, expr)?;
+            match inner_ty {
+                Type::Optional(opt) => Ok(*opt),
+                other => Ok(other),
+            }
+        }
     }
 }

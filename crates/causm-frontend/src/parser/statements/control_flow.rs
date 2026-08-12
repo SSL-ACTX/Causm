@@ -178,7 +178,12 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             let mut inner = pair.into_inner();
             let item_name = inner.next().unwrap().as_str().to_string();
             let source = parse_expression(inner.next().unwrap());
-            let step_ms = inner.next().unwrap().as_str().parse::<u64>().unwrap_or(0);
+            let step_pair = inner.next().unwrap();
+            let step_expr = parse_expression(step_pair);
+            let step_ms = match step_expr {
+                Expression::Integer(i) => i as u64,
+                _ => 0,
+            };
             let mut body = Vec::new();
             for stmt_pair in inner {
                 if stmt_pair.as_rule() == Rule::statement {

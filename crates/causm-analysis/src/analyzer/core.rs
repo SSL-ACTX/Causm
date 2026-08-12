@@ -943,6 +943,9 @@ impl EntropicAnalyzer {
             Expression::TypeCast { expr, target_type } => {
                 format!("{} as {:?}", self.expr_snippet(expr), target_type)
             }
+            Expression::TryUnwrap(expr) => {
+                format!("{}?", self.expr_snippet(expr))
+            }
         }
     }
 

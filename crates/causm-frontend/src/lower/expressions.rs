@@ -258,5 +258,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::TryUnwrap(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::Move { dest, src });
+            dest
+        }
     }
 }

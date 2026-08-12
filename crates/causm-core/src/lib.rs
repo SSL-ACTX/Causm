@@ -320,6 +320,7 @@ macro_rules! expressions {
                 expr: Box<Expression>,
                 target_type: TypeName
             },
+            TryUnwrap(Box<Expression>),
             Null
         }
     };

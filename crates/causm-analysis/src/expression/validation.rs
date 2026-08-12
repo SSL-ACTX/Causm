@@ -522,7 +522,7 @@ pub(crate) fn analyze_expression(
             analyze_expression(analyzer, target)?;
             Ok(())
         }
-        Expression::TypeCast { expr, .. } => {
+        Expression::TypeCast { expr, .. } | Expression::TryUnwrap(expr) => {
             analyze_expression(analyzer, expr)?;
             Ok(())
         }
@@ -635,7 +635,7 @@ pub(crate) fn analyze_expression_nonconsuming(
             analyze_expression_nonconsuming(analyzer, target)?;
             Ok(())
         }
-        Expression::TypeCast { expr, .. } => {
+        Expression::TypeCast { expr, .. } | Expression::TryUnwrap(expr) => {
             analyze_expression_nonconsuming(analyzer, expr)?;
             Ok(())
         }
