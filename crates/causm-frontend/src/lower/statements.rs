@@ -747,6 +747,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             source,
             duration_ms,
             body,
+            reconcile: _,
         } => {
             let source_reg = ctx.get_reg(source);
             let old_symbol = ctx.symbols.get(binding).cloned();

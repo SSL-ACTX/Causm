@@ -166,6 +166,7 @@ impl EntropicAnalyzer {
         source: &String,
         duration_ms: &u64,
         body: &[SpannedStatement],
+        _reconcile: &Option<MergeResolution>,
     ) -> Result<(), SemanticError> {
         self.check_available(source)?;
 

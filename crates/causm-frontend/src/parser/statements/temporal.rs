@@ -116,6 +116,7 @@ pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
                 .unwrap_or_default();
             let duration_ms = inner.next().map(parse_duration_limit).unwrap_or(0);
             let mut body = Vec::new();
+            let mut reconcile = None;
             if let Some(block) = inner.next() {
                 for stmt_pair in block.into_inner() {
                     if let Some(actual_stmt) = stmt_pair.into_inner().next() {
@@ -123,11 +124,21 @@ pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
                     }
                 }
             }
+            if let Some(reconcile_pair) = inner.next() {
+                if reconcile_pair.as_rule() == Rule::reconcile_clause {
+                    reconcile = Some(
+                        crate::parser::statements::utils::parse_reconcile_clause(
+                            reconcile_pair,
+                        ),
+                    );
+                }
+            }
             Statement::Lease {
                 binding,
                 source,
                 duration_ms,
                 body,
+                reconcile,
             }
         }
         _ => unreachable!(),

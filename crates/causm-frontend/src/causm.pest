@@ -67,7 +67,7 @@ expression_stmt = { expression }
 
 entangle_stmt = { "entangle" ~ "(" ~ identifier_list ~ ")" }
 
-decay_handler_stmt = { "decay_handler" ~ "for" ~ identifier ~ "{" ~ statement* ~ "}" }
+decay_handler_stmt = { ("decay_handler" ~ "for" | "on_decay" ~ "(") ~ identifier ~ ")"? ~ "{" ~ statement* ~ "}" }
 
 assert_time_stmt = { "assert_time" ~ "(" ~ "elapsed" ~ relop ~ amount ~ "ms" ~ ")" ~ ("else" ~ statement_block)? }
 
@@ -102,7 +102,7 @@ break_stmt = { "break" }
 
 for_stmt = { "for" ~ identifier ~ param_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
 inspect_stmt = { "inspect" ~ identifier ~ "=" ~ identifier ~ statement_block }
-lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block }
+lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block ~ reconcile_clause? }
 split_map_stmt = { "split_map" ~ identifier ~ param_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
 pacing_opt = { "pacing" ~ duration_limit }

@@ -770,3 +770,59 @@ fn test_entropy_decay_rate_annotation() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_entropy_on_decay_automatic_handler() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_on_decay {
+            let @decayed(10ms) sensor_stream = 100
+            let status = "ok"
+            on_decay(sensor_stream) {
+                status = "decayed_triggered"
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let status_reg = ir.symbols.get("status").unwrap().0;
+    let val = vm.root_timeline.arena.peek(status_reg);
+    assert!(val.is_some());
+    Ok(())
+}
+
+#[test]
+fn test_temporal_lease_reconcile_clause() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_lease_reconcile {
+            let primary = struct { val = 500 }
+            let copied = 0
+            lease temp_reading = primary 20ms {
+                copied = temp_reading.val
+            } reconcile auto
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let copied_reg = ir.symbols.get("copied").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(copied_reg),
+        Some(causm_core::value::Payload::Integer(500))
+    );
+    Ok(())
+}

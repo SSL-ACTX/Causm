@@ -194,7 +194,8 @@ macro_rules! statements {
                 binding: String,
                 source: String,
                 duration_ms: u64,
-                body: Vec<SpannedStatement>
+                body: Vec<SpannedStatement>,
+                reconcile: Option<MergeResolution>
             },
             Loop {
                 max_ms: u64,

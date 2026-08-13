@@ -1026,6 +1026,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 source,
                 duration_ms,
                 body,
+                reconcile: _,
             } => {
                 self.check_available(source, path_condition)?;
                 let pre_lease_validity = self.variable_validity.clone();
