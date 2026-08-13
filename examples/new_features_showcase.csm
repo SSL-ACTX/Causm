@@ -14,18 +14,39 @@
         let node_id = 101
         let accum = 0
         let @decayed(5000ms) auth_session = "token_x89"
+        let @decay_rate(50ms) telemetry_stream = 200
 
         for step in 0..5 step 500ms {
             accum = accum + step * 2
         }
-                                                                               let node_state = NodeStatus.Active(accum)
-                                                                               print("Node ID:")                                                      print(node_id)
 
-        print("Session Token:")                                                print(auth_session)
+        let node_state = NodeStatus.Active(accum)
+        print("Node ID:")
+        print(node_id)
+
+        print("Session Token:")
+        print(auth_session)
 
         let score = accum?
         print("Calculated Score:")
         print(score)
+
+        let match_result = match entropy(telemetry_stream) {
+            Valid(val) if val == 200: {
+                let status = "verified_high_precision"
+                status
+            }
+            Valid(val): {
+                let status = "standard_valid"
+                status
+            }
+            Consumed: {
+                let status = "consumed_stream"
+                status
+            }
+        }
+        print("Entropic Guard Verification:")
+        print(match_result)
 
         let endpoint = "https://postman-echo.com/get"
         let pending_req = defer System.NetworkFetch(url: endpoint, latency: 20ms) deadline 2000ms

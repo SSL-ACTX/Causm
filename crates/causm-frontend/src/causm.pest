@@ -154,7 +154,7 @@ duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline")? ~ (amount ~ t
 anchor_stmt = { "anchor" ~ identifier }
 rewind_stmt = { "rewind_to" ~ "(" ~ identifier ~ ")" }
 commit_stmt = { "commit" ~ "{" ~ statement* ~ "}" }
-lifetime_annotation = { "@" ~ ("valid" | "decayed" ~ "(" ~ duration_literal ~ ")") }
+lifetime_annotation = { "@" ~ ("valid" | "decay_rate" ~ "(" ~ (float_literal | duration_literal) ~ ")" | "decayed" ~ ("(" ~ (param | duration_literal) ~ ")")?) }
 assignment_stmt = { "let" ~ lifetime_annotation? ~ identifier ~ type_annotation? ~ ("=" ~ expression)? }
 
 type_annotation = { ":" ~ type_name }

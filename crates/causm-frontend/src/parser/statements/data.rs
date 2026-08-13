@@ -25,6 +25,14 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     let s = lt_pair.as_str();
                     if s == "@valid" {
                         lifetime = Some(LifetimeAnnotation::Valid);
+                    } else if s.starts_with("@decay_rate(") {
+                        let dur_str = lt_pair
+                            .into_inner()
+                            .next()
+                            .map(|p| p.as_str())
+                            .unwrap_or("0ms");
+                        let ms = parse_duration_to_ms(dur_str);
+                        lifetime = Some(LifetimeAnnotation::DecayRate(ms));
                     } else if s.starts_with("@decayed(") {
                         let dur_str = lt_pair
                             .into_inner()
@@ -243,6 +251,30 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 {
                     let inject = |branch: &mut Option<(
                         DecayedPattern,
+                        Option<Expression>,
+                        Vec<SpannedStatement>,
+                    )>| {
+                        if let Some((_, _, ref mut body)) = branch {
+                            if body.len() == 1 {
+                                if let Statement::Expression(expr) =
+                                    body[0].stmt.clone()
+                                {
+                                    *body = vec![SpannedStatement {
+                                        stmt: Statement::Assignment {
+                                            target: lhs_name.clone(),
+                                            mutable: false,
+                                            var_type: None,
+                                            lifetime: None,
+                                            expr,
+                                        },
+                                        span: body[0].span.clone(),
+                                    }];
+                                }
+                            }
+                        }
+                    };
+                    let inject_consumed = |branch: &mut Option<(
+                        Option<Expression>,
                         Vec<SpannedStatement>,
                     )>| {
                         if let Some((_, ref mut body)) = branch {
@@ -264,27 +296,6 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                             }
                         }
                     };
-                    let inject_consumed =
-                        |branch: &mut Option<Vec<SpannedStatement>>| {
-                            if let Some(ref mut body) = branch {
-                                if body.len() == 1 {
-                                    if let Statement::Expression(expr) =
-                                        body[0].stmt.clone()
-                                    {
-                                        *body = vec![SpannedStatement {
-                                            stmt: Statement::Assignment {
-                                                target: lhs_name.clone(),
-                                                mutable: false,
-                                                var_type: None,
-                                                lifetime: None,
-                                                expr,
-                                            },
-                                            span: body[0].span.clone(),
-                                        }];
-                                    }
-                                }
-                            }
-                        };
                     inject(valid_branch);
                     inject(decayed_branch);
                     inject(pending_branch);

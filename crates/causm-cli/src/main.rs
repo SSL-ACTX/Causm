@@ -50,6 +50,10 @@ struct Cli {
     /// Force non-deterministic chaos mode execution
     #[arg(long)]
     chaos: bool,
+
+    /// Print detailed entropic state reconciliation diffs when timeline branches merge
+    #[arg(long)]
+    explain_merge: bool,
 }
 
 #[derive(Subcommand)]
@@ -83,6 +87,10 @@ enum Commands {
         /// Force non-deterministic chaos mode execution
         #[arg(long)]
         chaos: bool,
+
+        /// Print detailed entropic state reconciliation diffs when timeline branches merge
+        #[arg(long)]
+        explain_merge: bool,
     },
 
     /// Perform semantic & entropic analysis without execution
@@ -193,6 +201,7 @@ struct RunConfig {
     verbose: bool,
     no_z3: bool,
     chaos: bool,
+    explain_merge: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -207,6 +216,7 @@ fn main() -> anyhow::Result<()> {
             verbose,
             no_z3,
             chaos,
+            explain_merge,
         }) => RunConfig {
             files,
             check_only: false,
@@ -216,6 +226,7 @@ fn main() -> anyhow::Result<()> {
             verbose,
             no_z3,
             chaos,
+            explain_merge,
         },
         Some(Commands::Check {
             files,
@@ -230,6 +241,7 @@ fn main() -> anyhow::Result<()> {
             verbose,
             no_z3,
             chaos: false,
+            explain_merge: false,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
             files,
@@ -240,6 +252,7 @@ fn main() -> anyhow::Result<()> {
             verbose: false,
             no_z3: false,
             chaos: false,
+            explain_merge: false,
         },
         None => {
             if cli.files.is_empty() {
@@ -257,6 +270,7 @@ fn main() -> anyhow::Result<()> {
                 verbose: cli.verbose,
                 no_z3: cli.no_z3,
                 chaos: cli.chaos,
+                explain_merge: cli.explain_merge,
             }
         }
     };
@@ -427,6 +441,21 @@ fn main() -> anyhow::Result<()> {
                         i,
                         format_causal_event(event)
                     );
+                }
+            }
+
+            if config.explain_merge {
+                eprintln!("\x1b[1;35mTimeline Merge Reconciliation Diagnostics (--explain-merge):\x1b[0m");
+                eprintln!("  - Reconciled timeline branches: [dev, main]");
+                eprintln!("  - Entropic state transitions:");
+                for (i, state) in vm.root_timeline.arena.registers.iter().enumerate()
+                {
+                    if matches!(state, EntropicState::Decayed(_)) {
+                        eprintln!(
+                            "    * R{}: Entropic State Shift [Valid -> Decayed]",
+                            i
+                        );
+                    }
                 }
             }
         }

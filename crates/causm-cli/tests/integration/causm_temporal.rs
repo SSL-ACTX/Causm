@@ -705,3 +705,68 @@ fn test_temporal_paced_time_range_step_loop() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_entropy_match_pattern_guard_clause() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_guards {
+            require System.Log
+            let status_code = 200
+            let res = "none"
+            match entropy(status_code) {
+                Valid(val) if val == 200: {
+                    res = "ok_guard_passed"
+                }
+                Valid(val): {
+                    res = "ok_fallback"
+                }
+                Consumed: {
+                    res = "consumed"
+                }
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let reg = ir.symbols.get("res").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(reg),
+        Some(causm_core::value::Payload::String(
+            "ok_guard_passed".to_string()
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_entropy_decay_rate_annotation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_rate {
+            let @decay_rate(50ms) sensor_reading = 999
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let reg = ir.symbols.get("sensor_reading").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(reg),
+        Some(causm_core::value::Payload::Integer(999))
+    );
+    Ok(())
+}

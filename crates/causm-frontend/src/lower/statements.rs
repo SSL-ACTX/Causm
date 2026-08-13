@@ -274,7 +274,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let mut branch_jumps = Vec::new();
             let mut mismatch_jumps = Vec::new();
 
-            if let Some((pattern, body)) = valid_branch {
+            if let Some((pattern, guard, body)) = valid_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut valid_target,
@@ -323,6 +323,15 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     }
                 }
 
+                if let Some(ref guard_expr) = guard {
+                    let guard_reg = lower_expression(ctx, guard_expr);
+                    mismatch_jumps.push(ctx.instructions.len());
+                    ctx.push(Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
                 for s in body {
                     lower_spanned(ctx, s);
                 }
@@ -330,7 +339,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Some((pattern, body)) = decayed_branch {
+            if let Some((pattern, guard, body)) = decayed_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut decayed_target,
@@ -379,6 +388,15 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     }
                 }
 
+                if let Some(ref guard_expr) = guard {
+                    let guard_reg = lower_expression(ctx, guard_expr);
+                    mismatch_jumps.push(ctx.instructions.len());
+                    ctx.push(Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
                 for s in body {
                     lower_spanned(ctx, s);
                 }
@@ -386,7 +404,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Some((pattern, body)) = pending_branch {
+            if let Some((pattern, guard, body)) = pending_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut pending_target,
@@ -435,6 +453,15 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     }
                 }
 
+                if let Some(ref guard_expr) = guard {
+                    let guard_reg = lower_expression(ctx, guard_expr);
+                    mismatch_jumps.push(ctx.instructions.len());
+                    ctx.push(Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
                 for s in body {
                     lower_spanned(ctx, s);
                 }
@@ -442,7 +469,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.push(Instruction::Jump { target: 0 });
             }
 
-            if let Some(body) = consumed_branch {
+            if let Some((guard, body)) = consumed_branch {
                 let start = ctx.instructions.len();
                 if let Instruction::MatchEntropy {
                     ref mut consumed_target,
@@ -451,6 +478,16 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 {
                     *consumed_target = Some(start);
                 }
+
+                if let Some(ref guard_expr) = guard {
+                    let guard_reg = lower_expression(ctx, guard_expr);
+                    mismatch_jumps.push(ctx.instructions.len());
+                    ctx.push(Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
                 for s in body {
                     lower_spanned(ctx, s);
                 }

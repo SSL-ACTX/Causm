@@ -413,7 +413,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
 
                 // Valid branch
                 let mut valid_clock = branch_start_clock.clone();
-                if let Some((pattern, branch_body)) = valid_branch {
+                if let Some((pattern, _guard, branch_body)) = valid_branch {
                     let valid_pc =
                         self.solver.bool_and(&[path_condition, &valid_cond]);
                     if let DecayedPattern::Binding(binding) = pattern {
@@ -453,7 +453,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut decayed_clock = branch_start_clock.clone();
-                if let Some((pattern, branch_body)) = decayed_branch {
+                if let Some((pattern, _guard, branch_body)) = decayed_branch {
                     let decayed_pc =
                         self.solver.bool_and(&[path_condition, &decayed_cond]);
                     if let DecayedPattern::Binding(binding) = pattern {
@@ -496,7 +496,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut pending_clock = branch_start_clock.clone();
-                if let Some((pattern, branch_body)) = pending_branch {
+                if let Some((pattern, _guard, branch_body)) = pending_branch {
                     let pending_pc =
                         self.solver.bool_and(&[path_condition, &pending_cond]);
                     if let DecayedPattern::Binding(binding) = pattern {
@@ -539,7 +539,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_leased = pre_match_leased.clone();
                 self.causal_horizon = pre_match_horizon.clone();
                 let mut consumed_clock = branch_start_clock.clone();
-                if let Some(branch_body) = consumed_branch {
+                if let Some((_guard, branch_body)) = consumed_branch {
                     let consumed_pc =
                         self.solver.bool_and(&[path_condition, &consumed_cond]);
                     for stmt in branch_body {

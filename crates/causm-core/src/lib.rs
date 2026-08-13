@@ -170,10 +170,10 @@ macro_rules! statements {
             },
             MatchEntropy {
                 target: Expression,
-                valid_branch: Option<(DecayedPattern, Vec<SpannedStatement>)>,
-                decayed_branch: Option<(DecayedPattern, Vec<SpannedStatement>)>,
-                pending_branch: Option<(DecayedPattern, Vec<SpannedStatement>)>,
-                consumed_branch: Option<Vec<SpannedStatement>>
+                valid_branch: Option<(DecayedPattern, Option<Expression>, Vec<SpannedStatement>)>,
+                decayed_branch: Option<(DecayedPattern, Option<Expression>, Vec<SpannedStatement>)>,
+                pending_branch: Option<(DecayedPattern, Option<Expression>, Vec<SpannedStatement>)>,
+                consumed_branch: Option<(Option<Expression>, Vec<SpannedStatement>)>
             },
             Await(String),
             AwaitChan(String),
@@ -268,6 +268,7 @@ macro_rules! statements {
 macro_rules! define_statement_enum {
     ($($name:ident $({ $($field:ident: $type:ty),* })? $(( $($tuple_type:ty),* ))?),*) => {
         #[derive(Debug, Clone, PartialEq, Eq)]
+        #[allow(clippy::large_enum_variant)]
         pub enum Statement {
             $($name $({ $($field: $type),* })? $(( $($tuple_type),* ))?),*
         }
@@ -348,19 +349,19 @@ impl Statement {
             } => {
                 let valid_cost = valid_branch
                     .as_ref()
-                    .map(|(_, b)| estimate_block(b))
+                    .map(|(_, _, b)| estimate_block(b))
                     .unwrap_or(0);
                 let decayed_cost = decayed_branch
                     .as_ref()
-                    .map(|(_, b)| estimate_block(b))
+                    .map(|(_, _, b)| estimate_block(b))
                     .unwrap_or(0);
                 let pending_cost = pending_branch
                     .as_ref()
-                    .map(|(_, b)| estimate_block(b))
+                    .map(|(_, _, b)| estimate_block(b))
                     .unwrap_or(0);
                 let consumed_cost = consumed_branch
                     .as_ref()
-                    .map(|b| estimate_block(b))
+                    .map(|(_, b)| estimate_block(b))
                     .unwrap_or(0);
                 valid_cost
                     .max(decayed_cost)
@@ -529,6 +530,7 @@ pub struct SelectCase {
 pub enum LifetimeAnnotation {
     Valid,
     Decayed(u64),
+    DecayRate(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

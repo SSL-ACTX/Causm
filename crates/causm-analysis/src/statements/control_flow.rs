@@ -405,10 +405,22 @@ impl EntropicAnalyzer {
     pub(crate) fn MatchEntropy(
         &mut self,
         target: &Expression,
-        valid_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
-        decayed_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
-        pending_branch: &Option<(DecayedPattern, Vec<SpannedStatement>)>,
-        consumed_branch: &Option<Vec<SpannedStatement>>,
+        valid_branch: &Option<(
+            DecayedPattern,
+            Option<Expression>,
+            Vec<SpannedStatement>,
+        )>,
+        decayed_branch: &Option<(
+            DecayedPattern,
+            Option<Expression>,
+            Vec<SpannedStatement>,
+        )>,
+        pending_branch: &Option<(
+            DecayedPattern,
+            Option<Expression>,
+            Vec<SpannedStatement>,
+        )>,
+        consumed_branch: &Option<(Option<Expression>, Vec<SpannedStatement>)>,
     ) -> Result<(), SemanticError> {
         let original_state = self
             .branch_contexts
@@ -417,7 +429,7 @@ impl EntropicAnalyzer {
             .unwrap_or_default();
         let mut context_candidates = Vec::new();
 
-        if let Some((pattern, branch_body)) = valid_branch {
+        if let Some((pattern, guard, branch_body)) = valid_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
@@ -428,6 +440,10 @@ impl EntropicAnalyzer {
                 crate::expression::analyze_expression_nonconsuming(self, target);
             self.in_entropy_match = false;
             res?;
+
+            if let Some(guard_expr) = guard {
+                crate::expression::analyze_expression(self, guard_expr)?;
+            }
 
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
@@ -441,7 +457,7 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        if let Some((pattern, branch_body)) = decayed_branch {
+        if let Some((pattern, guard, branch_body)) = decayed_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
@@ -452,6 +468,10 @@ impl EntropicAnalyzer {
                 crate::expression::analyze_expression_nonconsuming(self, target);
             self.in_entropy_match = false;
             res?;
+
+            if let Some(guard_expr) = guard {
+                crate::expression::analyze_expression(self, guard_expr)?;
+            }
 
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
@@ -465,7 +485,7 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        if let Some((pattern, branch_body)) = pending_branch {
+        if let Some((pattern, guard, branch_body)) = pending_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
@@ -476,6 +496,10 @@ impl EntropicAnalyzer {
                 crate::expression::analyze_expression_nonconsuming(self, target);
             self.in_entropy_match = false;
             res?;
+
+            if let Some(guard_expr) = guard {
+                crate::expression::analyze_expression(self, guard_expr)?;
+            }
 
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
@@ -489,10 +513,15 @@ impl EntropicAnalyzer {
             self.branch_contexts = saved_contexts;
         }
 
-        if let Some(branch_body) = consumed_branch {
+        if let Some((guard, branch_body)) = consumed_branch {
             let saved_contexts = self.branch_contexts.clone();
             self.branch_contexts
                 .insert(self.current_branch.clone(), original_state.clone());
+
+            if let Some(guard_expr) = guard {
+                crate::expression::analyze_expression(self, guard_expr)?;
+            }
+
             for stmt in branch_body {
                 self.analyze_statement(stmt)?;
             }
