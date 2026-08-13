@@ -26,6 +26,7 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
     let mut known_valid: HashSet<SsaReg> = HashSet::new();
     let mut known_consumed: HashSet<SsaReg> = HashSet::new();
 
+    // Pass 1: Gather all valid definitions
     for block in ssa_cfg.blocks.values() {
         for inst in &block.instructions {
             match inst {
@@ -46,6 +47,15 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
                 | SsaInstruction::ArrayLit { dest, .. } => {
                     known_valid.insert(*dest);
                 }
+                _ => {}
+            }
+        }
+    }
+
+    // Pass 2: Track consumptions and structural decay
+    for block in ssa_cfg.blocks.values() {
+        for inst in &block.instructions {
+            match inst {
                 SsaInstruction::Consume { src } => {
                     known_consumed.insert(*src);
                 }
@@ -54,6 +64,10 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
                 }
                 SsaInstruction::ConsumeFieldDynamic { target, .. } => {
                     known_consumed.insert(*target);
+                }
+                SsaInstruction::FieldAccess { target, .. }
+                | SsaInstruction::IndexAccess { target, .. } => {
+                    known_valid.remove(target);
                 }
                 SsaInstruction::FieldUpdate { target, .. } => {
                     known_consumed.insert(*target);

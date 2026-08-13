@@ -116,11 +116,6 @@ impl Vm {
         src: Reg,
     ) -> Result<(), TemporalError> {
         let state = self.peek_state(branch_id, src.0)?;
-        if matches!(state, EntropicState::Consumed) {
-            return Err(TemporalError::MemoryFault(
-                causm_core::value::MemoryError::AlreadyConsumed,
-            ));
-        }
         let metadata = {
             let branch = self.get_branch_mut(branch_id)?;
             branch

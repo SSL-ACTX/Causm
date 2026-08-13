@@ -12,14 +12,17 @@ impl OptimizationPass for CopyPropagationPass {
     fn run(
         &self,
         ssa_cfg: &mut SsaCFG,
-        _globally_used_regs: &HashSet<u32>,
+        globally_used_regs: &HashSet<u32>,
         _is_routine: bool,
     ) -> bool {
-        copy_propagation(ssa_cfg)
+        copy_propagation(ssa_cfg, globally_used_regs)
     }
 }
 
-pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
+pub fn copy_propagation(
+    ssa_cfg: &mut SsaCFG,
+    globally_used_regs: &HashSet<u32>,
+) -> bool {
     let mut copies: HashMap<SsaReg, SsaReg> = HashMap::new();
 
     // 0. Collect all consumed registers
@@ -41,11 +44,13 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
         }
     }
 
-    // 1. Collect all direct copies (skipping src if it was consumed)
+    // 1. Collect all direct copies (skipping src if it was consumed, and dest if it is a preserved register)
     for block in ssa_cfg.blocks.values() {
         for instr in &block.instructions {
             if let SsaInstruction::Move { dest, src } = instr {
-                if !consumed_regs.contains(src) {
+                if !consumed_regs.contains(src)
+                    && !globally_used_regs.contains(&dest.reg)
+                {
                     copies.insert(*dest, *src);
                 }
             }

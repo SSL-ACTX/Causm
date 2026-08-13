@@ -263,7 +263,11 @@ pub(crate) fn infer_expression_type(
                 | BinaryOperator::Div
                 | BinaryOperator::Rem
                 | BinaryOperator::Pow => {
-                    if left_type == Type::Float || right_type == Type::Float {
+                    if (left_type == Type::String || right_type == Type::String)
+                        && matches!(op, BinaryOperator::Add)
+                    {
+                        Ok(Type::String)
+                    } else if left_type == Type::Float || right_type == Type::Float {
                         Ok(Type::Float)
                     } else {
                         Ok(Type::Integer)
