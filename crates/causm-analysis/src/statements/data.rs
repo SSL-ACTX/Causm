@@ -106,20 +106,22 @@ impl EntropicAnalyzer {
 
     pub(crate) fn EnumDecl(
         &mut self,
-        name: &String,
-        variants: &Vec<EnumVariantDef>,
+        name: &str,
+        variants: &[EnumVariantDef],
     ) -> Result<(), SemanticError> {
         let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-        branch
-            .types
-            .insert(name.clone(), causm_core::types::Type::Custom(name.clone()));
-        branch
-            .custom_types
-            .insert(name.clone(), causm_core::types::Type::Custom(name.clone()));
+        branch.types.insert(
+            name.to_string(),
+            causm_core::types::Type::Custom(name.to_string()),
+        );
+        branch.custom_types.insert(
+            name.to_string(),
+            causm_core::types::Type::Custom(name.to_string()),
+        );
         for variant in variants {
             branch.types.insert(
                 variant.name.clone(),
-                causm_core::types::Type::Custom(name.clone()),
+                causm_core::types::Type::Custom(name.to_string()),
             );
         }
         Ok(())

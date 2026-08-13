@@ -425,4 +425,5 @@ pub use ssa::{
 };
 
 pub mod optimize;
+pub mod properties;
 pub use optimize::optimize_program;

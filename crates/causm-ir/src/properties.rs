@@ -1,0 +1,183 @@
+use crate::ssa::{SsaInstruction, SsaReg};
+use crate::Reg;
+
+pub trait InstructionProperties {
+    fn defined_reg(&self) -> Option<Reg>;
+    fn used_regs(&self) -> Vec<Reg>;
+    fn consumed_regs(&self) -> Vec<Reg>;
+    fn decayed_regs(&self) -> Vec<Reg>;
+}
+
+pub trait SsaInstructionProperties {
+    fn defined_ssa_reg(&self) -> Option<SsaReg>;
+    fn used_ssa_regs(&self) -> Vec<SsaReg>;
+    fn consumed_ssa_regs(&self) -> Vec<SsaReg>;
+    fn decayed_ssa_regs(&self) -> Vec<SsaReg>;
+}
+
+impl SsaInstructionProperties for SsaInstruction {
+    fn defined_ssa_reg(&self) -> Option<SsaReg> {
+        match self {
+            SsaInstruction::BinaryOp { dest, .. }
+            | SsaInstruction::UnaryOp { dest, .. }
+            | SsaInstruction::LoadInt { dest, .. }
+            | SsaInstruction::LoadFloat { dest, .. }
+            | SsaInstruction::LoadBool { dest, .. }
+            | SsaInstruction::LoadString { dest, .. }
+            | SsaInstruction::LoadNull { dest }
+            | SsaInstruction::ConstInt { dest, .. }
+            | SsaInstruction::ConstFloat { dest, .. }
+            | SsaInstruction::ConstBool { dest, .. }
+            | SsaInstruction::ConstString { dest, .. }
+            | SsaInstruction::ConstNull { dest }
+            | SsaInstruction::Move { dest, .. }
+            | SsaInstruction::Clone { dest, .. }
+            | SsaInstruction::Call { dest, .. }
+            | SsaInstruction::DynamicCall { dest, .. }
+            | SsaInstruction::TypeAssert { dest, .. }
+            | SsaInstruction::TypeCast { dest, .. }
+            | SsaInstruction::TryTypeAssert { dest, .. }
+            | SsaInstruction::StructLit { dest, .. }
+            | SsaInstruction::TopologyLit { dest, .. }
+            | SsaInstruction::ArrayLit { dest, .. }
+            | SsaInstruction::FieldAccess { dest, .. }
+            | SsaInstruction::IndexAccess { dest, .. }
+            | SsaInstruction::ChanRecv { dest, .. }
+            | SsaInstruction::Defer { dest, .. }
+            | SsaInstruction::Lease {
+                target_reg: dest, ..
+            } => Some(*dest),
+
+            SsaInstruction::FieldUpdate { target, .. }
+            | SsaInstruction::IndexFieldUpdate { target, .. } => Some(*target),
+
+            _ => None,
+        }
+    }
+
+    fn used_ssa_regs(&self) -> Vec<SsaReg> {
+        let mut regs = Vec::new();
+        match self {
+            SsaInstruction::BinaryOp { left, right, .. } => {
+                regs.push(*left);
+                regs.push(*right);
+            }
+            SsaInstruction::UnaryOp { src, .. }
+            | SsaInstruction::Move { src, .. }
+            | SsaInstruction::Clone { src, .. }
+            | SsaInstruction::TypeAssert { src, .. }
+            | SsaInstruction::TypeCast { src, .. }
+            | SsaInstruction::TryTypeAssert { src, .. }
+            | SsaInstruction::AssertState { src, .. }
+            | SsaInstruction::Print { src }
+            | SsaInstruction::Debug { src }
+            | SsaInstruction::Consume { src }
+            | SsaInstruction::ConsumeField { src, .. }
+            | SsaInstruction::ChanSend { src, .. }
+            | SsaInstruction::JumpIf { cond: src, .. }
+            | SsaInstruction::JumpIfNot { cond: src, .. }
+            | SsaInstruction::Await { target: src }
+            | SsaInstruction::MatchEntropy { target: src, .. }
+            | SsaInstruction::Lease {
+                source_reg: src, ..
+            }
+            | SsaInstruction::EndLease {
+                source_reg: src, ..
+            } => {
+                regs.push(*src);
+            }
+            SsaInstruction::ConsumeFieldDynamic { target, index }
+            | SsaInstruction::IndexAccess { target, index, .. } => {
+                regs.push(*target);
+                regs.push(*index);
+            }
+            SsaInstruction::FieldAccess { target, .. } => {
+                regs.push(*target);
+            }
+            SsaInstruction::FieldUpdate {
+                old_target, src, ..
+            } => {
+                regs.push(*old_target);
+                regs.push(*src);
+            }
+            SsaInstruction::IndexFieldUpdate {
+                old_target,
+                index,
+                src,
+                ..
+            } => {
+                regs.push(*old_target);
+                regs.push(*index);
+                regs.push(*src);
+            }
+            SsaInstruction::For { source, .. }
+            | SsaInstruction::ForStep { source, .. }
+            | SsaInstruction::SplitMap { source, .. } => {
+                regs.push(*source);
+            }
+            SsaInstruction::Call { args, .. } => {
+                regs.extend(args.iter().cloned());
+            }
+            SsaInstruction::DynamicCall { args, .. } => {
+                regs.extend(args.iter().cloned());
+            }
+            SsaInstruction::StructLit { fields, .. }
+            | SsaInstruction::TopologyLit { fields, .. } => {
+                let mut sorted_keys: Vec<_> = fields.keys().collect();
+                sorted_keys.sort();
+                for k in sorted_keys {
+                    regs.push(fields[k]);
+                }
+            }
+            SsaInstruction::ArrayLit { elements, .. } => {
+                regs.extend(elements.iter().cloned());
+            }
+            SsaInstruction::Entangle { regs: r_vec } => {
+                regs.extend(r_vec.iter().cloned());
+            }
+            _ => {}
+        }
+        regs
+    }
+
+    fn consumed_ssa_regs(&self) -> Vec<SsaReg> {
+        let mut regs = Vec::new();
+        match self {
+            SsaInstruction::Consume { src }
+            | SsaInstruction::ConsumeField { src, .. }
+            | SsaInstruction::ChanSend { src, .. } => {
+                regs.push(*src);
+            }
+            SsaInstruction::ConsumeFieldDynamic { target, .. }
+            | SsaInstruction::FieldUpdate { target, .. }
+            | SsaInstruction::IndexFieldUpdate { target, .. } => {
+                regs.push(*target);
+            }
+            SsaInstruction::For { source, .. }
+            | SsaInstruction::ForStep { source, .. }
+            | SsaInstruction::SplitMap { source, .. } => {
+                regs.push(*source);
+            }
+            SsaInstruction::Call { args, .. } => {
+                regs.extend(args.iter().cloned());
+            }
+            SsaInstruction::DynamicCall { args, .. } => {
+                regs.extend(args.iter().cloned());
+            }
+            _ => {}
+        }
+        regs
+    }
+
+    fn decayed_ssa_regs(&self) -> Vec<SsaReg> {
+        let mut regs = Vec::new();
+        match self {
+            SsaInstruction::FieldAccess { target, .. }
+            | SsaInstruction::IndexAccess { target, .. } => {
+                regs.push(*target);
+            }
+            _ => {}
+        }
+        regs
+    }
+}

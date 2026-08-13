@@ -1,5 +1,5 @@
 use super::OptimizationPass;
-use crate::ssa::{SsaCFG, SsaInstruction, SsaReg, SsaTerminator};
+use crate::ssa::{SsaCFG, SsaReg, SsaTerminator};
 use std::collections::HashSet;
 
 pub struct EntropyOptimizationPass;
@@ -19,6 +19,8 @@ impl OptimizationPass for EntropyOptimizationPass {
     }
 }
 
+use crate::properties::SsaInstructionProperties;
+
 pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
     let mut changed = false;
 
@@ -29,25 +31,8 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
     // Pass 1: Gather all valid definitions
     for block in ssa_cfg.blocks.values() {
         for inst in &block.instructions {
-            match inst {
-                SsaInstruction::LoadInt { dest, .. }
-                | SsaInstruction::LoadFloat { dest, .. }
-                | SsaInstruction::LoadBool { dest, .. }
-                | SsaInstruction::LoadString { dest, .. }
-                | SsaInstruction::LoadNull { dest }
-                | SsaInstruction::ConstInt { dest, .. }
-                | SsaInstruction::ConstFloat { dest, .. }
-                | SsaInstruction::ConstBool { dest, .. }
-                | SsaInstruction::ConstString { dest, .. }
-                | SsaInstruction::ConstNull { dest }
-                | SsaInstruction::BinaryOp { dest, .. }
-                | SsaInstruction::UnaryOp { dest, .. }
-                | SsaInstruction::StructLit { dest, .. }
-                | SsaInstruction::TopologyLit { dest, .. }
-                | SsaInstruction::ArrayLit { dest, .. } => {
-                    known_valid.insert(*dest);
-                }
-                _ => {}
+            if let Some(dest) = inst.defined_ssa_reg() {
+                known_valid.insert(dest);
             }
         }
     }
@@ -55,49 +40,11 @@ pub fn optimize_entropy(ssa_cfg: &mut SsaCFG) -> bool {
     // Pass 2: Track consumptions and structural decay
     for block in ssa_cfg.blocks.values() {
         for inst in &block.instructions {
-            match inst {
-                SsaInstruction::Consume { src } => {
-                    known_consumed.insert(*src);
-                }
-                SsaInstruction::ConsumeField { src, .. } => {
-                    known_consumed.insert(*src);
-                }
-                SsaInstruction::ConsumeFieldDynamic { target, .. } => {
-                    known_consumed.insert(*target);
-                }
-                SsaInstruction::FieldAccess { target, .. }
-                | SsaInstruction::IndexAccess { target, .. } => {
-                    known_valid.remove(target);
-                }
-                SsaInstruction::FieldUpdate { target, .. } => {
-                    known_consumed.insert(*target);
-                }
-                SsaInstruction::IndexFieldUpdate { target, .. } => {
-                    known_consumed.insert(*target);
-                }
-                SsaInstruction::ChanSend { src, .. } => {
-                    known_consumed.insert(*src);
-                }
-                SsaInstruction::For { source, .. } => {
-                    known_consumed.insert(*source);
-                }
-                SsaInstruction::ForStep { source, .. } => {
-                    known_consumed.insert(*source);
-                }
-                SsaInstruction::SplitMap { source, .. } => {
-                    known_consumed.insert(*source);
-                }
-                SsaInstruction::Call { args, .. } => {
-                    for arg in args {
-                        known_consumed.insert(*arg);
-                    }
-                }
-                SsaInstruction::DynamicCall { args, .. } => {
-                    for arg in args {
-                        known_consumed.insert(*arg);
-                    }
-                }
-                _ => {}
+            for c in inst.consumed_ssa_regs() {
+                known_consumed.insert(c);
+            }
+            for d in inst.decayed_ssa_regs() {
+                known_valid.remove(&d);
             }
         }
     }

@@ -19,6 +19,8 @@ impl OptimizationPass for CopyPropagationPass {
     }
 }
 
+use crate::properties::SsaInstructionProperties;
+
 pub fn copy_propagation(
     ssa_cfg: &mut SsaCFG,
     globally_used_regs: &HashSet<u32>,
@@ -29,17 +31,8 @@ pub fn copy_propagation(
     let mut consumed_regs: HashSet<SsaReg> = HashSet::new();
     for block in ssa_cfg.blocks.values() {
         for instr in &block.instructions {
-            match instr {
-                SsaInstruction::Consume { src } => {
-                    consumed_regs.insert(*src);
-                }
-                SsaInstruction::ConsumeField { src, .. } => {
-                    consumed_regs.insert(*src);
-                }
-                SsaInstruction::ConsumeFieldDynamic { target, .. } => {
-                    consumed_regs.insert(*target);
-                }
-                _ => {}
+            for c in instr.consumed_ssa_regs() {
+                consumed_regs.insert(c);
             }
         }
     }

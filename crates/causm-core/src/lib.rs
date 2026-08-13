@@ -276,6 +276,119 @@ macro_rules! define_statement_enum {
 
 statements!(define_statement_enum);
 
+impl Statement {
+    pub fn estimate_cost<F>(&self, mut estimate_block: F) -> u64
+    where
+        F: FnMut(&[SpannedStatement]) -> u64,
+    {
+        let base = 1;
+        let extra = match self {
+            Statement::NetworkRequest { .. } => 5,
+            Statement::Split { .. }
+            | Statement::Merge { .. }
+            | Statement::Anchor(_)
+            | Statement::Rewind(_)
+            | Statement::Commit(_)
+            | Statement::Send { .. }
+            | Statement::ChannelOpen { .. }
+            | Statement::ChannelSend { .. }
+            | Statement::AcausalReset { .. }
+            | Statement::Capability(_)
+            | Statement::Assignment { .. }
+            | Statement::TypeDecl { .. }
+            | Statement::EnumDecl { .. }
+            | Statement::InterfaceDecl { .. }
+            | Statement::FieldUpdate { .. }
+            | Statement::Expression(_)
+            | Statement::Print(_) => 0,
+            Statement::DecayHandler { body, .. } => estimate_block(body),
+            Statement::AssertTime { fallback, .. } => {
+                fallback.as_ref().map(|b| estimate_block(b)).unwrap_or(0)
+            }
+            Statement::RelativisticBlock { body, .. }
+            | Statement::DirectiveBlock { body, .. } => estimate_block(body),
+            Statement::Isolate(block) => estimate_block(&block.body),
+            Statement::Watchdog { recovery, .. } => estimate_block(recovery),
+            Statement::Debug(_) => 1,
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => estimate_block(then_branch)
+                .max(else_branch.as_ref().map(|b| estimate_block(b)).unwrap_or(0)),
+            Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
+            Statement::ForStep { step_ms, .. } => *step_ms,
+            Statement::Speculate { body, fallback, .. } => {
+                let body_cost = estimate_block(body);
+                let fallback_cost =
+                    fallback.as_ref().map(|b| estimate_block(b)).unwrap_or(0);
+                body_cost + fallback_cost
+            }
+            Statement::Select {
+                max_ms,
+                cases,
+                timeout,
+                ..
+            } => {
+                let case_max_cost = cases
+                    .iter()
+                    .map(|c| estimate_block(&c.body))
+                    .max()
+                    .unwrap_or(0);
+                let timeout_cost =
+                    timeout.as_ref().map(|b| estimate_block(b)).unwrap_or(0);
+                *max_ms + case_max_cost.max(timeout_cost)
+            }
+            Statement::MatchEntropy {
+                valid_branch,
+                decayed_branch,
+                pending_branch,
+                consumed_branch,
+                ..
+            } => {
+                let valid_cost = valid_branch
+                    .as_ref()
+                    .map(|(_, b)| estimate_block(b))
+                    .unwrap_or(0);
+                let decayed_cost = decayed_branch
+                    .as_ref()
+                    .map(|(_, b)| estimate_block(b))
+                    .unwrap_or(0);
+                let pending_cost = pending_branch
+                    .as_ref()
+                    .map(|(_, b)| estimate_block(b))
+                    .unwrap_or(0);
+                let consumed_cost = consumed_branch
+                    .as_ref()
+                    .map(|b| estimate_block(b))
+                    .unwrap_or(0);
+                valid_cost
+                    .max(decayed_cost)
+                    .max(pending_cost)
+                    .max(consumed_cost)
+            }
+            Statement::Collapse => 0,
+            Statement::SplitMap { body, .. } => 1 + estimate_block(body),
+            Statement::Inspect { body, .. } => estimate_block(body),
+            Statement::Lease { duration_ms, .. } => *duration_ms,
+            Statement::RoutineDef { taking_ms, .. } => taking_ms.unwrap_or(0),
+            Statement::Loop { max_ms, .. } => *max_ms,
+            Statement::LoopTick { .. } => 1,
+            Statement::LoopTickOn { .. } => 1,
+            Statement::While { max_ms, .. } => *max_ms,
+            Statement::Slice { .. } => 0,
+            Statement::SpeculationMode(_) => 0,
+            Statement::Await(_) => 1,
+            Statement::AwaitChan(_) => 1,
+            Statement::Yield(_)
+            | Statement::Break
+            | Statement::Entangle { .. }
+            | Statement::Return(_) => 0,
+        };
+        base + extra
+    }
+}
+
 #[macro_export]
 macro_rules! expressions {
     ($macro:ident) => {
