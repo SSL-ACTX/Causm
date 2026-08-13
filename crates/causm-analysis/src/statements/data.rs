@@ -9,6 +9,7 @@ impl EntropicAnalyzer {
         target: &String,
         mutable: &bool,
         var_type: &Option<TypeName>,
+        lifetime: &Option<LifetimeAnnotation>,
         expr: &Expression,
     ) -> Result<(), SemanticError> {
         {
@@ -100,6 +101,27 @@ impl EntropicAnalyzer {
             analyze_expression(self, target)?;
         }
         analyze_expression(self, value)?;
+        Ok(())
+    }
+
+    pub(crate) fn EnumDecl(
+        &mut self,
+        name: &String,
+        variants: &Vec<EnumVariantDef>,
+    ) -> Result<(), SemanticError> {
+        let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        branch
+            .types
+            .insert(name.clone(), causm_core::types::Type::Custom(name.clone()));
+        branch
+            .custom_types
+            .insert(name.clone(), causm_core::types::Type::Custom(name.clone()));
+        for variant in variants {
+            branch.types.insert(
+                variant.name.clone(),
+                causm_core::types::Type::Custom(name.clone()),
+            );
+        }
         Ok(())
     }
 }

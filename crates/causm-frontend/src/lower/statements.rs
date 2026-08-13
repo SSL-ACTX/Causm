@@ -474,10 +474,23 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
             }
         }
-        Statement::Assignment { target, expr, .. } => {
+        Statement::EnumDecl { .. } => {}
+        Statement::Assignment {
+            target,
+            expr,
+            lifetime,
+            ..
+        } => {
             let src = lower_expression(ctx, expr);
             let dest = ctx.get_reg(target);
             ctx.push(Instruction::Move { dest, src });
+            if let Some(causm_core::LifetimeAnnotation::Decayed(ms)) = lifetime {
+                ctx.push(Instruction::Lease {
+                    target_reg: dest,
+                    source_reg: dest,
+                    duration_ms: *ms,
+                });
+            }
 
             match expr {
                 Expression::Identifier(_) => {
@@ -811,7 +824,10 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             step_ms,
             body,
         } => {
-            let source_reg = lower_expression(ctx, source);
+            let source_reg = match source {
+                Expression::Identifier(ref name) => ctx.get_reg(name),
+                _ => lower_expression(ctx, source),
+            };
             let start_pc = ctx.instructions.len();
             let cond_reg = ctx.alloc_reg();
             let item_reg = ctx.get_reg(item_name);

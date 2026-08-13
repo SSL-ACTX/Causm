@@ -94,7 +94,12 @@ macro_rules! statements {
                 target: String,
                 mutable: bool,
                 var_type: Option<TypeName>,
+                lifetime: Option<LifetimeAnnotation>,
                 expr: Expression
+            },
+            EnumDecl {
+                name: String,
+                variants: Vec<EnumVariantDef>
             },
             TypeDecl {
                 name: String,
@@ -399,6 +404,18 @@ pub struct SelectCase {
     pub binding: String,
     pub source: Expression,
     pub body: Vec<SpannedStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LifetimeAnnotation {
+    Valid,
+    Decayed(u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumVariantDef {
+    pub name: String,
+    pub payload_types: Vec<TypeName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

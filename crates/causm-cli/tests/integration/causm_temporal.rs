@@ -604,3 +604,104 @@ fn test_try_operator_and_time_step_loops() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_uninitialized_let_assignment() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_uninit {
+            let res: int
+            res = 100
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let reg = ir.symbols.get("res").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(reg),
+        Some(causm_core::value::Payload::Integer(100))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_syntax_enum_declaration_parsing() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_enum {
+            enum SystemStatus {
+                Ready,
+                Busy(int)
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+    Ok(())
+}
+
+#[test]
+fn test_entropy_lifetime_annotation_decayed() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_lifetime {
+            let @decayed(5000ms) session = 777
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let reg = ir.symbols.get("session").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(reg),
+        Some(causm_core::value::Payload::Integer(777))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_temporal_paced_time_range_step_loop() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_paced_loop {
+            let total = 0
+            for t in 0..4 step 500ms {
+                total = total + 5
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let reg = ir.symbols.get("total").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(reg),
+        Some(causm_core::value::Payload::Integer(20))
+    );
+    Ok(())
+}

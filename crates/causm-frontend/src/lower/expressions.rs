@@ -70,7 +70,18 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 arg_regs.push(lower_expression(ctx, arg));
             }
             let dest = ctx.alloc_reg();
-            if routine_name == "<dynamic>" {
+            if routine_name == "<enum_constructor>" {
+                let mut payload_regs = Vec::new();
+                for arg in args {
+                    payload_regs.push(lower_expression(ctx, arg));
+                }
+                let src = if !payload_regs.is_empty() {
+                    payload_regs[0]
+                } else {
+                    ctx.alloc_reg()
+                };
+                ctx.push(causm_ir::Instruction::Move { dest, src });
+            } else if routine_name == "<dynamic>" {
                 let budget = *resolved_budget.borrow();
                 ctx.push(causm_ir::Instruction::DynamicCall {
                     method: method.clone(),

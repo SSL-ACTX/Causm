@@ -17,6 +17,21 @@ pub(crate) fn analyze_expression(
             resolved_routine,
             resolved_budget,
         } => {
+            if let Expression::Identifier(ref name) = **target {
+                let is_enum_type = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .map(|st| st.custom_types.contains_key(name))
+                    .unwrap_or(false);
+                if is_enum_type {
+                    for arg in args {
+                        analyze_expression_nonconsuming(analyzer, arg)?;
+                    }
+                    *resolved_routine.borrow_mut() =
+                        Some("<enum_constructor>".to_string());
+                    return Ok(());
+                }
+            }
             analyze_expression_nonconsuming(analyzer, target)?;
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {

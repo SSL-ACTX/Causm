@@ -385,3 +385,18 @@ pub fn parse_duration_limit(pair: Pair<Rule>) -> u64 {
         num
     }
 }
+
+pub fn parse_duration_to_ms(str_val: &str) -> u64 {
+    let s = str_val.trim();
+    if s.ends_with("ns") {
+        s.trim_end_matches("ns").parse::<u64>().unwrap_or(0) / 1_000_000
+    } else if s.ends_with("us") {
+        s.trim_end_matches("us").parse::<u64>().unwrap_or(0) / 1000
+    } else if s.ends_with("ms") {
+        s.trim_end_matches("ms").parse::<u64>().unwrap_or(0)
+    } else if s.ends_with('s') {
+        s.trim_end_matches('s').parse::<u64>().unwrap_or(0) * 1000
+    } else {
+        s.parse::<u64>().unwrap_or(0)
+    }
+}

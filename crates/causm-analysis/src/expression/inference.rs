@@ -96,6 +96,16 @@ pub(crate) fn infer_expression_type(
             resolved_routine,
             resolved_budget,
         } => {
+            if let Expression::Identifier(ref name) = **target {
+                let is_enum_type = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .map(|st| st.custom_types.contains_key(name))
+                    .unwrap_or(false);
+                if is_enum_type {
+                    return Ok(Type::Custom(name.clone()));
+                }
+            }
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
                 Type::Custom(name) => name.clone(),

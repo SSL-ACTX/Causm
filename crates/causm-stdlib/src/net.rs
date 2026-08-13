@@ -5,7 +5,12 @@ pub fn register_net_capabilities(vm: &mut Vm) {
         let url = params.get("url").cloned().unwrap_or_default();
         if url.starts_with("http://") || url.starts_with("https://") {
             println!("\x1b[1;34m[System.NetworkFetch]\x1b[0m HTTP GET {}", url);
-            match ureq::get(&url).timeout(std::time::Duration::from_secs(5)).call() {
+            match ureq::get(&url)
+                .set("User-Agent", "curl/8.4.0")
+                .set("Accept", "*/*")
+                .timeout(std::time::Duration::from_secs(5))
+                .call()
+            {
                 Ok(response) => {
                     let body = response.into_string().unwrap_or_else(|_| "".to_string());
                     println!("\x1b[1;32m[System.NetworkFetch]\x1b[0m Response received ({} bytes)", body.len());

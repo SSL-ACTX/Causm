@@ -41,7 +41,12 @@ When adding new syntax, instructions, or VM capabilities:
 4.  Update SSA/CFG transformation logic in `crates/causm-ir/src/ssa/` if registers or control flow terminators change.
 5.  Add entropic verification, cost estimation, type inference, and validation passes in `crates/causm-analysis/src/`.
 6.  Wire VM execution logic in `crates/causm-runtime/src/vm/`.
-7.  Add targeted parser, analyzer, and integration tests in `crates/causm-cli/tests/integration/` to verify the pipeline.
+7.  Add isolated, modular test cases in `crates/causm-cli/tests/integration/` (or relevant crate unit tests) adhering to strict naming, category, and target precision guidelines.
+
+### 2.4 Strict Test Case Mandates
+*   **Target Precision:** Every new feature, syntax addition, or bug fix MUST have dedicated, isolated test functions targeting that specific feature individually. Never bundle multiple distinct features into a single generic test suite function.
+*   **Clear Category & Naming Conventions:** Test functions must follow descriptive, structured naming conventions that declare the feature category and test target: `test_<category>_<feature>_<scenario>` (e.g., `test_syntax_uninitialized_let_definite_assignment`, `test_entropy_lifetime_annotation_decayed_lease`, `test_enum_variant_pattern_matching`, `test_temporal_paced_range_step_loop`).
+*   **Assertion Precision:** Each test must assert exact expected behaviors, values, and error states directly without relying on side-effect approximations.
 
 ---
 

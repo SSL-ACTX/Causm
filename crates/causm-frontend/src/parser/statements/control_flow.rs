@@ -177,13 +177,29 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
         Rule::for_step_stmt => {
             let mut inner = pair.into_inner();
             let item_name = inner.next().unwrap().as_str().to_string();
-            let source = parse_expression(inner.next().unwrap());
-            let step_pair = inner.next().unwrap();
-            let step_expr = parse_expression(step_pair);
-            let step_ms = match step_expr {
-                Expression::Integer(i) => i as u64,
-                _ => 0,
+            let range_pair = inner.next().unwrap();
+            let source = if range_pair.as_rule() == Rule::range_expr {
+                let r_str = range_pair.as_str();
+                if let Some((start_str, end_str)) = r_str.split_once("..") {
+                    let start_ms = parse_duration_to_ms(start_str);
+                    let end_ms = parse_duration_to_ms(end_str);
+                    let elems: Vec<Expression> = (start_ms..end_ms)
+                        .map(|v| Expression::Integer(v as i64))
+                        .collect();
+                    Expression::ArrayLiteral(if elems.is_empty() {
+                        vec![Expression::Integer(0)]
+                    } else {
+                        elems
+                    })
+                } else {
+                    parse_expression(range_pair.into_inner().next().unwrap())
+                }
+            } else {
+                parse_expression(range_pair)
             };
+            let step_pair = inner.next().unwrap();
+            let step_str = step_pair.as_str();
+            let step_ms = parse_duration_to_ms(step_str);
             let mut body = Vec::new();
             for stmt_pair in inner {
                 if stmt_pair.as_rule() == Rule::statement {

@@ -29,6 +29,7 @@ impl Vm {
             | Statement::Capability(_)
             | Statement::Assignment { .. }
             | Statement::TypeDecl { .. }
+            | Statement::EnumDecl { .. }
             | Statement::InterfaceDecl { .. }
             | Statement::FieldUpdate { .. }
             | Statement::Expression(_)

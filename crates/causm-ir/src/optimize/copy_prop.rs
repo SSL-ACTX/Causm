@@ -281,6 +281,95 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                         changed = true;
                     }
                 }
+                SsaInstruction::Await { target } => {
+                    let new_target = resolve(*target);
+                    if *target != new_target {
+                        *target = new_target;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::MatchEntropy { target, .. } => {
+                    let new_target = resolve(*target);
+                    if *target != new_target {
+                        *target = new_target;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::Lease { target_reg, source_reg, .. } => {
+                    let new_target = resolve(*target_reg);
+                    if *target_reg != new_target {
+                        *target_reg = new_target;
+                        changed = true;
+                    }
+                    let new_source = resolve(*source_reg);
+                    if *source_reg != new_source {
+                        *source_reg = new_source;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::EndLease { source_reg, .. } => {
+                    let new_source = resolve(*source_reg);
+                    if *source_reg != new_source {
+                        *source_reg = new_source;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::Entangle { regs } => {
+                    for r in regs {
+                        let new_r = resolve(*r);
+                        if *r != new_r {
+                            *r = new_r;
+                            changed = true;
+                        }
+                    }
+                }
+                SsaInstruction::Consume { src } => {
+                    let new_src = resolve(*src);
+                    if *src != new_src {
+                        *src = new_src;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::ConsumeField { src, .. } => {
+                    let new_src = resolve(*src);
+                    if *src != new_src {
+                        *src = new_src;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::ConsumeFieldDynamic { target, index } => {
+                    let new_target = resolve(*target);
+                    if *target != new_target {
+                        *target = new_target;
+                        changed = true;
+                    }
+                    let new_index = resolve(*index);
+                    if *index != new_index {
+                        *index = new_index;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::Debug { src } => {
+                    let new_src = resolve(*src);
+                    if *src != new_src {
+                        *src = new_src;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::JumpIf { cond, .. } => {
+                    let new_cond = resolve(*cond);
+                    if *cond != new_cond {
+                        *cond = new_cond;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::JumpIfNot { cond, .. } => {
+                    let new_cond = resolve(*cond);
+                    if *cond != new_cond {
+                        *cond = new_cond;
+                        changed = true;
+                    }
+                }
                 _ => {}
             }
         }

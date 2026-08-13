@@ -9,12 +9,31 @@ use std::collections::HashMap;
 pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
         Rule::assignment_stmt => {
-            let mut inner = pair.into_inner();
+            let mut inner = pair.into_inner().peekable();
             let mut mutable = false;
             if let Some(first) = inner.peek() {
                 if first.as_str() == "mut" {
                     mutable = true;
                     inner.next();
+                }
+            }
+
+            let mut lifetime = None;
+            if let Some(p) = inner.peek() {
+                if p.as_rule() == Rule::lifetime_annotation {
+                    let lt_pair = inner.next().unwrap();
+                    let s = lt_pair.as_str();
+                    if s == "@valid" {
+                        lifetime = Some(LifetimeAnnotation::Valid);
+                    } else if s.starts_with("@decayed(") {
+                        let dur_str = lt_pair
+                            .into_inner()
+                            .next()
+                            .map(|p| p.as_str())
+                            .unwrap_or("0ms");
+                        let ms = parse_duration_to_ms(dur_str);
+                        lifetime = Some(LifetimeAnnotation::Decayed(ms));
+                    }
                 }
             }
 
@@ -43,8 +62,37 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 target,
                 mutable,
                 var_type,
+                lifetime,
                 expr,
             }
+        }
+        Rule::enum_decl => {
+            let mut inner = pair.into_inner();
+            let name = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let mut variants = Vec::new();
+            if let Some(list_pair) = inner.next() {
+                for variant_pair in list_pair.into_inner() {
+                    let mut var_inner = variant_pair.into_inner();
+                    let v_name = var_inner
+                        .next()
+                        .map(|p| p.as_str().to_string())
+                        .unwrap_or_default();
+                    let mut payload_types = Vec::new();
+                    if let Some(types_pair) = var_inner.next() {
+                        for t_pair in types_pair.into_inner() {
+                            payload_types.push(parse_type_name(t_pair));
+                        }
+                    }
+                    variants.push(EnumVariantDef {
+                        name: v_name,
+                        payload_types,
+                    });
+                }
+            }
+            Statement::EnumDecl { name, variants }
         }
         Rule::type_decl => {
             let mut inner = pair.into_inner().peekable();
@@ -207,6 +255,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                             target: lhs_name.clone(),
                                             mutable: false,
                                             var_type: None,
+                                            lifetime: None,
                                             expr,
                                         },
                                         span: body[0].span.clone(),
@@ -227,6 +276,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                                 target: lhs_name.clone(),
                                                 mutable: false,
                                                 var_type: None,
+                                                lifetime: None,
                                                 expr,
                                             },
                                             span: body[0].span.clone(),
@@ -273,6 +323,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     target: name,
                     mutable: false,
                     var_type: None,
+                    lifetime: None,
                     expr: value,
                 }
             } else {

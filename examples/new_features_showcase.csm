@@ -1,0 +1,36 @@
+@0ms: {
+    isolate system_core {
+        enable cpu(5000ms)
+        enable memory(64KB)
+        require System.Log
+        require System.NetworkFetch
+
+        enum NodeStatus {
+            Active(int),
+            Degraded(string),
+            Offline
+        }
+
+        let node_id = 101
+        let accum = 0
+        let @decayed(5000ms) auth_session = "token_x89"
+
+        for step in 0..5 step 500ms {
+            accum = accum + step * 2
+        }
+                                                                               let node_state = NodeStatus.Active(accum)
+                                                                               print("Node ID:")                                                      print(node_id)
+
+        print("Session Token:")                                                print(auth_session)
+
+        let score = accum?
+        print("Calculated Score:")
+        print(score)
+
+        let endpoint = "https://postman-echo.com/get"
+        let pending_req = defer System.NetworkFetch(url: endpoint, latency: 20ms) deadline 2000ms
+        await(pending_req)
+        print("Network request completed successfully:")
+        print(clone(pending_req))
+    }
+}
