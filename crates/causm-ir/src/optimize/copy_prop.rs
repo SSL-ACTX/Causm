@@ -295,7 +295,11 @@ pub fn copy_propagation(ssa_cfg: &mut SsaCFG) -> bool {
                         changed = true;
                     }
                 }
-                SsaInstruction::Lease { target_reg, source_reg, .. } => {
+                SsaInstruction::Lease {
+                    target_reg,
+                    source_reg,
+                    ..
+                } => {
                     let new_target = resolve(*target_reg);
                     if *target_reg != new_target {
                         *target_reg = new_target;

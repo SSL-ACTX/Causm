@@ -156,6 +156,9 @@ impl std::fmt::Display for SsaInstruction {
                     regs.iter().map(|r| r.to_string()).collect();
                 write!(f, "Entangle [{}]", regs_str.join(", "))
             }
+            SsaInstruction::SetEntropyMode { mode } => {
+                write!(f, "SetEntropyMode {:?}", mode)
+            }
             SsaInstruction::Anchor { name } => {
                 write!(f, "Anchor {}", name)
             }

@@ -94,6 +94,9 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         let history_index = self.causal_history.len();
         let branch = self.get_branch_mut(branch_id)?;
+        if branch.entropy_mode == causm_core::EntropyMode::Chaos {
+            return Err(TemporalError::RewindDisabledInChaos);
+        }
         let snapshot = AnchorPoint {
             name: name.clone(),
             clock_snapshot: branch.local_clock,
@@ -116,6 +119,12 @@ impl Vm {
         anchor: String,
     ) -> Result<(), TemporalError> {
         let target_id = if target == "self" { branch_id } else { &target };
+        {
+            let t_branch = self.get_branch_mut(target_id)?;
+            if t_branch.entropy_mode == causm_core::EntropyMode::Chaos {
+                return Err(TemporalError::RewindDisabledInChaos);
+            }
+        }
         let anchor_data = {
             let t_branch = self.get_branch_mut(target_id)?;
             t_branch

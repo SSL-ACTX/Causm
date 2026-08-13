@@ -5,6 +5,16 @@ use causm_ir::Reg;
 
 #[allow(non_snake_case)]
 impl Vm {
+    pub(crate) fn SetEntropyMode(
+        &mut self,
+        branch_id: &str,
+        mode: causm_core::EntropyMode,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.entropy_mode = mode;
+        Ok(())
+    }
+
     pub(crate) fn Isolate(
         &mut self,
         branch_id: &str,

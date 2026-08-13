@@ -1080,6 +1080,41 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.decay_handlers
                 .insert(type_name.clone(), sub_ctx.instructions);
         }
+        Statement::DirectiveBlock { directives, body } => {
+            use causm_core::BlockDirective;
+            let mut new_entropy_mode = None;
+            for dir in directives {
+                match dir {
+                    BlockDirective::Chaos => {
+                        new_entropy_mode = Some(causm_core::EntropyMode::Chaos)
+                    }
+                    BlockDirective::Deterministic => {
+                        new_entropy_mode =
+                            Some(causm_core::EntropyMode::Deterministic)
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(mode) = new_entropy_mode {
+                ctx.push(causm_ir::Instruction::SetEntropyMode { mode });
+                ctx.entropy_modes.push(mode);
+            }
+
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+
+            if new_entropy_mode.is_some() {
+                ctx.entropy_modes.pop();
+                let prev_mode = ctx
+                    .entropy_modes
+                    .last()
+                    .copied()
+                    .unwrap_or(causm_core::EntropyMode::Deterministic);
+                ctx.push(causm_ir::Instruction::SetEntropyMode { mode: prev_mode });
+            }
+        }
         _ => {}
     }
 }

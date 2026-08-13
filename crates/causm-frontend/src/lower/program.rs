@@ -10,13 +10,20 @@ pub fn lower_program(program: &Program) -> IrProgram {
 
     for tb in &program.timelines {
         let start_idx = ctx.instructions.len();
+        if let Some(mode) = tb.entropy_mode {
+            ctx.entropy_modes.push(mode);
+        }
         for stmt in &tb.statements {
             lower_spanned(&mut ctx, stmt);
+        }
+        if tb.entropy_mode.is_some() {
+            ctx.entropy_modes.pop();
         }
         let block_instrs = ctx.instructions.split_off(start_idx);
         let block_spans = ctx.spans.split_off(start_idx);
         blocks.push(IrBlock {
             time: tb.time.clone(),
+            entropy_mode: tb.entropy_mode,
             instructions: block_instrs,
             spans: block_spans,
         });

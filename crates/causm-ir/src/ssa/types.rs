@@ -198,6 +198,9 @@ pub enum SsaInstruction {
     Entangle {
         regs: Vec<SsaReg>,
     },
+    SetEntropyMode {
+        mode: causm_core::EntropyMode,
+    },
     Anchor {
         name: String,
     },

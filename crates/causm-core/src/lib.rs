@@ -23,6 +23,8 @@ pub struct SpannedStatement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimelineBlock {
     pub time: TimeCoordinate,
+    pub no_z3: bool,
+    pub entropy_mode: Option<EntropyMode>,
     pub statements: Vec<SpannedStatement>,
 }
 
@@ -139,6 +141,10 @@ macro_rules! statements {
             },
             RelativisticBlock {
                 time: TimeCoordinate,
+                body: Vec<SpannedStatement>
+            },
+            DirectiveBlock {
+                directives: Vec<BlockDirective>,
                 body: Vec<SpannedStatement>
             },
             NetworkRequest {
@@ -423,6 +429,13 @@ pub struct TypeFieldDef {
     pub typ: TypeName,
     pub is_const: bool,
     pub default_value: Option<Expression>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockDirective {
+    NoZ3,
+    Chaos,
+    Deterministic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

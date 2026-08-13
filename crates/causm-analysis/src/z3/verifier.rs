@@ -1,8 +1,8 @@
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use crate::solver::SolverBackend;
 use causm_core::{
-    BinaryOperator, DecayedPattern, Expression, IsolateBlock, Program,
-    SpannedStatement, Statement,
+    BinaryOperator, BlockDirective, DecayedPattern, Expression, IsolateBlock,
+    Program, SpannedStatement, Statement,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -45,6 +45,13 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         self.current_slice_ms = None;
 
         for (idx, timeline) in program.timelines.iter().enumerate() {
+            if timeline.no_z3 {
+                self.analyzer
+                    .analyzed_wcet
+                    .borrow_mut()
+                    .insert(format!("Timeline {}", idx), 0);
+                continue;
+            }
             let mut clock = self.solver.int_from_u64(0);
             let path_cond = self.solver.bool_from_bool(true);
             for spanned in &timeline.statements {
@@ -218,6 +225,24 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     ));
                 }
                 Ok(current_clock)
+            }
+            Statement::DirectiveBlock { directives, body } => {
+                let mut bypass_z3 = false;
+                for dir in directives {
+                    if matches!(dir, BlockDirective::NoZ3) {
+                        bypass_z3 = true;
+                    }
+                }
+                if bypass_z3 {
+                    Ok(current_clock)
+                } else {
+                    let mut clock = current_clock;
+                    for stmt in body {
+                        clock =
+                            self.verify_statement(stmt, path_condition, &clock)?;
+                    }
+                    Ok(clock)
+                }
             }
             Statement::Isolate(block) => {
                 self.verify_isolate(block, path_condition)?;

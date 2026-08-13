@@ -11,9 +11,10 @@ pub struct LoweringContext {
     pub type_decay_limits: HashMap<String, u64>,
     pub type_decls: HashMap<String, HashMap<String, TypeFieldDef>>,
     pub interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
-    pub struct_extends: HashMap<String, String>,
-    pub decay_handlers: HashMap<String, Vec<Instruction>>,
+    pub(crate) struct_extends: HashMap<String, String>,
+    pub(crate) decay_handlers: HashMap<String, Vec<Instruction>>,
     pub current_span: Option<Span>,
+    pub entropy_modes: Vec<causm_core::EntropyMode>,
 }
 
 impl Default for LoweringContext {
@@ -36,6 +37,7 @@ impl LoweringContext {
             struct_extends: HashMap::new(),
             decay_handlers: HashMap::new(),
             current_span: None,
+            entropy_modes: vec![causm_core::EntropyMode::Deterministic],
         }
     }
 

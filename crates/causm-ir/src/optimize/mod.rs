@@ -520,6 +520,9 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             target: target.clone(),
             resolution: resolution.clone(),
         },
+        SsaInstruction::SetEntropyMode { mode } => {
+            Instruction::SetEntropyMode { mode: *mode }
+        }
         SsaInstruction::Anchor { name } => {
             Instruction::Anchor { name: name.clone() }
         }

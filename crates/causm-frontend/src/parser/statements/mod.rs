@@ -19,6 +19,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
     let stmt = match pair.as_rule() {
         // Structural
         Rule::timeline_block
+        | Rule::directive_stmt
         | Rule::isolate_stmt
         | Rule::routine_stmt
         | Rule::require_decl
@@ -88,7 +89,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
 }
 
 pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.into_inner().peekable();
     let time_coord_pair = inner.next().expect("Timeline missing time");
     let time_pair = time_coord_pair
         .into_inner()
@@ -111,6 +112,23 @@ pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
         _ => TimeCoordinate::Global(0),
     };
 
+    let mut no_z3 = false;
+    let mut entropy_mode = None;
+
+    while let Some(next_pair) = inner.peek() {
+        if next_pair.as_rule() == Rule::timeline_directive {
+            let directive_pair = inner.next().unwrap();
+            match directive_pair.as_str() {
+                "@no_z3" => no_z3 = true,
+                "@chaos" => entropy_mode = Some(EntropyMode::Chaos),
+                "@deterministic" => entropy_mode = Some(EntropyMode::Deterministic),
+                _ => {}
+            }
+        } else {
+            break;
+        }
+    }
+
     let mut statements = Vec::new();
     if let Some(block_inner) = inner.next() {
         for stmt_pair in block_inner.into_inner() {
@@ -120,5 +138,10 @@ pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
             }
         }
     }
-    TimelineBlock { time, statements }
+    TimelineBlock {
+        time,
+        no_z3,
+        entropy_mode,
+        statements,
+    }
 }

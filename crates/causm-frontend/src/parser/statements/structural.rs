@@ -198,6 +198,35 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 anchor_name,
             }
         }
+        Rule::directive_stmt => {
+            let mut inner = pair.into_inner().peekable();
+            let mut directives = Vec::new();
+            while let Some(next_pair) = inner.peek() {
+                if next_pair.as_rule() == Rule::timeline_directive {
+                    let dir_pair = inner.next().unwrap();
+                    let dir = match dir_pair.as_str() {
+                        "@no_z3" => BlockDirective::NoZ3,
+                        "@chaos" => BlockDirective::Chaos,
+                        "@deterministic" => BlockDirective::Deterministic,
+                        _ => continue,
+                    };
+                    directives.push(dir);
+                } else {
+                    break;
+                }
+            }
+
+            let mut body = Vec::new();
+            if let Some(block_inner) = inner.next() {
+                for stmt_pair in block_inner.into_inner() {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
+                }
+            }
+
+            Statement::DirectiveBlock { directives, body }
+        }
         _ => unreachable!(),
     }
 }

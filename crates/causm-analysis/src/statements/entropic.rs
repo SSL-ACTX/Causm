@@ -125,6 +125,9 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn Anchor(&mut self, _name: &String) -> Result<(), SemanticError> {
+        if self.entropy_mode == causm_core::EntropyMode::Chaos {
+            return Err(self.annotate(SemanticErrorKind::ChaosModePreventsRewind));
+        }
         if let Some(cap) = self.get_capability("System.Entropy") {
             if cap.parameters.get("mode").map(|s| s.as_str()) == Some("chaos") {
                 return Err(
@@ -136,6 +139,9 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn Rewind(&mut self, _name: &String) -> Result<(), SemanticError> {
+        if self.entropy_mode == causm_core::EntropyMode::Chaos {
+            return Err(self.annotate(SemanticErrorKind::ChaosModePreventsRewind));
+        }
         if let Some(cap) = self.get_capability("System.Entropy") {
             if cap.parameters.get("mode").map(|s| s.as_str()) == Some("chaos") {
                 return Err(
@@ -151,6 +157,9 @@ impl EntropicAnalyzer {
         _target: &String,
         _anchor_name: &String,
     ) -> Result<(), SemanticError> {
+        if self.entropy_mode == causm_core::EntropyMode::Chaos {
+            return Err(self.annotate(SemanticErrorKind::ChaosModePreventsRewind));
+        }
         if let Some(cap) = self.get_capability("System.Entropy") {
             if cap.parameters.get("mode").map(|s| s.as_str()) == Some("chaos") {
                 return Err(

@@ -149,6 +149,9 @@ macro_rules! instructions {
             Entangle {
                 regs: Vec<$crate::Reg>
             },
+            SetEntropyMode {
+                mode: causm_core::EntropyMode
+            },
             Anchor {
                 name: String
             },
@@ -377,6 +380,7 @@ pub struct IrRoutine {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrBlock {
     pub time: TimeCoordinate,
+    pub entropy_mode: Option<causm_core::EntropyMode>,
     pub instructions: Vec<Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
 }

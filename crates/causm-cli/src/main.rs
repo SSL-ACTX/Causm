@@ -42,6 +42,14 @@ struct Cli {
     /// Print detailed metrics, clocks, WCET analysis, and final memory arena state
     #[arg(short, long)]
     verbose: bool,
+
+    /// Bypass Z3 formal verification
+    #[arg(long)]
+    no_z3: bool,
+
+    /// Force non-deterministic chaos mode execution
+    #[arg(long)]
+    chaos: bool,
 }
 
 #[derive(Subcommand)]
@@ -67,6 +75,14 @@ enum Commands {
         /// Print detailed execution metrics and arena state
         #[arg(short, long)]
         verbose: bool,
+
+        /// Bypass Z3 formal verification
+        #[arg(long)]
+        no_z3: bool,
+
+        /// Force non-deterministic chaos mode execution
+        #[arg(long)]
+        chaos: bool,
     },
 
     /// Perform semantic & entropic analysis without execution
@@ -78,6 +94,10 @@ enum Commands {
         /// Print detailed WCET analysis bounds
         #[arg(short, long)]
         verbose: bool,
+
+        /// Bypass Z3 formal verification
+        #[arg(long)]
+        no_z3: bool,
     },
 
     /// Print compiler intermediate representations
@@ -171,6 +191,8 @@ struct RunConfig {
     trace_entropy: bool,
     trace_causal: bool,
     verbose: bool,
+    no_z3: bool,
+    chaos: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -183,6 +205,8 @@ fn main() -> anyhow::Result<()> {
             trace_entropy,
             trace_causal,
             verbose,
+            no_z3,
+            chaos,
         }) => RunConfig {
             files,
             check_only: false,
@@ -190,14 +214,22 @@ fn main() -> anyhow::Result<()> {
             trace_entropy,
             trace_causal,
             verbose,
+            no_z3,
+            chaos,
         },
-        Some(Commands::Check { files, verbose }) => RunConfig {
+        Some(Commands::Check {
+            files,
+            verbose,
+            no_z3,
+        }) => RunConfig {
             files,
             check_only: true,
             emit: None,
             trace_entropy: false,
             trace_causal: false,
             verbose,
+            no_z3,
+            chaos: false,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
             files,
@@ -206,6 +238,8 @@ fn main() -> anyhow::Result<()> {
             trace_entropy: false,
             trace_causal: false,
             verbose: false,
+            no_z3: false,
+            chaos: false,
         },
         None => {
             if cli.files.is_empty() {
@@ -221,6 +255,8 @@ fn main() -> anyhow::Result<()> {
                 trace_entropy: cli.trace_entropy,
                 trace_causal: cli.trace_causal,
                 verbose: cli.verbose,
+                no_z3: cli.no_z3,
+                chaos: cli.chaos,
             }
         }
     };
@@ -264,6 +300,9 @@ fn main() -> anyhow::Result<()> {
         }
 
         let mut analyzer = EntropicAnalyzer::new();
+        if config.no_z3 {
+            analyzer.use_z3 = false;
+        }
         if let Err(err) = analyzer.analyze_program_with_source(
             &program,
             &source,
@@ -312,6 +351,9 @@ fn main() -> anyhow::Result<()> {
             let mut ir_program = lower::lower_program(&program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
+            if config.chaos {
+                vm.root_timeline.entropy_mode = causm_core::EntropyMode::Chaos;
+            }
             vm.trace_entropy = config.trace_entropy;
 
             let tracer =

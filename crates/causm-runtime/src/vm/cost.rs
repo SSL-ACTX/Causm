@@ -44,6 +44,7 @@ impl Vm {
             Statement::RelativisticBlock { body, .. } => {
                 self.estimate_block_cost(body)
             }
+            Statement::DirectiveBlock { body, .. } => self.estimate_block_cost(body),
             Statement::Isolate(block) => self.estimate_block_cost(&block.body),
             Statement::Watchdog { recovery, .. } => {
                 self.estimate_block_cost(recovery)

@@ -825,6 +825,9 @@ impl SsaTransformer {
                     regs.iter().map(|&r| self.current_ssa_reg(r)).collect();
                 SsaInstruction::Entangle { regs: regs_ssa }
             }
+            Instruction::SetEntropyMode { mode } => {
+                SsaInstruction::SetEntropyMode { mode: *mode }
+            }
             Instruction::Anchor { name } => {
                 SsaInstruction::Anchor { name: name.clone() }
             }

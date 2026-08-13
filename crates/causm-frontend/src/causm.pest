@@ -4,7 +4,9 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "#" ~ (!"\n" ~ ANY)* }
 
 program = { SOI ~ timeline_block+ ~ EOI }
 
-timeline_block = { "@" ~ time_coord ~ ":" ~ statement_block }
+timeline_block = { "@" ~ time_coord ~ timeline_directive* ~ ":" ~ statement_block }
+timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") }
+directive_stmt = { timeline_directive+ ~ ":" ~ statement_block }
 
 time_coord     = { relative_time | absolute_time | branch_name }
 absolute_time  = @{ ASCII_DIGIT+ ~ "ms" }
@@ -14,7 +16,8 @@ branch_name    = { identifier }
 statement_block = { "{" ~ statement* ~ "}" | statement }
 
 statement = {
-    isolate_stmt
+    directive_stmt
+    | isolate_stmt
     | split_stmt
     | routine_stmt
     | merge_stmt

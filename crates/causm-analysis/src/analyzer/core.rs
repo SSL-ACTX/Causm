@@ -25,6 +25,7 @@ pub struct EntropicAnalyzer {
     pub(crate) merged_branches: HashSet<String>,
     pub(crate) known_channels: HashSet<String>,
     pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
+    pub entropy_mode: causm_core::EntropyMode,
 }
 
 impl Default for EntropicAnalyzer {
@@ -60,6 +61,7 @@ impl EntropicAnalyzer {
             merged_branches: HashSet::new(),
             known_channels: HashSet::new(),
             analyzed_wcet: std::cell::RefCell::new(HashMap::new()),
+            entropy_mode: causm_core::EntropyMode::Deterministic,
         };
         analyzer.register_intrinsics();
         analyzer
@@ -181,6 +183,10 @@ impl EntropicAnalyzer {
 
         for block in &program.timelines {
             let old_branch = self.current_branch.clone();
+            let old_entropy_mode = self.entropy_mode;
+            if let Some(mode) = block.entropy_mode {
+                self.entropy_mode = mode;
+            }
             match &block.time {
                 TimeCoordinate::Branch(id) => {
                     if id != "main" && !self.branch_contexts.contains_key(id) {
@@ -221,6 +227,7 @@ impl EntropicAnalyzer {
             }
 
             self.current_branch = old_branch;
+            self.entropy_mode = old_entropy_mode;
         }
 
         if self.enforce_egc {

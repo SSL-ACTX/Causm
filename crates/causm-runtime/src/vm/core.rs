@@ -232,6 +232,9 @@ impl Vm {
 
             {
                 let branch = self.get_branch_mut(branch_id)?;
+                if let Some(mode) = block.entropy_mode {
+                    branch.entropy_mode = mode;
+                }
                 branch.instructions = block.instructions.clone();
                 branch.spans = block.spans.clone();
                 branch.pc = 0;

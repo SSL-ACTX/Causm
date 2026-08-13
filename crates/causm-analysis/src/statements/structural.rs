@@ -77,4 +77,31 @@ impl EntropicAnalyzer {
         }
         Ok(())
     }
+
+    pub(crate) fn DirectiveBlock(
+        &mut self,
+        directives: &[BlockDirective],
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        let old_use_z3 = self.use_z3;
+        let old_entropy_mode = self.entropy_mode;
+
+        for dir in directives {
+            match dir {
+                BlockDirective::NoZ3 => self.use_z3 = false,
+                BlockDirective::Chaos => self.entropy_mode = EntropyMode::Chaos,
+                BlockDirective::Deterministic => {
+                    self.entropy_mode = EntropyMode::Deterministic
+                }
+            }
+        }
+
+        for inner_stmt in body {
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        self.use_z3 = old_use_z3;
+        self.entropy_mode = old_entropy_mode;
+        Ok(())
+    }
 }
