@@ -20,6 +20,7 @@ The following documents define the formal behavior, syntax, and semantics of Cau
 - **[Asynchronous Promises](./spec/causm_spec_promises.md)**: Temporal promises and causal synchronization.
 - **[Timeline Routing](./spec/causm_spec_temporal_routing.md)**: Advanced routing across isolated timelines.
 - **[Isochronous Scheduling](./spec/causm_spec_isochronous_scheduling.md)**: High-precision temporal synchronization.
+- **[Module System & Imports](./spec/causm_spec_modules.md)**: Multi-file code imports, namespaces, and dependency graphs.
 
 ## 2. TVM Internals (`docs/tvm/`)
 Technical documentation regarding the Register-based Temporal Virtual Machine.
@@ -31,6 +32,7 @@ Technical documentation regarding the Register-based Temporal Virtual Machine.
 Historical design documents and the standard RFC process.
 
 - **[Standard RFC Template](./rfc/causm_RFC.md)**: Guidelines for proposing language changes.
+- **[Module System Proposal](./proposals/causm_prop_import_system.md)**: Code imports, manifests, and entropic namespace resolution.
 - **[Entropic GC Proposal](./proposals/causm_prop_egc.md)**: Original design for deterministic reclamation.
 - **[Advanced Mechanics](./proposals/causm_prop_advanced_mechanics.md)**: Refinements for channels, contracts, and diagnostics.
 - **[Advanced Routing](./proposals/causm_prop_advanced_routing.md)**: Early designs for complex timeline topologies.

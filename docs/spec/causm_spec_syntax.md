@@ -16,36 +16,57 @@ A timeline block defines an execution context at a specified temporal coordinate
 @<time_coordinate>: <statement_block>
 ```
 
-**Temporal Coordinates:**
-- **Absolute Temporal Marker**: `@0ms:`, `@100ms:` (Time relative to the root timeline initialization).
-- **Relative Temporal Offset**: `@+10ms:` (Temporal offset relative to the current timeline entry point).
-- **Branch Identifier**: `@branch_name:` (Execution within a designated named branch).
+### Temporal Block Markers and Directives (`@`)
 
-**Example:**
-```causm
-@0ms: {
-  split main into [worker]
-  @worker: {
-    let x = "system_initialization"
-  }
-}
-```
+The `@` symbol is utilized across four primary language constructs:
+
+1. **Temporal Coordinate Markers**:
+   - Absolute Markers: `@0ms:`, `@100ms:` (Establishes execution at a fixed global clock coordinate).
+   - Relative Offsets: `@+10ms:` (Advances the local branch clock by a relative duration).
+   - Branch Identifiers: `@worker:` (Scopes execution within a specific timeline branch).
+
+2. **Entropic Lifetime Annotations**:
+   - Explicit Decay Duration: `let @decayed(50ms) token = "xyz"` (Triggers entropic state shift to `Decayed` after 50ms).
+   - Dynamic Decay Rate: `let @decay_rate(20ms) telemetry = 100` (Enforces per-tick entropic decay rate).
+
+3. **Execution Block Directives**:
+   - `@chaos` / `directive chaos`: Overrides safety constraints to simulate non-deterministic environment jitter.
+   - `@deterministic` / `directive deterministic`: Enforces strict WCET bounds and deterministic state reconciliation.
 
 ---
 
 ## 2. Declarations and Expressions
 
-### Variable Initialization (`let`)
-Initializes a new binding within the entropic arena of the current execution branch.
+#### Variable Initialization (`let`)
+Initializes a new binding within the entropic arena of the current execution branch. Supports optional lifetime decay annotations and uninitialized definite assignment tracking.
 
 **Syntax:**
 ```causm
-let <identifier> = <expression>
+let [annotation] <identifier> [= <expression>]
 ```
+
+**Lifetime Annotations & Uninitialized Let:**
+- `let @decayed(50ms) token = "xyz"`: Specifies explicit lifetime decay duration.
+- `let @decay_rate(20ms) sensor_stream = 100`: Specifies entropic decay rate per time unit.
+- `let uninit_var`: Uninitialized binding subject to compile-time definite assignment verification.
 
 **Entropic Implications:**
 - If the `<expression>` evaluates to a variable, the value is **consumed** (moved) from its source, rendering it unavailable unless an explicit `clone()` operation is performed.
 - If the `<expression>` is a literal, it is allocated within the local memory arena.
+
+### Entropic Transition Handlers (`on_decay` / `decay_handler`)
+Specifies a logic block that executes automatically upon entropic state decay.
+
+**Syntax:**
+```causm
+on_decay(<variable_name>) {
+    <statements>
+}
+
+decay_handler for <type_name> {
+    <statements>
+}
+```
 
 ### Type Specifications (`type`)
 Defines structured data types with advanced temporal and entropic constraints.
@@ -79,19 +100,40 @@ interface <name> [[= <base_interface>] + interface] {
 }
 ```
 
-### Entropic Transition Handlers (`decay_handler`)
-Specifies a logic block that executes automatically prior to the decay transition of a variable of a designated type.
+---
+
+## 3. Control Flow & Execution Primitives
+
+### Try Unwrap Operator (`?`)
+Unwraps a fallible entropic payload or error result.
 
 **Syntax:**
 ```causm
-decay_handler for <type_name> {
+let result = <expression>?
+```
+
+### Paced Time-Step Loops (`for ... step`)
+Iterates over numeric ranges with fixed temporal step pacing.
+
+**Syntax:**
+```causm
+for <step_var> in <start>..<end> step <amount>ms {
     <statements>
 }
 ```
 
----
+### Match Entropy & Pattern Guards
+Inspects variable entropic state with optional conditional guards.
 
-## 3. Control Flow Primitives
+**Syntax:**
+```causm
+match entropy(<target>) {
+    Valid(<pattern>) [if <guard_condition>]: { <statements> }
+    Decayed(<pattern>) [if <guard_condition>]: { <statements> }
+    Pending(<pattern>) [if <guard_condition>]: { <statements> }
+    Consumed [if <guard_condition>]: { <statements> }
+}
+```
 
 ### Temporal Assertions (`assert_time`)
 Enforces strict temporal constraints during execution.
@@ -165,12 +207,24 @@ A scatter-gather construct that initializes independent timelines for each eleme
 split_map <item> <mode> <source> { <statements> } reconcile (<resolution_rules>)
 ```
 
-### Temporal Leases (`lease`)
-Provides transient, read-only access to an entropic structure for a fixed duration.
+### Temporal Leases (`lease ... reconcile`)
+Provides transient, read-only access for a fixed duration with optional inline timeline state reconciliation.
 
 **Syntax:**
 ```causm
-lease <binding> = <source> for <amount>ms { <statements> }
+lease <binding> = <source> <amount>ms {
+    <statements>
+} [reconcile (auto | <rules>)]
+```
+
+### Block Directives (`directive`)
+Overrides execution entropy mode within scoped blocks.
+
+**Syntax:**
+```causm
+directive (chaos | deterministic) {
+    <statements>
+}
 ```
 
 **See also**: [Temporal Leases Specification](./causm_spec_leases.md)
@@ -284,11 +338,28 @@ The `+` operator supports automatic coercion to string when at least one operand
 let msg = "Balance: " + 1000 // Results in "Balance: 1000"
 ```
 
-### Index Access
-Topologies and arrays support dynamic indexing.
+### Reference Operator Shorthand (`&`)
+Syntactic sugar for non-consuming `peek` access of a variable within expressions.
+
 **Syntax:**
 ```causm
-let val = source[index_expression]
+let ref_val = &variable_name
 ```
-- For topologies, the index must evaluate to a **String** (field name).
-- For arrays, the index must evaluate to an **Integer**.
+
+---
+
+## 10. Module Import Declarations
+
+Supports multi-file code organization across `.csm` files.
+
+**Syntax:**
+```causm
+// Module alias import
+import "path/file.csm" as Alias
+
+// Named symbol import
+from "path/file.csm" import Symbol1, Symbol2 as CustomName
+```
+
+**See also**: [Module System Specification](./causm_spec_modules.md)
+
