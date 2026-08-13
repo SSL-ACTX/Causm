@@ -102,4 +102,20 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         analyze_expression(self, expr)
     }
+
+    pub(crate) fn Import(
+        &mut self,
+        _path: &String,
+        _alias: &Option<String>,
+    ) -> Result<(), SemanticError> {
+        Ok(())
+    }
+
+    pub(crate) fn FromImport(
+        &mut self,
+        _path: &String,
+        _symbols: &[(String, Option<String>)],
+    ) -> Result<(), SemanticError> {
+        Ok(())
+    }
 }

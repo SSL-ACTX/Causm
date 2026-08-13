@@ -291,7 +291,8 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
-        let program = match parser::parse_causm(&source) {
+        let program = match parser::parse_causm_with_imports(&source, path.parent())
+        {
             Ok(p) => p,
             Err(e) => {
                 eprintln!(

@@ -60,8 +60,15 @@ statement = {
     | entangle_stmt
     | field_update_stmt
     | slice_stmt
+    | import_stmt
+    | from_import_stmt
     | expression_stmt
 }
+
+import_stmt = { "import" ~ string_literal ~ ("as" ~ identifier)? }
+from_import_stmt = { "from" ~ string_literal ~ "import" ~ import_symbol_list }
+import_symbol_list = { import_symbol ~ ("," ~ import_symbol)* ~ ","? }
+import_symbol = { identifier ~ ("as" ~ identifier)? }
 
 expression_stmt = { expression }
 
@@ -82,7 +89,7 @@ routine_stmt = { "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param
 method_receiver = { param_mode ~ "self" ~ ("for" ~ amount ~ "ms")? }
 method_name = { identifier ~ ("<" ~ type_param_list ~ ">")? ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
-param_decl = { param_mode ~ identifier ~ type_annotation? }
+param_decl = { param_mode? ~ identifier ~ type_annotation? }
 param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" }
 return_annotation = { "->" ~ type_name }
 

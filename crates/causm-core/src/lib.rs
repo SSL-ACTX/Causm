@@ -257,6 +257,14 @@ macro_rules! statements {
             Entangle {
                 variables: Vec<String>
             },
+            Import {
+                path: String,
+                alias: Option<String>
+            },
+            FromImport {
+                path: String,
+                symbols: Vec<(String, Option<String>)>
+            },
             FieldUpdate {
                 target: Expression,
                 field: String,
@@ -385,6 +393,8 @@ impl Statement {
             Statement::Yield(_)
             | Statement::Break
             | Statement::Entangle { .. }
+            | Statement::Import { .. }
+            | Statement::FromImport { .. }
             | Statement::Return(_) => 0,
         };
         base + extra

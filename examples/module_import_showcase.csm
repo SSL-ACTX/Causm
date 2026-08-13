@@ -1,0 +1,42 @@
+@0ms: {
+    isolate main_system {
+        enable cpu(5000ms)
+        enable memory(64KB)
+        require System.Log
+
+        from "module_sensor_lib.csm" import compute_telemetry_digest
+
+        let raw_reading = 150
+        let ref_reading = &raw_reading
+        print("Raw Reading Reference:")
+        print(ref_reading)
+
+        let digest = call compute_telemetry_digest(raw_reading)
+        print("Imported Routine Telemetry Digest:")
+        print(digest)
+
+        let sensor_pack = struct { status = "active", level = digest }
+        lease current_pack = sensor_pack 30ms {
+            let active_level = current_pack.level
+            print("Leased Active Level:")
+            print(active_level)
+        } reconcile auto
+
+        let match_eval = match entropy(raw_reading) {
+            Valid(v) if v == 150: {
+                let status = "high_precision_match"
+                status
+            }
+            Valid(v): {
+                let status = "standard_valid"
+                status
+            }
+            Consumed: {
+                let status = "consumed_reading"
+                status
+            }
+        }
+        print("Entropic Guard Status:")
+        print(match_eval)
+    }
+}

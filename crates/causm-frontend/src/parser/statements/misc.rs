@@ -87,6 +87,32 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::collapse_stmt => Statement::Collapse,
+        Rule::import_stmt => {
+            let mut inner = pair.into_inner();
+            let raw_path = inner.next().unwrap().as_str().replace('"', "");
+            let alias = inner.next().map(|p| p.as_str().to_string());
+            Statement::Import {
+                path: raw_path,
+                alias,
+            }
+        }
+        Rule::from_import_stmt => {
+            let mut inner = pair.into_inner();
+            let raw_path = inner.next().unwrap().as_str().replace('"', "");
+            let mut symbols = Vec::new();
+            if let Some(list) = inner.next() {
+                for sym_pair in list.into_inner() {
+                    let mut sym_inner = sym_pair.into_inner();
+                    let name = sym_inner.next().unwrap().as_str().to_string();
+                    let sym_alias = sym_inner.next().map(|p| p.as_str().to_string());
+                    symbols.push((name, sym_alias));
+                }
+            }
+            Statement::FromImport {
+                path: raw_path,
+                symbols,
+            }
+        }
         Rule::speculation_mode_stmt => {
             let mode_str = pair
                 .into_inner()

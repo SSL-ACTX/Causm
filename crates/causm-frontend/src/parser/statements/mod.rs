@@ -70,6 +70,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::collapse_stmt
         | Rule::speculation_mode_stmt
         | Rule::network_request_stmt
+        | Rule::import_stmt
+        | Rule::from_import_stmt
         | Rule::print_stmt
         | Rule::debug_stmt
         | Rule::inspect_stmt => misc::parse_misc_stmt(pair),
