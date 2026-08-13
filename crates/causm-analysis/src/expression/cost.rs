@@ -111,7 +111,8 @@ pub fn estimate_expression_cost(
         | Expression::Deferred { .. } => 1,
         Expression::TypeAssertion { target, .. }
         | Expression::TypeCast { expr: target, .. }
-        | Expression::TryUnwrap(target) => {
+        | Expression::TryUnwrap(target)
+        | Expression::RefOp(target) => {
             1 + estimate_expression_cost(analyzer, target)
         }
     }

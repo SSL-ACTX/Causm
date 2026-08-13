@@ -444,6 +444,7 @@ pub(crate) fn analyze_expression(
                 analyze_expression(analyzer, target)
             }
         }
+        Expression::RefOp(expr) => analyze_expression_nonconsuming(analyzer, expr),
         Expression::CloneOp(name) => {
             let state = analyzer
                 .branch_contexts
@@ -578,6 +579,7 @@ pub(crate) fn analyze_expression_nonconsuming(
             }
             analyze_expression_nonconsuming(analyzer, target)
         }
+        Expression::RefOp(expr) => analyze_expression_nonconsuming(analyzer, expr),
         Expression::CloneOp(name) => {
             let state = analyzer
                 .branch_contexts

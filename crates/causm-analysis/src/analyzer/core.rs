@@ -863,6 +863,7 @@ impl EntropicAnalyzer {
                 format!("{}.{}", self.expr_snippet(target), field)
             }
             Expression::CloneOp(v) => format!("clone({})", v),
+            Expression::RefOp(e) => format!("&{}", self.expr_snippet(e)),
             Expression::StructLit(_, fields) => {
                 let parts: Vec<String> = fields
                     .iter()

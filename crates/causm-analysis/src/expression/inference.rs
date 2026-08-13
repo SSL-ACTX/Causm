@@ -242,6 +242,7 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::IndexAccess { .. } => Ok(Type::Unknown),
+        Expression::RefOp(expr) => infer_expression_type(analyzer, expr),
         Expression::CloneOp(name) => match analyzer.get_variable_type(name) {
             Some(typ) => Ok(typ),
             None => Err(analyzer

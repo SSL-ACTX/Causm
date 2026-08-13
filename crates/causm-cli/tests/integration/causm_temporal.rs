@@ -826,3 +826,29 @@ fn test_temporal_lease_reconcile_clause() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_syntax_reference_operator_shorthand() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_ref_operator {
+            let data = 777
+            let ref_val = &data
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let ref_reg = ir.symbols.get("ref_val").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(ref_reg),
+        Some(causm_core::value::Payload::Integer(777))
+    );
+    Ok(())
+}

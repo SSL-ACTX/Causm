@@ -413,6 +413,7 @@ macro_rules! expressions {
                 field: String
             },
             CloneOp(String),
+            RefOp(Box<Expression>),
             StructLit(std::cell::RefCell<Option<String>>, std::collections::HashMap<String, Expression>),
             TopologyLit(std::collections::HashMap<String, Expression>),
             IndexAccess {

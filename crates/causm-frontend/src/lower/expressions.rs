@@ -275,5 +275,6 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::Move { dest, src });
             dest
         }
+        Expression::RefOp(expr) => lower_expression(ctx, expr),
     }
 }

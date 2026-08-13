@@ -16,6 +16,10 @@
         let @decayed(5000ms) auth_session = "token_x89"
         let @decay_rate(50ms) telemetry_stream = 200
 
+        on_decay(telemetry_stream) {
+            print("Automatic entropic decay handler triggered for telemetry_stream")
+        }
+
         for step in 0..5 step 500ms {
             accum = accum + step * 2
         }
@@ -27,9 +31,12 @@
         print("Session Token:")
         print(auth_session)
 
-        let score = accum?
-        print("Calculated Score:")
-        print(score)
+        let primary_sensor = struct { status = "operational", score = accum }
+        lease temp_reading = primary_sensor 20ms {
+            let val = temp_reading.score
+            print("Leased sensor reading:")
+            print(val)
+        } reconcile auto
 
         let match_result = match entropy(telemetry_stream) {
             Valid(val) if val == 200: {
