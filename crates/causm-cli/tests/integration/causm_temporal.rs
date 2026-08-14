@@ -1023,15 +1023,13 @@ fn test_ffi_forbidden_library_path_error() -> anyhow::Result<()> {
 
 #[test]
 fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
-    let fs_src = causm_stdlib::get_module("std::fs").expect("std::fs module exists");
-    let test_wrapper = format!(
-        r#"
-        @0ms: {{
-            isolate test_fs_mod {{
+    let source = r#"
+        @0ms: {
+            isolate test_fs_mod {
                 require System.FFI
                 require System.Log
 
-                {}
+                from "std/fs" import *
 
                 let file_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm.txt"
                 let renamed_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm_renamed.txt"
@@ -1044,13 +1042,11 @@ fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
                 let exists_after = call file_exists(clone(renamed_path))
 
                 let cleaned = call remove_file(clone(renamed_path))
-            }}
-        }}
-        "#,
-        fs_src
-    );
+            }
+        }
+        "#;
 
-    let program = parser::parse_causm(&test_wrapper)?;
+    let program = parser::parse_causm_with_imports(source, None)?;
     let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
