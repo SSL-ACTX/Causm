@@ -118,6 +118,39 @@ enum Commands {
         #[arg(required = true, value_name = "FILES")]
         files: Vec<PathBuf>,
     },
+
+    /// Empirically tune 'taking ?' routine temporal contracts
+    Tune {
+        /// Input source file(s) to tune in-place
+        #[arg(required = true, value_name = "FILES")]
+        files: Vec<PathBuf>,
+
+        /// Number of chaos fuzzing iterations
+        #[arg(long, default_value_t = 100)]
+        iterations: usize,
+
+        /// Safety margin percentage added to P99.9 WCET
+        #[arg(long, default_value_t = 15.0)]
+        safety_margin: f64,
+
+        /// Dry-run mode: print proposed changes without modifying files
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Profile memory and clock timelines
+    Profile {
+        /// Input source file
+        #[arg(required = true, value_name = "FILE")]
+        file: PathBuf,
+    },
+
+    /// Format Causm source files
+    Fmt {
+        /// Input source file(s)
+        #[arg(required = true, value_name = "FILES")]
+        files: Vec<PathBuf>,
+    },
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -254,6 +287,151 @@ fn main() -> anyhow::Result<()> {
             chaos: false,
             explain_merge: false,
         },
+        Some(Commands::Tune {
+            files,
+            iterations,
+            safety_margin,
+            dry_run,
+        }) => {
+            for path in &files {
+                let source = fs::read_to_string(path)?;
+                let mut tuned_source = source.clone();
+                let program =
+                    parser::parse_causm_with_imports(&source, path.parent())
+                        .map_err(|e| anyhow::anyhow!(e))?;
+
+                println!("\x1b[1;36m[Tuning Target]\x1b[0m {}", path.display());
+                for tb in &program.timelines {
+                    for stmt in &tb.statements {
+                        if let causm_core::Statement::RoutineDef {
+                            name,
+                            taking_ms,
+                            ..
+                        } = &stmt.stmt
+                        {
+                            if taking_ms.is_none()
+                                && source.contains(&format!("routine {}", name))
+                            {
+                                let fuzzer_cfg =
+                                    causm_devtools::tuner::fuzzer::FuzzConfig {
+                                        iterations,
+                                        chaos_jitter_ms: 5,
+                                        safety_margin_pct: safety_margin,
+                                        target: Some(name.clone()),
+                                    };
+                                match causm_devtools::tuner::fuzzer::fuzz_routine_wcet(&source, &fuzzer_cfg) {
+                                    Ok(res) => {
+                                        println!(
+                                            "  \x1b[32m✔\x1b[0m Routine \x1b[1m{}\x1b[0m: P99.9 WCET = {}ms (+{:.0}% margin -> \x1b[1;33mtaking {}ms\x1b[0m)",
+                                            name,
+                                            res.max_duration_ms,
+                                            safety_margin,
+                                            res.p99_wcet_ms
+                                        );
+                                        tuned_source = causm_devtools::tuner::rewriter::patch_routine_contract(
+                                            &tuned_source,
+                                            name,
+                                            res.p99_wcet_ms,
+                                        );
+                                    }
+                                    Err(e) => {
+                                        eprintln!("  \x1b[31m✖\x1b[0m Failed tuning {}: {}", name, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !dry_run {
+                    fs::write(path, &tuned_source)?;
+                    println!("\x1b[1;32m[Updated]\x1b[0m {}\n", path.display());
+                } else {
+                    println!(
+                        "\x1b[1;33m[Dry-Run Proposal]\x1b[0m\n{}\n",
+                        tuned_source
+                    );
+                }
+            }
+            return Ok(());
+        }
+        Some(Commands::Profile { file }) => {
+            let source = fs::read_to_string(&file)?;
+            let program = parser::parse_causm_with_imports(&source, file.parent())
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let ir = lower::lower_program(&program);
+            let mut vm = Vm::new();
+            causm_stdlib::register_all(&mut vm);
+            vm.execute_program(&ir)?;
+
+            let report = causm_devtools::profiler::timeline::TimelineProfileReport::profile_vm(&vm);
+            println!(
+                "\x1b[1;36m=== TVM Profile Report: {} ===\x1b[0m",
+                file.display()
+            );
+            println!("Logical Global Clock: {}ms", report.clock.global_clock_ms);
+            println!(
+                "Root Timeline Clock:  {}ms",
+                report.clock.root_local_clock_ms
+            );
+            println!(
+                "Arena Capacity:       {} bytes",
+                report.memory.capacity_bytes
+            );
+            println!("Arena Used:           {} bytes", report.memory.used_bytes);
+            println!(
+                "Active Variables:     {}",
+                report.memory.active_variables_count
+            );
+            return Ok(());
+        }
+        Some(Commands::Fmt { files }) => {
+            let fmt_cfg = causm_devtools::fmt::rules::FormatConfig::default();
+            for path in &files {
+                let source = fs::read_to_string(path)?;
+                let program =
+                    parser::parse_causm(&source).map_err(|e| anyhow::anyhow!(e))?;
+                let formatted =
+                    causm_devtools::fmt::printer::format_program(&program, &fmt_cfg);
+
+                // Two-Tier Safe Round-Trip & Semantic Validation Gate:
+                // 1. Parse formatted source with import resolution
+                match parser::parse_causm_with_imports(&formatted, path.parent()) {
+                    Ok(reparsed_ast) => {
+                        // 2. Validate semantics with full static analyzer
+                        let mut analyzer = EntropicAnalyzer::new();
+                        analyzer.use_z3 = false;
+                        if let Err(err) = analyzer.analyze_program_with_source(
+                            &reparsed_ast,
+                            &formatted,
+                            &path.display().to_string(),
+                        ) {
+                            let formatted_err = analyzer.format_semantic_error(&err);
+                            eprintln!(
+                                "\x1b[1;31mFormatting Semantic Regression in {}:\x1b[0m\n  {}\n(Original file preserved untouched)",
+                                path.display(),
+                                formatted_err
+                            );
+                        } else {
+                            fs::write(path, formatted)?;
+                            println!(
+                                "\x1b[1;32mFormatted:\x1b[0m {}",
+                                path.display()
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "\x1b[1;31mFormatting Syntax Error in {}:\x1b[0m\n{}\n--- Formatted Output Snippet ---\n{}\n-------------------",
+                            path.display(),
+                            err,
+                            formatted
+                        );
+                    }
+                }
+            }
+            return Ok(());
+        }
         None => {
             if cli.files.is_empty() {
                 use clap::CommandFactory;
@@ -372,11 +550,11 @@ fn main() -> anyhow::Result<()> {
             vm.trace_entropy = config.trace_entropy;
 
             let tracer =
-                causm_tracer::Tracer::new(config.verbose || config.trace_entropy);
+                causm_devtools::Tracer::new(config.verbose || config.trace_entropy);
             tracer.emit(
                 0,
                 "main",
-                causm_tracer::TraceLayer::Runtime,
+                causm_devtools::TraceLayer::Runtime,
                 None,
                 "Initializing TVM Runtime Engine",
             );

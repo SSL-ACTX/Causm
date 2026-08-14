@@ -94,11 +94,11 @@ dependencies = [
  "anyhow",
  "causm-analysis",
  "causm-core",
+ "causm-devtools",
  "causm-frontend",
  "causm-ir",
  "causm-runtime",
  "causm-stdlib",
- "causm-tracer",
  "clap",
 ]
 
@@ -108,6 +108,21 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "causm-devtools"
+version = "0.1.0"
+dependencies = [
+ "causm-analysis",
+ "causm-core",
+ "causm-frontend",
+ "causm-ir",
+ "causm-runtime",
+ "causm-stdlib",
+ "colored",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -152,15 +167,6 @@ dependencies = [
  "causm-runtime",
  "serde_json",
  "ureq",
-]
-
-[[package]]
-name = "causm-tracer"
-version = "0.1.0"
-dependencies = [
- "colored",
- "serde",
- "serde_json",
 ]
 
 [[package]]

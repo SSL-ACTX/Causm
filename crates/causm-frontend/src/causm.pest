@@ -217,13 +217,13 @@ as_keyword = @{ "as" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 type_cast_tail = { as_keyword ~ type_name }
 field_access_tail = { "." ~ identifier }
 field_update_stmt = { primary_expr ~ "=" ~ expression }
-null = { "null" }
+null = @{ "null" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 time_unit = { "ns" | "us" | "ms" | "s" }
 duration_literal = @{ ASCII_DIGIT+ ~ time_unit }
 match_entropy_expr = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
 syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ expression)* ~ ")" ~ duration_limit? }
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
-base_expr = { path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | ref_op | clone_op | float_literal | duration_literal | integer_literal | bool_literal | identifier_expr | string_literal | null | "(" ~ expression ~ ")" }
+base_expr = { null | path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | ref_op | clone_op | float_literal | duration_literal | integer_literal | bool_literal | identifier_expr | string_literal | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ expression ~ "]" }
 bool_literal = { "true" | "false" }

@@ -1,3 +1,8 @@
+pub mod fmt;
+pub mod profiler;
+pub mod telemetry;
+pub mod tuner;
+
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};

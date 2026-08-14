@@ -454,11 +454,11 @@ fn test_stdlib_and_tracer_integration() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let tracer = causm_tracer::Tracer::new(false);
+    let tracer = causm_devtools::Tracer::new(false);
     tracer.emit(
         0,
         "main",
-        causm_tracer::TraceLayer::Runtime,
+        causm_devtools::TraceLayer::Runtime,
         Some("init"),
         "Test tracer emission",
     );

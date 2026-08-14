@@ -256,4 +256,51 @@ mod tests {
         assert!(res_fail.is_err(), "Expected type compatibility failure when routine budget exceeds interface contract");
         Ok(())
     }
+
+    #[test]
+    fn test_devtools_profiler_and_tuner_rewriter() -> anyhow::Result<()> {
+        let code = r#"
+@0ms: {
+  routine process_sample(peek s: int) -> int taking ? {
+    let a = s + 10
+    yield a
+  }
+  let x = 5
+}
+"#;
+        let program = parser::parse_causm(code)?;
+        let ir = causm_frontend::lower::lower_program(&program);
+        let mut vm = Vm::new();
+        vm.execute_program(&ir)?;
+
+        // 1. Validate real memory and clock profiling
+        let report =
+            causm_devtools::profiler::timeline::TimelineProfileReport::profile_vm(
+                &vm,
+            );
+        assert!(
+            report.memory.capacity_bytes > 0,
+            "Profiler should record arena memory capacity"
+        );
+        assert_eq!(report.clock.global_clock_ms, 0);
+
+        // 2. Validate AST contract rewriter
+        let patched = causm_devtools::tuner::rewriter::patch_routine_contract(
+            code,
+            "process_sample",
+            46,
+        );
+        assert!(patched
+            .contains("routine process_sample(peek s: int) -> int taking 46ms"));
+        assert!(!patched.contains("taking ?"));
+
+        // 3. Validate statistical WCET calculation
+        let p99 = causm_devtools::tuner::statistics::calculate_p99_wcet(
+            &[10, 12, 14, 15, 18],
+            10.0,
+        );
+        assert!(p99 >= 18);
+
+        Ok(())
+    }
 }
