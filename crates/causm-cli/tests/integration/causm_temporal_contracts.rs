@@ -92,4 +92,75 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn test_syntax_duration_wildcard_inferred_and_profile_guided(
+    ) -> anyhow::Result<()> {
+        let code = r#"
+@main: {
+  routine process_inferred(peek data: string) -> bool taking _ {
+    yield true
+  }
+
+  routine calculate_tuned(samples: array) -> array taking ? {
+    yield samples
+  }
+
+  interface FftProcessor {
+    routine execute(samples: array) -> array taking ?
+    routine fast_step() -> bool taking _
+  }
+}
+"#;
+        let program = parser::parse_causm(code)?;
+        assert_eq!(program.timelines.len(), 1);
+        let statements = &program.timelines[0].statements;
+
+        // Assert process_inferred AST has taking_ms == None (inferred contract)
+        let found_inferred = statements.iter().any(|s| {
+            if let causm_core::Statement::RoutineDef {
+                name, taking_ms, ..
+            } = &s.stmt
+            {
+                name == "process_inferred" && taking_ms.is_none()
+            } else {
+                false
+            }
+        });
+        assert!(found_inferred, "Routine process_inferred with taking _ should be parsed with taking_ms = None");
+
+        // Assert calculate_tuned AST has taking_ms == None (profile-guided contract)
+        let found_tuned = statements.iter().any(|s| {
+            if let causm_core::Statement::RoutineDef {
+                name, taking_ms, ..
+            } = &s.stmt
+            {
+                name == "calculate_tuned" && taking_ms.is_none()
+            } else {
+                false
+            }
+        });
+        assert!(found_tuned, "Routine calculate_tuned with taking ? should be parsed with taking_ms = None");
+
+        // Assert interface methods parsed properly with taking_ms == None
+        let found_interface = statements.iter().any(|s| {
+            if let causm_core::Statement::InterfaceDecl { name, methods, .. } =
+                &s.stmt
+            {
+                if name == "FftProcessor" && methods.len() == 2 {
+                    methods[0].name == "execute"
+                        && methods[0].taking_ms.is_none()
+                        && methods[1].name == "fast_step"
+                        && methods[1].taking_ms.is_none()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+        assert!(found_interface, "Interface methods with taking ? and taking _ should be parsed with taking_ms = None");
+
+        Ok(())
+    }
 }

@@ -438,10 +438,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                             return_type = Some(parse_type_name(type_name_pair));
                         }
                         Rule::duration_limit => {
-                            taking_ms = opt
-                                .into_inner()
-                                .next()
-                                .and_then(|p| p.as_str().parse::<u64>().ok());
+                            let str_val = opt.as_str();
+                            if str_val.contains('_') || str_val.contains('?') {
+                                taking_ms = None;
+                            } else {
+                                taking_ms =
+                                    Some(super::utils::parse_duration_limit(opt));
+                            }
                         }
                         Rule::state_constraint => {
                             let mut sc_inner = opt.into_inner();
@@ -450,6 +453,17 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                             let state_name =
                                 sc_inner.next().unwrap().as_str().to_string();
                             state_constraint = Some((var_name, state_name));
+                        }
+                        Rule::statement => {
+                            if default_body.is_none() {
+                                default_body = Some(Vec::new());
+                            }
+                            if let Some(s) = opt.into_inner().next() {
+                                default_body
+                                    .as_mut()
+                                    .unwrap()
+                                    .push(parse_statement(s));
+                            }
                         }
                         Rule::statement_block => {
                             let body = opt

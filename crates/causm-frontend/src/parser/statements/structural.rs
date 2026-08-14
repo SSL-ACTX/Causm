@@ -140,7 +140,9 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                         }
                     }
                     Rule::duration_limit => {
-                        if current.as_str().contains("_") {
+                        if current.as_str().contains('_')
+                            || current.as_str().contains('?')
+                        {
                             taking_ms = None;
                         } else {
                             if let Some(amount_pair) = current

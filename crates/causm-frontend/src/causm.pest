@@ -164,7 +164,8 @@ topology_intersect = { "topology_intersect" ~ "{" ~ resolution_rules ~ (on_inval
 on_invalid_clause = { "on_invalid" ~ ":" ~ rewind_clause }
 rewind_clause = { "rewind" ~ identifier ~ "to" ~ identifier }
 reconcile_clause = { "reconcile" ~ ("auto" | "(" ~ resolution_rules ~ ")") }
-duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline")? ~ (amount ~ time_unit | "_") ~ ")"? }
+duration_wildcard = { "_" | "?" }
+duration_limit = { "("? ~ ("taking" | "for" | "max" | "deadline") ~ (amount ~ time_unit | duration_wildcard) ~ ")"? | "(" ~ (amount ~ time_unit | duration_wildcard) ~ ")" | amount ~ time_unit }
 anchor_stmt = { "anchor" ~ identifier }
 rewind_stmt = { "rewind_to" ~ "(" ~ identifier ~ ")" }
 commit_stmt = { "commit" ~ "{" ~ statement* ~ "}" }
@@ -252,7 +253,7 @@ interface_item = { assoc_type_decl | interface_method }
 interface_decl = { pub_opt ~ "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }
 interface_sum = { interface_term ~ ("+" ~ interface_term)* }
 interface_term = { identifier ~ decay_opt? | "interface" ~ decay_opt? ~ "{" ~ interface_item* ~ "}" }
-interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ statement_block? }
+interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ ("{" ~ statement* ~ "}" | ";")? }
 state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
 
 enum_decl = { pub_opt ~ "enum" ~ identifier ~ "{" ~ enum_variant_list? ~ "}" }

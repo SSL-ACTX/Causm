@@ -169,11 +169,12 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             }
                             Rule::duration_limit => {
                                 let str_val = p.as_str();
-                                let digits: String = str_val
-                                    .chars()
-                                    .filter(|c| c.is_ascii_digit())
-                                    .collect();
-                                taking_ms = digits.parse::<u64>().ok();
+                                if str_val.contains('_') || str_val.contains('?') {
+                                    taking_ms = None;
+                                } else {
+                                    taking_ms =
+                                        Some(super::utils::parse_duration_limit(p));
+                                }
                             }
                             _ => {}
                         }
