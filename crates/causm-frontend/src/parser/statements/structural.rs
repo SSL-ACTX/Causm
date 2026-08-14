@@ -107,25 +107,30 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                                 current.into_inner().collect()
                             };
                         for p in pairs_to_process {
-                            let mut decl = p.into_inner();
-                            if let Some(mode) = decl.next() {
-                                if let Some(param_name) = decl.next() {
-                                    let param_type = decl
-                                        .next()
-                                        .and_then(|tp| tp.into_inner().next())
-                                        .map(parse_type_name);
-                                    let mode = match mode.as_str() {
+                            let mut decl = p.into_inner().peekable();
+                            let mut mode = ParamMode::Peek;
+                            if let Some(first) = decl.peek() {
+                                if first.as_rule() == Rule::param_mode {
+                                    let mode_str = decl.next().unwrap().as_str();
+                                    mode = match mode_str {
                                         "consume" => ParamMode::Consume,
                                         "clone" => ParamMode::Clone,
                                         "decay" => ParamMode::Decay,
                                         _ => ParamMode::Peek,
                                     };
-                                    params.push(ParamDecl {
-                                        mode,
-                                        name: param_name.as_str().to_string(),
-                                        typ: param_type,
-                                    });
                                 }
+                            }
+                            if let Some(name_pair) = decl.next() {
+                                let param_name = name_pair.as_str().to_string();
+                                let param_type = decl
+                                    .next()
+                                    .and_then(|tp| tp.into_inner().next())
+                                    .map(parse_type_name);
+                                params.push(ParamDecl {
+                                    mode,
+                                    name: param_name,
+                                    typ: param_type,
+                                });
                             }
                         }
                     }

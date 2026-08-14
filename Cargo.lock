@@ -117,6 +117,7 @@ dependencies = [
  "anyhow",
  "causm-core",
  "causm-ir",
+ "causm-stdlib",
  "pest",
  "pest_derive",
  "serde",

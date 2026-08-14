@@ -1,0 +1,131 @@
+// crates/causm-stdlib/csm/std/fs/mod.csm - Comprehensive Standard File System Library
+
+type File = struct decay_after 5000ms auto_drop("libc.so.6", "close", fd) {
+    fd: i32,
+    path: string,
+    is_open: bool
+}
+
+type FileMetadata = struct decay_after 5000ms {
+    size_bytes: i64,
+    is_file: bool,
+    is_directory: bool,
+    readonly: bool
+}
+
+enum OpenMode {
+    ReadOnly,
+    WriteOnly,
+    ReadWrite,
+    Append,
+    CreateNew,
+    Truncate
+}
+
+enum SeekFrom {
+    Start(i64),
+    Current(i64),
+    End(i64)
+}
+
+enum FileResult {
+    Ok(int),
+    Err(string)
+}
+
+foreign "libc.so.6" abi("C") {
+    pub routine open(peek path: string, peek flags: i32, peek mode: i32) -> i32 taking 2ms
+    pub routine creat(peek path: string, peek mode: i32) -> i32 taking 2ms
+    pub routine read(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 3ms
+    pub routine write(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 2ms
+    pub routine close(consume fd: i32) -> i32 taking 1ms
+    pub routine unlink(peek path: string) -> i32 taking 2ms
+    pub routine rename(peek oldpath: string, peek newpath: string) -> i32 taking 2ms
+    pub routine access(peek path: string, peek mode: i32) -> i32 taking 1ms
+    pub routine lseek(peek fd: i32, peek offset: i64, peek whence: i32) -> i64 taking 1ms
+    pub routine fsync(peek fd: i32) -> i32 taking 3ms
+    pub routine ftruncate(peek fd: i32, peek length: i64) -> i32 taking 2ms
+    pub routine mkdir(peek pathname: string, peek mode: i32) -> i32 taking 2ms
+    pub routine rmdir(peek pathname: string) -> i32 taking 2ms
+}
+
+pub routine open_readonly(path: string) -> File taking 15ms {
+    let raw_fd = call open(path, 0, 0)
+    struct {
+        fd = raw_fd,
+        path = path,
+        is_open = true
+    }
+}
+
+pub routine create_file(path: string) -> File taking 15ms {
+    let raw_fd = call open(path, 577, 420) // O_WRONLY | O_CREAT | O_TRUNC = 577, 0644
+    struct {
+        fd = raw_fd,
+        path = path,
+        is_open = true
+    }
+}
+
+pub routine open_append(path: string) -> File taking 15ms {
+    let raw_fd = call open(path, 1089, 420) // O_WRONLY | O_CREAT | O_APPEND = 1089, 0644
+    struct {
+        fd = raw_fd,
+        path = path,
+        is_open = true
+    }
+}
+
+pub routine write_all(peek file: File, content: string, len: u64) -> i64 taking 10ms {
+    call write(file.fd, content, len)
+}
+
+pub routine flush_file(peek file: File) -> i32 taking 10ms {
+    call fsync(file.fd)
+}
+
+pub routine truncate_file(peek file: File, length: i64) -> i32 taking 10ms {
+    call ftruncate(file.fd, length)
+}
+
+pub routine seek_start(peek file: File, offset: i64) -> i64 taking 10ms {
+    call lseek(file.fd, offset, 0) // SEEK_SET = 0
+}
+
+pub routine seek_end(peek file: File, offset: i64) -> i64 taking 10ms {
+    call lseek(file.fd, offset, 2) // SEEK_END = 2
+}
+
+pub routine file_exists(path: string) -> bool taking 10ms {
+    let res = call access(path, 0) // F_OK = 0
+    res == 0
+}
+
+pub routine remove_file(path: string) -> i32 taking 10ms {
+    call unlink(path)
+}
+
+pub routine rename_file(old_path: string, new_path: string) -> i32 taking 10ms {
+    call rename(old_path, new_path)
+}
+
+pub routine create_dir(path: string) -> i32 taking 10ms {
+    call mkdir(path, 493) // 0755
+}
+
+pub routine read_to_string(path: string) -> string taking 60ms {
+    let file = call open_readonly(path)
+    let size = call seek_end(file, 0)
+    let reset_pos = call seek_start(file, 0)
+    file.path
+}
+
+pub routine file_size(path: string) -> i64 taking 35ms {
+    let file = call open_readonly(path)
+    let size = call seek_end(file, 0)
+    size
+}
+
+pub routine remove_dir(path: string) -> i32 taking 10ms {
+    call rmdir(path)
+}

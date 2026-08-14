@@ -394,7 +394,7 @@ impl Statement {
             Statement::SplitMap { body, .. } => 1 + estimate_block(body),
             Statement::Inspect { body, .. } => estimate_block(body),
             Statement::Lease { duration_ms, .. } => *duration_ms,
-            Statement::RoutineDef { taking_ms, .. } => taking_ms.unwrap_or(0),
+            Statement::RoutineDef { .. } => 0,
             Statement::Loop { max_ms, .. } => *max_ms,
             Statement::LoopTick { .. } => 1,
             Statement::LoopTickOn { .. } => 1,

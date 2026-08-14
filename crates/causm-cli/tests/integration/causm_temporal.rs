@@ -1020,3 +1020,165 @@ fn test_ffi_forbidden_library_path_error() -> anyhow::Result<()> {
     assert!(res.is_err());
     Ok(())
 }
+
+#[test]
+fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
+    let fs_src = causm_stdlib::get_module("std::fs").expect("std::fs module exists");
+    let test_wrapper = format!(
+        r#"
+        @0ms: {{
+            isolate test_fs_mod {{
+                require System.FFI
+                require System.Log
+
+                {}
+
+                let file_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm.txt"
+                let renamed_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm_renamed.txt"
+
+                let my_file = call create_file(clone(file_path))
+                let written = call write_all(my_file, "Hello from Pure Causm Stdlib\n", 30)
+                let exists_before = call file_exists(clone(file_path))
+
+                let renamed = call rename_file(clone(file_path), clone(renamed_path))
+                let exists_after = call file_exists(clone(renamed_path))
+
+                let cleaned = call remove_file(clone(renamed_path))
+            }}
+        }}
+        "#,
+        fs_src
+    );
+
+    let program = parser::parse_causm(&test_wrapper)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let written_reg = ir.symbols.get("written").unwrap().0;
+    let exists_before_reg = ir.symbols.get("exists_before").unwrap().0;
+    let exists_after_reg = ir.symbols.get("exists_after").unwrap().0;
+    let cleaned_reg = ir.symbols.get("cleaned").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(written_reg),
+        Some(causm_core::value::Payload::Integer(30))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(exists_before_reg),
+        Some(causm_core::value::Payload::Bool(true))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(exists_after_reg),
+        Some(causm_core::value::Payload::Bool(true))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(cleaned_reg),
+        Some(causm_core::value::Payload::Integer(0))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate fs_helpers {
+            enable cpu(5000ms)
+            enable memory(64KB)
+            require System.FFI
+
+            from "std/fs" import *
+
+            let file_path = "/data/data/com.termux/files/home/Causm/target/test_read_stat.txt"
+            let f = call create_file(clone(file_path))
+            let wr = call write_all(f, "CAUSM_STAT_READ_TEST", 20)
+            let fl = call flush_file(f)
+
+            let sz = call file_size(clone(file_path))
+            let read_path = call read_to_string(clone(file_path))
+
+            let rm = call remove_file(clone(file_path))
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let sz_reg = ir.symbols.get("sz").unwrap().0;
+    let read_path_reg = ir.symbols.get("read_path").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(sz_reg),
+        Some(causm_core::value::Payload::Integer(20))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(read_path_reg),
+        Some(causm_core::value::Payload::String(
+            "/data/data/com.termux/files/home/Causm/target/test_read_stat.txt"
+                .to_string()
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_stdlib_path_module() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate path_demo {
+            enable cpu(1000ms)
+            enable memory(32KB)
+            require System.FFI
+
+            from "std/path" import *
+
+            let full = call join("/home/user", "config.toml")
+            let base = call path_basename(clone(full))
+            let dir = call path_dirname(clone(full))
+            let ext = call extension(clone(full))
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let full_reg = ir.symbols.get("full").unwrap().0;
+    let base_reg = ir.symbols.get("base").unwrap().0;
+    let ext_reg = ir.symbols.get("ext").unwrap().0;
+    let dir_reg = ir.symbols.get("dir").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(full_reg),
+        Some(causm_core::value::Payload::String(
+            "/home/user/config.toml".to_string()
+        ))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(base_reg),
+        Some(causm_core::value::Payload::String(
+            "config.toml".to_string()
+        ))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(ext_reg),
+        Some(causm_core::value::Payload::String(".toml".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(dir_reg),
+        Some(causm_core::value::Payload::String("/home/user".to_string()))
+    );
+    Ok(())
+}

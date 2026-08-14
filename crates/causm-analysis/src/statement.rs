@@ -7,10 +7,21 @@ impl EntropicAnalyzer {
         stmt: &SpannedStatement,
     ) -> Result<(), SemanticError> {
         {
-            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-            branch.accumulated_cost += 1;
-            if let Statement::NetworkRequest { .. } = &stmt.stmt {
-                branch.accumulated_cost += 5;
+            let is_declaration = matches!(
+                &stmt.stmt,
+                Statement::RoutineDef { .. }
+                    | Statement::TypeDecl { .. }
+                    | Statement::EnumDecl { .. }
+                    | Statement::InterfaceDecl { .. }
+                    | Statement::ForeignBlock { .. }
+            );
+            if !is_declaration {
+                let branch =
+                    self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                branch.accumulated_cost += 1;
+                if let Statement::NetworkRequest { .. } = &stmt.stmt {
+                    branch.accumulated_cost += 5;
+                }
             }
         }
 

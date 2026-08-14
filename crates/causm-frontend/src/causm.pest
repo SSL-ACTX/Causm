@@ -2,7 +2,7 @@
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" | COMMENT }
 COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "#" ~ (!"\n" ~ ANY)* }
 
-program = { SOI ~ timeline_block+ ~ EOI }
+program = { SOI ~ (timeline_block | statement)* ~ EOI }
 
 timeline_block = { "@" ~ time_coord ~ timeline_directive* ~ ":" ~ statement_block }
 timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") }

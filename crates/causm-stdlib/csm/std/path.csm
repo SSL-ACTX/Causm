@@ -1,0 +1,23 @@
+foreign "libc.so.6" abi("C") {
+    pub routine basename(peek path: string) -> string taking 1ms
+    pub routine dirname(peek path: string) -> string taking 1ms
+    pub routine strrchr(peek s: string, peek c: i32) -> string taking 1ms
+}
+
+pub routine join(dir: string, file: string) -> string taking 10ms {
+    dir + "/" + file
+}
+
+pub routine path_basename(path: string) -> string taking 10ms {
+    call basename(path)
+}
+
+pub routine path_dirname(path: string) -> string taking 10ms {
+    call dirname(path)
+}
+
+pub routine extension(path: string) -> string taking 10ms {
+    // 46 is ASCII code for '.'
+    let ext_ptr = call strrchr(path, 46)
+    ext_ptr
+}

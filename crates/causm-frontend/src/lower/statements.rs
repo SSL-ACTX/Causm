@@ -28,9 +28,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             sub_ctx.type_decls = ctx.type_decls.clone();
             sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
 
-            for (i, param) in params.iter().enumerate() {
-                sub_ctx.symbols.insert(param.name.clone(), Reg(i as u32));
-                sub_ctx.next_reg = (i + 1) as u32;
+            for param in params.iter() {
+                let p_reg = sub_ctx.alloc_reg();
+                sub_ctx.symbols.insert(param.name.clone(), p_reg);
             }
 
             if let Some((ref param_name, ref expected_state)) = state_constraint {
@@ -42,7 +42,14 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
             }
 
-            for s in body {
+            for (i, s) in body.iter().enumerate() {
+                if i == body.len() - 1 {
+                    if let Statement::Expression(ref expr) = s.stmt {
+                        let ret_reg = lower_expression(&mut sub_ctx, expr);
+                        sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                        continue;
+                    }
+                }
                 lower_spanned(&mut sub_ctx, s);
             }
 
