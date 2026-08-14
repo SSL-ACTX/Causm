@@ -357,9 +357,25 @@ Supports multi-file code organization across `.csm` files.
 // Module alias import
 import "path/file.csm" as Alias
 
-// Named symbol import
-from "path/file.csm" import Symbol1, Symbol2 as CustomName
+**See also**: [Module System Specification](./causm_spec_modules.md)
+
+---
+
+## 11. Foreign Blocks & System Calls (`foreign`, `syscall`)
+
+Enables native C ABI foreign function declarations and low-level kernel system call invocations with capability sandbox enforcement and explicit duration bounds.
+
+**Syntax:**
+```causm
+foreign "libc.so.6" abi("C") {
+    pub routine getpid() -> i32 taking 1ms
+}
+
+routine sys_write(peek msg: string) -> i64 taking 2ms {
+    require System.Syscall
+    let result = syscall("sys_write", 1, msg, 12) taking 2ms
+    yield result
+}
 ```
 
-**See also**: [Module System Specification](./causm_spec_modules.md)
 

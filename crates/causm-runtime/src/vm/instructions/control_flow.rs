@@ -163,6 +163,40 @@ impl Vm {
             arg_values.push(val);
         }
 
+        // Check if this routine is a dynamic foreign FFI binding
+        if let Some(ref binding) = routine_def.foreign_binding {
+            let sym_ptr = self
+                .foreign_manager
+                .get_or_load_symbol(&binding.lib_name, &binding.symbol)?;
+            let result_payload = unsafe {
+                crate::vm::ffi::invoke_foreign_symbol(
+                    sym_ptr,
+                    &arg_values,
+                    &routine_def.return_type,
+                )?
+            };
+
+            // Consume arguments if needed
+            for (i, reg) in args.iter().enumerate() {
+                let (mode, _, _) = &params[i];
+                if let causm_core::ParamMode::Consume = mode {
+                    self.consume_reg(branch_id, reg.0)?;
+                }
+            }
+
+            if let Some(cost) = routine_def.taking_ms {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock += cost;
+                branch.consume_budget(cost)?;
+            }
+
+            return self.insert_reg(
+                branch_id,
+                dest.0,
+                causm_core::value::EntropicState::Valid(result_payload),
+            );
+        }
+
         // Consume arguments if needed
         for (i, reg) in args.iter().enumerate() {
             let (mode, _, _) = &params[i];

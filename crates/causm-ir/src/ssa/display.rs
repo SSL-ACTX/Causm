@@ -392,6 +392,18 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::JumpIfNot { cond, target } => {
                 write!(f, "JumpIfNot {} to Block {}", cond, target)
             }
+            SsaInstruction::Syscall {
+                dest, target, args, ..
+            } => {
+                write!(f, "{} = syscall({:?}, {:?})", dest, target, args)
+            }
+            SsaInstruction::AutoDrop { target, spec } => {
+                write!(
+                    f,
+                    "AutoDrop {} ({:?}::{}({}))",
+                    target, spec.lib_name, spec.routine_name, spec.field_name
+                )
+            }
             SsaInstruction::Other(s) => {
                 write!(f, "{}", s)
             }

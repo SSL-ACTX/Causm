@@ -2,6 +2,7 @@ use crate::parser::expressions::parse_expression;
 use crate::parser::statements::parse_statement;
 use crate::parser::statements::utils::*;
 use crate::parser::Rule;
+use causm_core::types::AutoDropSpec;
 use causm_core::*;
 use pest::iterators::Pair;
 use std::collections::HashMap;
@@ -132,6 +133,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
 
             let mut decay_after_ms = None;
+            let mut auto_drop = None;
             let mut scoped_branch = None;
             let mut fields = HashMap::new();
 
@@ -142,6 +144,26 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                             .into_inner()
                             .next()
                             .and_then(|p| p.as_str().parse::<u64>().ok());
+                    }
+                    Rule::auto_drop_opt => {
+                        let mut ad_inner = current.into_inner();
+                        let lib_name = ad_inner
+                            .next()
+                            .map(|p| p.as_str().replace('"', ""))
+                            .unwrap_or_default();
+                        let routine_name = ad_inner
+                            .next()
+                            .map(|p| p.as_str().replace('"', ""))
+                            .unwrap_or_default();
+                        let field_name = ad_inner
+                            .next()
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_default();
+                        auto_drop = Some(AutoDropSpec {
+                            lib_name,
+                            routine_name,
+                            field_name,
+                        });
                     }
                     Rule::scoped_opt => {
                         scoped_branch = current
@@ -182,11 +204,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     _ => {}
                 }
             }
+
             Statement::TypeDecl {
                 name,
                 extends,
                 fields,
                 decay_after_ms,
+                auto_drop,
                 scoped_branch,
             }
         }

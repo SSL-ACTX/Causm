@@ -80,11 +80,37 @@ impl Vm {
         }
 
         for (b_id, r_id) in to_consume {
+            self.trigger_auto_drop(&b_id, r_id);
             if let Ok(branch) = self.get_branch_mut(&b_id) {
                 branch.arena.consume(r_id).ok();
             }
         }
         Ok(())
+    }
+
+    pub fn trigger_auto_drop(&mut self, branch_id: &str, reg: u32) {
+        if let Ok(causm_core::value::Payload::Struct(fields)) =
+            self.peek_reg(branch_id, reg)
+        {
+            for spec in self.auto_drop_specs.values() {
+                if let Some(causm_core::value::EntropicState::Valid(ref field_val)) =
+                    fields.get(&spec.field_name)
+                {
+                    if let Ok(sym_ptr) = self
+                        .foreign_manager
+                        .get_or_load_symbol(&spec.lib_name, &spec.routine_name)
+                    {
+                        unsafe {
+                            let _ = crate::vm::ffi::invoke_foreign_symbol(
+                                sym_ptr,
+                                std::slice::from_ref(field_val),
+                                &causm_core::types::Type::I32,
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn consume_field_reg(

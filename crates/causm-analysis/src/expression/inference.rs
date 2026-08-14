@@ -54,6 +54,7 @@ pub(crate) fn infer_expression_type(
             Ok(Type::Struct(causm_core::types::StructType {
                 fields: schema,
                 decay_after_ms: None,
+                auto_drop: None,
                 scoped_branch: None,
             }))
         }
@@ -243,6 +244,7 @@ pub(crate) fn infer_expression_type(
         }
         Expression::IndexAccess { .. } => Ok(Type::Unknown),
         Expression::RefOp(expr) => infer_expression_type(analyzer, expr),
+        Expression::Syscall { .. } => Ok(Type::Integer),
         Expression::CloneOp(name) => match analyzer.get_variable_type(name) {
             Some(typ) => Ok(typ),
             None => Err(analyzer

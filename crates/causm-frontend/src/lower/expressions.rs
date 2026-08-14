@@ -229,6 +229,24 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::Syscall {
+            target,
+            args,
+            duration_ms,
+        } => {
+            let mut arg_regs = Vec::new();
+            for a in args {
+                arg_regs.push(lower_expression(ctx, a));
+            }
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::Syscall {
+                dest,
+                target: target.clone(),
+                args: arg_regs,
+                duration_ms: *duration_ms,
+            });
+            dest
+        }
         Expression::Deferred {
             capability,
             params,

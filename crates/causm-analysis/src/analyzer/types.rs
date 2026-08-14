@@ -37,6 +37,8 @@ pub enum SemanticErrorKind {
     InvalidStructuralAccess(String),
     #[error("Capability violation: Required capability '{0}' is not declared in this isolate.")]
     MissingCapability(String),
+    #[error("Forbidden library path: '{0}' is not in the allowed paths whitelist.")]
+    ForbiddenLibraryPath(String),
     #[error("Temporal Assertion Violation: WCET to this point is {0}ms, which exceeds the limit of {1}ms")]
     TemporalAssertionViolation(u64, u64),
     #[error("Chaos Mode enabled: Rewinds and anchors are disabled because non-deterministic entropy was requested.")]

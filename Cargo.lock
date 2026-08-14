@@ -138,6 +138,7 @@ dependencies = [
  "causm-core",
  "causm-ir",
  "dashmap",
+ "libc",
  "thiserror",
 ]
 

@@ -731,6 +731,7 @@ impl EntropicAnalyzer {
                     causm_core::types::Type::Struct(causm_core::types::StructType {
                         fields: item_fields,
                         decay_after_ms: None,
+                        auto_drop: None,
                         scoped_branch: None,
                     }),
                     None,
@@ -805,6 +806,7 @@ impl EntropicAnalyzer {
                 causm_core::types::Type::Struct(causm_core::types::StructType {
                     fields: item_fields,
                     decay_after_ms: None,
+                    auto_drop: None,
                     scoped_branch: None,
                 })
             }

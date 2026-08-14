@@ -1193,6 +1193,31 @@ impl SsaTransformer {
             Instruction::LoopTickOn { chan_id } => SsaInstruction::LoopTickOn {
                 chan_id: chan_id.clone(),
             },
+            Instruction::Syscall {
+                dest,
+                target,
+                args,
+                duration_ms,
+            } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                let ssa_dest = SsaReg {
+                    reg: dest.0,
+                    version: dest_ver,
+                };
+                let ssa_args =
+                    args.iter().map(|r| self.current_ssa_reg(*r)).collect();
+                SsaInstruction::Syscall {
+                    dest: ssa_dest,
+                    target: target.clone(),
+                    args: ssa_args,
+                    duration_ms: *duration_ms,
+                }
+            }
+            Instruction::AutoDrop { target, spec } => SsaInstruction::AutoDrop {
+                target: self.current_ssa_reg(*target),
+                spec: spec.clone(),
+            },
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }

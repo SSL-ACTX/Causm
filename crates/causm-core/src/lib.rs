@@ -1,5 +1,6 @@
 // src/ast.rs
 
+use crate::types::AutoDropSpec;
 pub mod types;
 pub mod value;
 
@@ -57,6 +58,12 @@ pub enum SpeculationCommitMode {
     Full,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyscallTarget {
+    Number(i64),
+    Symbol(String),
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamDecl {
@@ -108,6 +115,7 @@ macro_rules! statements {
                 extends: Option<String>,
                 fields: std::collections::HashMap<String, TypeFieldDef>,
                 decay_after_ms: Option<u64>,
+                auto_drop: Option<AutoDropSpec>,
                 scoped_branch: Option<String>
             },
             InterfaceDecl {
@@ -265,6 +273,11 @@ macro_rules! statements {
                 path: String,
                 symbols: Vec<(String, Option<String>)>
             },
+            ForeignBlock {
+                lib_name: String,
+                abi: String,
+                routines: Vec<SpannedStatement>
+            },
             FieldUpdate {
                 target: Expression,
                 field: String,
@@ -395,6 +408,7 @@ impl Statement {
             | Statement::Entangle { .. }
             | Statement::Import { .. }
             | Statement::FromImport { .. }
+            | Statement::ForeignBlock { .. }
             | Statement::Return(_) => 0,
         };
         base + extra
@@ -456,6 +470,11 @@ macro_rules! expressions {
             TypeCast {
                 expr: Box<Expression>,
                 target_type: TypeName
+            },
+            Syscall {
+                target: SyscallTarget,
+                args: Vec<Expression>,
+                duration_ms: Option<u64>
             },
             TryUnwrap(Box<Expression>),
             Null

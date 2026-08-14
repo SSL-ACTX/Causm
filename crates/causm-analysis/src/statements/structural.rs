@@ -1,4 +1,5 @@
 use crate::analyzer::{EntropicAnalyzer, SemanticError};
+use causm_core::types::AutoDropSpec;
 use causm_core::*;
 
 #[allow(non_snake_case, unused_variables)]
@@ -9,6 +10,7 @@ impl EntropicAnalyzer {
         extends: &Option<String>,
         fields: &std::collections::HashMap<String, TypeFieldDef>,
         decay_after_ms: &Option<u64>,
+        auto_drop: &Option<AutoDropSpec>,
         scoped_branch: &Option<String>,
     ) -> Result<(), SemanticError> {
         let mut resolved_fields = std::collections::HashMap::new();
@@ -36,6 +38,7 @@ impl EntropicAnalyzer {
             causm_core::types::Type::Struct(causm_core::types::StructType {
                 fields: schema,
                 decay_after_ms: *decay_after_ms,
+                auto_drop: auto_drop.clone(),
                 scoped_branch: scoped_branch.clone(),
             });
         self.set_custom_type(name, type_struct);

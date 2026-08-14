@@ -2,9 +2,17 @@ use crate::{BuiltinType, TypeName};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutoDropSpec {
+    pub lib_name: String,
+    pub routine_name: String,
+    pub field_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructType {
     pub fields: HashMap<String, Type>,
     pub decay_after_ms: Option<u64>,
+    pub auto_drop: Option<AutoDropSpec>,
     pub scoped_branch: Option<String>,
 }
 
@@ -69,6 +77,7 @@ impl Type {
                 BuiltinType::Struct => Type::Struct(StructType {
                     fields: HashMap::new(),
                     decay_after_ms: None,
+                    auto_drop: None,
                     scoped_branch: None,
                 }),
                 BuiltinType::Topology => Type::Topology(HashMap::new()),

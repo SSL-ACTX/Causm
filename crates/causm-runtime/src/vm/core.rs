@@ -29,6 +29,7 @@ impl Vm {
             routines: HashMap::new(),
             decay_handlers: HashMap::new(),
             type_decay_limits: HashMap::new(),
+            auto_drop_specs: HashMap::new(),
             struct_extends: HashMap::new(),
             speculation_stack: Vec::new(),
             speculative_commit_mode: SpeculationCommitMode::Selective,
@@ -40,6 +41,9 @@ impl Vm {
             trace_entropy: false,
             _is_decaying: false,
             current_span: None,
+            foreign_manager: std::sync::Arc::new(
+                crate::vm::ffi::ForeignLibraryManager::new(),
+            ),
         }
     }
 
@@ -209,6 +213,7 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         self.symbols = program.symbols.clone();
         self.type_decay_limits = program.type_decay_limits.clone();
+        self.auto_drop_specs = program.auto_drop_specs.clone();
         self.struct_extends = program.struct_extends.clone();
         self.decay_handlers = program.decay_handlers.clone();
         // Register routines
@@ -217,6 +222,7 @@ impl Vm {
                 params: ir_routine.params.clone(),
                 return_type: ir_routine.return_type.clone(),
                 taking_ms: ir_routine.taking_ms,
+                foreign_binding: ir_routine.foreign_binding.clone(),
                 instructions: ir_routine.instructions.clone(),
                 spans: ir_routine.spans.clone(),
             };

@@ -257,6 +257,44 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
+        Rule::syscall_expr => {
+            let mut inner = pair.into_inner();
+            let target_pair = inner.next().unwrap();
+            let target = match target_pair.as_rule() {
+                Rule::string_literal => {
+                    SyscallTarget::Symbol(target_pair.as_str().replace('"', ""))
+                }
+                _ => SyscallTarget::Number(
+                    target_pair.as_str().parse::<i64>().unwrap_or(0),
+                ),
+            };
+            let mut args = Vec::new();
+            let mut duration_ms = None;
+            for p in inner {
+                match p.as_rule() {
+                    Rule::expression_list => {
+                        for e in p.into_inner() {
+                            args.push(parse_expression(e));
+                        }
+                    }
+                    Rule::expression => {
+                        args.push(parse_expression(p));
+                    }
+                    Rule::duration_limit => {
+                        let str_val = p.as_str();
+                        let digits: String =
+                            str_val.chars().filter(|c| c.is_ascii_digit()).collect();
+                        duration_ms = digits.parse::<u64>().ok();
+                    }
+                    _ => {}
+                }
+            }
+            Expression::Syscall {
+                target,
+                args,
+                duration_ms,
+            }
+        }
         Rule::ref_op => {
             let inner_expr = parse_expression(pair.into_inner().next().unwrap());
             Expression::RefOp(Box::new(inner_expr))

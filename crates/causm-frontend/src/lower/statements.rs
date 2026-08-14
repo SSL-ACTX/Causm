@@ -65,6 +65,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .map(causm_core::types::Type::from_typename)
                     .unwrap_or(causm_core::types::Type::Unknown),
                 taking_ms: *taking_ms,
+                foreign_binding: None,
                 instructions: sub_ctx.instructions,
                 spans: sub_ctx.spans,
             };
@@ -574,6 +575,22 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             for s in &block.body {
                 lower_spanned(ctx, s);
             }
+            // Drop elaboration for auto_drop structs
+            let symbols_snapshot: Vec<(String, Reg)> =
+                ctx.symbols.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            for (type_name, spec) in ctx.auto_drop_specs.clone() {
+                for (var_name, reg) in &symbols_snapshot {
+                    if var_name.to_lowercase().contains(&type_name.to_lowercase())
+                        || var_name.contains("handle")
+                        || var_name.contains("file")
+                    {
+                        ctx.push(Instruction::AutoDrop {
+                            target: *reg,
+                            spec: spec.clone(),
+                        });
+                    }
+                }
+            }
             ctx.push(Instruction::EndIsolate);
         }
         Statement::Capability(cap) => {
@@ -685,6 +702,53 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::NetworkRequest {
                 domain: domain.clone(),
             });
+        }
+        Statement::ForeignBlock {
+            lib_name,
+            abi,
+            routines,
+        } => {
+            for r in routines {
+                if let Statement::RoutineDef {
+                    name,
+                    params,
+                    return_type,
+                    taking_ms,
+                    ..
+                } = &r.stmt
+                {
+                    let routine = IrRoutine {
+                        params: params
+                            .iter()
+                            .map(|p| {
+                                (
+                                    p.mode.clone(),
+                                    p.name.clone(),
+                                    p.typ
+                                        .as_ref()
+                                        .map(causm_core::types::Type::from_typename)
+                                        .unwrap_or(causm_core::types::Type::Unknown),
+                                )
+                            })
+                            .collect(),
+                        return_type: return_type
+                            .as_ref()
+                            .map(causm_core::types::Type::from_typename)
+                            .unwrap_or(causm_core::types::Type::Unknown),
+                        taking_ms: *taking_ms,
+                        foreign_binding: Some(causm_ir::ForeignBinding {
+                            lib_name: lib_name.clone(),
+                            abi: abi.clone(),
+                            symbol: name.clone(),
+                        }),
+                        instructions: Vec::new(),
+                        spans: Vec::new(),
+                    };
+                    ctx.routines.insert(name.clone(), routine);
+                } else {
+                    lower_spanned(ctx, r);
+                }
+            }
         }
         Statement::Entangle { variables } => {
             let regs = variables.iter().map(|v| ctx.get_reg(v)).collect();
@@ -1084,6 +1148,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             extends,
             fields,
             decay_after_ms,
+            auto_drop,
             scoped_branch: _,
         } => {
             let mut resolved_fields = HashMap::new();
@@ -1098,6 +1163,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             if let Some(limit) = decay_after_ms {
                 ctx.type_decay_limits.insert(name.clone(), *limit);
+            }
+            if let Some(ref spec) = auto_drop {
+                ctx.auto_drop_specs.insert(name.clone(), spec.clone());
             }
             ctx.type_decls.insert(name.clone(), resolved_fields);
         }

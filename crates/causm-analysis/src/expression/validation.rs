@@ -445,6 +445,21 @@ pub(crate) fn analyze_expression(
             }
         }
         Expression::RefOp(expr) => analyze_expression_nonconsuming(analyzer, expr),
+        Expression::Syscall { args, .. } => {
+            if !analyzer.capability_stack.is_empty()
+                && !analyzer.is_capability_allowed("System.Syscall")
+            {
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::MissingCapability(
+                        "System.Syscall".to_string(),
+                    ),
+                ));
+            }
+            for a in args {
+                analyze_expression_nonconsuming(analyzer, a)?;
+            }
+            Ok(())
+        }
         Expression::CloneOp(name) => {
             let state = analyzer
                 .branch_contexts
@@ -580,6 +595,21 @@ pub(crate) fn analyze_expression_nonconsuming(
             analyze_expression_nonconsuming(analyzer, target)
         }
         Expression::RefOp(expr) => analyze_expression_nonconsuming(analyzer, expr),
+        Expression::Syscall { args, .. } => {
+            if !analyzer.capability_stack.is_empty()
+                && !analyzer.is_capability_allowed("System.Syscall")
+            {
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::MissingCapability(
+                        "System.Syscall".to_string(),
+                    ),
+                ));
+            }
+            for a in args {
+                analyze_expression_nonconsuming(analyzer, a)?;
+            }
+            Ok(())
+        }
         Expression::CloneOp(name) => {
             let state = analyzer
                 .branch_contexts

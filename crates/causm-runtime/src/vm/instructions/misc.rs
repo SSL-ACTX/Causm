@@ -1,5 +1,6 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::Vm;
+use causm_core::value::Payload;
 use causm_core::Capability;
 use causm_ir::Reg;
 
@@ -52,6 +53,73 @@ impl Vm {
         let branch = self.get_branch_mut(branch_id)?;
         branch.local_clock += 5;
         branch.consume_budget(5)?;
+        Ok(())
+    }
+
+    pub(crate) fn Syscall(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        target: causm_core::SyscallTarget,
+        args: Vec<Reg>,
+        duration_ms: Option<u64>,
+    ) -> Result<(), TemporalError> {
+        let cost = duration_ms.unwrap_or(1);
+        let arg_vals: Vec<_> = args
+            .iter()
+            .filter_map(|r| self.peek_reg(branch_id, r.0).ok())
+            .collect();
+
+        let ret_val = match target {
+            causm_core::SyscallTarget::Symbol(ref sym) => {
+                if sym == "sys_write" {
+                    if let Some(Payload::String(ref s)) = arg_vals.get(1) {
+                        use std::io::Write;
+                        let fd = match arg_vals.first() {
+                            Some(Payload::Integer(i)) => *i,
+                            _ => 1,
+                        };
+                        if fd == 2 {
+                            let _ = std::io::stderr().write_all(s.as_bytes());
+                            let _ = std::io::stderr().flush();
+                        } else {
+                            let _ = std::io::stdout().write_all(s.as_bytes());
+                            let _ = std::io::stdout().flush();
+                        }
+                    }
+                }
+                arg_vals.len() as i64
+            }
+            causm_core::SyscallTarget::Number(n) => {
+                // x86_64: 1 = write, AArch64: 64 = write
+                if n == 1 || n == 64 {
+                    if let Some(Payload::String(ref s)) = arg_vals.get(1) {
+                        use std::io::Write;
+                        let fd = match arg_vals.first() {
+                            Some(Payload::Integer(i)) => *i,
+                            _ => 1,
+                        };
+                        if fd == 2 {
+                            let _ = std::io::stderr().write_all(s.as_bytes());
+                            let _ = std::io::stderr().flush();
+                        } else {
+                            let _ = std::io::stdout().write_all(s.as_bytes());
+                            let _ = std::io::stdout().flush();
+                        }
+                    }
+                }
+                n
+            }
+        };
+
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(Payload::Integer(ret_val)),
+        )?;
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.local_clock += cost;
+        branch.consume_budget(cost)?;
         Ok(())
     }
 }

@@ -72,6 +72,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::network_request_stmt
         | Rule::import_stmt
         | Rule::from_import_stmt
+        | Rule::foreign_block_stmt
         | Rule::print_stmt
         | Rule::debug_stmt
         | Rule::inspect_stmt => misc::parse_misc_stmt(pair),

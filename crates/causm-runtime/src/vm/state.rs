@@ -62,6 +62,7 @@ pub struct Routine {
     #[allow(dead_code)]
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub foreign_binding: Option<causm_ir::ForeignBinding>,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
 }
@@ -89,6 +90,7 @@ pub struct Vm {
     pub routines: HashMap<String, Routine>,
     pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
     pub type_decay_limits: HashMap<String, u64>,
+    pub auto_drop_specs: HashMap<String, causm_core::types::AutoDropSpec>,
     pub struct_extends: HashMap<String, String>,
     pub speculation_stack: Vec<SpeculationContext>,
     pub entanglements: Vec<std::collections::HashSet<(String, u32)>>,
@@ -99,6 +101,7 @@ pub struct Vm {
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,
+    pub foreign_manager: std::sync::Arc<crate::vm::ffi::ForeignLibraryManager>,
 }
 
 #[derive(Clone, Debug)]

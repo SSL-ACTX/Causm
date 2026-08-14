@@ -6,6 +6,7 @@ pub mod cost;
 pub mod entropy;
 pub mod error;
 pub mod eval;
+pub mod ffi;
 pub mod instructions;
 pub mod state;
 

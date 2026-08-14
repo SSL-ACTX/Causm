@@ -96,6 +96,107 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                 alias,
             }
         }
+        Rule::foreign_block_stmt => {
+            let full_span = Span {
+                start: pair.as_span().start(),
+                end: pair.as_span().end(),
+            };
+            let mut inner = pair.into_inner();
+            let lib_name = inner.next().unwrap().as_str().replace('"', "");
+            let abi = inner.next().unwrap().as_str().replace('"', "");
+            let mut routines = Vec::new();
+            for item in inner {
+                if item.as_rule() == Rule::foreign_routine {
+                    let mut r_inner = item.into_inner();
+                    let mut name_pair = r_inner.next().unwrap();
+                    if name_pair.as_rule() == Rule::pub_opt {
+                        name_pair = r_inner.next().unwrap();
+                    }
+                    let name = name_pair.as_str().to_string();
+                    let mut params = Vec::new();
+                    let mut return_type = None;
+                    let mut taking_ms = None;
+                    for p in r_inner {
+                        match p.as_rule() {
+                            Rule::param_decl | Rule::param_decl_list => {
+                                let pairs: Vec<_> =
+                                    if p.as_rule() == Rule::param_decl {
+                                        vec![p]
+                                    } else {
+                                        p.into_inner().collect()
+                                    };
+                                for pd in pairs {
+                                    let decl = pd.into_inner();
+                                    let mut mode = ParamMode::Peek;
+                                    let mut p_name = String::new();
+                                    let mut typ = None;
+                                    for sub in decl {
+                                        match sub.as_rule() {
+                                            Rule::param_mode => {
+                                                mode = match sub.as_str() {
+                                                    "consume" => ParamMode::Consume,
+                                                    "clone" => ParamMode::Clone,
+                                                    "decay" => ParamMode::Decay,
+                                                    "lease" => ParamMode::Lease,
+                                                    _ => ParamMode::Peek,
+                                                };
+                                            }
+                                            Rule::identifier => {
+                                                p_name = sub.as_str().to_string();
+                                            }
+                                            Rule::type_annotation => {
+                                                if let Some(t_pair) =
+                                                    sub.into_inner().next()
+                                                {
+                                                    typ = Some(super::utils::parse_type_name(t_pair));
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    params.push(ParamDecl {
+                                        mode,
+                                        name: p_name,
+                                        typ,
+                                    });
+                                }
+                            }
+                            Rule::return_annotation => {
+                                if let Some(t_pair) = p.into_inner().next() {
+                                    return_type =
+                                        Some(super::utils::parse_type_name(t_pair));
+                                }
+                            }
+                            Rule::duration_limit => {
+                                let str_val = p.as_str();
+                                let digits: String = str_val
+                                    .chars()
+                                    .filter(|c| c.is_ascii_digit())
+                                    .collect();
+                                taking_ms = digits.parse::<u64>().ok();
+                            }
+                            _ => {}
+                        }
+                    }
+                    routines.push(SpannedStatement {
+                        stmt: Statement::RoutineDef {
+                            name,
+                            params,
+                            return_type,
+                            taking_ms,
+                            state_constraint: None,
+                            body: Vec::new(),
+                        },
+                        span: full_span.clone(),
+                    });
+                }
+            }
+            Statement::ForeignBlock {
+                lib_name,
+                abi,
+                routines,
+            }
+        }
         Rule::from_import_stmt => {
             let mut inner = pair.into_inner();
             let raw_path = inner.next().unwrap().as_str().replace('"', "");

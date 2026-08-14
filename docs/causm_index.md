@@ -32,6 +32,7 @@ Technical documentation regarding the Register-based Temporal Virtual Machine.
 Historical design documents and the standard RFC process.
 
 - **[Standard RFC Template](./rfc/causm_RFC.md)**: Guidelines for proposing language changes.
+- **[FFI & Syscall Bridge Proposal](./proposals/causm_prop_ffi_syscall_bridge.md)**: Foreign function interface, native system calls, and self-hosted standard library architecture.
 - **[Module System Proposal](./proposals/causm_prop_import_system.md)**: Code imports, manifests, and entropic namespace resolution.
 - **[Entropic GC Proposal](./proposals/causm_prop_egc.md)**: Original design for deterministic reclamation.
 - **[Advanced Mechanics](./proposals/causm_prop_advanced_mechanics.md)**: Refinements for channels, contracts, and diagnostics.

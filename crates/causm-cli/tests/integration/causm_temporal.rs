@@ -886,3 +886,98 @@ fn test_entropy_match_struct_field_pattern_destructuring() -> anyhow::Result<()>
     );
     Ok(())
 }
+
+#[test]
+fn test_ffi_foreign_block_declaration_and_routine_binding() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_ffi {
+            require System.FFI
+            foreign "libc.so.6" abi("C") {
+                routine getpid() -> i32 taking 1ms
+            }
+            let res = 1
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_reg = ir.symbols.get("res").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(res_reg),
+        Some(causm_core::value::Payload::Integer(1))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_syscall_execution_symbolic_and_numeric() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_syscall {
+            require System.Syscall
+            let ret1 = syscall("sys_write", 1, "hello_syscall", 13) taking 2ms
+            let ret2 = syscall(1, 1, "numeric_syscall", 15) taking 2ms
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let r1_reg = ir.symbols.get("ret1").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(r1_reg),
+        Some(causm_core::value::Payload::Integer(3))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_ffi_capability_missing_error() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_ffi_no_cap {
+            foreign "libc.so.6" abi("C") {
+                routine getpid() -> i32 taking 1ms
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    Ok(())
+}
+
+#[test]
+fn test_ffi_forbidden_library_path_error() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_forbidden_path {
+            require System.FFI
+            foreign "/tmp/malicious.so" abi("C") {
+                routine getpid() -> i32 taking 1ms
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    Ok(())
+}

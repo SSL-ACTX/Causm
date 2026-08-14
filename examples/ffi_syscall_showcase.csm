@@ -1,0 +1,55 @@
+@0ms: {
+    isolate native_bridge_showcase {
+        enable cpu(5000ms)
+        enable memory(64KB)
+        require System.Log
+        require System.FFI
+        require System.Syscall
+
+        type NativeHandle = struct decay_after 1000ms auto_drop("libc.so.6", "close", fd) {
+            fd: i32
+        }
+
+        foreign "libc.so.6" abi("C") {
+            pub routine getpid() -> i32 taking 1ms
+            pub routine getppid() -> i32 taking 1ms
+            pub routine getuid() -> i32 taking 1ms
+            pub routine getcwd() -> string taking 1ms
+            pub routine write(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 2ms
+            pub routine close(consume fd: i32) -> i32 taking 1ms
+        }
+
+        let pid_val = call getpid()
+        print("Native Foreign Process ID:")
+        print(pid_val)
+
+        let ppid_val = call getppid()
+        print("Native Parent Process ID:")
+        print(ppid_val)
+
+        let uid_val = call getuid()
+        print("Native User ID:")
+        print(uid_val)
+
+        let cwd_val = call getcwd()
+        print("Native Working Directory:")
+        print(cwd_val)
+
+        // NativeHandle automatically reclaims fd via libc close() on entropic decay
+        let handle = struct { fd = 1 }
+        let ref_handle = &handle
+        print("Native Handle Reference:")
+        print(ref_handle)
+
+        let payload_msg = "Causm Low-Level Syscall Engine Active\n"
+        let msg_len = 38
+
+        let res_sym = syscall("sys_write", handle.fd, payload_msg, msg_len) taking 2ms
+        print("Symbolic Syscall Status Code:")
+        print(res_sym)
+
+        let res_num = syscall(1, handle.fd, payload_msg, msg_len) taking 2ms
+        print("Numeric Syscall Status Code:")
+        print(res_num)
+    }
+}

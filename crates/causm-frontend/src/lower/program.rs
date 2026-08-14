@@ -103,6 +103,7 @@ pub fn lower_program(program: &Program) -> IrProgram {
                                     .map(causm_core::types::Type::from_typename)
                                     .unwrap_or(causm_core::types::Type::Unknown),
                                 taking_ms: im.taking_ms,
+                                foreign_binding: None,
                                 instructions: sub_ctx.instructions,
                                 spans: sub_ctx.spans,
                             };
@@ -120,6 +121,7 @@ pub fn lower_program(program: &Program) -> IrProgram {
         routines: ctx.routines,
         symbols: ctx.symbols,
         type_decay_limits: ctx.type_decay_limits,
+        auto_drop_specs: ctx.auto_drop_specs,
         struct_extends: ctx.struct_extends,
         decay_handlers: ctx.decay_handlers,
     }

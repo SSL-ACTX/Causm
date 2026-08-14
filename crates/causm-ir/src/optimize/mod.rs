@@ -663,6 +663,21 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             src: ssa_reg_to_reg(*src),
             target_type: target_type.clone(),
         },
+        SsaInstruction::Syscall {
+            dest,
+            target,
+            args,
+            duration_ms,
+        } => Instruction::Syscall {
+            dest: ssa_reg_to_reg(*dest),
+            target: target.clone(),
+            args: args.iter().map(|r| ssa_reg_to_reg(*r)).collect(),
+            duration_ms: *duration_ms,
+        },
+        SsaInstruction::AutoDrop { target, spec } => Instruction::AutoDrop {
+            target: ssa_reg_to_reg(*target),
+            spec: spec.clone(),
+        },
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }

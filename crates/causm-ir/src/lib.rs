@@ -239,6 +239,16 @@ macro_rules! instructions {
                 field: String,
                 src: $crate::Reg
             },
+            Syscall {
+                dest: $crate::Reg,
+                target: causm_core::SyscallTarget,
+                args: Vec<$crate::Reg>,
+                duration_ms: Option<u64>
+            },
+            AutoDrop {
+                target: $crate::Reg,
+                spec: causm_core::types::AutoDropSpec
+            },
             IndexAccess {
                 dest: $crate::Reg,
                 target: $crate::Reg,
@@ -364,8 +374,16 @@ pub struct IrProgram {
     pub routines: HashMap<String, IrRoutine>,
     pub symbols: HashMap<String, Reg>,
     pub type_decay_limits: HashMap<String, u64>,
+    pub auto_drop_specs: HashMap<String, causm_core::types::AutoDropSpec>,
     pub struct_extends: HashMap<String, String>,
     pub decay_handlers: HashMap<String, Vec<Instruction>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignBinding {
+    pub lib_name: String,
+    pub abi: String,
+    pub symbol: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,6 +391,7 @@ pub struct IrRoutine {
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub foreign_binding: Option<ForeignBinding>,
     pub instructions: Vec<Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
 }

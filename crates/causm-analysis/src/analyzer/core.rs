@@ -471,6 +471,7 @@ impl EntropicAnalyzer {
                 Type::Struct(StructType {
                     fields: resolved_fields,
                     decay_after_ms: s.decay_after_ms,
+                    auto_drop: s.auto_drop.clone(),
                     scoped_branch: s.scoped_branch.clone(),
                 })
             }
@@ -864,6 +865,7 @@ impl EntropicAnalyzer {
             }
             Expression::CloneOp(v) => format!("clone({})", v),
             Expression::RefOp(e) => format!("&{}", self.expr_snippet(e)),
+            Expression::Syscall { .. } => "syscall(...)".to_string(),
             Expression::StructLit(_, fields) => {
                 let parts: Vec<String> = fields
                     .iter()

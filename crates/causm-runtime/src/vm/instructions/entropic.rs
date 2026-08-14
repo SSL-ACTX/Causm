@@ -14,6 +14,35 @@ impl Vm {
         self.consume_reg(branch_id, src.0)
     }
 
+    pub(crate) fn AutoDrop(
+        &mut self,
+        branch_id: &str,
+        target: Reg,
+        spec: causm_core::types::AutoDropSpec,
+    ) -> Result<(), TemporalError> {
+        if let Ok(causm_core::value::Payload::Struct(fields)) =
+            self.peek_reg(branch_id, target.0)
+        {
+            if let Some(causm_core::value::EntropicState::Valid(ref field_val)) =
+                fields.get(&spec.field_name)
+            {
+                if let Ok(sym_ptr) = self
+                    .foreign_manager
+                    .get_or_load_symbol(&spec.lib_name, &spec.routine_name)
+                {
+                    unsafe {
+                        let _ = crate::vm::ffi::invoke_foreign_symbol(
+                            sym_ptr,
+                            std::slice::from_ref(field_val),
+                            &causm_core::types::Type::I32,
+                        );
+                    }
+                }
+            }
+        }
+        self.consume_reg(branch_id, target.0)
+    }
+
     pub(crate) fn ConsumeField(
         &mut self,
         branch_id: &str,

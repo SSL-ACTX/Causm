@@ -370,6 +370,16 @@ pub enum SsaInstruction {
     LoopTickOn {
         chan_id: String,
     },
+    Syscall {
+        dest: SsaReg,
+        target: causm_core::SyscallTarget,
+        args: Vec<SsaReg>,
+        duration_ms: Option<u64>,
+    },
+    AutoDrop {
+        target: SsaReg,
+        spec: causm_core::types::AutoDropSpec,
+    },
     Other(String),
 }
 

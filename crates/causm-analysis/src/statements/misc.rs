@@ -16,6 +16,35 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn ForeignBlock(
+        &mut self,
+        lib_name: &str,
+        _abi: &str,
+        routines: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        if !self.capability_stack.is_empty()
+            && !self.is_capability_allowed("System.FFI")
+        {
+            return Err(self.annotate(SemanticErrorKind::MissingCapability(
+                "System.FFI".to_string(),
+            )));
+        }
+        if lib_name.starts_with('/')
+            && !lib_name.starts_with("/lib")
+            && !lib_name.starts_with("/usr/lib")
+            && !lib_name.starts_with("/system/lib")
+            && !lib_name.starts_with("/data/data/com.termux")
+        {
+            return Err(self.annotate(SemanticErrorKind::ForbiddenLibraryPath(
+                lib_name.to_string(),
+            )));
+        }
+        for r in routines {
+            self.analyze_statement(r)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn Debug(&mut self, expr: &Expression) -> Result<(), SemanticError> {
         analyze_expression_nonconsuming(self, expr)?;
         if !self.capability_stack.is_empty()
