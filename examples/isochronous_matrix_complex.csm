@@ -17,7 +17,7 @@
         open_chan sensors (16)
         open_chan signals (16)
         loop tick {
-            let packet = topology { s1 = 150, s2 = 155 }
+            let packet = topology { s2 = 155, s1 = 150 }
             chan_send sensors (packet)
             break
         }

@@ -93,28 +93,83 @@ fn expand_spanned_statements(
                         for s in item_stmts {
                             result.push(s.clone());
                             if let Some(ref ns) = alias {
-                                if let Statement::RoutineDef {
-                                    name,
-                                    params,
-                                    return_type,
-                                    taking_ms,
-                                    state_constraint,
-                                    body,
-                                } = &s.stmt
-                                {
-                                    let qualified_name = format!("{}.{}", ns, name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::RoutineDef {
-                                            name: qualified_name,
-                                            params: params.clone(),
-                                            return_type: return_type.clone(),
-                                            taking_ms: *taking_ms,
-                                            state_constraint: state_constraint
-                                                .clone(),
-                                            body: body.clone(),
-                                        },
-                                        span: s.span.clone(),
-                                    });
+                                match &s.stmt {
+                                    Statement::RoutineDef {
+                                        name,
+                                        params,
+                                        return_type,
+                                        taking_ms,
+                                        state_constraint,
+                                        body,
+                                    } => {
+                                        let qualified_name =
+                                            format!("{}.{}", ns, name);
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::RoutineDef {
+                                                name: qualified_name,
+                                                params: params.clone(),
+                                                return_type: return_type.clone(),
+                                                taking_ms: *taking_ms,
+                                                state_constraint: state_constraint
+                                                    .clone(),
+                                                body: body.clone(),
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                    Statement::ForeignBlock {
+                                        lib_name,
+                                        abi,
+                                        routines,
+                                    } => {
+                                        let qualified_routines = routines
+                                            .iter()
+                                            .map(|r_spanned| {
+                                                if let Statement::RoutineDef {
+                                                    name,
+                                                    params,
+                                                    return_type,
+                                                    taking_ms,
+                                                    state_constraint,
+                                                    body,
+                                                } = &r_spanned.stmt
+                                                {
+                                                    SpannedStatement {
+                                                        stmt:
+                                                            Statement::RoutineDef {
+                                                                name: format!(
+                                                                    "{}.{}",
+                                                                    ns, name
+                                                                ),
+                                                                params: params
+                                                                    .clone(),
+                                                                return_type:
+                                                                    return_type
+                                                                        .clone(),
+                                                                taking_ms:
+                                                                    *taking_ms,
+                                                                state_constraint:
+                                                                    state_constraint
+                                                                        .clone(),
+                                                                body: body.clone(),
+                                                            },
+                                                        span: r_spanned.span.clone(),
+                                                    }
+                                                } else {
+                                                    r_spanned.clone()
+                                                }
+                                            })
+                                            .collect();
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::ForeignBlock {
+                                                lib_name: lib_name.clone(),
+                                                abi: abi.clone(),
+                                                routines: qualified_routines,
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                    _ => {}
                                 }
                             }
                         }

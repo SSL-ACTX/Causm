@@ -1,0 +1,7 @@
+// crates/causm-stdlib/csm/std/time/ffi.csm - C ABI Clock Bindings
+
+foreign "libc.so.6" abi("C") {
+    pub routine clock_gettime(peek clk_id: i32, peek tp: Timespec) -> i32 taking 1ms
+    pub routine nanosleep(peek req: Timespec, peek rem: Timespec) -> i32 taking 1ms
+    pub routine time(peek tloc: i64) -> i64 taking 1ms
+}

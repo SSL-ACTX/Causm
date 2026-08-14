@@ -28,10 +28,11 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             sub_ctx.type_decls = ctx.type_decls.clone();
             sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
 
-            for param in params.iter() {
-                let p_reg = sub_ctx.alloc_reg();
+            for (i, param) in params.iter().enumerate() {
+                let p_reg = Reg(i as u32);
                 sub_ctx.symbols.insert(param.name.clone(), p_reg);
             }
+            sub_ctx.next_reg = params.len() as u32;
 
             if let Some((ref param_name, ref expected_state)) = state_constraint {
                 if let Some(&reg) = sub_ctx.symbols.get(param_name) {

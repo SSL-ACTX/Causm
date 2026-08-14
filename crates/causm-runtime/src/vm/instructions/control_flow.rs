@@ -171,10 +171,23 @@ impl Vm {
             let result_payload = unsafe {
                 crate::vm::ffi::invoke_foreign_symbol(
                     sym_ptr,
-                    &arg_values,
+                    &mut arg_values,
                     &routine_def.return_type,
                 )?
             };
+
+            // Write back any modified struct argument payloads into registers
+            for (i, reg) in args.iter().enumerate() {
+                if let causm_core::value::Payload::Struct(_) = &arg_values[i] {
+                    self.insert_reg(
+                        branch_id,
+                        reg.0,
+                        causm_core::value::EntropicState::Valid(
+                            arg_values[i].clone(),
+                        ),
+                    )?;
+                }
+            }
 
             // Consume arguments if needed
             for (i, reg) in args.iter().enumerate() {

@@ -16,9 +16,9 @@
 @sender: {
     let packet1: SensorData = struct { id = "S1", reading = 100 }
     chan_send sensors_bus (packet1)
-    let packet2: SensorData = struct { id = "S2", reading = 200 }
+    let packet2: SensorData = struct { reading = 200, id = "S2" }
     chan_send sensors_bus (packet2)
-    let packet3: SensorData = struct { id = "S3", reading = 300 }
+    let packet3: SensorData = struct { reading = 300, id = "S3" }
     chan_send sensors_bus (packet3)
     print("Sender finished transmitting telemetry packets.")
 }

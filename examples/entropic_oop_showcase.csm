@@ -1,11 +1,11 @@
 @0ms: {
     type SecurityNode = struct decay_after 1000ms {
-        status: string,
-        node_id: int
+        node_id: int,
+        status: string
     }
     type QuantumVault = SecurityNode + struct {
-        clearance_level: int,
-        vault_code: int
+        vault_code: int,
+        clearance_level: int
     }
     interface Encryptable {
         routine encrypt_payload(peek self) -> int taking 15ms
@@ -35,7 +35,7 @@
     routine QuantumVault.purge(consume self) taking 15ms {
         print("Quantum Vault state purged and memory reclaimed.")
     }
-    let v: QuantumVault = struct { status = "OPERATIONAL", clearance_level = 9, vault_code = 987654, node_id = 8192 }
+    let v: QuantumVault = struct { status = "OPERATIONAL", vault_code = 987654, clearance_level = 9, node_id = 8192 }
     let code = v.inspect_secure()
     let level = v.verify_clearance()
     let node: AuditNode = v

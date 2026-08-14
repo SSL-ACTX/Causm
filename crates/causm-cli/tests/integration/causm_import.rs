@@ -96,3 +96,42 @@ fn test_import_wildcard_symbol_import() -> anyhow::Result<()> {
     let _ = std::fs::remove_dir_all(&temp_dir);
     Ok(())
 }
+
+#[test]
+fn test_import_std_time_monotonic_telemetry() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        import "std/time" as Time
+        let ts = call Time.unix_timestamp()
+        let start = call Time.now()
+        let dur = call Time.from_millis(100)
+        let total_nanos = dur.nanos_total
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.use_z3 = false;
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let total_nanos_reg = ir.symbols.get("total_nanos").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(total_nanos_reg),
+        Some(causm_core::value::Payload::Integer(100_000_000))
+    );
+
+    let ts_reg = ir.symbols.get("ts").unwrap().0;
+    if let Some(causm_core::value::Payload::Integer(ts_val)) =
+        vm.root_timeline.arena.peek(ts_reg)
+    {
+        assert!(ts_val > 1_700_000_000);
+    } else {
+        panic!("Expected valid UNIX timestamp from std/time");
+    }
+
+    Ok(())
+}

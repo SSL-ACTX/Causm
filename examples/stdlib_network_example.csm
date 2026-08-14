@@ -5,7 +5,7 @@
         require System.NetworkFetch
         require System.Log
         let endpoint = "https://httpbin.org/get"
-        let req = defer System.NetworkFetch(url = "endpoint", latency = "5") taking 100ms
+        let req = defer System.NetworkFetch(latency = "5", url = "endpoint") taking 100ms
         let status = null
         debug("Initiating HTTP NetworkFetch pipeline...")
     }

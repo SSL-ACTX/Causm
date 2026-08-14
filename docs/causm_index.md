@@ -51,6 +51,8 @@ Historical design documents and the standard RFC process.
 - **[Type Casting & Broadcasting](./proposals/causm_prop_casting_and_broadcasting.md)**: Design for the `as` casting operator and elementwise array broadcasting.
 - **[Advanced Entropic OOP](./proposals/causm_prop_advanced_entropic_oop.md)**: Monomorphized generic method dispatch, associated lifecycle types, and entropic interface constraints.
 - **[Profile-Guided Tuning & DevTools](./proposals/causm_prop_profile_guided_tuning_and_devtools.md)**: Inferred (`taking _`) and empirical (`taking ?`) temporal contracts, `causm-devtools` profiling/tuning suite, and continuous contract synthesis.
+- **[Self-Hosted std/time Module](./proposals/causm_prop_std_time.md)**: High-resolution monotonic timestamps (`Instant`, `Duration`), wall-clock epoch time, and precision sleeping.
+
 
 ---
 *This index is maintained as the authoritative source for Causm documentation.*

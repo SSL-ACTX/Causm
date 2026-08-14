@@ -1,5 +1,5 @@
 @0ms: {
-    let raw = struct { count = "0", b = "fieldB", a = "fieldA" }
+    let raw = struct { a = "fieldA", count = "0", b = "fieldB" }
     inspect raw_binding = raw {
         let raw_copy = clone(raw_binding)
         let a_check = raw_copy.a
@@ -17,7 +17,7 @@
         anchor speculation_start
         let first = p.a
         commit {
-            let merged = struct { x = first, y = "inferred" }
+            let merged = struct { y = "inferred", x = first }
             yield merged
         }
         collapse

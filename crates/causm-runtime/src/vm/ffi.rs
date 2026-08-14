@@ -106,14 +106,17 @@ impl ForeignLibraryManager {
 /// `sym_ptr` must be a valid, callable C function pointer matching the native ABI.
 pub unsafe fn invoke_foreign_symbol(
     sym_ptr: *mut libc::c_void,
-    args: &[Payload],
+    args: &mut [Payload],
     return_type: &Type,
 ) -> Result<Payload, TemporalError> {
     // Keep CString allocations alive for the duration of the native call
     let mut c_strings = Vec::new();
     let mut raw_args: Vec<usize> = Vec::new();
 
-    for arg in args {
+    // Struct buffers allocated on the heap: (arg_index, sorted_keys, buffer)
+    let mut struct_buffers: Vec<(usize, Vec<String>, Vec<u8>)> = Vec::new();
+
+    for (arg_idx, arg) in args.iter().enumerate() {
         match arg {
             Payload::Integer(i) => {
                 raw_args.push(*i as usize);
@@ -134,9 +137,53 @@ pub unsafe fn invoke_foreign_symbol(
             Payload::Null => {
                 raw_args.push(0);
             }
-            Payload::Struct(_) | Payload::Topology(_) | Payload::Array(_) => {
+            Payload::Struct(map) => {
+                // Marshall 64-bit integer fields consecutively into a C-compatible memory buffer.
+                // If the struct has POSIX timespec fields, place tv_sec first, then tv_nsec.
+                let mut buf = Vec::with_capacity(map.len() * 8);
+                let sorted_keys: Vec<String> = if map.contains_key("tv_sec")
+                    && map.contains_key("tv_nsec")
+                {
+                    let mut keys = vec!["tv_sec".to_string(), "tv_nsec".to_string()];
+                    for k in map.keys() {
+                        if k != "tv_sec" && k != "tv_nsec" {
+                            keys.push(k.clone());
+                        }
+                    }
+                    keys
+                } else {
+                    let mut keys: Vec<String> = map.keys().cloned().collect();
+                    keys.sort();
+                    keys
+                };
+                for k in &sorted_keys {
+                    let val_i64 = match map.get(k) {
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Integer(i),
+                        )) => *i,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Float(bits),
+                        )) => *bits as i64,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Bool(b),
+                        )) => {
+                            if *b {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        _ => 0i64,
+                    };
+                    buf.extend_from_slice(&val_i64.to_ne_bytes());
+                }
+                let ptr = buf.as_mut_ptr() as usize;
+                struct_buffers.push((arg_idx, sorted_keys, buf));
+                raw_args.push(ptr);
+            }
+            Payload::Topology(_) | Payload::Array(_) => {
                 return Err(TemporalError::EvalError(
-                    "Passing complex structured types directly to raw C FFI without pointer wrapper is unsupported"
+                    "Passing complex array/topology types directly to raw C FFI is unsupported"
                         .to_string(),
                 ));
             }
@@ -216,7 +263,25 @@ pub unsafe fn invoke_foreign_symbol(
 
     drop(c_strings);
 
-    // Convert raw C return integer/pointer to Payload based on return_type
+    // Write back any modified bytes from C struct buffers into the Causm arguments
+    for (arg_idx, sorted_keys, buf) in struct_buffers {
+        if let Payload::Struct(ref mut map) = args[arg_idx] {
+            for (i, k) in sorted_keys.into_iter().enumerate() {
+                let offset = i * 8;
+                if offset + 8 <= buf.len() {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(&buf[offset..offset + 8]);
+                    let val_i64 = i64::from_ne_bytes(bytes);
+                    map.insert(
+                        k,
+                        causm_core::value::EntropicState::Valid(Payload::Integer(
+                            val_i64,
+                        )),
+                    );
+                }
+            }
+        }
+    }
     match return_type {
         Type::Integer
         | Type::I8

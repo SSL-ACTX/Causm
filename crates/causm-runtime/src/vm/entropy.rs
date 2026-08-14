@@ -101,9 +101,10 @@ impl Vm {
                         .get_or_load_symbol(&spec.lib_name, &spec.routine_name)
                     {
                         unsafe {
+                            let mut args = [field_val.clone()];
                             let _ = crate::vm::ffi::invoke_foreign_symbol(
                                 sym_ptr,
-                                std::slice::from_ref(field_val),
+                                &mut args,
                                 &causm_core::types::Type::I32,
                             );
                         }
