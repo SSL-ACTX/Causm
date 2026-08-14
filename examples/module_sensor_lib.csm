@@ -1,13 +1,13 @@
 @0ms: {
     isolate main_system {
-        enum SensorState {
+        pub enum SensorState {
             Calibrated(int),
             Uncalibrated
         }
 
         let @decay_rate(100ms) internal_calibration = 99
 
-        routine compute_telemetry_digest(peek val: int) -> int taking 10ms {
+        pub routine compute_telemetry_digest(peek val: int) -> int taking 10ms {
             let digest = val * 3 + 10
             yield digest
         }

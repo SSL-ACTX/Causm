@@ -4,39 +4,45 @@
         enable memory(64KB)
         require System.Log
 
-        from "module_sensor_lib.csm" import compute_telemetry_digest
+        import "sensor_math.csm" as Math
+        from "sensor_types.csm" import SensorMode
 
-        let raw_reading = 150
-        let ref_reading = &raw_reading
+        let raw_reading = 100
+        let scaling_factor = 4
+        let ref_raw = &raw_reading
         print("Raw Reading Reference:")
-        print(ref_reading)
+        print(ref_raw)
 
-        let digest = call compute_telemetry_digest(raw_reading)
-        print("Imported Routine Telemetry Digest:")
+        let digest = call Math.compute_digest(raw_reading, scaling_factor)
+        print("Computed Telemetry Digest:")
         print(digest)
 
-        let sensor_pack = struct { status = "active", level = digest }
-        lease current_pack = sensor_pack 30ms {
-            let active_level = current_pack.level
-            print("Leased Active Level:")
-            print(active_level)
+        let calibrated = call Math.calibrate_reading(digest)
+        print("Calibrated Signal Value:")
+        print(calibrated)
+
+        let telemetry_pack = struct { status = "operational", score = calibrated }
+        lease current_pack = telemetry_pack 40ms {
+            let score_val = current_pack.score
+            print("Leased Telemetry Score:")
+            print(score_val)
         } reconcile auto
 
-        let match_eval = match entropy(raw_reading) {
-            Valid(v) if v == 150: {
-                let status = "high_precision_match"
-                status
+        let entropic_status = match entropy(raw_reading) {
+            Valid(v) if v == 100: {
+                let s = "verified_high_precision"
+                s
             }
             Valid(v): {
-                let status = "standard_valid"
-                status
+                let s = "standard_valid"
+                s
             }
             Consumed: {
-                let status = "consumed_reading"
-                status
+                let s = "consumed_stream"
+                s
             }
         }
-        print("Entropic Guard Status:")
-        print(match_eval)
+        print("Entropic Verification Status:")
+        print(entropic_status)
     }
 }

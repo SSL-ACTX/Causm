@@ -76,10 +76,11 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::enum_decl => {
             let mut inner = pair.into_inner();
-            let name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
+            let mut name_pair = inner.next().unwrap();
+            if name_pair.as_rule() == Rule::pub_opt {
+                name_pair = inner.next().unwrap();
+            }
+            let name = name_pair.as_str().to_string();
             let mut variants = Vec::new();
             if let Some(list_pair) = inner.next() {
                 for variant_pair in list_pair.into_inner() {
@@ -104,10 +105,11 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::type_decl => {
             let mut inner = pair.into_inner().peekable();
-            let name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
+            let mut name_pair = inner.next().unwrap();
+            if name_pair.as_rule() == Rule::pub_opt {
+                name_pair = inner.next().unwrap();
+            }
+            let name = name_pair.as_str().to_string();
 
             if let Some(p) = inner.peek() {
                 if p.as_rule() == Rule::generic_param_list {
@@ -347,7 +349,11 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::interface_decl => {
             let mut inner = pair.into_inner().peekable();
-            let name = inner.next().unwrap().as_str().to_string();
+            let mut name_pair = inner.next().unwrap();
+            if name_pair.as_rule() == Rule::pub_opt {
+                name_pair = inner.next().unwrap();
+            }
+            let name = name_pair.as_str().to_string();
             let mut extends = Vec::new();
             let mut methods = Vec::new();
 
@@ -372,16 +378,34 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                         Rule::param_decl_list => {
                             for p_pair in opt.into_inner() {
                                 let mut p_inner = p_pair.into_inner();
-                                 let first_pair = p_inner.next().unwrap();
-                                 let (mode, p_name) = match first_pair.as_str() {
-                                     "consume" => (causm_core::ParamMode::Consume, p_inner.next().unwrap().as_str().to_string()),
-                                     "clone" => (causm_core::ParamMode::Clone, p_inner.next().unwrap().as_str().to_string()),
-                                     "decay" => (causm_core::ParamMode::Decay, p_inner.next().unwrap().as_str().to_string()),
-                                     "peek" => (causm_core::ParamMode::Peek, p_inner.next().unwrap().as_str().to_string()),
-                                     "lease" => (causm_core::ParamMode::Lease, p_inner.next().unwrap().as_str().to_string()),
-                                     _ => (causm_core::ParamMode::Peek, first_pair.as_str().to_string()),
-                                 };
-                                 let typ = p_inner.next().map(parse_type_name);
+                                let first_pair = p_inner.next().unwrap();
+                                let (mode, p_name) = match first_pair.as_str() {
+                                    "consume" => (
+                                        causm_core::ParamMode::Consume,
+                                        p_inner.next().unwrap().as_str().to_string(),
+                                    ),
+                                    "clone" => (
+                                        causm_core::ParamMode::Clone,
+                                        p_inner.next().unwrap().as_str().to_string(),
+                                    ),
+                                    "decay" => (
+                                        causm_core::ParamMode::Decay,
+                                        p_inner.next().unwrap().as_str().to_string(),
+                                    ),
+                                    "peek" => (
+                                        causm_core::ParamMode::Peek,
+                                        p_inner.next().unwrap().as_str().to_string(),
+                                    ),
+                                    "lease" => (
+                                        causm_core::ParamMode::Lease,
+                                        p_inner.next().unwrap().as_str().to_string(),
+                                    ),
+                                    _ => (
+                                        causm_core::ParamMode::Peek,
+                                        first_pair.as_str().to_string(),
+                                    ),
+                                };
+                                let typ = p_inner.next().map(parse_type_name);
                                 params.push(causm_core::ParamDecl {
                                     mode,
                                     name: p_name,

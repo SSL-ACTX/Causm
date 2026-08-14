@@ -85,7 +85,9 @@ fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
 speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
 speculation_mode_value = { "selective" | "full" }
-routine_stmt = { "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ "{" ~ statement* ~ "}" }
+pub_keyword = @{ "pub" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+pub_opt = { pub_keyword? }
+routine_stmt = { pub_opt ~ "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ "{" ~ statement* ~ "}" }
 method_receiver = { param_mode ~ "self" ~ ("for" ~ amount ~ "ms")? }
 method_name = { identifier ~ ("<" ~ type_param_list ~ ">")? ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
@@ -236,16 +238,16 @@ decay_opt = { "decay_after" ~ amount ~ "ms" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
 generic_param = { identifier ~ (":" ~ identifier)? }
 generic_param_list = { "<" ~ generic_param ~ ("," ~ generic_param)* ~ ">" }
-type_decl = { "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
+type_decl = { pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
 assoc_type_decl = { "type" ~ identifier ~ (":" ~ identifier)? }
 interface_item = { assoc_type_decl | interface_method }
-interface_decl = { "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }
+interface_decl = { pub_opt ~ "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }
 interface_sum = { interface_term ~ ("+" ~ interface_term)* }
 interface_term = { identifier ~ decay_opt? | "interface" ~ decay_opt? ~ "{" ~ interface_item* ~ "}" }
 interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ statement_block? }
 state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
 
-enum_decl = { "enum" ~ identifier ~ "{" ~ enum_variant_list? ~ "}" }
+enum_decl = { pub_opt ~ "enum" ~ identifier ~ "{" ~ enum_variant_list? ~ "}" }
 enum_variant_list = { enum_variant ~ ("," ~ enum_variant)* ~ ","? }
 enum_variant = { identifier ~ ("(" ~ type_name_list ~ ")")? }
 type_name_list = { type_name ~ ("," ~ type_name)* }

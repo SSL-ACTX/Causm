@@ -34,7 +34,7 @@ fn expand_spanned_statements(
     let mut result = Vec::new();
     for spanned in stmts {
         match spanned.stmt {
-            Statement::Import { path, .. } | Statement::FromImport { path, .. } => {
+            Statement::Import { path, alias } => {
                 let target_path = if let Some(dir) = base_dir {
                     dir.join(&path)
                 } else {
@@ -52,10 +52,100 @@ fn expand_spanned_statements(
                             loaded_files,
                         )?;
                         for imp_spanned in expanded {
-                            if let Statement::Isolate(iso) = imp_spanned.stmt {
-                                result.extend(iso.body);
-                            } else {
-                                result.push(imp_spanned);
+                            let item_stmts =
+                                if let Statement::Isolate(iso) = imp_spanned.stmt {
+                                    iso.body
+                                } else {
+                                    vec![imp_spanned]
+                                };
+                            for s in item_stmts {
+                                result.push(s.clone());
+                                if let Some(ref ns) = alias {
+                                    if let Statement::RoutineDef {
+                                        name,
+                                        params,
+                                        return_type,
+                                        taking_ms,
+                                        state_constraint,
+                                        body,
+                                    } = &s.stmt
+                                    {
+                                        let qualified_name =
+                                            format!("{}.{}", ns, name);
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::RoutineDef {
+                                                name: qualified_name,
+                                                params: params.clone(),
+                                                return_type: return_type.clone(),
+                                                taking_ms: *taking_ms,
+                                                state_constraint: state_constraint
+                                                    .clone(),
+                                                body: body.clone(),
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Statement::FromImport { path, symbols } => {
+                let target_path = if let Some(dir) = base_dir {
+                    dir.join(&path)
+                } else {
+                    PathBuf::from(&path)
+                };
+                let path_str = target_path.to_string_lossy().to_string();
+                if !loaded_files.contains(&path_str) && target_path.exists() {
+                    loaded_files.insert(path_str.clone());
+                    let imported_source = std::fs::read_to_string(&target_path)?;
+                    let imported_prog = parse_causm(&imported_source)?;
+                    for imp_tl in imported_prog.timelines {
+                        let expanded = expand_spanned_statements(
+                            imp_tl.statements,
+                            target_path.parent(),
+                            loaded_files,
+                        )?;
+                        for imp_spanned in expanded {
+                            let item_stmts =
+                                if let Statement::Isolate(iso) = imp_spanned.stmt {
+                                    iso.body
+                                } else {
+                                    vec![imp_spanned]
+                                };
+                            for s in item_stmts {
+                                result.push(s.clone());
+                                for (sym_name, sym_alias) in &symbols {
+                                    if let Some(alias_name) = sym_alias {
+                                        if let Statement::RoutineDef {
+                                            name,
+                                            params,
+                                            return_type,
+                                            taking_ms,
+                                            state_constraint,
+                                            body,
+                                        } = &s.stmt
+                                        {
+                                            if name == sym_name {
+                                                result.push(SpannedStatement {
+                                                    stmt: Statement::RoutineDef {
+                                                        name: alias_name.clone(),
+                                                        params: params.clone(),
+                                                        return_type: return_type
+                                                            .clone(),
+                                                        taking_ms: *taking_ms,
+                                                        state_constraint:
+                                                            state_constraint.clone(),
+                                                        body: body.clone(),
+                                                    },
+                                                    span: s.span.clone(),
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

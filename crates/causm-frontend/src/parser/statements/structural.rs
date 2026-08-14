@@ -70,10 +70,11 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::routine_stmt => {
             let mut inner = pair.into_inner();
-            let name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
+            let mut name_pair = inner.next().unwrap();
+            if name_pair.as_rule() == Rule::pub_opt {
+                name_pair = inner.next().unwrap();
+            }
+            let name = name_pair.as_str().to_string();
             let mut params = Vec::new();
             let mut return_type = None;
             let mut taking_ms: Option<u64> = None;

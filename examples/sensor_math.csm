@@ -1,0 +1,15 @@
+@0ms: {
+    isolate sensor_math {
+        import "sensor_types.csm" as Types
+
+        pub routine compute_digest(peek raw_val: int, peek factor: int) -> int taking 10ms {
+            let intermediate = raw_val * factor + 25
+            yield intermediate
+        }
+
+        pub routine calibrate_reading(peek reading: int) -> int taking 10ms {
+            let calibrated = reading + 50
+            yield calibrated
+        }
+    }
+}
