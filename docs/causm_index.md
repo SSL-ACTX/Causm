@@ -50,6 +50,7 @@ Historical design documents and the standard RFC process.
 - **[Temporal Leases Proposal](./proposals/causm_prop_temporal_leases.md)**: Design for time-bound resource ownership.
 - **[Type Casting & Broadcasting](./proposals/causm_prop_casting_and_broadcasting.md)**: Design for the `as` casting operator and elementwise array broadcasting.
 - **[Advanced Entropic OOP](./proposals/causm_prop_advanced_entropic_oop.md)**: Monomorphized generic method dispatch, associated lifecycle types, and entropic interface constraints.
+- **[Profile-Guided Tuning & DevTools](./proposals/causm_prop_profile_guided_tuning_and_devtools.md)**: Inferred (`taking _`) and empirical (`taking ?`) temporal contracts, `causm-devtools` profiling/tuning suite, and continuous contract synthesis.
 
 ---
 *This index is maintained as the authoritative source for Causm documentation.*

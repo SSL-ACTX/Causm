@@ -10,7 +10,7 @@ A routine defines a reusable procedure governed by an explicit temporal and entr
 
 ### Formal Syntax
 ```causm
-routine <name>(<param_mode> <identifier>, ...) taking (<amount>ms | _) {
+routine <name>(<param_mode> <identifier>, ...) [-> <type>] taking (<amount>ms | _ | ?) {
   <statements>
   [yield <expression>]
 }
@@ -21,6 +21,7 @@ routine <name>(<param_mode> <identifier>, ...) taking (<amount>ms | _) {
 - **`clone`**: The caller retains the original value; the routine receives a deep replication, incurring a deterministic cloning cost.
 - **`decay`**: The value is moved, and in the case of structured data, the original value in the caller's arena is transitioned to the `Decayed` state.
 - **`peek`**: Provides read-only access for inspection; the caller's arena state remains unmodified.
+- **`lease`**: Leases the resource for a bounded duration.
 
 ---
 
@@ -29,7 +30,8 @@ routine <name>(<param_mode> <identifier>, ...) taking (<amount>ms | _) {
 The `taking` clause specifies the **Worst-Case Execution Time (WCET)** for the routine.
 
 - **Explicit Temporal Specification**: `taking 20ms`. The Register-based Temporal Virtual Machine (TVM) guarantees the routine execution occupies exactly 20ms. If completion occurs prematurely, deterministic padding is applied. If the duration is exceeded, a `WatchdogBite` is triggered.
-- **Inferred Temporal Specification**: `taking _`. The static analyzer computes the maximum execution cost across all code paths and establishes the contract automatically.
+- **Inferred Temporal Specification**: `taking _`. The static analyzer computes the maximum execution cost across all code paths and establishes the contract automatically at compile time.
+- **Empirical Temporal Tuning Specification**: `taking ?`. Directs the `causm tune` engine to execute empirical chaos-fuzzing benchmark sweeps, measure statistical $P_{99.9}$ execution bounds with safety margins, and patch the source contract in place.
 
 ---
 

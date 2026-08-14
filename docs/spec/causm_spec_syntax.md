@@ -238,14 +238,20 @@ Defines a procedure governed by a deterministic execution contract.
 
 **Syntax:**
 ```causm
-routine <name>(<params>) taking (<amount>ms | _) { <statements> }
+routine <name>(<params>) [-> <return_type>] taking (<amount>ms | _ | ?) [where <state_constraints>] { <statements> }
 ```
+
+**Temporal Contract Forms:**
+- `taking <amount>ms`: Explicit fixed Worst-Case Execution Time (WCET) budget.
+- `taking _`: Inferred contract automatically computed by the static compiler analyzer across all code paths.
+- `taking ?`: Dynamic wildcard contract empirically synthesized by `causm tune` fuzzing sweeps.
 
 **Parameter Passing Modes:**
 - `consume`: The argument is moved into the routine's scope.
 - `clone`: The argument is replicated.
 - `peek`: Read-only access is granted; the caller's state remains unaffected.
 - `decay`: The caller's value transitions to the `Decayed` state following the call.
+- `lease`: Leased for the duration of the method invocation.
 
 ---
 
@@ -377,5 +383,19 @@ routine sys_write(peek msg: string) -> i64 taking 2ms {
     yield result
 }
 ```
+
+---
+
+## 12. Developer Tooling CLI (`causm tune`, `causm profile`, `causm fmt`)
+
+The Causm devtools suite (`crates/causm-devtools`) provides built-in tools for formatting, profiling, and self-calibrating temporal contracts.
+
+- **`causm fmt [files...]`**: Formats Causm code using AST parsing rules with a two-tier round-trip and entropic semantic validation gate.
+- **`causm profile <file.csm>`**: Profiles TVM memory watermarks, logical global/root clocks, and timeline branch lifetimes.
+- **`causm tune [files...]`**: Empirically benchmarks routines via chaos fuzzing and updates `taking ?` or existing contracts with statistical $P_{99.9}$ safety margins:
+  - `causm tune <file> --all` (`-a`): Continuously re-tunes all contracts in the file.
+  - `causm tune <file> --routine <name>` (`-r`): Pinpoints an individual routine for recalibration.
+  - `causm tune <file> --dry-run`: Previews suggested temporal contract changes without modifying files.
+
 
 

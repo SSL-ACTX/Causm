@@ -114,3 +114,22 @@ This inherits all fields from `Actor` and adds `model` to `Robot`.
 - **Struct Subtyping**: A struct `S1` is compatible with/assignable to another struct `S2` if `S1` contains at least all the fields of `S2` with compatible types.
 - **Interface Subtyping**: A struct `S` implicitly implements an interface `I` if `S` defines all the methods specified by `I` with matching signatures (names, parameters, parameter modes, return types, and temporal contracts).
 
+## 7. Enumerations (`enum`)
+
+Enums define sum types with optional payload data per variant:
+
+```causm
+enum NodeStatus {
+    Active(int),
+    Degraded(string),
+    Offline
+}
+
+let s1 = NodeStatus::Active(101)
+let s2 = NodeStatus::Degraded("high_latency")
+let s3 = NodeStatus::Offline
+```
+
+Variants can carry any Causm types (scalars, structs, arrays) and are fully tracked under the entropic lifecycle and match expressions.
+
+
