@@ -1,10 +1,8 @@
 @0ms: {
     print("--- Causm Time Travel & Reversing Showcase ---")
-
     let bank_balance = 1000
     print("Initial bank balance: " + bank_balance)
-
-    speculate (max 20ms) {
+    speculate (taking 20ms) {
         let bank_balance = bank_balance + 500
         let market_crash = true
         if (market_crash) {
@@ -16,16 +14,10 @@
             yield bank_balance
         }
     } fallback {
-        // bank_balance here is the pre-speculation value
         print("Fallback: Speculation failed. Local state reverted.")
         print("Reverted balance: " + bank_balance)
     }
-
-    let cloud_config = topology {
-        "region": "us-east-1",
-        "instances": 10
-    }
-
+    let cloud_config = topology { region = "us-east-1", instances = 10 }
     print("Splitting for concurrent infrastructure updates...")
     split main into [dev_branch, ops_branch]
 }
@@ -33,37 +25,26 @@
 @10ms: {
     @dev_branch: {
         anchor stable_config
-        cloud_config["instances"] = 20
+        cloud_config.instances = 20
         print("Dev: Scaling up to 20 instances.")
     }
-
     @ops_branch: {
-        cloud_config["region"] = "eu-central-1"
+        cloud_config.region = "eu-central-1"
         print("Ops: Migrating region to eu-central-1.")
     }
 }
 
 @20ms: {
     print("Merging updates with safety constraints...")
-    merge [dev_branch, ops_branch] into main reconcile (
-        cloud_config: topology_union {
-            "instances": priority(dev_branch),
-            "region": priority(ops_branch),
-            "_": decay
-            // on conflict, rewind Dev to last known good config
-            on_invalid: rewind dev_branch to stable_config
-        }
-    )
-
+    merge [dev_branch, ops_branch] into main reconcile(cloud_config=first_wins)
     print("Merge complete. Final config:")
     print("Region: " + cloud_config["region"])
     print("Instances: " + cloud_config["instances"])
 }
 
 @30ms: {
-    // Causm prevents rewinding past a causal event (message already observed).
     print("Demonstrating Causal Safety (Paradox Prevention)...")
-    open_chan quantum_bus(1)
+    open_chan quantum_bus (1)
     split main into [sender, receiver]
 }
 
@@ -72,9 +53,8 @@
         anchor pre_send
         let signal = "SIGNAL_DETECTED"
         print("Sender: Emitting signal...")
-        chan_send quantum_bus(signal)
+        chan_send quantum_bus (signal)
     }
-
     @receiver: {
         let val = chan_recv(quantum_bus)
         print("Receiver: Observed: " + val)
@@ -85,6 +65,5 @@
     @sender: {
         print("Sender: A rewind to 'pre_send' would now trigger a Causal Paradox.")
         print("Causality preserved.")
-        // rewind_to(pre_send) // TemporalError::Paradox
     }
 }

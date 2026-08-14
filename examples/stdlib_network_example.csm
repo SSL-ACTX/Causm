@@ -1,31 +1,32 @@
 @0ms: {
-  isolate primary_gateway {
-    enable cpu(100ms)
-    enable memory(10KB)
-    require System.NetworkFetch
-    require System.Log
-
-    let endpoint = "https://httpbin.org/get"
-    let req = defer System.NetworkFetch(url: endpoint, latency: 5ms) deadline 100ms
-    let status
-
-    debug("Initiating HTTP NetworkFetch pipeline...")
-  }
+    isolate primary_gateway {
+        enable cpu(100ms)
+        enable memory(10240bytes)
+        require System.NetworkFetch
+        require System.Log
+        let endpoint = "https://httpbin.org/get"
+        let req = defer System.NetworkFetch(latency = "5", url = "endpoint") taking 100ms
+        let status = null
+        debug("Initiating HTTP NetworkFetch pipeline...")
+    }
 }
 
 @10ms: {
-  isolate handler {
-    require System.Log
-
-    await(req)
-
-    status = match entropy(req) {
-      Valid(val): "Gateway Connected [HTTP 200]"
-      Pending(p): "Gateway Response Pending"
-      Consumed:   "Gateway Timed Out / Breached Deadline"
+    isolate handler {
+        require System.Log
+        await(req)
+        match entropy(req) {
+            Valid(val): {
+                let status = "Gateway Connected [HTTP 200]"
+            }
+            Pending(p): {
+                let status = "Gateway Response Pending"
+            }
+            Consumed: {
+                let status = "Gateway Timed Out / Breached Deadline"
+            }
+        }
+        print("Network Request Status:")
+        print(status)
     }
-
-    print("Network Request Status:")
-    print(status)
-  }
 }

@@ -1,19 +1,16 @@
 @0ms: {
     let counter: int = 0
     let total: int = 0
-
-    while (counter < 5) (max 25ms) {
-        total = total + counter
-        counter = counter + 1
+    while (counter < 5) taking 25ms {
+        let total = total + counter
+        let counter = counter + 1
     }
     debug(counter)
     debug(total)
-
     let buffer = "sensor_stream_payload"
     let ticks = 0
-
-    while valid (buffer) (max 30ms) {
-        ticks = ticks + 1
+    while valid (buffer) taking 30ms {
+        let ticks = ticks + 1
         if (ticks == 3) {
             let extracted = buffer
             debug(extracted)
@@ -26,17 +23,15 @@
     let readings = [15, 42, 88, 23, 99]
     let sum = 0
     let peak = 0
-
     for val in readings step 10ms {
-        sum = sum + val
+        let sum = sum + val
         if (val > peak) {
-            peak = val
+            let peak = val
         } reconcile auto
     }
     debug(sum)
     debug(peak)
-
-    open_chan signal_bus(8)
+    open_chan signal_bus (8)
     split main into [producer, consumer]
 }
 
@@ -45,22 +40,19 @@
         let msg1 = "CRITICAL_ALERT"
         let msg2 = "SYSTEM_SYNC"
         let msg3 = "TERMINATE"
-
-        chan_send signal_bus(msg1)
-        chan_send signal_bus(msg2)
-        chan_send signal_bus(msg3)
+        chan_send signal_bus (msg1)
+        chan_send signal_bus (msg2)
+        chan_send signal_bus (msg3)
     }
-
     @consumer: {
         slice 20ms
         let count = 0
         let terminated = false
-
         loop tick on signal_bus {
             let msg = chan_recv(signal_bus)
-            count = count + 1
+            let count = count + 1
             if (msg == "TERMINATE") {
-                terminated = true
+                let terminated = true
             } reconcile auto
             break
         }

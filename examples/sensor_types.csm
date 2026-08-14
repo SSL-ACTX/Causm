@@ -1,13 +1,12 @@
 @0ms: {
     isolate sensor_types {
-        pub enum SensorMode {
+        enum SensorMode {
             HighPrecision(int),
             LowPower
         }
-
-        pub type SensorConfig = struct decay_after 200ms {
-            sensor_id: int,
-            threshold: int
+        type SensorConfig = struct decay_after 200ms {
+            threshold: int,
+            sensor_id: int
         }
     }
 }

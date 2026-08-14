@@ -1,23 +1,18 @@
 @0ms: {
     isolate system_core {
         enable cpu(5000ms)
-        enable memory(64KB)
+        enable memory(65536bytes)
         require System.Log
-
         let x = 100
-
         @no_z3: {
             assert_time(elapsed >= 0ms)
         }
-
         print("Deterministic outer block started")
-
         @chaos: {
             print("Entered chaos mode block")
             let y = 200
             print(y)
         }
-
         @deterministic: {
             split main into [w]
             @w: {
@@ -28,7 +23,6 @@
             reset w to checkpt
             print("Rewound worker successfully")
         }
-
         print("Showcase completed successfully")
     }
 }

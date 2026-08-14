@@ -1,23 +1,14 @@
 @0ms: {
     let status = "pending"
     let sensor_active = true
-
     if (sensor_active) {
-        status = "online"
+        let status = "online"
     } else {
-        status = "offline"
+        let status = "offline"
     } reconcile auto
-
     print("Sensor Status: " + status)
-
-    let packet = struct { 
-        header = "REQ_104", 
-        payload = "0xFA99", 
-        checksum = "0x11" 
-    }
-
+    let packet = struct { payload = "0xFA99", header = "REQ_104", checksum = "0x11" }
     let is_secure = false
-
     if (is_secure) {
         let data = packet.payload
         print("Secure branch extracted payload: " + data)
@@ -26,13 +17,12 @@
         let c = packet.checksum
         print("Insecure branch extracted header/checksum")
     } reconcile auto
-
     match entropy(packet) {
-        Decayed(d): {
-            print("Packet successfully decayed after branch reconciliation.")
-        }
         Valid(v): {
             print("ERROR: Packet should not be fully valid here.")
+        }
+        Decayed(d): {
+            print("Packet successfully decayed after branch reconciliation.")
         }
         Consumed: {
             print("ERROR: Packet should not be fully consumed here.")

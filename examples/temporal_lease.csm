@@ -1,33 +1,19 @@
 @0ms: {
-    let system_state = struct {
-        status = "OPERATIONAL",
-        entropy_level = 0.042,
-        metrics = struct {
-            requests = 1500,
-            errors = 2
-        }
-    }
-
+    let system_state = struct { entropy_level = 0.042, metrics = struct { requests = 1500, errors = 2 }, status = "OPERATIONAL" }
     print("--- Initial System State ---")
     debug(system_state)
-
     print("Initiating 20ms lease for validation...")
-    lease read_view = system_state for 20ms {
+    lease read_view = system_state taking 20ms {
         let current_status = read_view.status
         let err_count = read_view.metrics.errors
-
         if (err_count < 5) {
             print("Status check passed.")
         } else {
             print("Status check failed: high error rate.")
         }
-        // mutating read_view or system_state here is a semantic error
     }
-
-    // system_state is automatically restored after lease expires
     print("Lease expired. System state restored.")
     debug(system_state)
-
     assert_time(elapsed >= 20ms)
     print("Execution synchronized.")
 }

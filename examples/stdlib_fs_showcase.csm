@@ -1,60 +1,41 @@
-// examples/stdlib_fs_showcase.csm - Pure Causm Standard Library File System & Path Showcase
-
 @0ms: {
     isolate fs_showcase {
         enable cpu(10000ms)
-        enable memory(128KB)
+        enable memory(131072bytes)
         require System.FFI
         require System.Log
-
-        // Import standard library modules directly
         from "std/fs" import *
         from "std/path" import *
-
         let base_dir = "/data/data/com.termux/files/home/Causm/target"
         let log_file_name = "causm_sys_audit.log"
         let target_path = call join(clone(base_dir), clone(log_file_name))
-
         let extracted_base = call path_basename(clone(target_path))
         print(extracted_base)
-
         let extracted_dir = call path_dirname(clone(target_path))
         print(extracted_dir)
-
         let ext = call extension(clone(target_path))
         print(ext)
-
         let file = call create_file(clone(target_path))
         print(file.path)
-
         let payload = "CAUSM_STATUS=INITIALIZED,ENTROPY=0.0,CLOCK=0ms\n"
         let bytes_written = call write_all(file, clone(payload), 46)
         print(bytes_written)
-
         let sync_code = call flush_file(file)
         print(sync_code)
-
         let sz = call file_size(clone(target_path))
         print(sz)
-
         let exists = call file_exists(clone(target_path))
         print(exists)
-
         let read_back = call read_to_string(clone(target_path))
         print(read_back)
-
         let archive_path = call join(clone(base_dir), "causm_sys_audit_archive.log")
         let rename_status = call rename_file(clone(target_path), clone(archive_path))
-
         let exists_orig = call file_exists(clone(target_path))
         print(exists_orig)
-
         let exists_archive = call file_exists(clone(archive_path))
         print(exists_archive)
-
         let rm_status = call remove_file(clone(archive_path))
         print(rm_status)
-
         let exists_post_cleanup = call file_exists(clone(archive_path))
         print(exists_post_cleanup)
     }

@@ -40,15 +40,23 @@ pub fn fuzz_routine_wcet(
     let _ = analyzer.analyze_program(&program);
     let static_cost = if let Some(target_name) = &config.target {
         analyzer
-            .routines
+            .analyzed_wcet
+            .borrow()
             .get(target_name)
-            .map(|r| r.taking_ms)
+            .copied()
             .unwrap_or(0)
     } else {
         0
     };
 
-    let ir = lower_program(&program);
+    let mut ir = lower_program(&program);
+    // Strip previous taking contract from target routine during simulation
+    // so existing contract doesn't artificially inflate measured TVM clock
+    if let Some(target_name) = &config.target {
+        if let Some(r) = ir.routines.get_mut(target_name) {
+            r.taking_ms = None;
+        }
+    }
     let mut durations = Vec::with_capacity(config.iterations);
 
     for _ in 0..config.iterations {

@@ -3,38 +3,27 @@
         id: string,
         reading: int
     }
-
     let cleanup_runs = 0
-
     decay_handler for SensorData {
-        cleanup_runs = cleanup_runs + 1
+        let cleanup_runs = cleanup_runs + 1
         print("WARNING: SensorData packet decayed! Executing decay_handler.")
     }
-
-    // Open a relativistic channel with capacity 5 and a 50ms message lease.
-    open_chan sensors_bus(5) decay_after 50ms
-
+    open_chan sensors_bus (5) decay_after 50ms
     print("Spawning concurrent pipelines: [sender, receiver]")
     split main into [sender, receiver]
 }
 
 @sender: {
-    // Sender emits sensor data packets at 0ms, 1ms, and 2ms.
     let packet1: SensorData = struct { id = "S1", reading = 100 }
-    chan_send sensors_bus(packet1)
-
-    let packet2: SensorData = struct { id = "S2", reading = 200 }
-    chan_send sensors_bus(packet2)
-
+    chan_send sensors_bus (packet1)
+    let packet2: SensorData = struct { reading = 200, id = "S2" }
+    chan_send sensors_bus (packet2)
     let packet3: SensorData = struct { id = "S3", reading = 300 }
-    chan_send sensors_bus(packet3)
-    
+    chan_send sensors_bus (packet3)
     print("Sender finished transmitting telemetry packets.")
 }
 
 @receiver: {
-    // Receiver simulates a delay (e.g. processing other tasks) by executing dummy assignments.
-    // This allows receiver's local clock to advance beyond the 50ms message lease.
     let d1 = 1
     let d2 = 2
     let d3 = 3
@@ -85,14 +74,9 @@
     let d48 = 48
     let d49 = 49
     let d50 = 50
-
     await_chan(sensors_bus)
-
-    // Iterating sequentially over the received telemetry data.
-    // pacing 20ms ensures each loop iteration takes exactly 20ms.
-    // max 100ms total budget is padded automatically at completion.
     let arr = [1, 2, 3]
-    for idx clone arr pacing 20ms (max 100ms) {
+    for idx clone arr pacing taking 20ms taking 100ms {
         let p = chan_recv(sensors_bus)
         match entropy(p) {
             Valid(v): {
@@ -101,10 +85,11 @@
             Decayed: {
                 print("Received expired packet.")
             }
-            Pending: {}
-            Consumed: {}
+            Pending: {
+            }
+            Consumed: {
+            }
         }
     }
-
     print("Receiver pipeline finished. Decay handler runs: " + cleanup_runs)
 }

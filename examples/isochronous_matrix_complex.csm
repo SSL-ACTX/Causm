@@ -1,48 +1,39 @@
 @0ms: {
-  routine compute_ema(consume current, consume prev) taking 20ms {
-    let weight = 2
-    let p1 = current * weight
-    let p2 = prev * 8
-    let sum = p1 + p2
-    let ema = sum / 10
-    yield ema
-  }
-
-  isolate dsp_pipeline {
-    require System.Log
-    require Chan.Manage
-    require Chan.Inbound(id="*")
-    require Chan.Outbound(id="*")
-    
-    enable memory(100KB)
-    slice 40ms
-    
-    open_chan sensors(16)
-    open_chan signals(16)
-
-    loop tick {
-      let packet = topology {
-        "s1": 150,
-        "s2": 155
-      }
-      chan_send sensors(packet)
-      break
+    routine compute_ema(consume current, consume prev) taking 20ms {
+        let weight = 2
+        let p1 = current * weight
+        let p2 = prev * 8
+        let sum = p1 + p2
+        let ema = sum / 10
+        yield ema
     }
-
-    loop tick {
-      let data = chan_recv(sensors)
-      let v1 = data["s1"]
-      let v2 = data["s2"]
-      let result = call compute_ema(v2, v1)
-      chan_send signals(result)
-      break
+    isolate dsp_pipeline {
+        enable memory(102400bytes)
+        slice 40ms
+        require System.Log
+        require Chan.Manage
+        require Chan.Inbound(id = "*")
+        require Chan.Outbound(id = "*")
+        open_chan sensors (16)
+        open_chan signals (16)
+        loop tick {
+            let packet = topology { s2 = 155, s1 = 150 }
+            chan_send sensors (packet)
+            break
+        }
+        loop tick {
+            let data = chan_recv(sensors)
+            let v1 = data["s1"]
+            let v2 = data["s2"]
+            let result = call compute_ema(v2, v1)
+            chan_send signals (result)
+            break
+        }
+        loop tick {
+            let final_val = chan_recv(signals)
+            let display = "Signal: " + final_val
+            print(display)
+            break
+        }
     }
-
-    loop tick {
-      let final_val = chan_recv(signals)
-      let display = "Signal: " + final_val
-      print(display)
-      break
-    }
-  }
 }

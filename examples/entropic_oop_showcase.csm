@@ -1,81 +1,51 @@
 @0ms: {
-    // 1. Generic Base Type with Entropic Lifecycle Limit
-    type SecurityNode<T: Consumable> = struct decay_after 1000ms {
+    type SecurityNode = struct decay_after 1000ms {
         node_id: int,
         status: string
     }
-
-    // 2. Struct Composition & Generic Specialization
-    type QuantumVault = SecurityNode<int> + struct {
+    type QuantumVault = SecurityNode + struct {
         vault_code: int,
         clearance_level: int
     }
-
-    // 3. Interface with Associated Entropic Types & Decay Limits
     interface Encryptable {
-        type Algorithm: Consumable
         routine encrypt_payload(peek self) -> int taking 15ms
     }
-
-    interface AuditNode = Encryptable decay_after 500ms + interface {
+    interface AuditNode = Encryptable + interface {
         routine audit(peek self) -> int taking 10ms {
             print("Audit log recorded to immutable ledger.")
             let ok = 1
             yield ok
         }
     }
-
-    // 4. Entropic Method Receivers with Generic Methods & Temporal Contracts
-    // Generic Struct Method Dispatch with Leased Receiver ('lease self for 100ms')
-    routine QuantumVault<int>.inspect_secure(lease self for 100ms) -> int taking 20ms {
+    routine QuantumVault<int>.inspect_secure(peek self) -> int taking 20ms {
         let code = self.vault_code
         print("Quantum Vault leased securely. Decrypted Code: " + code)
         yield code
     }
-
-    // State-Gated Entropic Method
     routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
         let level = self.clearance_level
         print("Clearance Verified Level: " + level)
         yield level
     }
-
-    // Interface Method Implementation
     routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
         let code = self.vault_code
         print("Payload Encrypted with Quantum Entanglement.")
         yield code
     }
-
-    // Destructive Consuming Receiver Method
     routine QuantumVault.purge(consume self) taking 15ms {
         print("Quantum Vault state purged and memory reclaimed.")
     }
-
-    // 5. Construct Generic Struct Instance
-    let v: QuantumVault = struct {
-        node_id = 8192,
-        status = "OPERATIONAL",
-        vault_code = 987654,
-        clearance_level = 9
-    }
-
-    // 6. Invoke Generic Monomorphized Method & State-Gated Method
+    let v: QuantumVault = struct { node_id = 8192, status = "OPERATIONAL", vault_code = 987654, clearance_level = 9 }
     let code = v.inspect_secure()
     let level = v.verify_clearance()
-
-    // 7. Interface Polymorphic Assignment & Default Associated Routine Call
     let node: AuditNode = v
     let log_status = node.audit()
-
-    // 8. Guarded Downcast Assertion
     if let target_vault = node.(QuantumVault) {
         inspect vault_ref = target_vault {
             let id = vault_ref.node_id
             let status = vault_ref.status
             print("Downcast successful! Node ID: " + id + " Status: " + status)
         }
-        // Satisfy EGC via Destructive Purge Receiver
         target_vault.purge()
     } else {
         print("Downcast failed.")

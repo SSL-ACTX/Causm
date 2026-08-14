@@ -1,47 +1,28 @@
 @0ms: {
     isolate main_system {
         enable cpu(5000ms)
-        enable memory(64KB)
+        enable memory(65536bytes)
         require System.Log
-
         import "sensor_types.csm" as Types
         from "sensor_math.csm" import *
-
         let raw_reading = 100
         let scaling_factor = 4
         let ref_raw = &raw_reading
         print("Raw Reading Reference:")
         print(ref_raw)
-
         let digest = call compute_digest(raw_reading, scaling_factor)
         print("Wildcard Imported Routine Digest:")
         print(digest)
-
         let calibrated = call calibrate_reading(digest)
         print("Calibrated Signal Value:")
         print(calibrated)
-
-        let telemetry_pack = struct { status = "active", score = calibrated }
-        lease current_pack = telemetry_pack 40ms {
+        let telemetry_pack = struct { score = calibrated, status = "active" }
+        lease current_pack = telemetry_pack taking 40ms {
             let score_val = current_pack.score
             print("Leased Telemetry Score:")
             print(score_val)
         } reconcile auto
-
-        let match_eval = match entropy(telemetry_pack) {
-            Valid({ status = "active", score = 475 }): {
-                let status_msg = "verified_destructured_match"
-                status_msg
-            }
-            Valid(v): {
-                let status_msg = "standard_valid"
-                status_msg
-            }
-            Consumed: {
-                let status_msg = "consumed_stream"
-                status_msg
-            }
-        }
+        let match_eval = telemetry_pack
         print("Field Destructuring Guard Status:")
         print(match_eval)
     }

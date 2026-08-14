@@ -133,6 +133,14 @@ enum Commands {
         #[arg(long, default_value_t = 15.0)]
         safety_margin: f64,
 
+        /// Tune all routines including already defined contracts (continuous re-tuning)
+        #[arg(long, short = 'a')]
+        all: bool,
+
+        /// Pinpoint a specific routine to re-tune
+        #[arg(long, short = 'r')]
+        routine: Option<String>,
+
         /// Dry-run mode: print proposed changes without modifying files
         #[arg(long)]
         dry_run: bool,
@@ -291,6 +299,8 @@ fn main() -> anyhow::Result<()> {
             files,
             iterations,
             safety_margin,
+            all,
+            routine,
             dry_run,
         }) => {
             for path in &files {
@@ -309,7 +319,16 @@ fn main() -> anyhow::Result<()> {
                             ..
                         } = &stmt.stmt
                         {
-                            if taking_ms.is_none()
+                            let should_tune =
+                                if let Some(ref target_routine) = routine {
+                                    target_routine == name
+                                } else if all {
+                                    true
+                                } else {
+                                    taking_ms.is_none()
+                                };
+
+                            if should_tune
                                 && source.contains(&format!("routine {}", name))
                             {
                                 let fuzzer_cfg =
@@ -322,8 +341,11 @@ fn main() -> anyhow::Result<()> {
                                 match causm_devtools::tuner::fuzzer::fuzz_routine_wcet(&source, &fuzzer_cfg) {
                                     Ok(res) => {
                                         println!(
-                                            "  \x1b[32m✔\x1b[0m Routine \x1b[1m{}\x1b[0m: P99.9 WCET = {}ms (+{:.0}% margin -> \x1b[1;33mtaking {}ms\x1b[0m)",
+                                            "  \x1b[32m✔\x1b[0m Routine \x1b[1m{}\x1b[0m ({} iterations, min: {}ms, max: {}ms): P99.9 WCET = {}ms (+{:.0}% margin -> \x1b[1;33mtaking {}ms\x1b[0m)",
                                             name,
+                                            res.sample_durations_ms.len(),
+                                            res.min_duration_ms,
+                                            res.max_duration_ms,
                                             res.max_duration_ms,
                                             safety_margin,
                                             res.p99_wcet_ms

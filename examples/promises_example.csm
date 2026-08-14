@@ -1,83 +1,75 @@
 @0ms: {
-  isolate gateway_init {
-    enable cpu(100ms)
-    enable memory(5KB)
-    require System.NetworkFetch
-    require System.Log
-
-    let primary_req = defer System.NetworkFetch(url="api.primary.internal", latency="20") deadline 40ms
-    // backup latency 60ms > deadline 50ms, so backup breaches deadline
-    let backup_req = defer System.NetworkFetch(url="api.backup.internal", latency="60") deadline 50ms
-
-    let v1 = ""
-    let v2 = ""
-
-    debug("Initialization complete. Promises are Pending.")
-  }
-
-  routine process_payload(peek payload) taking 10ms {
-    let processed = "Processed: " + payload
-    yield processed
-  }
+    isolate gateway_init {
+        enable cpu(100ms)
+        enable memory(5120bytes)
+        require System.NetworkFetch
+        require System.Log
+        let primary_req = defer System.NetworkFetch(latency = "20", url = "api.primary.internal") taking 406050ms
+        let backup_req = defer System.NetworkFetch(latency = "60", url = "api.backup.internal") taking 50ms
+        let v1 = ""
+        let v2 = ""
+        debug("Initialization complete. Promises are Pending.")
+    }
+    routine process_payload(peek payload) taking 10ms {
+        let processed = "Processed: " + payload
+        yield processed
+    }
 }
 
 @10ms: {
-  split main into [w1, w2]
+    split main into [w1, w2]
 }
 
 @w1: {
-  isolate primary_handler {
-    require System.Log
-    await(primary_req)
-
-    match entropy(primary_req) {
-      Valid(val): {
-        let primary_result = call process_payload("api_response_data")
-        v1 = "Primary Success: " + primary_result
-      }
-      Pending(p): {
-        v1 = "Primary Pending"
-      }
-      Consumed: {
-        v1 = "Primary Timeout"
-      }
-      Decayed(d): {
-        v1 = "Primary Decayed"
-      }
+    isolate primary_handler {
+        require System.Log
+        await(primary_req)
+        match entropy(primary_req) {
+            Valid(val): {
+                let primary_result = call process_payload("api_response_data")
+                let v1 = "Primary Success: " + primary_result
+            }
+            Decayed(d): {
+                let v1 = "Primary Decayed"
+            }
+            Pending(p): {
+                let v1 = "Primary Pending"
+            }
+            Consumed: {
+                let v1 = "Primary Timeout"
+            }
+        }
     }
-  }
 }
 
 @w2: {
-  isolate backup_handler {
-    require System.Log
-    await(backup_req)
-
-    match entropy(backup_req) {
-      Valid(val): {
-        let backup_result = call process_payload("backup_payload")
-        v2 = "Backup Success: " + backup_result
-      }
-      Pending(p): {
-        v2 = "Backup Pending"
-      }
-      Consumed: {
-        v2 = "Backup Failed: Deadline Exceeded"
-      }
-      Decayed(d): {
-        v2 = "Backup Decayed"
-      }
+    isolate backup_handler {
+        require System.Log
+        await(backup_req)
+        match entropy(backup_req) {
+            Valid(val): {
+                let backup_result = call process_payload("backup_payload")
+                let v2 = "Backup Success: " + backup_result
+            }
+            Decayed(d): {
+                let v2 = "Backup Decayed"
+            }
+            Pending(p): {
+                let v2 = "Backup Pending"
+            }
+            Consumed: {
+                let v2 = "Backup Failed: Deadline Exceeded"
+            }
+        }
     }
-  }
 }
 
 @80ms: {
-  merge [w1, w2] into main reconcile(v1=w1, v2=w2)
-
-  isolate telemetry {
-    require System.Log
-    print("Gateway Telemetry Report:")
-    print(v1)
-    print(v2)
-  }
+    merge [w1, w2] into main reconcile(v1=priority(w1), v2=priority(w2))
+    isolate telemetry {
+        require System.Log
+        print("Gateway Telemetry Report:")
+        print(v1)
+        print(v2)
+    }
 }
