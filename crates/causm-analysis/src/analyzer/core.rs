@@ -956,6 +956,15 @@ impl EntropicAnalyzer {
             Expression::TryUnwrap(expr) => {
                 format!("{}?", self.expr_snippet(expr))
             }
+            Expression::EnumVariant {
+                enum_name,
+                variant_name,
+                args,
+            } => {
+                let args_str: Vec<String> =
+                    args.iter().map(|a| self.expr_snippet(a)).collect();
+                format!("{}::{}({})", enum_name, variant_name, args_str.join(", "))
+            }
         }
     }
 

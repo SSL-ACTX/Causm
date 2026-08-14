@@ -476,6 +476,11 @@ macro_rules! expressions {
                 args: Vec<Expression>,
                 duration_ms: Option<u64>
             },
+            EnumVariant {
+                enum_name: String,
+                variant_name: String,
+                args: Vec<Expression>
+            },
             TryUnwrap(Box<Expression>),
             Null
         }

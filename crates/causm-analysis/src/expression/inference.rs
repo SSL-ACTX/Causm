@@ -245,6 +245,9 @@ pub(crate) fn infer_expression_type(
         Expression::IndexAccess { .. } => Ok(Type::Unknown),
         Expression::RefOp(expr) => infer_expression_type(analyzer, expr),
         Expression::Syscall { .. } => Ok(Type::Integer),
+        Expression::EnumVariant { enum_name, .. } => {
+            Ok(Type::Custom(enum_name.clone()))
+        }
         Expression::CloneOp(name) => match analyzer.get_variable_type(name) {
             Some(typ) => Ok(typ),
             None => Err(analyzer

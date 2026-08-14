@@ -114,5 +114,11 @@ pub fn estimate_expression_cost(
         | Expression::TryUnwrap(target)
         | Expression::RefOp(target) => estimate_expression_cost(analyzer, target),
         Expression::Syscall { duration_ms, .. } => duration_ms.unwrap_or(1),
+        Expression::EnumVariant { args, .. } => {
+            1 + args
+                .iter()
+                .map(|e| estimate_expression_cost(analyzer, e))
+                .sum::<u64>()
+        }
     }
 }

@@ -553,6 +553,12 @@ pub(crate) fn analyze_expression(
             analyze_expression(analyzer, target)?;
             Ok(())
         }
+        Expression::EnumVariant { args, .. } => {
+            for a in args {
+                analyze_expression(analyzer, a)?;
+            }
+            Ok(())
+        }
         Expression::TypeCast { expr, .. } | Expression::TryUnwrap(expr) => {
             analyze_expression(analyzer, expr)?;
             Ok(())
@@ -680,6 +686,12 @@ pub(crate) fn analyze_expression_nonconsuming(
         }
         Expression::TypeAssertion { target, .. } => {
             analyze_expression_nonconsuming(analyzer, target)?;
+            Ok(())
+        }
+        Expression::EnumVariant { args, .. } => {
+            for arg in args {
+                analyze_expression_nonconsuming(analyzer, arg)?;
+            }
             Ok(())
         }
         Expression::TypeCast { expr, .. } | Expression::TryUnwrap(expr) => {

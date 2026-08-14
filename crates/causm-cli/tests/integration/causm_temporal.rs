@@ -640,6 +640,8 @@ fn test_syntax_enum_declaration_parsing() -> anyhow::Result<()> {
                 Ready,
                 Busy(int)
             }
+            let s1 = SystemStatus::Ready()
+            let s2 = SystemStatus::Busy(42)
         }
     }
     "#;
@@ -650,6 +652,43 @@ fn test_syntax_enum_declaration_parsing() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
+
+    let s1_reg = ir.symbols.get("s1").unwrap().0;
+    let s2_reg = ir.symbols.get("s2").unwrap().0;
+
+    let p1 = vm.root_timeline.arena.peek(s1_reg).unwrap();
+    let p2 = vm.root_timeline.arena.peek(s2_reg).unwrap();
+
+    match p1 {
+        Payload::Struct(fields) => {
+            assert_eq!(
+                fields.get("tag"),
+                Some(&causm_core::value::EntropicState::Valid(Payload::String(
+                    "Ready".to_string()
+                )))
+            );
+        }
+        _ => panic!("Expected struct representation for enum variant"),
+    }
+
+    match p2 {
+        Payload::Struct(fields) => {
+            assert_eq!(
+                fields.get("tag"),
+                Some(&causm_core::value::EntropicState::Valid(Payload::String(
+                    "Busy".to_string()
+                )))
+            );
+            assert_eq!(
+                fields.get("_0"),
+                Some(&causm_core::value::EntropicState::Valid(Payload::Integer(
+                    42
+                )))
+            );
+        }
+        _ => panic!("Expected struct representation for enum variant"),
+    }
+
     Ok(())
 }
 

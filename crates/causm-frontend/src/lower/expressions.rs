@@ -247,6 +247,30 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::EnumVariant {
+            enum_name,
+            variant_name,
+            args,
+        } => {
+            let tag_reg = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::LoadString {
+                dest: tag_reg,
+                value: variant_name.clone(),
+            });
+            let mut fields_map = HashMap::new();
+            fields_map.insert("tag".to_string(), tag_reg);
+            for (idx, arg_expr) in args.iter().enumerate() {
+                let arg_reg = lower_expression(ctx, arg_expr);
+                fields_map.insert(format!("_{}", idx), arg_reg);
+            }
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::StructLit {
+                dest,
+                fields: fields_map,
+                type_name: Some(format!("{}::{}", enum_name, variant_name)),
+            });
+            dest
+        }
         Expression::Deferred {
             capability,
             params,

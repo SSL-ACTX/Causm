@@ -24,9 +24,21 @@
             accum = accum + step * 2
         }
 
-        let node_state = NodeStatus.Active(accum)
+        let state_active = NodeStatus::Active(clone(accum))
+        let state_degraded = NodeStatus::Degraded("high_latency")
+        let state_offline = NodeStatus::Offline()
+
         print("Node ID:")
         print(node_id)
+
+        print("Constructed Enum Variant 1 (Active):")
+        print(state_active)
+
+        print("Constructed Enum Variant 2 (Degraded):")
+        print(state_degraded)
+
+        print("Constructed Enum Variant 3 (Offline):")
+        print(state_offline)
 
         print("Session Token:")
         print(auth_session)
