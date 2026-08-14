@@ -17,12 +17,12 @@
         anchor speculation_start
         let first = p.a
         commit {
-            let merged = struct { y = "inferred", x = first }
+            let merged = struct { x = first, y = "inferred" }
             yield merged
         }
         collapse
     } fallback {
-        let merged = struct { x = "failed", y = "" }
+        let merged = struct { y = "", x = "failed" }
         yield merged
     }
 }
@@ -40,7 +40,7 @@
         let key = item.key
         let value = item_copy.value
         commit {
-            let result = struct { value = value, key = key }
+            let result = struct { key = key, value = value }
         }
     }
 }

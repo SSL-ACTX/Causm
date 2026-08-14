@@ -1,5 +1,5 @@
 @0ms: {
-    let account = topology { status = "active", balance = 100 }
+    let account = topology { balance = 100, status = "active" }
     split main into [thief, banker]
 }
 
@@ -9,14 +9,14 @@
         isolate thief_isolate {
             require System.Log
             let cash = account["balance"]
-            log("Thief: I took the balance")
+            debug("Thief: I took the balance")
         }
     }
     @banker: {
         isolate banker_isolate {
             require System.Log
             account.status = "frozen"
-            log("Banker: Freezing account")
+            debug("Banker: Freezing account")
         }
     }
 }
@@ -27,13 +27,13 @@
         require System.Log
         match entropy(account["balance"]) {
             Valid(v): {
-                log("Restored")
+                debug("Restored")
             }
             Decayed(d): {
-                log("Partial decay")
+                debug("Partial decay")
             }
             Consumed: {
-                log("Balance is gone")
+                debug("Balance is gone")
             }
         }
     }

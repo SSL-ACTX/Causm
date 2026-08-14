@@ -1,5 +1,5 @@
 @0ms: {
-    let system_state = struct { entropy_level = 0.042, metrics = struct { requests = 1500, errors = 2 }, status = "OPERATIONAL" }
+    let system_state = struct { metrics = struct { requests = 1500, errors = 2 }, status = "OPERATIONAL", entropy_level = 0.042 }
     print("--- Initial System State ---")
     debug(system_state)
     print("Initiating 20ms lease for validation...")

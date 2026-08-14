@@ -42,7 +42,7 @@
         print("Entropic Guard Verification:")
         print(match_result)
         let endpoint = "https://postman-echo.com/get"
-        let pending_req = defer System.NetworkFetch(url = "endpoint", latency = "20") taking 2000ms
+        let pending_req = defer System.NetworkFetch(latency = "20", url = "endpoint") taking 2000ms
         await(pending_req)
         print("Network request completed successfully:")
         print(clone(pending_req))

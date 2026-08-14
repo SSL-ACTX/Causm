@@ -16,7 +16,7 @@
         let calibrated = call calibrate_reading(digest)
         print("Calibrated Signal Value:")
         print(calibrated)
-        let telemetry_pack = struct { score = calibrated, status = "active" }
+        let telemetry_pack = struct { status = "active", score = calibrated }
         lease current_pack = telemetry_pack taking 40ms {
             let score_val = current_pack.score
             print("Leased Telemetry Score:")
