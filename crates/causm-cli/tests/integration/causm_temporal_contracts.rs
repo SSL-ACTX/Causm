@@ -163,4 +163,97 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_temporal_static_inference_taking_wildcard_execution(
+    ) -> anyhow::Result<()> {
+        let code = r#"
+@main: {
+  routine compute_sum(peek a: int, peek b: int) -> int taking _ {
+    let sum = a + b
+    yield sum
+  }
+
+  let x = 10
+  let y = 20
+  let res = call compute_sum(x, y)
+}
+"#;
+        let program = parser::parse_causm(code)?;
+        let mut analyzer = EntropicAnalyzer::new();
+        analyzer.analyze_program(&program)?;
+
+        let ir = causm_frontend::lower::lower_program(&program);
+        let mut vm = Vm::new();
+        vm.execute_program(&ir)?;
+
+        let res_reg = ir.symbols.get("res").expect("res symbol not found").0;
+        let val = vm.root_timeline.arena.peek(res_reg);
+        match val {
+            Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 30),
+            _ => panic!("Expected compute_sum to produce 30, got {:?}", val),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_temporal_interface_contract_subtyping_satisfaction_and_violation(
+    ) -> anyhow::Result<()> {
+        // 1. Success scenario: concrete routine inferred cost <= interface budget
+        let code_ok = r#"
+@0ms: {
+  interface FastWorker {
+    routine work(peek self) -> int (taking 10ms)
+  }
+
+  type Task = struct { val: int }
+
+  routine Task.work(peek self) -> int taking _ {
+    let v = self.val
+    yield v
+  }
+
+  let t: Task = struct { val = 42 }
+  let w: FastWorker = t
+  let res = w.work()
+}
+"#;
+        let program = parser::parse_causm(code_ok)?;
+        let mut analyzer = EntropicAnalyzer::new();
+        analyzer.analyze_program(&program)?;
+
+        let ir = causm_frontend::lower::lower_program(&program);
+        let mut vm = Vm::new();
+        vm.execute_program(&ir)?;
+
+        let res_reg = ir.symbols.get("res").expect("res symbol not found").0;
+        let res_val = vm.root_timeline.arena.peek(res_reg);
+        match res_val {
+            Some(causm_core::value::Payload::Integer(v)) => assert_eq!(v, 42),
+            _ => panic!("Expected work to produce 42, got {:?}", res_val),
+        }
+
+        // 2. Failure scenario: concrete routine explicit or inferred cost exceeds interface budget
+        let code_fail = r#"
+@0ms: {
+  interface TightWorker {
+    routine work(peek self) -> int (taking 1ms)
+  }
+
+  type HeavyTask = struct { val: int }
+
+  routine HeavyTask.work(peek self) -> int taking 5ms {
+    let a = self.val + 1
+    let b = a + 1
+    yield b
+  }
+
+  let t: HeavyTask = struct { val = 1 }
+  let w: TightWorker = t
+}
+"#;
+        let res_fail = run_causm(code_fail);
+        assert!(res_fail.is_err(), "Expected type compatibility failure when routine budget exceeds interface contract");
+        Ok(())
+    }
 }

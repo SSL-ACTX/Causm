@@ -71,7 +71,24 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .as_ref()
                     .map(causm_core::types::Type::from_typename)
                     .unwrap_or(causm_core::types::Type::Unknown),
-                taking_ms: *taking_ms,
+                taking_ms: taking_ms.or_else(|| {
+                    let cost = causm_core::Statement::RoutineDef {
+                        name: name.clone(),
+                        params: params.clone(),
+                        return_type: return_type.clone(),
+                        taking_ms: None,
+                        state_constraint: state_constraint.clone(),
+                        body: body.clone(),
+                    }
+                    .estimate_cost(|b| {
+                        b.iter()
+                            .map(|s| {
+                                s.stmt.estimate_cost(|inner_b| inner_b.len() as u64)
+                            })
+                            .sum::<u64>()
+                    });
+                    Some(cost.max(1))
+                }),
                 foreign_binding: None,
                 instructions: sub_ctx.instructions,
                 spans: sub_ctx.spans,

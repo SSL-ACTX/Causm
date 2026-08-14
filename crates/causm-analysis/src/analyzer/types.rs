@@ -61,6 +61,8 @@ pub enum SemanticErrorKind {
     ArgumentCountMismatch(String),
     #[error("Timeline Violation: Branch '@{0}' is inactive, has been merged, or has not been split yet.")]
     InactiveTimeline(String),
+    #[error("Temporal Contract Violated: routine '{0}' inferred cost {1}ms exceeds interface budget {2}ms")]
+    TemporalContractViolated(String, u64, u64),
 }
 
 #[derive(Debug)]
