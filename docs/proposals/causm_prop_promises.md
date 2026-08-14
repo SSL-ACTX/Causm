@@ -1,6 +1,14 @@
-# Proposal: Relativistic I/O and Entropic Promises
+# Proposal: Relativistic I/O, Entropic Promises, and Timeline Suspension Protocols
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** I/O Model & Asynchronous Contracts  
+
+---
 
 This document specifies the formal requirements for managing external, non-deterministic input/output (I/O) within the Causm Virtual Machine. It introduces the **Pending** entropic state and the protocol for **Timeline Suspension** to interface with external environments without compromising internal causal determinism.
+
+---
 
 ## 1. The I/O Determinism Challenge
 Within the Causm framework, every operation must possess a predictable temporal cost. External I/O operations inherently violate this principle, as their Worst-Case Execution Time (WCET) is frequently unbounded. Consequently, I/O operations cannot be evaluated synchronously and must be decoupled from the `local_clock` accounting.

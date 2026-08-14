@@ -1,5 +1,11 @@
 # Proposal: Module System, Code Import Protocols, and Entropic Namespace Resolution
 
+**Status:** Approved & Implemented  
+**Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
+**Category:** Modular Systems & Compilation Pipeline  
+
+---
+
 This document specifies the formal requirements for modularizing Causm programs across multiple `.csm` source files. It introduces the **Module System**, the **Import Protocol**, and **Entropic Capability Propagation** to enable modular software composition without compromising timeline isolation, formal Z3 verification, or entropic state determinism.
 
 ---

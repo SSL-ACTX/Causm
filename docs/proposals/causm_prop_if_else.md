@@ -1,6 +1,14 @@
-# Proposal: Causm Deterministic Branching and Causal Loops
+# Proposal: Causm Deterministic Branching, Temporal Equalization, and Causal Loops
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Control Flow & Temporal Invariance  
+
+---
 
 This document specifies the formal requirements for control flow within the Causm Virtual Machine, ensuring that branching logic maintains temporal invariance and entropic stability.
+
+---
 
 ## 1. Deterministic Temporal Equalization (The Padding Protocol)
 Within the Causm framework, temporal resources are strcausmy governed. Conventional branching mechanisms (if/else) typically introduce temporal jitter, as divergent execution paths may possess distinct durations. Causm eliminates this variability through **Temporal Equalization**.

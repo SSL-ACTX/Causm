@@ -1,4 +1,10 @@
-# Causm Advanced Entropic OOP Proposal & Roadmap
+# Proposal: Advanced Entropic Object-Oriented Programming (Protocols, Traits & Behavioral Inheritance)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Language Core & OOP Semantics  
+
+---
 
 This document outlines the architecture for extending Causm's **Entropic Object Orientation** with Monomorphized Generic Method Dispatch, Associated Lifecycle Types, and Entropic Interface Constraints.
 

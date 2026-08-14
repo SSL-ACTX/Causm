@@ -1,4 +1,10 @@
-# Proposal: Advanced Causal Mechanics and Temporal Refinements
+# Proposal: Advanced Causal Mechanics (Isochronous Multi-Threading, Speculative Replay & Entropic Sandboxing)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Runtime Engine & Causal Verification  
+
+---
 
 This document specifies a suite of high-level enhancements for the Causm, focusing on cross-timeline synchronization, type-level temporal enforcement, and acausal diagnostic protocols.
 

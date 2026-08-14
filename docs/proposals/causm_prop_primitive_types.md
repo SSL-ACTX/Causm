@@ -1,4 +1,10 @@
-# Causm Primitive Numerical Types Expansion Proposal
+# Proposal: Explicit Sized Primitive Numerical Types (`i8`-`i64`, `u8`-`u64`, `f32`, `f64`)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Type System Core  
+
+---
 
 This proposal specifies the extension of Causm's type system to support explicit sized integer (`i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`) and floating-point (`f32`, `f64`) primitive types.
 

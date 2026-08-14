@@ -1,6 +1,14 @@
-# Proposal: The Isochronous Matrix (Fixed-Slice Scheduling)
+# Proposal: The Isochronous Matrix (Fixed-Slice Scheduling and Tick-Based Execution)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** VM Scheduling & Temporal Runtime  
+
+---
 
 This document specifies the architecture for high-performance execution within the Causm. By utilizing **Forced Fixed Slices (Ticks)**, the Virtual Machine (VM) eliminates runtime padding overhead and channel locking mechanisms, facilitating near-native execution speeds while maintaining absolute causal determinism.
+
+---
 
 ## 1. Limitations of Continuous Temporal Accounting
 Previous Causm implementations utilized instruction-level temporal tracking. If Branch A required 4ms and Branch B required 7ms, the VM dynamically applied 3ms of temporal padding to Branch A. 

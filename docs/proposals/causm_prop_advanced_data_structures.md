@@ -1,4 +1,10 @@
-# Proposal: Causm Advanced Data Structures (ADTs, History Buffers, and Tuples)
+# Proposal: Causm Advanced Data Structures (Nested Topologies, Tagged Unions, and Homogeneous Slices)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Type System & Data Representation  
+
+---
 
 This document specifies the design requirements and formal semantics for advanced data representation constructs within the Causm programming language, expanding capabilities beyond standard structs to support polymorphic states, causal timelines, and developer ergonomics.
 

@@ -1,6 +1,14 @@
-# Proposal: Entropic Iteration and Paced Loops
+# Proposal: Entropic Iteration, Paced Loops, and Scatter-Gather Branching
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Control Flow & Iterative Mechanics  
+
+---
 
 This document specifies the formal requirements for collection iteration within the Causm. It introduces **Destructive Iteration**, **Temporal Pacing**, and **Scatter-Gather Branching** to ensure that iterative constructs remain entropically safe and temporally deterministic.
+
+---
 
 ## 1. The Entropic Iterator (`consume` vs. `clone`)
 In conventional programming languages, iterative access is typically a passive read operation. Within the Causm framework, memory is entropic, necessitating an explicit declaration of the entropic impact of iteration on the source structure.

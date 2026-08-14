@@ -1,6 +1,14 @@
-# Proposal: Causm Routines and Temporal Contracts
+# Proposal: Causm Routines, Temporal Contracts, and Entropic Signatures
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Procedural Execution & WCET Bounds  
+
+---
 
 This document specifies the formal requirements for procedural execution and code reuse within the Causm. It introduces **Temporal Contracts** and **Entropic Signatures** to ensure that routine invocation does not introduce non-deterministic latency or opaque memory consumption.
+
+---
 
 ## 1. The Temporal Execution Contract (`taking Nms`)
 

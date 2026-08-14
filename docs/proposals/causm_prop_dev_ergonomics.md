@@ -1,6 +1,14 @@
-# Proposal: Developer Ergonomics and Causal Diagnostics
+# Proposal: Developer Ergonomics, Language Server Diagnostics, and Visual Causality
+
+**Status:** Approved & In Progress  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Developer Tooling & LSP Architecture  
+
+---
 
 This document specifies structural language enhancements and diagnostic tooling designed to mitigate the cognitive load associated with Entropic Memory and Temporal Pacing, ensuring the usability of Causm without compromising its deterministic guarantees.
+
+---
 
 ## 1. Entropic Language Server Protocol (Visual Causality)
 Managing entropic state manually increases the probability of developmental errors. The **Entropic Language Server Protocol (LSP)** provides real-time visualization of variable states.

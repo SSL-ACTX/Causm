@@ -1,4 +1,10 @@
-# Causm Numerical Type Casting & Array Broadcasting Proposal
+# Proposal: Explicit Numerical Type Casting (`as`) and Elementwise Array Broadcasting
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Type System & Numerical Computation  
+
+---
 
 This proposal specifies explicit numerical type casting (`as`) and elementwise array broadcasting for the Causm programming language.
 

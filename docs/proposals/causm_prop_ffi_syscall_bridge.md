@@ -1,7 +1,7 @@
 # Proposal: Causm Foreign Function Interface (FFI) and Low-Level Syscall Bridge
 
-**Status:** Approved & Active Implementation  
-**Author:** Causm Architecture Team  
+**Status:** Approved & Implemented  
+**Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Language Core & Systems Integration  
 
 ---

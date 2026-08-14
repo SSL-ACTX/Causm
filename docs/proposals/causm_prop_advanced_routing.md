@@ -1,6 +1,14 @@
-# Proposal: Causm Advanced Routing (Select and Entropic Match)
+# Proposal: Advanced Temporal Routing (Isochronous Channels, Multiplexing & Dynamic Timelines)
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Concurrency & Channel Architecture  
+
+---
 
 This document specifies the formal requirements for advanced routing control flow within the Causm. It introduces **Temporal Multiplexing** for communication channels and **State-Based Routing** for entropic memory management.
+
+---
 
 ## 1. Relativistic Temporal Multiplexing (`select`)
 

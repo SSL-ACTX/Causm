@@ -1,6 +1,14 @@
-# Proposal: Causm Speculative Execution Branches
+# Proposal: Causm Speculative Execution Branches and Zero Entropic Leakage
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Transactional Control Flow & Speculation  
+
+---
 
 This document specifies the formal requirements for transactional execution within the Causm Virtual Machine. It introduces **Speculative Control Flow**, facilitating operations that may incur failure or exceed temporal constraints to execute securely without compromising the parent timeline's entropic state.
+
+---
 
 ## 1. Limitations of Conventional Exception Handling
 If an operation within Causm consumes a variable but fails prior to the conclusion of its logic, the variable is permanently lost, resulting in cascading causal failures. Causm requires "Zero Entropic Leakage" upon execution failure.

@@ -1,6 +1,14 @@
 # Proposal: Temporal Leases and Transient Entropic Borrowing
 
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Entropic Memory & Borrowing Semantics  
+
+---
+
 This document specifies the formal requirements for introducing **Temporal Leases** into the Causm. This mechanism provides transient, time-bound access to entropic memory structures, mitigating the necessity for resource-intensive explicit replication (`clone`) while preserving the deterministic security guarantees of the Entropic Memory Model.
+
+---
 
 ## 1. The Challenge of Transient Access
 Currently, accessing a value within Causm inherently triggers structural decay or complete consumption. If a timeline requires read-only access to a data structure (e.g., for validation or metric gathering) without destroying the source, the developer is forced to explicitly `clone()` the data. 

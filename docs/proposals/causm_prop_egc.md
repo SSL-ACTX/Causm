@@ -1,6 +1,14 @@
-# Proposal: Entropic Garbage Collection (EGC)
+# Proposal: Entropic Garbage Collection (EGC) and Zero-Jitter Deterministic Deallocation
+
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Memory Architecture & Arena Lifecycle  
+
+---
 
 This document specifies the formal requirements for memory reclamation within the Causm Virtual Machine. It introduces **Zero-Jitter Deallocation**, utilizing entropic state tracking to facilitate deterministic memory reclamation without the non-deterministic pauses associated with conventional Garbage Collection (GC) mechanisms.
+
+---
 
 ## 1. Limitations of Conventional Memory Management
 Traditional memory management strategies are incompatible with Causm's requirement for absolute temporal determinism:

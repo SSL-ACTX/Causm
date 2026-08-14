@@ -1,5 +1,11 @@
 # Proposal: Causm Advanced Loop Constructs (Entropic, Event-Driven, and Timed Iterations)
 
+**Status:** Approved & Implemented  
+**Author:** Seuriin <seuriin@gmail.com>  
+**Category:** Control Flow & Iteration  
+
+---
+
 This document specifies the design requirements and execution semantics for advanced loop constructs in the Causm programming language. These structures enhance deterministic temporal execution, entropic safety, and developer ergonomics.
 
 ---
