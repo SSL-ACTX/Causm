@@ -852,3 +852,37 @@ fn test_syntax_reference_operator_shorthand() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_entropy_match_struct_field_pattern_destructuring() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        isolate test_destructuring {
+            let item = struct { status = "active", score = 100 }
+            let res = 0
+            match entropy(item) {
+                Valid({ status = "active", score = 100 }): {
+                    res = 777
+                }
+                Consumed: {
+                    res = 0
+                }
+            }
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_reg = ir.symbols.get("res").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(res_reg),
+        Some(causm_core::value::Payload::Integer(777))
+    );
+    Ok(())
+}

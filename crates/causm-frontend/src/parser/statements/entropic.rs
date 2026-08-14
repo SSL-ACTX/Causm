@@ -47,18 +47,26 @@ pub fn parse_entropic_stmt(pair: Pair<Rule>) -> Statement {
                                                 .unwrap()
                                                 .as_str()
                                                 .to_string();
-                                            let val_pair =
-                                                field_pat_inner.next().unwrap();
-                                            let pattern_val = if val_pair.as_rule()
-                                                == Rule::entropic_state_name
+                                            let pattern_val = if let Some(val_pair) =
+                                                field_pat_inner.next()
                                             {
-                                                PatternValue::State(
-                                                    val_pair.as_str().to_string(),
-                                                )
+                                                if val_pair.as_rule()
+                                                    == Rule::entropic_state_name
+                                                {
+                                                    PatternValue::State(
+                                                        val_pair
+                                                            .as_str()
+                                                            .to_string(),
+                                                    )
+                                                } else {
+                                                    PatternValue::Expr(
+                                                        parse_expression(val_pair),
+                                                    )
+                                                }
                                             } else {
-                                                PatternValue::Expr(parse_expression(
-                                                    val_pair,
-                                                ))
+                                                PatternValue::State(
+                                                    "Valid".to_string(),
+                                                )
                                             };
                                             fields.insert(field_name, pattern_val);
                                         }

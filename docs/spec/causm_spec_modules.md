@@ -27,17 +27,18 @@ import "<relative_path>.csm" as <Alias>
 import "sensor/driver.csm" as SensorLib
 ```
 
-### 2.2 Named Symbol Imports
+### 2.2 Named & Wildcard Symbol Imports
 
-Imports specific routines, custom types, or state declarations directly into the calling scope.
+Imports specific routines, custom types, or all exported symbols (`*`) directly into the calling scope.
 
 ```causm
-from "<relative_path>.csm" import <Symbol> [as <Alias>]
+from "<relative_path>.csm" import (<Symbol> [as <Alias>] | *)
 ```
 
-**Example:**
+**Examples:**
 ```causm
 from "module_sensor_lib.csm" import compute_telemetry_digest, SensorState as State
+from "sensor_math.csm" import *
 ```
 
 ---
@@ -47,7 +48,7 @@ from "module_sensor_lib.csm" import compute_telemetry_digest, SensorState as Sta
 ```ebnf
 import_stmt       = "import", string_literal, [ "as", identifier ] ;
 from_import_stmt  = "from", string_literal, "import", import_symbol_list ;
-import_symbol_list= import_symbol, { ",", import_symbol }, [ "," ] ;
+import_symbol_list= "*" | ( import_symbol, { ",", import_symbol }, [ "," ] ) ;
 import_symbol     = identifier, [ "as", identifier ] ;
 ```
 

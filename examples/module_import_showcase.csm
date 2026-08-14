@@ -4,8 +4,8 @@
         enable memory(64KB)
         require System.Log
 
-        import "sensor_math.csm" as Math
-        from "sensor_types.csm" import SensorMode
+        import "sensor_types.csm" as Types
+        from "sensor_math.csm" import *
 
         let raw_reading = 100
         let scaling_factor = 4
@@ -13,36 +13,36 @@
         print("Raw Reading Reference:")
         print(ref_raw)
 
-        let digest = call Math.compute_digest(raw_reading, scaling_factor)
-        print("Computed Telemetry Digest:")
+        let digest = call compute_digest(raw_reading, scaling_factor)
+        print("Wildcard Imported Routine Digest:")
         print(digest)
 
-        let calibrated = call Math.calibrate_reading(digest)
+        let calibrated = call calibrate_reading(digest)
         print("Calibrated Signal Value:")
         print(calibrated)
 
-        let telemetry_pack = struct { status = "operational", score = calibrated }
+        let telemetry_pack = struct { status = "active", score = calibrated }
         lease current_pack = telemetry_pack 40ms {
             let score_val = current_pack.score
             print("Leased Telemetry Score:")
             print(score_val)
         } reconcile auto
 
-        let entropic_status = match entropy(raw_reading) {
-            Valid(v) if v == 100: {
-                let s = "verified_high_precision"
-                s
+        let match_eval = match entropy(telemetry_pack) {
+            Valid({ status = "active", score = 475 }): {
+                let status_msg = "verified_destructured_match"
+                status_msg
             }
             Valid(v): {
-                let s = "standard_valid"
-                s
+                let status_msg = "standard_valid"
+                status_msg
             }
             Consumed: {
-                let s = "consumed_stream"
-                s
+                let status_msg = "consumed_stream"
+                status_msg
             }
         }
-        print("Entropic Verification Status:")
-        print(entropic_status)
+        print("Field Destructuring Guard Status:")
+        print(match_eval)
     }
 }

@@ -67,7 +67,8 @@ statement = {
 
 import_stmt = { "import" ~ string_literal ~ ("as" ~ identifier)? }
 from_import_stmt = { "from" ~ string_literal ~ "import" ~ import_symbol_list }
-import_symbol_list = { import_symbol ~ ("," ~ import_symbol)* ~ ","? }
+import_symbol_list = { wildcard_symbol | import_symbol ~ ("," ~ import_symbol)* ~ ","? }
+wildcard_symbol = { "*" }
 import_symbol = { identifier ~ ("as" ~ identifier)? }
 
 expression_stmt = { expression }
@@ -104,7 +105,7 @@ guard_clause = { "if" ~ expression }
 entropy_branch = { "Valid" ~ ("(" ~ identifier_or_pattern ~ ")")? ~ guard_clause? ~ ":" ~ statement_block | "Decayed" ~ ("(" ~ identifier_or_pattern ~ ")")? ~ guard_clause? ~ ":" ~ statement_block | "Pending" ~ ("(" ~ identifier_or_pattern ~ ")")? ~ guard_clause? ~ ":" ~ statement_block | "Consumed" ~ guard_clause? ~ ":" ~ statement_block }
 identifier_or_pattern = { identifier | "{" ~ field_pattern_list ~ "}" }
 field_pattern_list = { field_pattern ~ ("," ~ field_pattern)* ~ ","? }
-field_pattern = { identifier ~ "=" ~ (entropic_state_name | expression) }
+field_pattern = { identifier ~ ("=" ~ (entropic_state_name | expression))? }
 entropic_state_name = { "Valid" | "Decayed" | "Pending" | "Consumed" }
 
 break_stmt = { "break" }

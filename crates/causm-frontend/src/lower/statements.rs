@@ -299,13 +299,18 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         sorted_fields.sort_by_key(|(k, _)| *k);
                         for (field_name, val) in sorted_fields {
                             if let PatternValue::Expr(expr) = val {
-                                let val_reg = lower_expression(ctx, expr);
+                                let idx_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::LoadString {
+                                    dest: idx_reg,
+                                    value: field_name.clone(),
+                                });
                                 let field_reg = ctx.alloc_reg();
-                                ctx.push(Instruction::FieldAccess {
+                                ctx.push(Instruction::IndexAccess {
                                     dest: field_reg,
                                     target: target_reg,
-                                    field: field_name.clone(),
+                                    index: idx_reg,
                                 });
+                                let val_reg = lower_expression(ctx, expr);
                                 let cmp_reg = ctx.alloc_reg();
                                 ctx.push(Instruction::BinaryOp {
                                     dest: cmp_reg,
@@ -364,13 +369,18 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         sorted_fields.sort_by_key(|(k, _)| *k);
                         for (field_name, val) in sorted_fields {
                             if let PatternValue::Expr(expr) = val {
-                                let val_reg = lower_expression(ctx, expr);
+                                let idx_reg = ctx.alloc_reg();
+                                ctx.push(Instruction::LoadString {
+                                    dest: idx_reg,
+                                    value: field_name.clone(),
+                                });
                                 let field_reg = ctx.alloc_reg();
-                                ctx.push(Instruction::FieldAccess {
+                                ctx.push(Instruction::IndexAccess {
                                     dest: field_reg,
                                     target: target_reg,
-                                    field: field_name.clone(),
+                                    index: idx_reg,
                                 });
+                                let val_reg = lower_expression(ctx, expr);
                                 let cmp_reg = ctx.alloc_reg();
                                 ctx.push(Instruction::BinaryOp {
                                     dest: cmp_reg,
@@ -429,13 +439,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         sorted_fields.sort_by_key(|(k, _)| *k);
                         for (field_name, val) in sorted_fields {
                             if let PatternValue::Expr(expr) = val {
-                                let val_reg = lower_expression(ctx, expr);
                                 let field_reg = ctx.alloc_reg();
                                 ctx.push(Instruction::FieldAccess {
                                     dest: field_reg,
                                     target: target_reg,
                                     field: field_name.clone(),
                                 });
+                                let val_reg = lower_expression(ctx, expr);
                                 let cmp_reg = ctx.alloc_reg();
                                 ctx.push(Instruction::BinaryOp {
                                     dest: cmp_reg,

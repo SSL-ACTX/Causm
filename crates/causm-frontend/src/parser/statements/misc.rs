@@ -102,10 +102,15 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
             let mut symbols = Vec::new();
             if let Some(list) = inner.next() {
                 for sym_pair in list.into_inner() {
-                    let mut sym_inner = sym_pair.into_inner();
-                    let name = sym_inner.next().unwrap().as_str().to_string();
-                    let sym_alias = sym_inner.next().map(|p| p.as_str().to_string());
-                    symbols.push((name, sym_alias));
+                    if sym_pair.as_rule() == Rule::wildcard_symbol {
+                        symbols.push(("*".to_string(), None));
+                    } else {
+                        let mut sym_inner = sym_pair.into_inner();
+                        let name = sym_inner.next().unwrap().as_str().to_string();
+                        let sym_alias =
+                            sym_inner.next().map(|p| p.as_str().to_string());
+                        symbols.push((name, sym_alias));
+                    }
                 }
             }
             Statement::FromImport {

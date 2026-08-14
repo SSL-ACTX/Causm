@@ -216,24 +216,20 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             fn unwrap_to_inner(
                 p: pest::iterators::Pair<Rule>,
             ) -> pest::iterators::Pair<Rule> {
-                match p.as_rule() {
-                    Rule::expression
-                    | Rule::pipeline_expr
-                    | Rule::relational_expr
-                    | Rule::additive_expr
-                    | Rule::multiplicative_expr
-                    | Rule::power_expr
-                    | Rule::unary_expr
-                    | Rule::primary_expr
-                    | Rule::base_expr => {
-                        if let Some(child) = p.into_inner().next() {
-                            unwrap_to_inner(child)
-                        } else {
-                            unreachable!()
-                        }
-                    }
-                    _ => p,
+                if p.as_rule() == Rule::match_entropy_expr
+                    || p.as_rule() == Rule::match_entropy_stmt
+                {
+                    return p;
                 }
+                for child in p.clone().into_inner() {
+                    let res = unwrap_to_inner(child);
+                    if res.as_rule() == Rule::match_entropy_expr
+                        || res.as_rule() == Rule::match_entropy_stmt
+                    {
+                        return res;
+                    }
+                }
+                p
             }
 
             let inner_val = unwrap_to_inner(value_pair.clone());
