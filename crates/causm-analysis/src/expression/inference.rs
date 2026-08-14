@@ -298,5 +298,6 @@ pub(crate) fn infer_expression_type(
                 other => Ok(other),
             }
         }
+        Expression::FString(_) => Ok(Type::String),
     }
 }

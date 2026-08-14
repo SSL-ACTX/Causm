@@ -1,5 +1,5 @@
 use super::context::LoweringContext;
-use causm_core::{Expression, TypeFieldDef};
+use causm_core::{Expression, FStringPart, TypeFieldDef};
 use causm_ir::Reg;
 use std::collections::HashMap;
 
@@ -318,5 +318,51 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             dest
         }
         Expression::RefOp(expr) => lower_expression(ctx, expr),
+        Expression::FString(parts) => {
+            // Build a concat chain across all parts.
+            // Empty fstring → empty string reg.
+            if parts.is_empty() {
+                let dest = ctx.alloc_reg();
+                ctx.push(causm_ir::Instruction::LoadString {
+                    dest,
+                    value: String::new(),
+                });
+                return dest;
+            }
+            // Lower first part into accumulator
+            let mut acc = match &parts[0] {
+                FStringPart::Text(t) => {
+                    let dest = ctx.alloc_reg();
+                    ctx.push(causm_ir::Instruction::LoadString {
+                        dest,
+                        value: t.clone(),
+                    });
+                    dest
+                }
+                FStringPart::Expr(e) => lower_expression(ctx, e),
+            };
+            for part in &parts[1..] {
+                let rhs = match part {
+                    FStringPart::Text(t) => {
+                        let dest = ctx.alloc_reg();
+                        ctx.push(causm_ir::Instruction::LoadString {
+                            dest,
+                            value: t.clone(),
+                        });
+                        dest
+                    }
+                    FStringPart::Expr(e) => lower_expression(ctx, e),
+                };
+                let dest = ctx.alloc_reg();
+                ctx.push(causm_ir::Instruction::BinaryOp {
+                    dest,
+                    op: causm_core::BinaryOperator::Add,
+                    left: acc,
+                    right: rhs,
+                });
+                acc = dest;
+            }
+            acc
+        }
     }
 }

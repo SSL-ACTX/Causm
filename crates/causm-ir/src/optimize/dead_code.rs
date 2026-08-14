@@ -4,7 +4,71 @@ use super::utils::{
 };
 use super::OptimizationPass;
 use crate::ssa::{SsaCFG, SsaReg};
+use crate::{Instruction, IrProgram};
 use std::collections::{HashMap, HashSet};
+
+/// For emit/dump purposes only: strip unnamespaced routines that are import-
+/// internal duplicates of a namespaced alias and are never called directly from
+/// any IR block (i.e. they exist only for intra-module call resolution).
+///
+/// Example: `import "std/net" as Net` emits both `socket` (raw FFI binding,
+/// needed by `create_socket` internally) and `Net.socket` (the public alias).
+/// If the root timeline never calls `socket` directly, we strip it from the
+/// dump so the output shows only the clean `Net.*` surface.
+///
+/// This must NOT be called at analysis or execution time — only before emit.
+pub fn prune_import_duplicates(ir: &mut IrProgram) {
+    // Collect all namespaced names: e.g. {"Net.socket", "Net.tcp_bind", ...}
+    let namespaced: HashSet<&str> = ir
+        .routines
+        .keys()
+        .filter(|k| k.contains('.'))
+        .map(|k| k.as_str())
+        .collect();
+
+    // Build a set of all Call targets inside IR blocks (the root timeline).
+    let mut root_callees: HashSet<String> = HashSet::new();
+    for block in &ir.blocks {
+        for instr in &block.instructions {
+            if let Instruction::Call { routine, .. } = instr {
+                root_callees.insert(routine.clone());
+            }
+        }
+    }
+
+    // Also collect calls made by *namespaced* routines — those are intra-module
+    // and should not prevent removal of the unqualified name from the dump.
+    // (We only care about root-level callers here.)
+
+    // Find unqualified names that:
+    //   1. Have NO dot in their name (they are the raw unqualified binding).
+    //   2. Have at least one namespaced counterpart `Ns.name` in the IR.
+    //   3. Are NOT directly called from any root IR block.
+    let to_remove: Vec<String> = ir
+        .routines
+        .keys()
+        .filter(|name| {
+            // must be unqualified
+            if name.contains('.') {
+                return false;
+            }
+            // there must be at least one Ns.<name> variant
+            let has_ns_alias = namespaced
+                .iter()
+                .any(|ns| ns.ends_with(&format!(".{}", name)));
+            if !has_ns_alias {
+                return false;
+            }
+            // must not be directly called from root blocks
+            !root_callees.contains(*name)
+        })
+        .cloned()
+        .collect();
+
+    for name in to_remove {
+        ir.routines.remove(&name);
+    }
+}
 
 pub struct DeadCodeEliminationPass;
 

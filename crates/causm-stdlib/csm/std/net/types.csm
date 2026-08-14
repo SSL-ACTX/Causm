@@ -1,0 +1,26 @@
+@0ms: {
+    type SocketAddr = struct {
+        ip: string,
+        port: i32
+    }
+    type TcpStream = struct decay_after 10000ms {
+        is_connected: bool,
+        fd: i32,
+        peer_ip: string,
+        peer_port: i32
+    }
+    type TcpListener = struct {
+        is_listening: bool,
+        fd: i32,
+        bind_port: i32
+    }
+    type UdpSocket = struct {
+        fd: i32,
+        port: i32,
+        is_bound: bool
+    }
+    type Timeval = struct {
+        tv_sec: i64,
+        tv_usec: i64
+    }
+}

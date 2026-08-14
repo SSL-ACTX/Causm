@@ -1,15 +1,13 @@
-// crates/causm-stdlib/csm/std/time/types.csm - Standard Time Types
-
-pub type Timespec = struct {
-    tv_sec: i64 = 0,
-    tv_nsec: i64 = 0
-}
-
-pub type Instant = struct {
-    secs: i64 = 0,
-    nanos: i64 = 0
-}
-
-pub type Duration = struct {
-    nanos_total: i64 = 0
+@0ms: {
+    type Timespec = struct {
+        tv_sec: i64,
+        tv_nsec: i64
+    }
+    type Instant = struct {
+        nanos: i64,
+        secs: i64
+    }
+    type Duration = struct {
+        nanos_total: i64
+    }
 }

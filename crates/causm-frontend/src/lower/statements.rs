@@ -583,8 +583,42 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 _ => {}
             }
         }
-        Statement::Print(expr) => {
-            let src = lower_expression(ctx, expr);
+        Statement::Print(args) => {
+            let src = if args.is_empty() {
+                let dest = ctx.alloc_reg();
+                ctx.push(Instruction::LoadString {
+                    dest,
+                    value: String::new(),
+                });
+                dest
+            } else {
+                let mut acc = lower_expression(ctx, &args[0]);
+                for arg in &args[1..] {
+                    // insert a space separator
+                    let space = ctx.alloc_reg();
+                    ctx.push(Instruction::LoadString {
+                        dest: space,
+                        value: " ".to_string(),
+                    });
+                    let with_space = ctx.alloc_reg();
+                    ctx.push(Instruction::BinaryOp {
+                        dest: with_space,
+                        op: causm_core::BinaryOperator::Add,
+                        left: acc,
+                        right: space,
+                    });
+                    let rhs = lower_expression(ctx, arg);
+                    let joined = ctx.alloc_reg();
+                    ctx.push(Instruction::BinaryOp {
+                        dest: joined,
+                        op: causm_core::BinaryOperator::Add,
+                        left: with_space,
+                        right: rhs,
+                    });
+                    acc = joined;
+                }
+                acc
+            };
             ctx.push(Instruction::Print { src });
         }
         Statement::Debug(expr) => {

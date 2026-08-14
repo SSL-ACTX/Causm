@@ -176,9 +176,13 @@ impl Vm {
                 )?
             };
 
-            // Write back any modified struct argument payloads into registers
+            // Write back any modified struct or array argument payloads into registers
             for (i, reg) in args.iter().enumerate() {
-                if let causm_core::value::Payload::Struct(_) = &arg_values[i] {
+                if matches!(
+                    &arg_values[i],
+                    causm_core::value::Payload::Struct(_)
+                        | causm_core::value::Payload::Array(_)
+                ) {
                     self.insert_reg(
                         branch_id,
                         reg.0,
@@ -271,9 +275,31 @@ impl Vm {
             }
         }
 
+        // Write back any modified peek/lease/mutable argument payloads from child arena to caller registers
+        for (i, (mode, _, _)) in params.iter().enumerate() {
+            if matches!(
+                mode,
+                causm_core::ParamMode::Peek | causm_core::ParamMode::Lease
+            ) {
+                if let Some(child_val) = child_branch.arena.peek(i as u32) {
+                    if matches!(
+                        child_val,
+                        causm_core::value::Payload::Array(_)
+                            | causm_core::value::Payload::Struct(_)
+                    ) {
+                        self.insert_reg(
+                            branch_id,
+                            args[i].0,
+                            causm_core::value::EntropicState::Valid(child_val),
+                        )?;
+                    }
+                }
+            }
+        }
+
         let result = child_branch
-            .arena
-            .peek(0)
+            .return_value
+            .or_else(|| child_branch.arena.peek(0))
             .unwrap_or(causm_core::value::Payload::String("void".to_string()));
 
         self.insert_reg(
@@ -295,6 +321,7 @@ impl Vm {
             causm_core::value::Payload::Null
         };
         let branch = self.get_branch_mut(branch_id)?;
+        branch.return_value = Some(val.clone());
         branch
             .arena
             .insert(0, causm_core::value::EntropicState::Valid(val))?;

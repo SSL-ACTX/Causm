@@ -83,7 +83,8 @@ decay_handler_stmt = { ("decay_handler" ~ "for" | "on_decay" ~ "(") ~ identifier
 
 assert_time_stmt = { "assert_time" ~ "(" ~ "elapsed" ~ relop ~ amount ~ "ms" ~ ")" ~ ("else" ~ statement_block)? }
 
-print_stmt = { "print" ~ "(" ~ expression ~ ")" }
+print_stmt = { "print" ~ "(" ~ print_arg_list ~ ")" }
+print_arg_list = { expression ~ ("," ~ expression)* }
 
 speculate_stmt = { "speculate" ~ duration_limit ~ "{" ~ statement* ~ "}" ~ fallback_stmt? }
 fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
@@ -223,7 +224,7 @@ duration_literal = @{ ASCII_DIGIT+ ~ time_unit }
 match_entropy_expr = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
 syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ expression)* ~ ")" ~ duration_limit? }
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
-base_expr = { null | path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | ref_op | clone_op | float_literal | duration_literal | integer_literal | bool_literal | identifier_expr | string_literal | "(" ~ expression ~ ")" }
+base_expr = { null | path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | struct_lit | topology_lit | array_lit | ref_op | clone_op | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | identifier_expr | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ expression ~ "]" }
 bool_literal = { "true" | "false" }
@@ -265,3 +266,7 @@ if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+fstring_literal = ${ "f\"" ~ fstring_part* ~ "\"" }
+fstring_part = { fstring_interp | fstring_text }
+fstring_interp = !{ "{" ~ expression ~ "}" }
+fstring_text = @{ (!("{" | "\"" | "\\") ~ ANY | "\\" ~ ANY)+ }

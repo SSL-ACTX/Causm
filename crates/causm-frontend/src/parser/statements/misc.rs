@@ -241,12 +241,11 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
             Statement::NetworkRequest { domain }
         }
         Rule::print_stmt => {
-            let mut inner = pair.into_inner();
-            let expr = inner
-                .next()
-                .map(parse_expression)
-                .unwrap_or(Expression::Literal("".into()));
-            Statement::Print(expr)
+            // print_stmt → print_arg_list → expression*
+            let arg_list = pair.into_inner().next().unwrap();
+            let args: Vec<Expression> =
+                arg_list.into_inner().map(parse_expression).collect();
+            Statement::Print(args)
         }
         Rule::debug_stmt => {
             let mut inner = pair.into_inner();

@@ -1,5 +1,5 @@
 @0ms: {
-    let account = topology { balance = 100, status = "active" }
+    let account = topology { status = "active", balance = 100 }
     split main into [thief, banker]
 }
 

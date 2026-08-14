@@ -115,6 +115,8 @@ pub unsafe fn invoke_foreign_symbol(
 
     // Struct buffers allocated on the heap: (arg_index, sorted_keys, buffer)
     let mut struct_buffers: Vec<(usize, Vec<String>, Vec<u8>)> = Vec::new();
+    // Array buffers allocated on the heap: (arg_index, buffer, is_byte_array)
+    let mut array_buffers: Vec<(usize, Vec<u8>, bool)> = Vec::new();
 
     for (arg_idx, arg) in args.iter().enumerate() {
         match arg {
@@ -151,6 +153,14 @@ pub unsafe fn invoke_foreign_symbol(
                         }
                     }
                     keys
+                } else if map.contains_key("tv_sec") && map.contains_key("tv_usec") {
+                    let mut keys = vec!["tv_sec".to_string(), "tv_usec".to_string()];
+                    for k in map.keys() {
+                        if k != "tv_sec" && k != "tv_usec" {
+                            keys.push(k.clone());
+                        }
+                    }
+                    keys
                 } else {
                     let mut keys: Vec<String> = map.keys().cloned().collect();
                     keys.sort();
@@ -178,9 +188,49 @@ pub unsafe fn invoke_foreign_symbol(
                 struct_buffers.push((arg_idx, sorted_keys, buf));
                 raw_args.push(ptr);
             }
-            Payload::Topology(_) | Payload::Array(_) => {
+            Payload::Array(elements) => {
+                // Determine if this is an array of byte/u8 integers (<256) or 64-bit integers
+                let is_u8 = elements.iter().all(|e| match e {
+                    Payload::Integer(i) => *i >= 0 && *i <= 255,
+                    _ => false,
+                });
+
+                if is_u8 {
+                    let mut buf: Vec<u8> = elements
+                        .iter()
+                        .map(|e| match e {
+                            Payload::Integer(i) => *i as u8,
+                            _ => 0u8,
+                        })
+                        .collect();
+                    let ptr = buf.as_mut_ptr() as usize;
+                    array_buffers.push((arg_idx, buf, true));
+                    raw_args.push(ptr);
+                } else {
+                    let mut buf = Vec::with_capacity(elements.len() * 8);
+                    for elem in elements {
+                        let val_i64 = match elem {
+                            Payload::Integer(i) => *i,
+                            Payload::Float(bits) => *bits as i64,
+                            Payload::Bool(b) => {
+                                if *b {
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
+                            _ => 0i64,
+                        };
+                        buf.extend_from_slice(&val_i64.to_ne_bytes());
+                    }
+                    let ptr = buf.as_mut_ptr() as usize;
+                    array_buffers.push((arg_idx, buf, false));
+                    raw_args.push(ptr);
+                }
+            }
+            Payload::Topology(_) => {
                 return Err(TemporalError::EvalError(
-                    "Passing complex array/topology types directly to raw C FFI is unsupported"
+                    "Passing complex topology types directly to raw C FFI is unsupported"
                         .to_string(),
                 ));
             }
@@ -273,6 +323,32 @@ pub unsafe fn invoke_foreign_symbol(
                             val_i64,
                         )),
                     );
+                }
+            }
+        }
+    }
+
+    // Write back any modified bytes from C array/buffer pointers into the Causm array arguments
+    for (arg_idx, buf, is_u8) in array_buffers {
+        if let Payload::Array(ref mut elements) = args[arg_idx] {
+            if is_u8 {
+                for (i, &byte) in buf.iter().enumerate() {
+                    if i < elements.len() {
+                        elements[i] = Payload::Integer(byte as i64);
+                    } else {
+                        elements.push(Payload::Integer(byte as i64));
+                    }
+                }
+            } else {
+                for (i, chunk) in buf.chunks_exact(8).enumerate() {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(chunk);
+                    let val_i64 = i64::from_ne_bytes(bytes);
+                    if i < elements.len() {
+                        elements[i] = Payload::Integer(val_i64);
+                    } else {
+                        elements.push(Payload::Integer(val_i64));
+                    }
                 }
             }
         }

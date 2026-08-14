@@ -434,6 +434,32 @@ impl Arena {
         Ok(state)
     }
 
+    pub fn peek_field(&self, reg: u32, field: &str) -> Result<Payload, MemoryError> {
+        let idx = reg as usize;
+        if idx >= self.registers.len() {
+            return Err(MemoryError::AlreadyConsumed);
+        }
+        match &self.registers[idx] {
+            EntropicState::Valid(Payload::Struct(fields))
+            | EntropicState::Valid(Payload::Topology(fields))
+            | EntropicState::Decayed(fields) => match fields.get(field) {
+                Some(EntropicState::Valid(p)) => Ok(p.clone()),
+                Some(EntropicState::Decayed(_)) => {
+                    Err(MemoryError::StructurallyDecayed)
+                }
+                Some(EntropicState::Leased { original, .. }) => match &**original {
+                    EntropicState::Valid(p) => Ok(p.clone()),
+                    _ => Err(MemoryError::AlreadyConsumed),
+                },
+                Some(EntropicState::Consumed) => Err(MemoryError::AlreadyConsumed),
+                _ => Err(MemoryError::KeyNotFound(field.to_string())),
+            },
+            EntropicState::Consumed => Err(MemoryError::AlreadyConsumed),
+            EntropicState::Leased { .. } => Err(MemoryError::Leased),
+            _ => Err(MemoryError::NotAStruct),
+        }
+    }
+
     pub fn consume_field(
         &mut self,
         reg: u32,

@@ -56,6 +56,7 @@ impl Vm {
                 pc: 0,
                 instructions: Vec::new(),
                 spans: Vec::new(),
+                return_value: None,
             };
             self.active_branches
                 .insert(branch_name.to_string(), new_branch);

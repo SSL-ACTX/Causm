@@ -303,4 +303,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_ffi_array_buffer_pointer_mutation() -> anyhow::Result<()> {
+        let code = r#"
+foreign "libc.so.6" abi("C") {
+    pub routine memset(peek s: array, c: i32, n: u64) -> i64 taking 1ms
+}
+
+@main: {
+    let mut buf = [0, 0, 0, 0]
+    let res = call memset(buf, 65, 4)
+    let b0 = buf[0]
+    let b3 = buf[3]
+}
+"#;
+        let vm = run_causm(code)?;
+        let b0_val = vm.root_timeline.arena.peek(vm.symbols.get("b0").unwrap().0);
+        let b3_val = vm.root_timeline.arena.peek(vm.symbols.get("b3").unwrap().0);
+        assert_eq!(b0_val, Some(causm_core::value::Payload::Integer(65)));
+        assert_eq!(b3_val, Some(causm_core::value::Payload::Integer(65)));
+        Ok(())
+    }
 }

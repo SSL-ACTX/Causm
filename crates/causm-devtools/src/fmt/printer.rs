@@ -313,8 +313,13 @@ fn format_spanned_statement(
         Statement::Yield(name) => {
             out.push_str(&format!("{}yield {}\n", indent, name));
         }
-        Statement::Print(expr) => {
-            out.push_str(&format!("{}print({})\n", indent, format_expr(expr)));
+        Statement::Print(args) => {
+            let formatted = args
+                .iter()
+                .map(|e| format_expr(e))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("{}print({})\n", indent, formatted));
         }
         Statement::Debug(expr) => {
             out.push_str(&format!("{}debug({})\n", indent, format_expr(expr)));
@@ -1099,6 +1104,21 @@ fn format_expr(expr: &Expression) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("defer {}({}) taking {}ms", capability, p_strs, deadline_ms)
+        }
+        Expression::FString(parts) => {
+            let mut s = "f\"".to_string();
+            for part in parts {
+                match part {
+                    causm_core::FStringPart::Text(t) => s.push_str(t),
+                    causm_core::FStringPart::Expr(e) => {
+                        s.push('{');
+                        s.push_str(&format_expr(e));
+                        s.push('}');
+                    }
+                }
+            }
+            s.push('"');
+            s
         }
         other => {
             eprintln!("\x1b[33mwarning:\x1b[0m Unhandled expression variant in formatter: {:?}", other);

@@ -76,10 +76,13 @@ pub fn estimate_statement_cost(
         Statement::Assignment { expr, .. }
         | Statement::FieldUpdate { value: expr, .. }
         | Statement::Expression(expr)
-        | Statement::Print(expr)
         | Statement::Debug(expr) => {
             crate::expression::estimate_expression_cost(analyzer, expr)
         }
+        Statement::Print(args) => args
+            .iter()
+            .map(|e| crate::expression::estimate_expression_cost(analyzer, e))
+            .sum(),
         _ => 0,
     };
     expr_cost + stmt.estimate_cost(|b| estimate_block_cost(analyzer, b))

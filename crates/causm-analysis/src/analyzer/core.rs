@@ -460,6 +460,25 @@ impl EntropicAnalyzer {
                 let base_name = name.split('<').next().unwrap_or(name).trim();
                 self.get_custom_type(base_name)
                     .or_else(|| self.get_custom_type(name))
+                    .or_else(|| {
+                        // Fall back: reconstruct struct from type_decls for imported types
+                        self.type_decls.get(base_name).map(|fields_map| {
+                            let schema: std::collections::HashMap<String, Type> =
+                                fields_map
+                                    .iter()
+                                    .filter(|(_, fd)| !fd.is_const)
+                                    .map(|(k, fd)| {
+                                        (k.clone(), Type::from_typename(&fd.typ))
+                                    })
+                                    .collect();
+                            Type::Struct(causm_core::types::StructType {
+                                fields: schema,
+                                decay_after_ms: None,
+                                auto_drop: None,
+                                scoped_branch: None,
+                            })
+                        })
+                    })
                     .unwrap_or_else(|| Type::Custom(name.clone()))
             }
             Type::Struct(s) => {
@@ -964,6 +983,21 @@ impl EntropicAnalyzer {
                 let args_str: Vec<String> =
                     args.iter().map(|a| self.expr_snippet(a)).collect();
                 format!("{}::{}({})", enum_name, variant_name, args_str.join(", "))
+            }
+            Expression::FString(parts) => {
+                let mut s = "f\"".to_string();
+                for part in parts {
+                    match part {
+                        causm_core::FStringPart::Text(t) => s.push_str(t),
+                        causm_core::FStringPart::Expr(e) => {
+                            s.push('{');
+                            s.push_str(&self.expr_snippet(e));
+                            s.push('}');
+                        }
+                    }
+                }
+                s.push('"');
+                s
             }
         }
     }

@@ -1,7 +1,7 @@
 @main: {
     type SensorData = struct {
-        id: string,
-        reading: int
+        reading: int,
+        id: string
     }
     let cleanup_runs = 0
     decay_handler for SensorData {
@@ -14,11 +14,11 @@
 }
 
 @sender: {
-    let packet1: SensorData = struct { id = "S1", reading = 100 }
+    let packet1: SensorData = struct { reading = 100, id = "S1" }
     chan_send sensors_bus (packet1)
-    let packet2: SensorData = struct { reading = 200, id = "S2" }
+    let packet2: SensorData = struct { id = "S2", reading = 200 }
     chan_send sensors_bus (packet2)
-    let packet3: SensorData = struct { reading = 300, id = "S3" }
+    let packet3: SensorData = struct { id = "S3", reading = 300 }
     chan_send sensors_bus (packet3)
     print("Sender finished transmitting telemetry packets.")
 }

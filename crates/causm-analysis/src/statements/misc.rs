@@ -4,8 +4,13 @@ use causm_core::*;
 
 #[allow(non_snake_case, unused_variables)]
 impl EntropicAnalyzer {
-    pub(crate) fn Print(&mut self, expr: &Expression) -> Result<(), SemanticError> {
-        analyze_expression_nonconsuming(self, expr)?;
+    pub(crate) fn Print(
+        &mut self,
+        args: &[Expression],
+    ) -> Result<(), SemanticError> {
+        for arg in args {
+            analyze_expression_nonconsuming(self, arg)?;
+        }
         if !self.capability_stack.is_empty()
             && !self.is_capability_allowed("System.Log")
         {

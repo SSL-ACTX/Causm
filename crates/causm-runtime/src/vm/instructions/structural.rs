@@ -308,8 +308,8 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         let target_val = self.peek_reg(branch_id, target.0)?;
         let idx_val = self.peek_reg(branch_id, index.0)?;
-        let idx_str = match idx_val {
-            Payload::String(s) => s,
+        let idx_str = match &idx_val {
+            Payload::String(s) => s.clone(),
             Payload::Integer(i) => i.to_string(),
             _ => {
                 return Err(TemporalError::EvalError(
@@ -322,6 +322,17 @@ impl Vm {
                 .get(&idx_str)
                 .cloned()
                 .unwrap_or(EntropicState::Consumed),
+            Payload::Array(elements) => {
+                if let Payload::Integer(i) = idx_val {
+                    if i >= 0 && (i as usize) < elements.len() {
+                        EntropicState::Valid(elements[i as usize].clone())
+                    } else {
+                        EntropicState::Consumed
+                    }
+                } else {
+                    EntropicState::Consumed
+                }
+            }
             _ => EntropicState::Consumed,
         };
         self.insert_reg(branch_id, dest.0, state)

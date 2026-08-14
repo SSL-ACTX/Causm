@@ -29,6 +29,8 @@ use entropy::EntropyOptimizationPass;
 use lease::LeaseOptimizationPass;
 use verifier::VerifierPass;
 
+pub use dead_code::prune_import_duplicates;
+
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     // 0. Pre-scan all IR blocks and routines to build a global set of channel names
     //    that are referenced (send/recv/await/loop-tick/select) anywhere in the program.

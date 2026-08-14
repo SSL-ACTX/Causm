@@ -375,7 +375,16 @@ pub(crate) fn analyze_expression(
                 args.iter().zip(info.params.iter())
             {
                 let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                if !analyzer.types_compatible(expected_type, &arg_type) {
+                let is_ffi_ptr_pass = matches!(
+                    (&expected_type, &arg_type),
+                    (
+                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
+                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
+                    )
+                );
+                if !is_ffi_ptr_pass
+                    && !analyzer.types_compatible(expected_type, &arg_type)
+                {
                     return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                         format!(
                             "routine {} arg type mismatch: expected {:?}, got {:?}",
@@ -563,6 +572,14 @@ pub(crate) fn analyze_expression(
             analyze_expression(analyzer, expr)?;
             Ok(())
         }
+        Expression::FString(parts) => {
+            for part in parts {
+                if let causm_core::FStringPart::Expr(e) = part {
+                    analyze_expression_nonconsuming(analyzer, e)?;
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -696,6 +713,14 @@ pub(crate) fn analyze_expression_nonconsuming(
         }
         Expression::TypeCast { expr, .. } | Expression::TryUnwrap(expr) => {
             analyze_expression_nonconsuming(analyzer, expr)?;
+            Ok(())
+        }
+        Expression::FString(parts) => {
+            for part in parts {
+                if let causm_core::FStringPart::Expr(e) = part {
+                    analyze_expression_nonconsuming(analyzer, e)?;
+                }
+            }
             Ok(())
         }
     }

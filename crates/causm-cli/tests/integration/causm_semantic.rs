@@ -1231,3 +1231,156 @@ fn causm_semantic_valid_pattern_destructuring_literal() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_print_variadic_arguments() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 42
+        let y = "world"
+        print("Hello", y, "val =", x)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0], "Hello world val = 42");
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_fstring_interpolation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let name = "Alice"
+        let age = 30
+        let msg = f"User {name} is {age} years old"
+        print(msg)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0], "User Alice is 30 years old");
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_fstring_with_expressions() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let a = 10
+        let b = 25
+        let result = f"{a} + {b} = {a + b}"
+        print(result)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0], "10 + 25 = 35");
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_string_escape_sequences() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let text = "Line1\nLine2\tTabbed"
+        let val = 42
+        let ftext = f"Val:\t{val}\nDone."
+        print(text)
+        print(ftext)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 2);
+    assert_eq!(logs[0], "Line1\nLine2\tTabbed");
+    assert_eq!(logs[1], "Val:\t42\nDone.");
+
+    Ok(())
+}

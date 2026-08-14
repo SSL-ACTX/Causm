@@ -45,7 +45,7 @@
         let res = 0
         yield res
     }
-    let r: PlayableRobot = struct { score = 999, id = 42, name = "T-800", model = "Cyberdyne Model 101" }
+    let r: PlayableRobot = struct { score = 999, model = "Cyberdyne Model 101", id = 42, name = "T-800" }
     r.introduce()
     r.status()
     r.check_battery()

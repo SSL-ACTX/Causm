@@ -1,0 +1,19 @@
+@0ms: {
+    foreign "libc.so.6" abi("C") {
+        routine socket(peek domain: i32, peek type: i32, peek protocol: i32) -> i32 taking 1ms
+        routine close(peek fd: i32) -> i32 taking 1ms
+        routine shutdown(peek fd: i32, peek how: i32) -> i32 taking 1ms
+        routine bind(peek fd: i32, peek addr_buf: i64, peek addrlen: i32) -> i32 taking 1ms
+        routine connect(peek fd: i32, peek addr_buf: i64, peek addrlen: i32) -> i32 taking 5ms
+        routine listen(peek fd: i32, peek backlog: i32) -> i32 taking 1ms
+        routine accept(peek fd: i32, peek addr_buf: i64, peek addrlen_buf: i64) -> i32 taking 50ms
+        routine send(peek fd: i32, peek buf: i64, peek len: i32, peek flags: i32) -> i32 taking 10ms
+        routine recv(peek fd: i32, peek buf: i64, peek len: i32, peek flags: i32) -> i32 taking 50ms
+        routine sendto(peek fd: i32, peek buf: i64, peek len: i32, peek flags: i32, peek dest_addr: i64, peek addrlen: i32) -> i32 taking 10ms
+        routine recvfrom(peek fd: i32, peek buf: i64, peek len: i32, peek flags: i32, peek src_addr: i64, peek addrlen_buf: i64) -> i32 taking 50ms
+        routine htons(peek port: i32) -> i32 taking 1ms
+        routine inet_addr(peek ip: string) -> i32 taking 1ms
+        routine setsockopt(peek fd: i32, peek level: i32, peek optname: i32, peek optval: i64, peek optlen: i32) -> i32 taking 1ms
+        routine fcntl(peek fd: i32, peek cmd: i32, peek arg: i32) -> i32 taking 1ms
+    }
+}

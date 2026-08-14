@@ -617,6 +617,7 @@ impl Timeline {
             pc: 0,
             instructions: Vec::new(),
             spans: Vec::new(),
+            return_value: None,
         }
     }
 

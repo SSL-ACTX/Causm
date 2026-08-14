@@ -8,8 +8,12 @@
     let start = call Time.now()
     let mut  = null
     null == null
+    null == null
+    null == null
     let accumulator = 0
     let mut  = null
+    null == null
+    null == null
     null == null
     let i = 0
     while (i < 10000) taking 20ms {

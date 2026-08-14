@@ -120,5 +120,14 @@ pub fn estimate_expression_cost(
                 .map(|e| estimate_expression_cost(analyzer, e))
                 .sum::<u64>()
         }
+        Expression::FString(parts) => {
+            1 + parts
+                .iter()
+                .map(|p| match p {
+                    FStringPart::Expr(e) => estimate_expression_cost(analyzer, e),
+                    FStringPart::Text(_) => 0,
+                })
+                .sum::<u64>()
+        }
     }
 }

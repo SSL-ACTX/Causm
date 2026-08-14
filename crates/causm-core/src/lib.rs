@@ -247,7 +247,7 @@ macro_rules! statements {
                 reconcile: Option<MergeResolution>
             },
             Yield(String),
-            Print(Expression),
+            Print(Vec<Expression>),
             Debug(Expression),
             RoutineDef {
                 name: String,
@@ -482,6 +482,7 @@ macro_rules! expressions {
                 args: Vec<Expression>
             },
             TryUnwrap(Box<Expression>),
+            FString(Vec<FStringPart>),
             Null
         }
     };
@@ -497,6 +498,15 @@ macro_rules! define_expression_enum {
 }
 
 expressions!(define_expression_enum);
+
+/// A segment within an f-string literal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FStringPart {
+    /// A literal text chunk between `{…}` interpolations.
+    Text(String),
+    /// An embedded expression `{expr}`.
+    Expr(Expression),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsolateBlock {

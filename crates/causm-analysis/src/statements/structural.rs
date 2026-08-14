@@ -41,8 +41,18 @@ impl EntropicAnalyzer {
                 auto_drop: auto_drop.clone(),
                 scoped_branch: scoped_branch.clone(),
             });
-        self.set_custom_type(name, type_struct);
-        self.type_decls.insert(name.to_string(), resolved_fields);
+        self.set_custom_type(name, type_struct.clone());
+        if let Some(dot_idx) = name.rfind('.') {
+            let bare_name = &name[dot_idx + 1..];
+            self.set_custom_type(bare_name, type_struct);
+        }
+        self.type_decls
+            .insert(name.to_string(), resolved_fields.clone());
+        if let Some(dot_idx) = name.rfind('.') {
+            let bare_name = &name[dot_idx + 1..];
+            self.type_decls
+                .insert(bare_name.to_string(), resolved_fields);
+        }
         Ok(())
     }
 

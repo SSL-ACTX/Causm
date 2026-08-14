@@ -169,8 +169,61 @@ fn expand_spanned_statements(
                                             span: s.span.clone(),
                                         });
                                     }
-                                    _ => {}
+                                    Statement::TypeDecl {
+                                        name,
+                                        extends,
+                                        fields,
+                                        decay_after_ms,
+                                        auto_drop,
+                                        scoped_branch,
+                                    } => {
+                                        let qualified_name =
+                                            format!("{}.{}", ns, name);
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::TypeDecl {
+                                                name: qualified_name,
+                                                extends: extends.clone(),
+                                                fields: fields.clone(),
+                                                decay_after_ms: *decay_after_ms,
+                                                auto_drop: auto_drop.clone(),
+                                                scoped_branch: scoped_branch.clone(),
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                    Statement::EnumDecl { name, variants } => {
+                                        let qualified_name =
+                                            format!("{}.{}", ns, name);
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::EnumDecl {
+                                                name: qualified_name,
+                                                variants: variants.clone(),
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                    Statement::InterfaceDecl {
+                                        name,
+                                        extends,
+                                        methods,
+                                    } => {
+                                        let qualified_name =
+                                            format!("{}.{}", ns, name);
+                                        result.push(SpannedStatement {
+                                            stmt: Statement::InterfaceDecl {
+                                                name: qualified_name,
+                                                extends: extends.clone(),
+                                                methods: methods.clone(),
+                                            },
+                                            span: s.span.clone(),
+                                        });
+                                    }
+                                    _ => {
+                                        result.push(s.clone());
+                                    }
                                 }
+                            } else {
+                                result.push(s.clone());
                             }
                         }
                     }
@@ -198,6 +251,7 @@ fn expand_spanned_statements(
                     )
                 };
                 let imported_prog = parse_causm(&imported_source)?;
+                let is_wildcard = symbols.iter().any(|(s, _)| s == "*");
                 for imp_tl in imported_prog.timelines {
                     let expanded = expand_spanned_statements(
                         imp_tl.statements,
@@ -212,22 +266,24 @@ fn expand_spanned_statements(
                                 vec![imp_spanned]
                             };
                         for s in item_stmts {
-                            result.push(s.clone());
-                            for (sym_name, sym_alias) in &symbols {
-                                if let Some(alias_name) = sym_alias {
-                                    if let Statement::RoutineDef {
-                                        name,
-                                        params,
-                                        return_type,
-                                        taking_ms,
-                                        state_constraint,
-                                        body,
-                                    } = &s.stmt
-                                    {
-                                        if name == sym_name {
+                            if is_wildcard {
+                                result.push(s.clone());
+                            } else {
+                                for (sym_name, sym_alias) in &symbols {
+                                    match &s.stmt {
+                                        Statement::RoutineDef {
+                                            name,
+                                            params,
+                                            return_type,
+                                            taking_ms,
+                                            state_constraint,
+                                            body,
+                                        } if name == sym_name => {
+                                            let target_name =
+                                                sym_alias.as_ref().unwrap_or(name);
                                             result.push(SpannedStatement {
                                                 stmt: Statement::RoutineDef {
-                                                    name: alias_name.clone(),
+                                                    name: target_name.clone(),
                                                     params: params.clone(),
                                                     return_type: return_type.clone(),
                                                     taking_ms: *taking_ms,
@@ -238,6 +294,59 @@ fn expand_spanned_statements(
                                                 span: s.span.clone(),
                                             });
                                         }
+                                        Statement::TypeDecl {
+                                            name,
+                                            extends,
+                                            fields,
+                                            decay_after_ms,
+                                            auto_drop,
+                                            scoped_branch,
+                                        } if name == sym_name => {
+                                            let target_name =
+                                                sym_alias.as_ref().unwrap_or(name);
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::TypeDecl {
+                                                    name: target_name.clone(),
+                                                    extends: extends.clone(),
+                                                    fields: fields.clone(),
+                                                    decay_after_ms: *decay_after_ms,
+                                                    auto_drop: auto_drop.clone(),
+                                                    scoped_branch: scoped_branch
+                                                        .clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                        Statement::EnumDecl { name, variants }
+                                            if name == sym_name =>
+                                        {
+                                            let target_name =
+                                                sym_alias.as_ref().unwrap_or(name);
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::EnumDecl {
+                                                    name: target_name.clone(),
+                                                    variants: variants.clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                        Statement::InterfaceDecl {
+                                            name,
+                                            extends,
+                                            methods,
+                                        } if name == sym_name => {
+                                            let target_name =
+                                                sym_alias.as_ref().unwrap_or(name);
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::InterfaceDecl {
+                                                    name: target_name.clone(),
+                                                    extends: extends.clone(),
+                                                    methods: methods.clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                        _ => {}
                                     }
                                 }
                             }

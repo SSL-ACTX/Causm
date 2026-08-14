@@ -966,8 +966,12 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     .borrow_mut()
                     .insert(name.clone(), wcet);
 
-                if let Some(limit) = taking_ms {
-                    let limit_int = routine_verifier.solver.int_from_u64(*limit);
+                let budget_limit = taking_ms.or_else(|| {
+                    self.analyzer.routines.get(name).map(|r| r.taking_ms)
+                });
+
+                if let Some(limit) = budget_limit {
+                    let limit_int = routine_verifier.solver.int_from_u64(limit);
                     let violation =
                         routine_verifier.solver.int_gt(&body_clock, &limit_int);
                     routine_verifier.solver.push();
@@ -981,7 +985,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                         return Err(self.analyzer.annotate(
                             SemanticErrorKind::TemporalAssertionViolation(
                                 actual_wcet,
-                                *limit,
+                                limit,
                             ),
                         ));
                     }
@@ -1072,10 +1076,15 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_leased = pre_lease_leased;
                 Ok(self.solver.int_add(&[in_clock, &limit_int]))
             }
-            Statement::Expression(expr)
-            | Statement::Print(expr)
-            | Statement::Debug(expr) => {
-                self.verify_expression(expr, path_condition, &current_clock)
+            Statement::Expression(expr) | Statement::Debug(expr) => {
+                self.verify_expression(expr, path_condition, &current_clock)?;
+                Ok(current_clock)
+            }
+            Statement::Print(args) => {
+                for expr in args {
+                    self.verify_expression(expr, path_condition, &current_clock)?;
+                }
+                Ok(current_clock)
             }
             _ => Ok(current_clock),
         }
@@ -1196,16 +1205,11 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.verify_expression(expr, path_condition, in_clock)?;
                 Ok(in_clock.clone())
             }
-            Expression::Call { routine, args } => {
+            Expression::Call { routine: _, args } => {
                 for arg in args {
                     self.verify_expression(arg, path_condition, in_clock)?;
                 }
-                if let Some(info) = self.analyzer.routines.get(routine) {
-                    let cost_int = self.solver.int_from_u64(info.taking_ms);
-                    Ok(self.solver.int_add(&[in_clock, &cost_int]))
-                } else {
-                    Ok(in_clock.clone())
-                }
+                Ok(in_clock.clone())
             }
             _ => Ok(in_clock.clone()),
         }

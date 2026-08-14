@@ -138,6 +138,7 @@ pub struct Timeline {
     pub pc: usize,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
+    pub return_value: Option<Payload>,
 }
 
 impl Timeline {

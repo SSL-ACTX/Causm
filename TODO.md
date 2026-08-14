@@ -209,3 +209,12 @@ Potential pass order:
 - `MatchEntropy` lowering.
 - Time-aware constructs preserved in IR.
 - Domain semantics remain visible instead of disappearing into runtime calls.
+
+---
+
+## IR / Emit Cleanup
+
+### [x] Strip unnamespaced import duplicates from `--emit ssa-opt` dump
+- **File:** `crates/causm-ir/src/optimize/dead_code.rs`
+- **Implemented:** Added `prune_import_duplicates` which prunes un-namespaced duplicate routine symbols that only exist for intra-module resolution and are not called directly from the root timeline before emitting `IR`, `SSA`, `SsaOpt`, `SsaDot`, and `SsaDotOpt`.
+

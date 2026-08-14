@@ -1,5 +1,5 @@
-// crates/causm-stdlib/csm/std/fs/mod.csm - Standard File System Module Aggregator
-
-from "std/fs/types" import *
-from "std/fs/ffi" import *
-from "std/fs/ops" import *
+@0ms: {
+    from "std/fs/types" import *
+    from "std/fs/ffi" import *
+    from "std/fs/ops" import *
+}

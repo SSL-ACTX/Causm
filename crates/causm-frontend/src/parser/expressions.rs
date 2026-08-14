@@ -1,5 +1,5 @@
 use crate::parser::Rule;
-use causm_core::*;
+use causm_core::{FStringPart, *};
 use std::collections::HashMap;
 
 pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression {
@@ -247,7 +247,38 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             Expression::Float(val.to_bits())
         }
         Rule::bool_literal => Expression::Boolean(pair.as_str() == "true"),
-        Rule::string_literal => Expression::Literal(pair.as_str().replace("\"", "")),
+        Rule::string_literal => Expression::Literal(unescape_string(pair.as_str())),
+        Rule::fstring_literal => {
+            let parts: Vec<FStringPart> = pair
+                .into_inner()
+                .map(|part| match part.as_rule() {
+                    Rule::fstring_text => {
+                        FStringPart::Text(unescape_raw_text(part.as_str()))
+                    }
+                    Rule::fstring_interp => {
+                        let inner_expr = part.into_inner().next().unwrap();
+                        FStringPart::Expr(parse_expression(inner_expr))
+                    }
+                    Rule::fstring_part => {
+                        let inner = part.into_inner().next().unwrap();
+                        match inner.as_rule() {
+                            Rule::fstring_text => {
+                                FStringPart::Text(unescape_raw_text(inner.as_str()))
+                            }
+                            Rule::fstring_interp => {
+                                let expr_pair = inner.into_inner().next().unwrap();
+                                FStringPart::Expr(parse_expression(expr_pair))
+                            }
+                            _ => {
+                                FStringPart::Text(unescape_raw_text(inner.as_str()))
+                            }
+                        }
+                    }
+                    _ => FStringPart::Text(unescape_raw_text(part.as_str())),
+                })
+                .collect();
+            Expression::FString(parts)
+        }
         Rule::identifier_expr | Rule::identifier => {
             Expression::Identifier(pair.as_str().to_string())
         }
@@ -393,4 +424,46 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
         Rule::null => Expression::Null,
         _ => Expression::Literal(pair.as_str().to_string()),
     }
+}
+
+pub(crate) fn unescape_string(raw: &str) -> String {
+    let inner = if (raw.starts_with('"') && raw.ends_with('"'))
+        || (raw.starts_with('\'') && raw.ends_with('\''))
+    {
+        if raw.len() >= 2 {
+            &raw[1..raw.len() - 1]
+        } else {
+            raw
+        }
+    } else {
+        raw
+    };
+
+    unescape_raw_text(inner)
+}
+
+pub(crate) fn unescape_raw_text(inner: &str) -> String {
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                Some('\'') => out.push('\''),
+                Some('0') => out.push('\0'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
