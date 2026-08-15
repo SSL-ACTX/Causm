@@ -16,7 +16,7 @@ pub fn patch_routine_contract(
                 let contract_rest = &source[contract_start..];
                 // Find end of taking token (space, where, or {)
                 let token_end = contract_rest
-                    .find(|c: char| c == '{' || c == '\n' || c == '\r' || c == 'w')
+                    .find(['{', '\n', '\r', 'w'])
                     .unwrap_or(header.len());
                 let old_contract = contract_rest[..token_end].trim_end();
 

@@ -5,8 +5,8 @@
             LowPower
         }
         type SensorConfig = struct decay_after 200ms {
-            threshold: int,
-            sensor_id: int
+            sensor_id: int,
+            threshold: int
         }
     }
 }

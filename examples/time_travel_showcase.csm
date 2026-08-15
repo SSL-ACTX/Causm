@@ -17,7 +17,7 @@
         print("Fallback: Speculation failed. Local state reverted.")
         print("Reverted balance: " + bank_balance)
     }
-    let cloud_config = topology { region = "us-east-1", instances = 10 }
+    let cloud_config = topology { instances = 10, region = "us-east-1" }
     print("Splitting for concurrent infrastructure updates...")
     split main into [dev_branch, ops_branch]
 }

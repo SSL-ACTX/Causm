@@ -17,8 +17,8 @@
     let payload = [65, 66, 67, 68, 69]
     let sent = call Net.tcp_send(s_fd, payload, 5)
     print(f"Client sent {sent} bytes (ABCDE)")
-    let mut null
-     = null
+    let mut  = null
+    null == null
     null == null
     let buf = [0, 0, 0, 0, 0]
     let recvd = call Net.tcp_recv(client_fd, buf, 5)
@@ -46,8 +46,8 @@
     let payload2 = [72, 101, 108, 108, 111]
     let sent2 = call Net.tcp_send_all(s2_fd, payload2, 5)
     print(f"tcp_send_all sent {sent2} bytes (Hello)")
-    let mut null
-     = null
+    let mut  = null
+    null == null
     null == null
     let buf2 = [0, 0, 0, 0, 0]
     let recvd2 = call Net.tcp_recv_exact(client2_fd, buf2, 5)
@@ -72,8 +72,8 @@
     let nb_payload = [78, 79, 78, 66, 76, 75]
     let nb_sent = call Net.tcp_send(s3_fd, nb_payload, 6)
     print(f"Non-blocking send: {nb_sent} bytes (NONBLK)")
-    let mut null
-     = null
+    let mut  = null
+    null == null
     null == null
     let nb_buf = [0, 0, 0, 0, 0, 0]
     let nb_recvd = call Net.tcp_recv(client3_fd, nb_buf, 6)
@@ -96,8 +96,8 @@
     let ping = [80, 73, 78, 71]
     let c2s = call Net.udp_send_to(cli_fd, ping, 4, 19880, 127, 0, 0, 1)
     print(f"UDP client sent {c2s} bytes (PING)")
-    let mut null
-     = null
+    let mut  = null
+    null == null
     null == null
     let ping_buf = [0, 0, 0, 0]
     let s_recvd = call Net.udp_recv_from(srv_fd, ping_buf, 4)
@@ -108,8 +108,8 @@
     let pong = [80, 79, 78, 71]
     let s2c = call Net.udp_send_to(srv_fd, pong, 4, 19881, 127, 0, 0, 1)
     print(f"UDP server sent {s2c} bytes (PONG)")
-    let mut null
-     = null
+    let mut  = null
+    null == null
     null == null
     let pong_buf = [0, 0, 0, 0]
     let c_recvd = call Net.udp_recv_from(cli_srv_fd, pong_buf, 4)

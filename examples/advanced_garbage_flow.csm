@@ -1,62 +1,69 @@
 @0ms: {
-    let raw = struct { b = "fieldB", a = "fieldA", count = "0" }
-    inspect raw_binding = raw {
-        let raw_copy = clone(raw_binding)
-        let a_check = raw_copy.a
-        debug(a_check)
-        debug(raw_binding.count)
+    print("=== Causm Advanced Garbage Flow & EGC ===")
+
+    print("Phase 1: Non-Consuming Inspection & Struct Initialization")
+    let raw = struct { session_id = 9021, tenant = "AcmeCorp", packets = 128 }
+
+    inspect session = raw {
+        let copy = clone(session)
+        let s_id = copy.session_id
+        let tenant = copy.tenant
+        let pkts = copy.packets
+        print(f"Inspected session: id={s_id} tenant={tenant} packets={pkts}")
     }
-    print("starting split")
-    split main into [w1, w2]
+
+    print("Phase 2: Splitting Causal Timeline into Dual Branches [alpha, beta]")
+    split main into [alpha, beta]
 }
 
-@w1: {
-    anchor stage1
+@alpha: {
+    anchor stage_alpha
     let p = clone(raw)
-    speculate (taking 40ms) {
-        anchor speculation_start
-        let first = p.a
+
+    speculate (taking 30ms) {
+        anchor spec_start
+        let name = clone(p).tenant
         commit {
-            let merged = struct { x = first, y = "inferred" }
-            yield merged
+            let res = struct { token = "AUTH_GRANTED", tenant = name }
         }
-        collapse
     } fallback {
-        let merged = struct { y = "", x = "failed" }
-        yield merged
+        let res = struct { token = "AUTH_REJECTED", tenant = "unknown" }
     }
 }
 
-@w2: {
-    anchor stage2
-    routine inspect_item(peek item) taking _ {
-        let item_copy = clone(item)
-        let _k = item.key
-        let _v = item_copy.value
-    }
-    let q = raw
+@beta: {
+    anchor stage_beta
+    let q = clone(raw)
+
     for item consume q {
         let item_copy = clone(item)
-        let key = item.key
-        let value = item_copy.value
+        let k = item.key
+        let v = item_copy.value
         commit {
-            let result = struct { value = value, key = key }
+            let entry = struct { key = k, value = v }
         }
     }
 }
 
 @0ms: {
-    merge [w1, w2] into main reconcile(raw=first_wins)
-    open_chan ch1 (3)
-    let hello = "hello"
-    chan_send ch1 (hello)
-    print("merged done")
+    merge [alpha, beta] into main reconcile(raw=first_wins)
+    print("Phase 3: Causal Merge Completed with Reconciliation (raw=first_wins)")
+
+    print("Phase 4: Entropic Channel Lifecycle & Select Timeout Reconciliation")
+    open_chan sync_ch (3)
+    let payload = "EGC_TELEMETRY_PACKET"
+    print(f"Sending channel payload: {payload}")
+    chan_send sync_ch (payload)
+
     select (taking 10ms) {
-        case m = chan_recv(ch1): {
-            let out = m
+        case msg = chan_recv(sync_ch): {
+            let received = msg
+            print(f"Received via select: {received}")
         }
         timeout: {
-            let out = "timeout"
+            print("Select timed out")
         }
     } reconcile auto
+
+    print("=== EGC & Causal Flow Showcase Complete ===")
 }

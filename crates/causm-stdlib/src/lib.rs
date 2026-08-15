@@ -17,6 +17,10 @@ pub const STD_NET_MOD: &str = include_str!("../csm/std/net/mod.csm");
 pub const STD_NET_TYPES: &str = include_str!("../csm/std/net/types.csm");
 pub const STD_NET_FFI: &str = include_str!("../csm/std/net/ffi.csm");
 pub const STD_NET_OPS: &str = include_str!("../csm/std/net/ops.csm");
+pub const STD_PROCESS_MOD: &str = include_str!("../csm/std/process/mod.csm");
+pub const STD_PROCESS_TYPES: &str = include_str!("../csm/std/process/types.csm");
+pub const STD_PROCESS_FFI: &str = include_str!("../csm/std/process/ffi.csm");
+pub const STD_PROCESS_OPS: &str = include_str!("../csm/std/process/ops.csm");
 
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
@@ -27,17 +31,17 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         "std::env" | "std/env" => Some(STD_ENV),
         "std::path" | "std/path" => Some(STD_PATH),
         "std::time" | "std/time" => Some(STD_TIME_MOD),
-        "std::time::types" | "std/time/types" | "std/time::types" => {
-            Some(STD_TIME_TYPES)
-        }
+        "std::time::types" | "std/time/types" => Some(STD_TIME_TYPES),
         "std::time::ffi" | "std/time/ffi" => Some(STD_TIME_FFI),
         "std::time::ops" | "std/time/ops" => Some(STD_TIME_OPS),
         "std::net" | "std/net" => Some(STD_NET_MOD),
-        "std::net::types" | "std/net/types" | "std/net::types" => {
-            Some(STD_NET_TYPES)
-        }
+        "std::net::types" | "std/net/types" => Some(STD_NET_TYPES),
         "std::net::ffi" | "std/net/ffi" => Some(STD_NET_FFI),
         "std::net::ops" | "std/net/ops" => Some(STD_NET_OPS),
+        "std::process" | "std/process" => Some(STD_PROCESS_MOD),
+        "std::process::types" | "std/process/types" => Some(STD_PROCESS_TYPES),
+        "std::process::ffi" | "std/process/ffi" => Some(STD_PROCESS_FFI),
+        "std::process::ops" | "std/process/ops" => Some(STD_PROCESS_OPS),
         _ => None,
     }
 }

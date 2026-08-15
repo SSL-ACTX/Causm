@@ -212,13 +212,7 @@ pub unsafe fn invoke_foreign_symbol(
                         let val_i64 = match elem {
                             Payload::Integer(i) => *i,
                             Payload::Float(bits) => *bits as i64,
-                            Payload::Bool(b) => {
-                                if *b {
-                                    1
-                                } else {
-                                    0
-                                }
-                            }
+                            Payload::Bool(b) => i64::from(*b),
                             _ => 0i64,
                         };
                         buf.extend_from_slice(&val_i64.to_ne_bytes());

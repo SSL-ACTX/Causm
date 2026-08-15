@@ -4,7 +4,7 @@
         enable memory(5120bytes)
         require System.NetworkFetch
         require System.Log
-        let primary_req = defer System.NetworkFetch(latency = "20", url = "api.primary.internal") taking 406050ms
+        let primary_req = defer System.NetworkFetch(url = "api.primary.internal", latency = "20") taking 406050ms
         let backup_req = defer System.NetworkFetch(url = "api.backup.internal", latency = "60") taking 50ms
         let v1 = ""
         let v2 = ""

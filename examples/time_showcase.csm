@@ -6,12 +6,14 @@
     let epoch_sec = call Time.unix_timestamp()
     print("UNIX Timestamp (seconds): " + epoch_sec)
     let start = call Time.now()
-    let mut  = null
+    let mut null
+     = null
     null == null
     null == null
     null == null
     let accumulator = 0
-    let mut  = null
+    let mut null
+     = null
     null == null
     null == null
     null == null

@@ -4,8 +4,8 @@
         tv_nsec: i64
     }
     type Instant = struct {
-        nanos: i64,
-        secs: i64
+        secs: i64,
+        nanos: i64
     }
     type Duration = struct {
         nanos_total: i64

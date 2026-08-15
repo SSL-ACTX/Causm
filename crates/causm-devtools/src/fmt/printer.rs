@@ -314,11 +314,8 @@ fn format_spanned_statement(
             out.push_str(&format!("{}yield {}\n", indent, name));
         }
         Statement::Print(args) => {
-            let formatted = args
-                .iter()
-                .map(|e| format_expr(e))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let formatted =
+                args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
             out.push_str(&format!("{}print({})\n", indent, formatted));
         }
         Statement::Debug(expr) => {

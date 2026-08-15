@@ -14,7 +14,7 @@
 }
 
 @sender: {
-    let packet1: SensorData = struct { reading = 100, id = "S1" }
+    let packet1: SensorData = struct { id = "S1", reading = 100 }
     chan_send sensors_bus (packet1)
     let packet2: SensorData = struct { id = "S2", reading = 200 }
     chan_send sensors_bus (packet2)

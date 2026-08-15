@@ -1,0 +1,55 @@
+@0ms: {
+    import "std/process" as Process
+    print("=== Causm std/process ===")
+    print("POSIX process management: identity, pipe IPC, signals, subprocesses")
+}
+
+@10ms: {
+    print("Phase 1: Process Identity & Telemetry")
+    let my_pid = call Process.pid()
+    let parent = call Process.parent_pid()
+    print(f"Current PID: {my_pid}	Parent PID: {parent}")
+    let proc_info = call Process.info()
+    print(f"Process info: pid={proc_info.pid} running={proc_info.is_running}")
+}
+
+@20ms: {
+    print("Phase 2: OS Pipe IPC (Kernel Buffer Round-Trip)")
+    let pipe = call Process.create_pipe()
+    let r_fd = pipe.read_fd
+    let w_fd = pipe.write_fd
+    print(f"Allocated pipe: read_fd={r_fd} write_fd={w_fd}")
+    let mut  = null
+    let payload = [80, 73, 80, 69, 33]
+    let bytes_written = call Process.pipe_write(w_fd, payload, 5)
+    print(f"Wrote {bytes_written} bytes into write_fd (PIPE!)")
+    let mut  = null
+    null == null
+    null == null
+    let mut  = null
+    let rx_buf = [0, 0, 0, 0, 0]
+    let bytes_read = call Process.pipe_read(r_fd, rx_buf, 5)
+    print(f"Read {bytes_read} bytes from read_fd")
+    print(f"	Byte[0]={rx_buf[0]}	Byte[4]={rx_buf[4]}")
+    let rc_r = call Process.close_fd(r_fd)
+    let rc_w = call Process.close_fd(w_fd)
+    print("Pipe descriptors closed.")
+}
+
+@30ms: {
+    print("Phase 3: Subprocess Lifecycle & Exit Codes")
+    let sys_res = call Process.run_command("uname -s -m")
+    print(f"Subprocess uname: code={sys_res.code} success={sys_res.success}")
+    let err_res = call Process.run_command("sh -c 'exit 42'")
+    print(f"Subprocess custom exit: code={err_res.code} success={err_res.success}")
+}
+
+@40ms: {
+    print("Phase 4: Signal Probing & Liveness Checks")
+    let my_pid = call Process.pid()
+    let self_alive = call Process.is_alive(my_pid)
+    print(f"Probe self (PID {my_pid}): alive={self_alive}")
+    let dead_alive = call Process.is_alive(99999)
+    print(f"Probe non-existent PID 99999: alive={dead_alive}")
+    print("=== std/process showcase complete ===")
+}

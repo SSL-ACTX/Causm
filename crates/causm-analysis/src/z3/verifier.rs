@@ -301,10 +301,19 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let mut merged_validity = HashMap::new();
                 let mut merged_leased = HashMap::new();
                 for var in pre_if_validity.keys() {
-                    let v_then = post_then_validity.get(var).unwrap();
-                    let v_else = post_else_validity.get(var).unwrap();
-                    let l_then = post_then_leased.get(var).unwrap();
-                    let l_else = post_else_leased.get(var).unwrap();
+                    let v_then = match post_then_validity.get(var) {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    let v_else = match post_else_validity.get(var) {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    let default_not_leased = self.solver.bool_from_bool(false);
+                    let l_then =
+                        post_then_leased.get(var).unwrap_or(&default_not_leased);
+                    let l_else =
+                        post_else_leased.get(var).unwrap_or(&default_not_leased);
 
                     let m_v = self
                         .solver
@@ -950,6 +959,10 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     routine_verifier
                         .variable_validity
                         .insert(p.name.clone(), is_valid);
+                    let is_leased = routine_verifier.solver.bool_from_bool(false);
+                    routine_verifier
+                        .variable_leased
+                        .insert(p.name.clone(), is_leased);
                 }
                 let mut body_clock = routine_verifier.solver.int_from_u64(0);
                 for stmt in body {

@@ -59,6 +59,11 @@ fn expand_spanned_statements(
                 let (imported_source, sub_base_dir) = if let Some(embedded) =
                     causm_stdlib::get_module(&path)
                 {
+                    let mod_key = format!("embedded::{}::as::{:?}", path, alias);
+                    if loaded_files.contains(&mod_key) {
+                        continue;
+                    }
+                    loaded_files.insert(mod_key);
                     (embedded.to_string(), None)
                 } else {
                     let target_path = if let Some(dir) = base_dir {

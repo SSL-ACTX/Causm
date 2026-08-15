@@ -1,0 +1,39 @@
+@0ms: {
+    type ExitStatus = struct {
+        code: i32,
+        success: bool,
+        signaled: bool
+    }
+    type ProcessPipe = struct {
+        read_fd: i32,
+        write_fd: i32
+    }
+    type PipeReader = struct decay_after 10000ms {
+        fd: i32
+    }
+    type PipeWriter = struct decay_after 10000ms {
+        fd: i32
+    }
+    type PipeEndpoints = struct {
+        reader: PipeReader,
+        writer: PipeWriter
+    }
+    type ChildProcess = struct decay_after 30000ms {
+        pid: i32,
+        is_running: bool
+    }
+    type ProcessInfo = struct {
+        pid: i32,
+        ppid: i32,
+        is_running: bool
+    }
+    enum Signal {
+        Hup,
+        Int,
+        Quit,
+        Kill,
+        Term,
+        User1,
+        User2
+    }
+}
