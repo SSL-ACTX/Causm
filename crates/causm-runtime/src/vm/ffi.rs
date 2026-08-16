@@ -261,8 +261,6 @@ pub unsafe fn invoke_foreign_symbol(
         }
     };
 
-    drop(c_strings);
-
     // Write back any modified bytes from C struct buffers into the Causm arguments
     for (arg_idx, sorted_keys, buf) in struct_buffers {
         if let Payload::Struct(ref mut map) = args[arg_idx] {
