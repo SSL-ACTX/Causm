@@ -165,14 +165,11 @@ pub unsafe fn invoke_foreign_symbol(
                             Payload::Float(bits),
                         )) => *bits as i64,
                         Some(causm_core::value::EntropicState::Valid(
-                            Payload::Bool(b),
-                        )) => {
-                            if *b {
-                                1
-                            } else {
-                                0
-                            }
-                        }
+                            Payload::Bool(true),
+                        )) => 1,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Bool(false),
+                        )) => 0,
                         _ => 0i64,
                     };
                     buf.extend_from_slice(&val_i64.to_ne_bytes());
