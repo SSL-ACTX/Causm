@@ -4,8 +4,16 @@ use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 
 fn ci_temp_file_path(file_name: &str) -> String {
+    static CI_TEMP_FILE_COUNTER: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+    let unique_suffix = format!(
+        "{}_{}",
+        std::process::id(),
+        CI_TEMP_FILE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+
     std::env::temp_dir()
-        .join(file_name)
+        .join(format!("{file_name}_{unique_suffix}"))
         .to_string_lossy()
         .into_owned()
 }
