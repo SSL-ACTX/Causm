@@ -3,6 +3,21 @@ use causm_core::value::Payload;
 use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 
+fn ci_temp_file_path(file_name: &str) -> String {
+    static CI_TEMP_FILE_COUNTER: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+    let unique_suffix = format!(
+        "{}_{}",
+        std::process::id(),
+        CI_TEMP_FILE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+
+    std::env::temp_dir()
+        .join(format!("{file_name}_{unique_suffix}"))
+        .to_string_lossy()
+        .into_owned()
+}
+
 #[test]
 fn causm_temporal_parse_analyze_execute_timeline() -> anyhow::Result<()> {
     let source = r#"
@@ -1023,6 +1038,8 @@ fn test_ffi_forbidden_library_path_error() -> anyhow::Result<()> {
 
 #[test]
 fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
+    let file_path = ci_temp_file_path("causm_test_pure_csm.txt");
+    let renamed_path = ci_temp_file_path("causm_test_pure_csm_renamed.txt");
     let source = r#"
         @0ms: {
             isolate test_fs_mod {
@@ -1031,8 +1048,8 @@ fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
 
                 from "std/fs" import *
 
-                let file_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm.txt"
-                let renamed_path = "/data/data/com.termux/files/home/Causm/target/test_pure_csm_renamed.txt"
+                let file_path = "__FILE_PATH__"
+                let renamed_path = "__RENAMED_PATH__"
 
                 let my_file = call create_file(clone(file_path))
                 let written = call write_all(my_file, "Hello from Pure Causm Stdlib\n", 30)
@@ -1044,9 +1061,11 @@ fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
                 let cleaned = call remove_file(clone(renamed_path))
             }
         }
-        "#;
+        "#
+    .replace("__FILE_PATH__", &file_path)
+    .replace("__RENAMED_PATH__", &renamed_path);
 
-    let program = parser::parse_causm_with_imports(source, None)?;
+    let program = parser::parse_causm_with_imports(&source, None)?;
     let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -1079,6 +1098,7 @@ fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
 
 #[test]
 fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
+    let file_path = ci_temp_file_path("causm_test_read_stat.txt");
     let source = r#"
     @0ms: {
         isolate fs_helpers {
@@ -1088,7 +1108,7 @@ fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
 
             from "std/fs" import *
 
-            let file_path = "/data/data/com.termux/files/home/Causm/target/test_read_stat.txt"
+            let file_path = "__FILE_PATH__"
             let f = call create_file(clone(file_path))
             let wr = call write_all(f, "CAUSM_STAT_READ_TEST", 20)
             let fl = call flush_file(f)
@@ -1099,9 +1119,10 @@ fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
             let rm = call remove_file(clone(file_path))
         }
     }
-    "#;
+    "#
+    .replace("__FILE_PATH__", &file_path);
 
-    let program = parser::parse_causm_with_imports(source, None)?;
+    let program = parser::parse_causm_with_imports(&source, None)?;
     let ir = causm_frontend::lower::lower_program(&program);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -1117,10 +1138,7 @@ fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
     );
     assert_eq!(
         vm.root_timeline.arena.peek(read_path_reg),
-        Some(causm_core::value::Payload::String(
-            "/data/data/com.termux/files/home/Causm/target/test_read_stat.txt"
-                .to_string()
-        ))
+        Some(causm_core::value::Payload::String(file_path))
     );
     Ok(())
 }
