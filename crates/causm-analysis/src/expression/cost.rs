@@ -129,5 +129,7 @@ pub fn estimate_expression_cost(
                 })
                 .sum::<u64>()
         }
+        Expression::StrBytes(expr) => 1 + estimate_expression_cost(analyzer, expr),
+        Expression::ToStr(expr) => 1 + estimate_expression_cost(analyzer, expr),
     }
 }

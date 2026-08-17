@@ -335,6 +335,14 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
+        Rule::str_bytes_expr => {
+            let inner = pair.into_inner().next().unwrap();
+            Expression::StrBytes(Box::new(parse_expression(inner)))
+        }
+        Rule::to_str_expr => {
+            let inner = pair.into_inner().next().unwrap();
+            Expression::ToStr(Box::new(parse_expression(inner)))
+        }
         Rule::syscall_expr => {
             let mut inner = pair.into_inner();
             let target_pair = inner.next().unwrap();

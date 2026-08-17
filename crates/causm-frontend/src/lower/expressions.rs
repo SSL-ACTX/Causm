@@ -153,6 +153,18 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::Clone { dest, src });
             dest
         }
+        Expression::StrBytes(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::StrBytes { dest, src });
+            dest
+        }
+        Expression::ToStr(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ToStr { dest, src });
+            dest
+        }
         Expression::FieldAccess { target, field } => {
             let mut const_expr = None;
             if let Expression::Identifier(ref name) = &**target {

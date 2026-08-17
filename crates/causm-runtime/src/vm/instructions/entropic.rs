@@ -88,6 +88,55 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn StrBytes(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+    ) -> Result<(), TemporalError> {
+        let payload = self.peek_reg(branch_id, src.0)?;
+        let bytes: Vec<Payload> = match &payload {
+            Payload::String(s) => {
+                s.bytes().map(|b| Payload::Integer(b as i64)).collect()
+            }
+            // If already an array pass through unchanged
+            Payload::Array(arr) => arr.clone(),
+            other => {
+                let s = format!("{}", other);
+                s.bytes().map(|b| Payload::Integer(b as i64)).collect()
+            }
+        };
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            EntropicState::Valid(Payload::Array(bytes)),
+        )
+    }
+
+    pub(crate) fn ToStr(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+    ) -> Result<(), TemporalError> {
+        let payload = self.peek_reg(branch_id, src.0)?;
+        let s = match &payload {
+            Payload::Array(arr) => {
+                let bytes: Vec<u8> = arr
+                    .iter()
+                    .filter_map(|p| match p {
+                        Payload::Integer(i) => Some(*i as u8),
+                        _ => None,
+                    })
+                    .collect();
+                String::from_utf8_lossy(&bytes).into_owned()
+            }
+            Payload::String(s) => s.clone(),
+            other => format!("{}", other),
+        };
+        self.insert_reg(branch_id, dest.0, EntropicState::Valid(Payload::String(s)))
+    }
+
     pub(crate) fn Entangle(
         &mut self,
         branch_id: &str,

@@ -1,0 +1,16 @@
+@0ms: {
+    routine Utf8.encode(peek text: string) -> array taking _ =>
+        str_bytes(text)
+
+    routine Utf8.decode(peek bytes: array) -> string taking _ =>
+        to_str(bytes)
+
+    routine Utf8.encode_len(peek text: string) -> i32 taking _ {
+        let b = str_bytes(text)
+        let n = 0
+        for _ in b step _ {
+            let n = n + 1
+        }
+        n
+    }
+}

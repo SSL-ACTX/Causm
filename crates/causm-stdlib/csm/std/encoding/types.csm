@@ -1,0 +1,6 @@
+@0ms: {
+    type EncodeResult = struct {
+        bytes: array,
+        len: i32
+    }
+}

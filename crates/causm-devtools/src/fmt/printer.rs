@@ -1075,6 +1075,8 @@ fn format_expr(expr: &Expression) -> String {
             format!("{}struct {{ {} }}", type_str, f_strs.join(", "))
         }
         Expression::CloneOp(id) => format!("clone({})", id),
+        Expression::StrBytes(expr) => format!("str_bytes({})", format_expr(expr)),
+        Expression::ToStr(expr) => format!("to_str({})", format_expr(expr)),
         Expression::RefOp(inner) => format!("&{}", format_expr(inner)),
         Expression::ArrayLiteral(elements) => {
             let elems_str = elements

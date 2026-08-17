@@ -94,6 +94,14 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 src: $crate::Reg
             },
+            StrBytes {
+                dest: $crate::Reg,
+                src: $crate::Reg
+            },
+            ToStr {
+                dest: $crate::Reg,
+                src: $crate::Reg
+            },
 
             // Control Flow
             Jump {

@@ -449,6 +449,8 @@ macro_rules! expressions {
                 field: String
             },
             CloneOp(String),
+            StrBytes(Box<Expression>),
+            ToStr(Box<Expression>),
             RefOp(Box<Expression>),
             StructLit(std::cell::RefCell<Option<String>>, std::collections::HashMap<String, Expression>),
             TopologyLit(std::collections::HashMap<String, Expression>),
