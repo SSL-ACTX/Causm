@@ -25,7 +25,7 @@
             let data = chan_recv(sensors)
             let v1 = data["s1"]
             let v2 = data["s2"]
-            let result = call compute_ema(v2, v1)
+            let result = compute_ema(v2, v1)
             chan_send signals (result)
             break
         }

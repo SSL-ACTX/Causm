@@ -1,189 +1,150 @@
-// crates/causm-stdlib/csm/std/net/ops.csm - Socket, TCP & UDP High-Level Operations
-
-pub routine create_socket() -> i32 taking _ {
-    // AF_INET = 2, SOCK_STREAM = 1, IPPROTO_IP = 0
-    call socket(2, 1, 0)
-}
-
-pub routine create_udp_socket() -> i32 taking _ {
-    // AF_INET = 2, SOCK_DGRAM = 2, IPPROTO_IP = 0
-    call socket(2, 2, 0)
-}
-
-pub routine close_socket(fd: i32) -> i32 taking _ {
-    call close(fd)
-}
-
-pub routine shutdown_stream(peek stream: TcpStream, how: i32) -> i32 taking _ {
-    call shutdown(stream.fd, how)
-}
-
-pub routine addr(ip: string, port: i32) -> SocketAddr taking _ {
-    struct {
-        ip = ip,
-        port = port
+@0ms: {
+    routine create_socket() -> i32 taking _ {
+        socket(2, 1, 0)
+    }
+    routine create_udp_socket() -> i32 taking _ {
+        socket(2, 2, 0)
+    }
+    routine close_socket(peek fd: i32) -> i32 taking _ {
+        close(fd)
+    }
+    routine shutdown_stream(peek stream: TcpStream, peek how: i32) -> i32 taking _ {
+        shutdown(stream.fd, how)
+    }
+    routine addr(peek ip: string, peek port: i32) -> SocketAddr taking _ {
+        struct { ip = ip, port = port }
+    }
+    routine make_sockaddr(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i64 taking _ {
+        let port_hi = port / 256 % 256
+        let port_lo = port % 256
+        let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
+        sa
+    }
+    routine set_reuseaddr(peek fd: i32) -> i32 taking _ {
+        let mut opt = [1, 0, 0, 0]
+        setsockopt(fd, 1, 2, opt, 4)
+    }
+    routine tcp_bind(peek fd: i32, peek port: i32) -> i32 taking _ {
+        let mut sa = make_sockaddr(port, 0, 0, 0, 0)
+        bind(fd, sa, 16)
+    }
+    routine tcp_listen(peek fd: i32, peek backlog: i32) -> i32 taking _ {
+        listen(fd, backlog)
+    }
+    routine tcp_accept(peek fd: i32) -> i32 taking _ {
+        let mut peer_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut addrlen = [16, 0, 0, 0]
+        accept(fd, peer_sa, addrlen)
+    }
+    routine tcp_connect(peek fd: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
+        let mut sa = make_sockaddr(port, b0, b1, b2, b3)
+        connect(fd, sa, 16)
+    }
+    routine tcp_send(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
+        send(fd, buf, len, 0)
+    }
+    routine tcp_recv(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
+        recv(fd, buf, len, 0)
+    }
+    routine tcp_listener(peek port: i32) -> TcpListener taking _ {
+        let fd = create_socket()
+        let _reuse = set_reuseaddr(fd)
+        let _bind = tcp_bind(fd, port)
+        let _listen = tcp_listen(fd, 128)
+        struct { bind_port = port, fd = fd, is_listening = true }
+    }
+    routine TcpListener.bind(peek port: i32) -> TcpListener taking _ {
+        tcp_listener(port)
+    }
+    routine TcpListener.accept(peek self) -> TcpStream taking _ {
+        let client_fd = tcp_accept(self.fd)
+        struct { fd = client_fd, is_connected = true, peer_ip = "", peer_port = self.bind_port }
+    }
+    routine TcpListener.close(peek self) -> i32 taking _ {
+        close_socket(self.fd)
+    }
+    routine tcp_stream_connect(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> TcpStream taking _ {
+        let fd = create_socket()
+        let _rc = tcp_connect(fd, port, b0, b1, b2, b3)
+        struct { fd = fd, is_connected = true, peer_ip = "", peer_port = port }
+    }
+    routine tcp_stream_connect_ip(peek ip: string, peek port: i32) -> TcpStream taking _ {
+        let fd = create_socket()
+        let raw_ip = inet_addr(ip)
+        let port_hi = port / 256 % 256
+        let port_lo = port % 256
+        let b0 = raw_ip % 256
+        let b1 = raw_ip / 256 % 256
+        let b2 = raw_ip / 65536 % 256
+        let b3 = raw_ip / 16777216 % 256
+        let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
+        let _rc = connect(fd, sa, 16)
+        struct { fd = fd, is_connected = true, peer_ip = ip, peer_port = port }
+    }
+    routine TcpStream.connect(peek ip: string, peek port: i32) -> TcpStream taking _ {
+        tcp_stream_connect_ip(ip, port)
+    }
+    routine TcpStream.send(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
+        send(self.fd, buf, len, 0)
+    }
+    routine TcpStream.recv(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
+        recv(self.fd, buf, len, 0)
+    }
+    routine TcpStream.close(peek self) -> i32 taking _ {
+        close_socket(self.fd)
+    }
+    routine tcp_send_all(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
+        tcp_send(fd, buf, len)
+    }
+    routine tcp_recv_exact(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
+        tcp_recv(fd, buf, len)
+    }
+    routine set_nonblocking(peek fd: i32) -> i32 taking _ {
+        let flags = fcntl(fd, 3, 0)
+        fcntl(fd, 4, flags + 2048)
+    }
+    routine set_blocking(peek fd: i32) -> i32 taking _ {
+        let flags = fcntl(fd, 3, 0)
+        fcntl(fd, 4, flags - 2048)
+    }
+    routine set_recv_timeout(peek fd: i32, peek timeout_ms: i64) -> i32 taking _ {
+        let sec = timeout_ms / 1000
+        let usec = timeout_ms % 1000 * 1000
+        let tv = struct { tv_sec = sec, tv_usec = usec }
+        setsockopt(fd, 1, 20, tv, 16)
+    }
+    routine set_send_timeout(peek fd: i32, peek timeout_ms: i64) -> i32 taking _ {
+        let sec = timeout_ms / 1000
+        let usec = timeout_ms % 1000 * 1000
+        let tv = struct { tv_sec = sec, tv_usec = usec }
+        setsockopt(fd, 1, 21, tv, 16)
+    }
+    routine udp_bind(peek port: i32) -> UdpSocket taking _ {
+        let fd = create_udp_socket()
+        let _reuse = set_reuseaddr(fd)
+        let mut sa = make_sockaddr(port, 0, 0, 0, 0)
+        let _bind_rc = bind(fd, sa, 16)
+        struct { fd = fd, is_bound = true, port = port }
+    }
+    routine UdpSocket.send_to(peek self, peek buf: i64, peek len: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
+        let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
+        sendto(self.fd, buf, len, 0, dest_sa, 16)
+    }
+    routine UdpSocket.recv_from(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
+        let mut src_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut addrlen = [16, 0, 0, 0]
+        recvfrom(self.fd, buf, len, 0, src_sa, addrlen)
+    }
+    routine UdpSocket.close(peek self) -> i32 taking _ {
+        close_socket(self.fd)
+    }
+    routine udp_send_to(peek fd: i32, peek buf: i64, peek len: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
+        let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
+        sendto(fd, buf, len, 0, dest_sa, 16)
+    }
+    routine udp_recv_from(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
+        let mut src_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut addrlen = [16, 0, 0, 0]
+        recvfrom(fd, buf, len, 0, src_sa, addrlen)
     }
 }
-
-// Build a 16-byte sockaddr_in as a byte array.
-// port: host byte order. b0..b3: IP address octets.
-pub routine make_sockaddr(port: i32, b0: i32, b1: i32, b2: i32, b3: i32) -> i64 taking _ {
-    let port_hi = (port / 256) % 256
-    let port_lo = port % 256
-    let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
-    sa
-}
-
-// Set SO_REUSEADDR (SOL_SOCKET=1, SO_REUSEADDR=2)
-pub routine set_reuseaddr(fd: i32) -> i32 taking _ {
-    let mut opt = [1, 0, 0, 0]
-    call setsockopt(fd, 1, 2, opt, 4)
-}
-
-// Bind fd to 0.0.0.0:port
-pub routine tcp_bind(fd: i32, port: i32) -> i32 taking _ {
-    let mut sa = call make_sockaddr(port, 0, 0, 0, 0)
-    call bind(fd, sa, 16)
-}
-
-// Start listening
-pub routine tcp_listen(fd: i32, backlog: i32) -> i32 taking _ {
-    call listen(fd, backlog)
-}
-
-// Accept a connection; returns new client fd
-pub routine tcp_accept(fd: i32) -> i32 taking _ {
-    let mut peer_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    let mut addrlen = [16, 0, 0, 0]
-    call accept(fd, peer_sa, addrlen)
-}
-
-// Connect fd to b0.b1.b2.b3:port
-pub routine tcp_connect(fd: i32, port: i32, b0: i32, b1: i32, b2: i32, b3: i32) -> i32 taking _ {
-    let mut sa = call make_sockaddr(port, b0, b1, b2, b3)
-    call connect(fd, sa, 16)
-}
-
-// Send buf over fd; returns bytes sent
-pub routine tcp_send(fd: i32, peek buf: i64, len: i32) -> i32 taking _ {
-    call send(fd, buf, len, 0)
-}
-
-// Receive into buf from fd; returns bytes received
-pub routine tcp_recv(fd: i32, peek buf: i64, len: i32) -> i32 taking _ {
-    call recv(fd, buf, len, 0)
-}
-
-// Create, bind, setsockopt, listen — returns TcpListener
-pub routine tcp_listener(port: i32) -> TcpListener taking _ {
-    let fd = call create_socket()
-    let _reuse = call set_reuseaddr(fd)
-    let _bind = call tcp_bind(fd, port)
-    let _listen = call tcp_listen(fd, 128)
-    struct {
-        fd = fd,
-        bind_port = port,
-        is_listening = true
-    }
-}
-
-// Create and connect a TcpStream
-pub routine tcp_stream_connect(port: i32, b0: i32, b1: i32, b2: i32, b3: i32) -> TcpStream taking _ {
-    let fd = call create_socket()
-    let _rc = call tcp_connect(fd, port, b0, b1, b2, b3)
-    struct {
-        fd = fd,
-        peer_ip = "",
-        peer_port = port,
-        is_connected = true
-    }
-}
-
-// Bind a UDP socket to 0.0.0.0:port
-pub routine udp_bind(port: i32) -> UdpSocket taking _ {
-    let fd = call create_udp_socket()
-    let _reuse = call set_reuseaddr(fd)
-    let mut sa = call make_sockaddr(port, 0, 0, 0, 0)
-    let _bind_rc = call bind(fd, sa, 16)
-    struct {
-        fd = fd,
-        port = port,
-        is_bound = true
-    }
-}
-
-// Send a datagram buffer to a specific target address
-pub routine udp_send_to(fd: i32, peek buf: i64, len: i32, port: i32, b0: i32, b1: i32, b2: i32, b3: i32) -> i32 taking _ {
-    let mut dest_sa = call make_sockaddr(port, b0, b1, b2, b3)
-    call sendto(fd, buf, len, 0, dest_sa, 16)
-}
-
-// Receive a datagram into buf from an incoming socket
-pub routine udp_recv_from(fd: i32, peek buf: i64, len: i32) -> i32 taking _ {
-    let mut src_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    let mut addrlen = [16, 0, 0, 0]
-    call recvfrom(fd, buf, len, 0, src_sa, addrlen)
-}
-
-// Set a socket to non-blocking mode (F_GETFL=3, F_SETFL=4, O_NONBLOCK=2048)
-pub routine set_nonblocking(fd: i32) -> i32 taking _ {
-    let flags = call fcntl(fd, 3, 0)
-    // O_NONBLOCK bitwise representation
-    let nonblocking_flags = flags + 2048
-    call fcntl(fd, 4, nonblocking_flags)
-}
-
-// Reset a socket to blocking mode
-pub routine set_blocking(fd: i32) -> i32 taking _ {
-    let flags = call fcntl(fd, 3, 0)
-    let blocking_flags = flags - 2048
-    call fcntl(fd, 4, blocking_flags)
-}
-
-// Connect a TcpStream directly to an IP string using inet_addr (e.g. "127.0.0.1", port)
-pub routine tcp_stream_connect_ip(ip: string, port: i32) -> TcpStream taking _ {
-    let fd = call create_socket()
-    let raw_ip = call inet_addr(ip)
-    let port_hi = (port / 256) % 256
-    let port_lo = port % 256
-    let b0 = raw_ip % 256
-    let b1 = (raw_ip / 256) % 256
-    let b2 = (raw_ip / 65536) % 256
-    let b3 = (raw_ip / 16777216) % 256
-    let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
-    let _rc = call connect(fd, sa, 16)
-    struct {
-        fd = fd,
-        peer_ip = ip,
-        peer_port = port,
-        is_connected = true
-    }
-}
-
-// Set receive timeout on socket (SOL_SOCKET=1, SO_RCVTIMEO=20) in milliseconds
-pub routine set_recv_timeout(fd: i32, timeout_ms: i64) -> i32 taking _ {
-    let sec = timeout_ms / 1000
-    let usec = (timeout_ms % 1000) * 1000
-    let tv = struct { tv_sec = sec, tv_usec = usec }
-    call setsockopt(fd, 1, 20, tv, 16)
-}
-
-// Set send timeout on socket (SOL_SOCKET=1, SO_SNDTIMEO=21) in milliseconds
-pub routine set_send_timeout(fd: i32, timeout_ms: i64) -> i32 taking _ {
-    let sec = timeout_ms / 1000
-    let usec = (timeout_ms % 1000) * 1000
-    let tv = struct { tv_sec = sec, tv_usec = usec }
-    call setsockopt(fd, 1, 21, tv, 16)
-}
-
-// Transmit complete buffer length over connected stream
-pub routine tcp_send_all(fd: i32, peek buf: i64, len: i32) -> i32 taking _ {
-    call tcp_send(fd, buf, len)
-}
-
-// Receive exact byte count into buffer
-pub routine tcp_recv_exact(fd: i32, peek buf: i64, len: i32) -> i32 taking _ {
-    call tcp_recv(fd, buf, len)
-}
-
-

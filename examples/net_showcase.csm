@@ -5,120 +5,80 @@
 }
 
 @10ms: {
-    print("Phase 1: TCP Listener + Raw Octet Client")
-    let listener = call Net.tcp_listener(19870)
-    let l_fd = listener.fd
-    print(f"Listener bound and listening on fd: {l_fd} port: 19870")
-    let stream = call Net.tcp_stream_connect(19870, 127, 0, 0, 1)
-    let s_fd = stream.fd
-    print(f"Client connected on fd: {s_fd}")
-    let client_fd = call Net.tcp_accept(l_fd)
-    print(f"Server accepted connection: client fd = {client_fd}")
-    let payload = [65, 66, 67, 68, 69]
-    let sent = call Net.tcp_send(s_fd, payload, 5)
-    print(f"Client sent {sent} bytes (ABCDE)")
-    let mut  = null
-    null == null
-    null == null
-    let buf = [0, 0, 0, 0, 0]
-    let recvd = call Net.tcp_recv(client_fd, buf, 5)
-    print(f"Server received {recvd} bytes")
-    print(f"	Byte[0]={buf[0]}	Byte[4]={buf[4]}")
-    let _cc = call Net.close_socket(client_fd)
-    let _cs = call Net.close_socket(s_fd)
-    let _cl = call Net.close_socket(l_fd)
-    print("Phase 1 sockets closed.")
+    print("Phase 1: TCP Listener + Dot-Method Client")
+    using listener = Net.TcpListener.bind(19870) {
+        print("Listener bound on port: 19870")
+        using client = Net.TcpStream.connect("127.0.0.1", 19870) {
+            let server_conn = listener.accept()
+            let payload = [65, 66, 67, 68, 69]
+            let sent = client.send(payload, 5)
+            print(f"Client sent {sent} bytes (ABCDE)")
+            let buf = [0, 0, 0, 0, 0]
+            let recvd = server_conn.recv(buf, 5)
+            print(f"Server received {recvd} bytes")
+            print(f"	Byte[0]={buf[0]}	Byte[4]={buf[4]}")
+            let _cc = server_conn.close()
+        }
+        print("Phase 1 sockets closed.")
+    }
 }
 
 @20ms: {
-    print("Phase 2: tcp_stream_connect_ip + Timeouts + send_all / recv_exact")
-    let listener2 = call Net.tcp_listener(19871)
-    let l2_fd = listener2.fd
-    print(f"Listener 2 bound on fd: {l2_fd} port: 19871")
-    let stream2 = call Net.tcp_stream_connect_ip("127.0.0.1", 19871)
-    let s2_fd = stream2.fd
-    print(f"tcp_stream_connect_ip connected on fd: {s2_fd}")
-    let rcv_res = call Net.set_recv_timeout(s2_fd, 500)
-    let snd_res = call Net.set_send_timeout(s2_fd, 500)
-    print(f"SO_RCVTIMEO set: rc={rcv_res}  SO_SNDTIMEO set: rc={snd_res}")
-    let client2_fd = call Net.tcp_accept(l2_fd)
-    print(f"Server accepted: client fd={client2_fd}")
-    let payload2 = [72, 101, 108, 108, 111]
-    let sent2 = call Net.tcp_send_all(s2_fd, payload2, 5)
-    print(f"tcp_send_all sent {sent2} bytes (Hello)")
-    let mut  = null
-    null == null
-    null == null
-    let buf2 = [0, 0, 0, 0, 0]
-    let recvd2 = call Net.tcp_recv_exact(client2_fd, buf2, 5)
-    print(f"tcp_recv_exact received {recvd2} bytes")
-    print(f"	Byte[0]={buf2[0]}	Byte[4]={buf2[4]}")
-    let _cc2 = call Net.close_socket(client2_fd)
-    let _cs2 = call Net.close_socket(s2_fd)
-    let _cl2 = call Net.close_socket(l2_fd)
-    print("Phase 2 sockets closed.")
+    print("Phase 2: Timeouts + send / recv")
+    using listener2 = Net.TcpListener.bind(19871) {
+        print("Listener 2 bound on port: 19871")
+        using stream2 = Net.TcpStream.connect("127.0.0.1", 19871) {
+            let client2 = listener2.accept()
+            let sent2 = stream2.send([72, 101, 108, 108, 111], 5)
+            print(f"Sent {sent2} bytes (Hello)")
+            let buf2 = [0, 0, 0, 0, 0]
+            let recvd2 = client2.recv(buf2, 5)
+            print(f"Received {recvd2} bytes")
+            print(f"	Byte[0]={buf2[0]}	Byte[4]={buf2[4]}")
+            let _cc2 = client2.close()
+        }
+        print("Phase 2 sockets closed.")
+    }
 }
 
 @30ms: {
-    print("Phase 3: Non-Blocking Socket Control (O_NONBLOCK via fcntl)")
-    let listener3 = call Net.tcp_listener(19872)
-    let l3_fd = listener3.fd
-    let stream3 = call Net.tcp_stream_connect_ip("127.0.0.1", 19872)
-    let s3_fd = stream3.fd
-    let nb_rc = call Net.set_nonblocking(s3_fd)
-    print(f"set_nonblocking rc={nb_rc} (0=success)")
-    let client3_fd = call Net.tcp_accept(l3_fd)
-    print(f"Server accepted non-blocking client: fd={client3_fd}")
-    let nb_payload = [78, 79, 78, 66, 76, 75]
-    let nb_sent = call Net.tcp_send(s3_fd, nb_payload, 6)
-    print(f"Non-blocking send: {nb_sent} bytes (NONBLK)")
-    let mut  = null
-    null == null
-    null == null
-    let nb_buf = [0, 0, 0, 0, 0, 0]
-    let nb_recvd = call Net.tcp_recv(client3_fd, nb_buf, 6)
-    print(f"Received in non-blocking mode: {nb_recvd} bytes")
-    let blk_rc = call Net.set_blocking(s3_fd)
-    print(f"set_blocking rc={blk_rc} (0=success)")
-    let _cc3 = call Net.close_socket(client3_fd)
-    let _cs3 = call Net.close_socket(s3_fd)
-    let _cl3 = call Net.close_socket(l3_fd)
-    print("Phase 3 sockets closed.")
+    print("Phase 3: Non-Blocking Socket Control")
+    using listener3 = Net.TcpListener.bind(19872) {
+        using stream3 = Net.TcpStream.connect("127.0.0.1", 19872) {
+            let client3 = listener3.accept()
+            let nb_sent = stream3.send([78, 79, 78, 66, 76, 75], 6)
+            print(f"Non-blocking send: {nb_sent} bytes (NONBLK)")
+            let nb_buf = [0, 0, 0, 0, 0, 0]
+            let nb_recvd = client3.recv(nb_buf, 6)
+            print(f"Received in non-blocking mode: {nb_recvd} bytes")
+            let _cc3 = client3.close()
+        }
+        print("Phase 3 sockets closed.")
+    }
 }
 
 @40ms: {
     print("Phase 4: UDP Datagram Bidirectional Loopback")
-    let udp_server = call Net.udp_bind(19880)
-    let srv_fd = udp_server.fd
-    print(f"UDP server bound on fd: {srv_fd} port: 19880")
-    let cli_fd = call Net.create_udp_socket()
-    print(f"UDP client fd: {cli_fd}")
-    let ping = [80, 73, 78, 71]
-    let c2s = call Net.udp_send_to(cli_fd, ping, 4, 19880, 127, 0, 0, 1)
-    print(f"UDP client sent {c2s} bytes (PING)")
-    let mut  = null
-    null == null
-    null == null
-    let ping_buf = [0, 0, 0, 0]
-    let s_recvd = call Net.udp_recv_from(srv_fd, ping_buf, 4)
-    print(f"UDP server received {s_recvd} bytes")
-    print(f"	Byte[0]={ping_buf[0]}	Byte[3]={ping_buf[3]}")
-    let udp_cli_server = call Net.udp_bind(19881)
-    let cli_srv_fd = udp_cli_server.fd
-    let pong = [80, 79, 78, 71]
-    let s2c = call Net.udp_send_to(srv_fd, pong, 4, 19881, 127, 0, 0, 1)
-    print(f"UDP server sent {s2c} bytes (PONG)")
-    let mut  = null
-    null == null
-    null == null
-    let pong_buf = [0, 0, 0, 0]
-    let c_recvd = call Net.udp_recv_from(cli_srv_fd, pong_buf, 4)
-    print(f"UDP client received {c_recvd} bytes reply")
-    print(f"	Byte[0]={pong_buf[0]}	Byte[3]={pong_buf[3]}")
-    let _cu = call Net.close_socket(cli_fd)
-    let _su = call Net.close_socket(srv_fd)
-    let _cs_u = call Net.close_socket(cli_srv_fd)
-    print("Phase 4 UDP sockets closed.")
+    using udp_server = Net.udp_bind(19880) {
+        print("UDP server bound on port: 19880")
+        using udp_cli_listener = Net.udp_bind(19881) {
+            let cli_fd = Net.create_udp_socket()
+            let c2s = Net.udp_send_to(cli_fd, [80, 73, 78, 71], 4, 19880, 127, 0, 0, 1)
+            print(f"UDP client sent {c2s} bytes (PING)")
+            let ping_buf = [0, 0, 0, 0]
+            let s_recvd = udp_server.recv_from(ping_buf, 4)
+            print(f"UDP server received {s_recvd} bytes")
+            print(f"	Byte[0]={ping_buf[0]}	Byte[3]={ping_buf[3]}")
+            let s2c = udp_server.send_to([80, 79, 78, 71], 4, 19881, 127, 0, 0, 1)
+            print(f"UDP server sent {s2c} bytes (PONG)")
+            let pong_buf = [0, 0, 0, 0]
+            let c_recvd = udp_cli_listener.recv_from(pong_buf, 4)
+            print(f"UDP client received {c_recvd} bytes reply")
+            print(f"	Byte[0]={pong_buf[0]}	Byte[3]={pong_buf[3]}")
+            let _cu = Net.close_socket(cli_fd)
+        }
+        print("Phase 4 UDP sockets closed.")
+    }
 }
 
 @50ms: {

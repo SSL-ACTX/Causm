@@ -106,6 +106,16 @@ macro_rules! statements {
                 lifetime: Option<LifetimeAnnotation>,
                 expr: Expression
             },
+            DestructureAssignment {
+                fields: Vec<(String, String)>,
+                mutable: bool,
+                expr: Expression
+            },
+            Using {
+                binding: String,
+                resource: Expression,
+                body: Vec<SpannedStatement>
+            },
             EnumDecl {
                 name: String,
                 variants: Vec<EnumVariantDef>
@@ -318,12 +328,14 @@ impl Statement {
             | Statement::AcausalReset { .. }
             | Statement::Capability(_)
             | Statement::Assignment { .. }
+            | Statement::DestructureAssignment { .. }
             | Statement::TypeDecl { .. }
             | Statement::EnumDecl { .. }
             | Statement::InterfaceDecl { .. }
             | Statement::FieldUpdate { .. }
             | Statement::Expression(_)
             | Statement::Print(_) => 0,
+            Statement::Using { body, .. } => estimate_block(body),
             Statement::DecayHandler { body, .. } => estimate_block(body),
             Statement::AssertTime { fallback, .. } => {
                 fallback.as_ref().map(|b| estimate_block(b)).unwrap_or(0)

@@ -609,10 +609,25 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown);
             if param.name == "self" && param.typ.is_none() {
-                if let Some(dot_idx) = name.find('.') {
-                    let struct_name = &name[..dot_idx];
+                if let Some(last_dot) = name.rfind('.') {
+                    let full_struct_name = &name[..last_dot];
+                    let bare_struct_name =
+                        if let Some(first_dot) = full_struct_name.rfind('.') {
+                            &full_struct_name[first_dot + 1..]
+                        } else {
+                            full_struct_name
+                        };
+                    let target_struct = if routine_analyzer
+                        .get_custom_type(full_struct_name)
+                        .is_some()
+                        || routine_analyzer.type_decls.contains_key(full_struct_name)
+                    {
+                        full_struct_name
+                    } else {
+                        bare_struct_name
+                    };
                     param_type =
-                        causm_core::types::Type::Custom(struct_name.to_string());
+                        causm_core::types::Type::Custom(target_struct.to_string());
                 }
             }
             routine_analyzer.set_variable_type(&param.name, param_type);
@@ -874,6 +889,36 @@ impl EntropicAnalyzer {
         &mut self,
         _mode: &SpeculationCommitMode,
     ) -> Result<(), SemanticError> {
+        Ok(())
+    }
+
+    pub(crate) fn Using(
+        &mut self,
+        binding: &String,
+        resource: &Expression,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        crate::expression::analyze_expression(self, resource)?;
+        let res_type = crate::expression::infer_expression_type(self, resource)?;
+        {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.types.insert(binding.clone(), res_type);
+            branch.produced.insert(binding.clone());
+            branch.consumed.remove(binding);
+            branch
+                .instantiated_at
+                .insert(binding.clone(), branch.accumulated_cost);
+        }
+
+        for inner_stmt in body {
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            branch.decayed.remove(binding);
+            branch.consumed.insert(binding.clone());
+        }
         Ok(())
     }
 }

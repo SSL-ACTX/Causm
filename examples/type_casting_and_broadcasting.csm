@@ -12,11 +12,11 @@
     let raw_data: array = [10, 20, 30, 40, 50]
     let factor: f32 = 1.25 as f32
     let offset: i16 = 5 as i16
-    let signal = call process_signal(raw_data, factor, offset)
+    let signal = process_signal(raw_data, factor, offset)
     print("Processed signal:")
     debug(clone(signal))
     let max_allowed: i32 = 40 as i32
-    let margins = call verify_thresholds(signal, max_allowed)
+    let margins = verify_thresholds(signal, max_allowed)
     print("Margins against threshold:")
     debug(margins)
 }

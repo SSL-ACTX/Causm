@@ -416,30 +416,71 @@ fn main() -> anyhow::Result<()> {
                 let formatted =
                     causm_devtools::fmt::printer::format_program(&program, &fmt_cfg);
 
+                // Pre-format analysis probe: if the original file already fails
+                // semantic analysis (e.g. stdlib-internal files that call FFI
+                // routines defined in a sibling ffi.csm), skip the semantic
+                // regression gate on the formatted output. Only verify that the
+                // formatted source is re-parseable.
+                let pre_analysis_ok = {
+                    let mut probe = EntropicAnalyzer::new();
+                    probe.use_z3 = false;
+                    let probe_ast =
+                        parser::parse_causm_with_imports(&source, path.parent());
+                    match probe_ast {
+                        Ok(ast) => probe
+                            .analyze_program_with_source(
+                                &ast,
+                                &source,
+                                &path.display().to_string(),
+                            )
+                            .is_ok(),
+                        Err(_) => false,
+                    }
+                };
+
                 // Two-Tier Safe Round-Trip & Semantic Validation Gate:
                 // 1. Parse formatted source with import resolution
                 match parser::parse_causm_with_imports(&formatted, path.parent()) {
                     Ok(reparsed_ast) => {
-                        // 2. Validate semantics with full static analyzer
-                        let mut analyzer = EntropicAnalyzer::new();
-                        analyzer.use_z3 = false;
-                        if let Err(err) = analyzer.analyze_program_with_source(
-                            &reparsed_ast,
-                            &formatted,
-                            &path.display().to_string(),
-                        ) {
-                            let formatted_err = analyzer.format_semantic_error(&err);
-                            eprintln!(
-                                "\x1b[1;31mFormatting Semantic Regression in {}:\x1b[0m\n  {}\n(Original file preserved untouched)",
-                                path.display(),
-                                formatted_err
-                            );
+                        // 2. Validate semantics — only if original was also clean.
+                        let semantic_ok = if pre_analysis_ok {
+                            let mut analyzer = EntropicAnalyzer::new();
+                            analyzer.use_z3 = false;
+                            match analyzer.analyze_program_with_source(
+                                &reparsed_ast,
+                                &formatted,
+                                &path.display().to_string(),
+                            ) {
+                                Ok(_) => true,
+                                Err(err) => {
+                                    let formatted_err =
+                                        analyzer.format_semantic_error(&err);
+                                    eprintln!(
+                                        "\x1b[1;31mFormatting Semantic Regression in {}:\x1b[0m\n  {}\n(Original file preserved untouched)",
+                                        path.display(),
+                                        formatted_err
+                                    );
+                                    false
+                                }
+                            }
                         } else {
-                            fs::write(path, formatted)?;
-                            println!(
-                                "\x1b[1;32mFormatted:\x1b[0m {}",
-                                path.display()
-                            );
+                            // Source was already non-self-contained; skip check.
+                            true
+                        };
+
+                        if semantic_ok {
+                            if formatted == source {
+                                println!(
+                                    "\x1b[2mUnchanged: {}\x1b[0m",
+                                    path.display()
+                                );
+                            } else {
+                                fs::write(path, formatted)?;
+                                println!(
+                                    "\x1b[1;32mFormatted:\x1b[0m {}",
+                                    path.display()
+                                );
+                            }
                         }
                     }
                     Err(err) => {
@@ -537,7 +578,22 @@ fn main() -> anyhow::Result<()> {
                 eprintln!(
                     "\x1b[1;35mStatic Temporal Analysis (WCET bounds):\x1b[0m"
                 );
-                let mut keys: Vec<&String> = wcet_map.keys().collect();
+                // For each dotted key, strip its first "Namespace." prefix and add the
+                // remainder to a suppression set. Any key whose entire name appears in
+                // this set is a duplicate covered by a namespaced alias and is hidden.
+                //
+                // e.g. "Net.TcpListener.accept" → tail = "TcpListener.accept" (suppressed)
+                //      "Net.create_socket"       → tail = "create_socket"      (suppressed)
+                let covered: std::collections::HashSet<String> = wcet_map
+                    .keys()
+                    .filter(|k| k.contains('.'))
+                    .map(|k| {
+                        let dot = k.find('.').unwrap();
+                        k[dot + 1..].to_string()
+                    })
+                    .collect();
+                let mut keys: Vec<&String> =
+                    wcet_map.keys().filter(|k| !covered.contains(*k)).collect();
                 keys.sort();
                 for key in keys {
                     let budget_str =

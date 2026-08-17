@@ -13,7 +13,12 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             let mut inner = pair.into_inner().peekable();
             let mut mutable = false;
             if let Some(first) = inner.peek() {
-                if first.as_str() == "mut" {
+                if first.as_rule() == Rule::mut_opt {
+                    let m_pair = inner.next().unwrap();
+                    if m_pair.as_str().contains("mut") {
+                        mutable = true;
+                    }
+                } else if first.as_str() == "mut" {
                     mutable = true;
                     inner.next();
                 }
@@ -46,33 +51,55 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 }
             }
 
-            let target = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let mut var_type: Option<TypeName> = None;
-            if let Some(next_pair) = inner.peek() {
-                if next_pair.as_rule() == Rule::type_annotation {
-                    let type_annotation_pair = inner.next().unwrap();
-                    if let Some(type_name_pair) =
-                        type_annotation_pair.into_inner().next()
-                    {
-                        var_type = Some(parse_type_name(type_name_pair));
+            let target_pair = inner.next().unwrap();
+            if target_pair.as_rule() == Rule::destructure_pattern {
+                let mut fields = Vec::new();
+                for field_pair in target_pair.into_inner() {
+                    let mut ids = field_pair
+                        .into_inner()
+                        .filter(|p| p.as_rule() == Rule::identifier)
+                        .map(|p| p.as_str().to_string());
+                    if let Some(src_name) = ids.next() {
+                        let target_name =
+                            ids.next().unwrap_or_else(|| src_name.clone());
+                        fields.push((src_name, target_name));
                     }
                 }
-            }
+                let expr = inner
+                    .next()
+                    .map(parse_expression)
+                    .unwrap_or(Expression::Null);
+                Statement::DestructureAssignment {
+                    fields,
+                    mutable,
+                    expr,
+                }
+            } else {
+                let target = target_pair.as_str().to_string();
+                let mut var_type: Option<TypeName> = None;
+                if let Some(next_pair) = inner.peek() {
+                    if next_pair.as_rule() == Rule::type_annotation {
+                        let type_annotation_pair = inner.next().unwrap();
+                        if let Some(type_name_pair) =
+                            type_annotation_pair.into_inner().next()
+                        {
+                            var_type = Some(parse_type_name(type_name_pair));
+                        }
+                    }
+                }
 
-            let expr = inner
-                .next()
-                .map(parse_expression)
-                .unwrap_or(Expression::Null);
+                let expr = inner
+                    .next()
+                    .map(parse_expression)
+                    .unwrap_or(Expression::Null);
 
-            Statement::Assignment {
-                target,
-                mutable,
-                var_type,
-                lifetime,
-                expr,
+                Statement::Assignment {
+                    target,
+                    mutable,
+                    var_type,
+                    lifetime,
+                    expr,
+                }
             }
         }
         Rule::enum_decl => {

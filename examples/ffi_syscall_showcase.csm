@@ -16,16 +16,16 @@
             routine write(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 2ms
             routine close(consume fd: i32) -> i32 taking 1ms
         }
-        let pid_val = call getpid()
+        let pid_val = getpid()
         print("Native Foreign Process ID:")
         print(pid_val)
-        let ppid_val = call getppid()
+        let ppid_val = getppid()
         print("Native Parent Process ID:")
         print(ppid_val)
-        let uid_val = call getuid()
+        let uid_val = getuid()
         print("Native User ID:")
         print(uid_val)
-        let cwd_val = call getcwd()
+        let cwd_val = getcwd()
         print("Native Working Directory:")
         print(cwd_val)
         let handle = struct { fd = 1 }

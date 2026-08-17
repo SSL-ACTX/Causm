@@ -10,10 +10,10 @@
         let ref_raw = &raw_reading
         print("Raw Reading Reference:")
         print(ref_raw)
-        let digest = call compute_digest(raw_reading, scaling_factor)
+        let digest = compute_digest(raw_reading, scaling_factor)
         print("Wildcard Imported Routine Digest:")
         print(digest)
-        let calibrated = call calibrate_reading(digest)
+        let calibrated = calibrate_reading(digest)
         print("Calibrated Signal Value:")
         print(calibrated)
         let telemetry_pack = struct { score = calibrated, status = "active" }

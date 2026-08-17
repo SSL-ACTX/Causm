@@ -60,12 +60,47 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             resolved_routine,
             resolved_budget,
         } => {
-            let routine_name =
-                resolved_routine.borrow().clone().unwrap_or_else(|| {
+            let routine_name = resolved_routine
+                .borrow()
+                .clone()
+                .or_else(|| {
+                    let mut parts = Vec::new();
+                    let mut curr: &Expression = target;
+                    while let Expression::FieldAccess {
+                        target: next_t,
+                        field: f,
+                    } = curr
+                    {
+                        parts.push(f.as_str());
+                        curr = next_t;
+                    }
+                    if let Expression::Identifier(ref base) = curr {
+                        parts.push(base.as_str());
+                        parts.reverse();
+                        let base_path = parts.join(".");
+                        let full_static = format!("{}.{}", base_path, method);
+                        if ctx.routines.contains_key(&full_static) {
+                            Some(format!("<static>{}", full_static))
+                        } else {
+                            Some(format!("{}.{}", base_path, method))
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| {
                     panic!("MethodCall was not resolved during semantic analysis");
                 });
+            let is_static = routine_name.starts_with("<static>");
+            let actual_routine_name = if is_static {
+                routine_name.trim_start_matches("<static>").to_string()
+            } else {
+                routine_name.clone()
+            };
             let mut arg_regs = Vec::new();
-            arg_regs.push(lower_expression(ctx, target));
+            if !is_static && routine_name != "<enum_constructor>" {
+                arg_regs.push(lower_expression(ctx, target));
+            }
             for arg in args {
                 arg_regs.push(lower_expression(ctx, arg));
             }
@@ -91,7 +126,7 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 });
             } else {
                 ctx.push(causm_ir::Instruction::Call {
-                    routine: routine_name,
+                    routine: actual_routine_name,
                     args: arg_regs,
                     dest,
                 });

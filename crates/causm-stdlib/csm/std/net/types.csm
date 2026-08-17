@@ -5,18 +5,18 @@
     }
     type TcpStream = struct decay_after 10000ms {
         fd: i32,
+        is_connected: bool,
         peer_ip: string,
-        peer_port: i32,
-        is_connected: bool
+        peer_port: i32
     }
     type TcpListener = struct {
-        is_listening: bool,
+        bind_port: i32,
         fd: i32,
-        bind_port: i32
+        is_listening: bool
     }
     type UdpSocket = struct {
-        is_bound: bool,
         fd: i32,
+        is_bound: bool,
         port: i32
     }
     type Timeval = struct {

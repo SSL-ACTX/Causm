@@ -38,6 +38,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         // Control Flow
         Rule::if_stmt
         | Rule::if_let_stmt
+        | Rule::using_stmt
         | Rule::loop_stmt
         | Rule::for_stmt
         | Rule::while_stmt

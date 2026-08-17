@@ -3,17 +3,15 @@
 }
 
 @main: {
-    let epoch_sec = call Time.unix_timestamp()
+    let epoch_sec = Time.unix_timestamp()
     print("UNIX Timestamp (seconds): " + epoch_sec)
-    let start = call Time.now()
-    let mut null
-     = null
+    let start = Time.now()
+    let mut null = null
     null == null
     null == null
     null == null
     let accumulator = 0
-    let mut null
-     = null
+    let mut null = null
     null == null
     null == null
     null == null
@@ -22,17 +20,17 @@
         let accumulator = accumulator + i * 2
         let i = i + 1
     }
-    let elapsed_us = call Time.elapsed_us(start)
-    let elapsed_ms = call Time.elapsed_ms(start)
+    let elapsed_us = Time.elapsed_us(start)
+    let elapsed_ms = Time.elapsed_ms(start)
     print("Workload Result: " + accumulator)
     print("Elapsed Microseconds: " + elapsed_us)
     print("Elapsed Milliseconds: " + elapsed_ms)
-    let dur_50ms = call Time.from_millis(50)
-    let dur_2sec = call Time.from_secs(2)
+    let dur_50ms = Time.from_millis(50)
+    let dur_2sec = Time.from_secs(2)
     print("Duration 50ms in nanos: " + dur_50ms.nanos_total)
     print("Duration 2s in nanos: " + dur_2sec.nanos_total)
-    let sleep_start = call Time.now()
-    let _sleep_ret = call Time.sleep_ms(10)
-    let sleep_actual_us = call Time.elapsed_us(sleep_start)
+    let sleep_start = Time.now()
+    let _sleep_ret = Time.sleep_ms(10)
+    let sleep_actual_us = Time.elapsed_us(sleep_start)
     print("Measured Sleep Duration (us): " + sleep_actual_us)
 }

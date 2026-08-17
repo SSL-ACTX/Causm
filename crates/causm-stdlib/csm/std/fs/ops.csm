@@ -1,84 +1,55 @@
-// crates/causm-stdlib/csm/std/fs/ops.csm - Idiomatic High-Level File System Operations
-
-// Open flags: O_RDONLY=0, O_WRONLY=1, O_RDWR=2, O_CREAT=64, O_TRUNC=512, O_APPEND=1024
-pub routine open_readonly(path: string) -> File taking _ {
-    let raw_fd = call open(path, 0, 0)
-    struct {
-        fd = raw_fd,
-        path = path,
-        is_open = true
+@0ms: {
+    routine open_readonly(peek path: string) -> File taking _ {
+        let raw_fd = open(path, 0, 0)
+        struct { fd = raw_fd, is_open = true, path = path }
+    }
+    routine create_file(peek path: string) -> File taking _ {
+        let raw_fd = open(path, 577, 420)
+        struct { fd = raw_fd, is_open = true, path = path }
+    }
+    routine open_append(peek path: string) -> File taking _ {
+        let raw_fd = open(path, 1089, 420)
+        struct { fd = raw_fd, is_open = true, path = path }
+    }
+    routine write_all(peek file: File, peek content: string, peek len: u64) -> i64 taking _ {
+        write(file.fd, content, len)
+    }
+    routine flush_file(peek file: File) -> i32 taking _ {
+        fsync(file.fd)
+    }
+    routine truncate_file(peek file: File, peek length: i64) -> i32 taking _ {
+        ftruncate(file.fd, length)
+    }
+    routine seek_start(peek file: File, peek offset: i64) -> i64 taking _ {
+        lseek(file.fd, offset, 0)
+    }
+    routine seek_end(peek file: File, peek offset: i64) -> i64 taking _ {
+        lseek(file.fd, offset, 2)
+    }
+    routine file_exists(peek path: string) -> bool taking _ {
+        let res = access(path, 0)
+        res == 0
+    }
+    routine remove_file(peek path: string) -> i32 taking _ {
+        unlink(path)
+    }
+    routine rename_file(peek old_path: string, peek new_path: string) -> i32 taking _ {
+        rename(old_path, new_path)
+    }
+    routine create_dir(peek path: string) -> i32 taking _ {
+        mkdir(path, 493)
+    }
+    routine read_to_string(peek path: string) -> string taking _ {
+        let file = open_readonly(path)
+        let size = seek_end(file, 0)
+        let reset_pos = seek_start(file, 0)
+        file.path
+    }
+    routine file_size(peek path: string) -> i64 taking _ {
+        let file = open_readonly(path)
+        seek_end(file, 0)
+    }
+    routine remove_dir(peek path: string) -> i32 taking _ {
+        rmdir(path)
     }
 }
-
-pub routine create_file(path: string) -> File taking _ {
-    let raw_fd = call open(path, 577, 420) // O_WRONLY | O_CREAT | O_TRUNC = 577, 0644
-    struct {
-        fd = raw_fd,
-        path = path,
-        is_open = true
-    }
-}
-
-pub routine open_append(path: string) -> File taking _ {
-    let raw_fd = call open(path, 1089, 420) // O_WRONLY | O_CREAT | O_APPEND = 1089, 0644
-    struct {
-        fd = raw_fd,
-        path = path,
-        is_open = true
-    }
-}
-
-pub routine write_all(peek file: File, content: string, len: u64) -> i64 taking _ {
-    call write(file.fd, content, len)
-}
-
-pub routine flush_file(peek file: File) -> i32 taking _ {
-    call fsync(file.fd)
-}
-
-pub routine truncate_file(peek file: File, length: i64) -> i32 taking _ {
-    call ftruncate(file.fd, length)
-}
-
-pub routine seek_start(peek file: File, offset: i64) -> i64 taking _ {
-    call lseek(file.fd, offset, 0) // SEEK_SET = 0
-}
-
-pub routine seek_end(peek file: File, offset: i64) -> i64 taking _ {
-    call lseek(file.fd, offset, 2) // SEEK_END = 2
-}
-
-pub routine file_exists(path: string) -> bool taking _ {
-    let res = call access(path, 0) // F_OK = 0
-    res == 0
-}
-
-pub routine remove_file(path: string) -> i32 taking _ {
-    call unlink(path)
-}
-
-pub routine rename_file(old_path: string, new_path: string) -> i32 taking _ {
-    call rename(old_path, new_path)
-}
-
-pub routine create_dir(path: string) -> i32 taking _ {
-    call mkdir(path, 493) // 0755
-}
-
-pub routine read_to_string(path: string) -> string taking _ {
-    let file = call open_readonly(path)
-    let size = call seek_end(file, 0)
-    let reset_pos = call seek_start(file, 0)
-    file.path
-}
-
-pub routine file_size(path: string) -> i64 taking _ {
-    let file = call open_readonly(path)
-    let size = call seek_end(file, 0)
-    size
-}
-
-pub routine remove_dir(path: string) -> i32 taking _ {
-    call rmdir(path)
-}
-

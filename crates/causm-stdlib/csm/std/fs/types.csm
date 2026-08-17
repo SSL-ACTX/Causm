@@ -1,14 +1,14 @@
 @0ms: {
     type File = struct decay_after 5000ms {
+        fd: i32,
         is_open: bool,
-        path: string,
-        fd: i32
+        path: string
     }
     type FileMetadata = struct decay_after 5000ms {
+        is_directory: bool,
         is_file: bool,
-        size_bytes: i64,
         readonly: bool,
-        is_directory: bool
+        size_bytes: i64
     }
     enum OpenMode {
         ReadOnly,

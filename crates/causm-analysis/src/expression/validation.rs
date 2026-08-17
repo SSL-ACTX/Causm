@@ -32,6 +32,95 @@ pub(crate) fn analyze_expression(
                     return Ok(());
                 }
             }
+            if let Some(ns) = super::inference::get_static_target_path(target) {
+                let static_routine_name = format!("{}.{}", ns, method);
+                let is_local_var = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .map(|st| st.types.contains_key(&ns))
+                    .unwrap_or(false);
+                if !is_local_var
+                    && analyzer.routines.contains_key(&static_routine_name)
+                {
+                    let info =
+                        analyzer.routines.get(&static_routine_name).unwrap().clone();
+                    if args.len() != info.params.len() {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::ArgumentCountMismatch(format!(
+                                "routine {} expects {} args, got {}",
+                                static_routine_name,
+                                info.params.len(),
+                                args.len()
+                            )),
+                        ));
+                    }
+                    for (arg_expr, (mode, _param_name, expected_type)) in
+                        args.iter().zip(info.params.iter())
+                    {
+                        let arg_type = infer_expression_type(analyzer, arg_expr)?;
+                        let is_ffi_ptr_pass = matches!(
+                            (&expected_type, &arg_type),
+                            (
+                                Type::I64 | Type::I32 | Type::U64 | Type::Integer,
+                                Type::Array(_) | Type::Struct(_) | Type::Custom(_)
+                            )
+                        );
+                        if !is_ffi_ptr_pass
+                            && !analyzer.types_compatible(expected_type, &arg_type)
+                        {
+                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                format!(
+                                    "routine {} arg type mismatch: expected {:?}, got {:?}",
+                                    static_routine_name, expected_type, arg_type
+                                ),
+                            )));
+                        }
+
+                        if let Expression::StructLit(ref type_name, _) = arg_expr {
+                            if type_name.borrow().is_none() {
+                                if let Type::Custom(ref name) = expected_type {
+                                    *type_name.borrow_mut() = Some(name.clone());
+                                }
+                            }
+                        }
+
+                        analyze_expression_nonconsuming(analyzer, arg_expr)?;
+
+                        match mode {
+                            ParamMode::Consume => {
+                                if let Expression::Identifier(name) = arg_expr {
+                                    analyzer.mark_consumed(name)?;
+                                }
+                            }
+                            ParamMode::Clone => {
+                                if let Expression::Identifier(name) = arg_expr {
+                                    let state = analyzer
+                                        .branch_contexts
+                                        .get(&analyzer.current_branch)
+                                        .unwrap();
+                                    if state.consumed.contains(name) {
+                                        return Err(analyzer.annotate(
+                                            SemanticErrorKind::UseAfterConsume(
+                                                name.clone(),
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    *resolved_routine.borrow_mut() =
+                        Some(format!("<static>{}", static_routine_name));
+                    let cost = info.taking_ms;
+                    let branch = analyzer
+                        .branch_contexts
+                        .get_mut(&analyzer.current_branch)
+                        .unwrap();
+                    branch.accumulated_cost += cost;
+                    return Ok(());
+                }
+            }
             analyze_expression_nonconsuming(analyzer, target)?;
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
@@ -307,8 +396,17 @@ pub(crate) fn analyze_expression(
                 args.iter().zip(info.params.iter().skip(1))
             {
                 let arg_type = infer_expression_type(analyzer, arg_expr)?;
+                let is_ffi_ptr_pass = matches!(
+                    (&expected_type, &arg_type),
+                    (
+                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
+                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
+                    )
+                );
 
-                if !analyzer.types_compatible(expected_type, &arg_type) {
+                if !is_ffi_ptr_pass
+                    && !analyzer.types_compatible(expected_type, &arg_type)
+                {
                     return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                         format!(
                             "method {} arg type mismatch: expected {:?}, got {:?}",

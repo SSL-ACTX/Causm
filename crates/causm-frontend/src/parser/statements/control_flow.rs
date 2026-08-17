@@ -439,6 +439,30 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             Statement::Yield(item)
         }
         Rule::break_stmt => Statement::Break,
+        Rule::using_stmt => {
+            let mut inner = pair.into_inner();
+            let binding = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let resource = inner
+                .next()
+                .map(parse_expression)
+                .unwrap_or(Expression::Null);
+            let mut body = Vec::new();
+            if let Some(block_pair) = inner.next() {
+                for stmt_pair in block_pair.into_inner() {
+                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
+                        body.push(parse_statement(actual_stmt));
+                    }
+                }
+            }
+            Statement::Using {
+                binding,
+                resource,
+                body,
+            }
+        }
         _ => unreachable!(),
     }
 }

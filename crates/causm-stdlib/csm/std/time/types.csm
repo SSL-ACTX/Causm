@@ -1,11 +1,11 @@
 @0ms: {
     type Timespec = struct {
-        tv_sec: i64,
-        tv_nsec: i64
+        tv_nsec: i64,
+        tv_sec: i64
     }
     type Instant = struct {
-        secs: i64,
-        nanos: i64
+        nanos: i64,
+        secs: i64
     }
     type Duration = struct {
         nanos_total: i64

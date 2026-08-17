@@ -1,51 +1,35 @@
-// crates/causm-stdlib/csm/std/time/ops.csm - Time Measurement & Sleep Operations
-
-pub routine now() -> Instant taking _ {
-    let mut ts = struct { tv_sec = 0, tv_nsec = 0 }
-    let _code = call clock_gettime(1, ts)
-    struct {
-        secs = ts.tv_sec,
-        nanos = ts.tv_nsec
+@0ms: {
+    routine now() -> Instant taking _ {
+        let mut ts = struct { tv_nsec = 0, tv_sec = 0 }
+        let _code = clock_gettime(1, ts)
+        struct { nanos = ts.tv_nsec, secs = ts.tv_sec }
     }
-}
-
-pub routine unix_timestamp() -> i64 taking _ {
-    let raw = call time(0)
-    raw
-}
-
-pub routine elapsed_ms(peek start: Instant) -> i64 taking _ {
-    let current = call now()
-    let sec_diff = current.secs - start.secs
-    let nano_diff = current.nanos - start.nanos
-    let total_ms = (sec_diff * 1000) + (nano_diff / 1000000)
-    total_ms
-}
-
-pub routine elapsed_us(peek start: Instant) -> i64 taking _ {
-    let current = call now()
-    let sec_diff = current.secs - start.secs
-    let nano_diff = current.nanos - start.nanos
-    let total_us = (sec_diff * 1000000) + (nano_diff / 1000)
-    total_us
-}
-
-pub routine from_millis(ms: i64) -> Duration taking _ {
-    struct {
-        nanos_total = ms * 1000000
+    routine unix_timestamp() -> i64 taking _ {
+        time(0)
     }
-}
-
-pub routine from_secs(secs: i64) -> Duration taking _ {
-    struct {
-        nanos_total = secs * 1000000000
+    routine elapsed_ms(peek start: Instant) -> i64 taking _ {
+        let current = now()
+        let sec_diff = current.secs - start.secs
+        let nano_diff = current.nanos - start.nanos
+        let total_ms = sec_diff * 1000 + nano_diff / 1000000
+        total_ms
     }
-}
-
-pub routine sleep_ms(ms: i64) -> i32 taking _ {
-    let sec = ms / 1000
-    let nsec = (ms % 1000) * 1000000
-    let req = struct { tv_sec = sec, tv_nsec = nsec }
-    let rem = struct { tv_sec = 0, tv_nsec = 0 }
-    call nanosleep(req, rem)
+    routine elapsed_us(peek start: Instant) -> i64 taking _ {
+        let current = now()
+        let sec_diff = current.secs - start.secs
+        let nano_diff = current.nanos - start.nanos
+        let total_us = sec_diff * 1000000 + nano_diff / 1000
+        total_us
+    }
+    routine from_millis(peek ms: i64) -> Duration taking _ {
+        struct { nanos_total = ms * 1000000 }
+    }
+    routine from_secs(peek secs: i64) -> Duration taking _ {
+        struct { nanos_total = secs * 1000000000 }
+    }
+    routine sleep_ms(peek ms: i64) -> i32 taking _ {
+        let req = struct { tv_nsec = ms % 1000 * 1000000, tv_sec = ms / 1000 }
+        let rem = struct { tv_nsec = 0, tv_sec = 0 }
+        nanosleep(req, rem)
+    }
 }

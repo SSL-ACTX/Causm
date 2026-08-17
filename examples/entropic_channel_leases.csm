@@ -1,7 +1,7 @@
 @main: {
     type SensorData = struct {
-        reading: int,
-        id: string
+        id: string,
+        reading: int
     }
     let cleanup_runs = 0
     decay_handler for SensorData {

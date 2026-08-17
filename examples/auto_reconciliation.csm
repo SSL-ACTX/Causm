@@ -7,7 +7,7 @@
         let status = "offline"
     } reconcile auto
     print("Sensor Status: " + status)
-    let packet = struct { header = "REQ_104", payload = "0xFA99", checksum = "0x11" }
+    let packet = struct { checksum = "0x11", header = "REQ_104", payload = "0xFA99" }
     let is_secure = false
     if (is_secure) {
         let data = packet.payload

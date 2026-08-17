@@ -548,6 +548,47 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
         }
         Statement::EnumDecl { .. } => {}
+        Statement::DestructureAssignment { fields, expr, .. } => {
+            let src = lower_expression(ctx, expr);
+            for (source_field, target_var) in fields {
+                let dest = ctx.get_reg(target_var);
+                ctx.push(Instruction::FieldAccess {
+                    dest,
+                    target: src,
+                    field: source_field.clone(),
+                });
+            }
+        }
+        Statement::Using {
+            binding,
+            resource,
+            body,
+        } => {
+            let src = lower_expression(ctx, resource);
+            let dest = ctx.get_reg(binding);
+            ctx.push(Instruction::Move { dest, src });
+
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+
+            for (type_name, spec) in ctx.auto_drop_specs.clone() {
+                if binding.to_lowercase().contains(&type_name.to_lowercase())
+                    || binding.contains("handle")
+                    || binding.contains("file")
+                    || binding.contains("listener")
+                    || binding.contains("client")
+                    || binding.contains("stream")
+                    || binding.contains("socket")
+                {
+                    ctx.push(Instruction::AutoDrop {
+                        target: dest,
+                        spec: spec.clone(),
+                    });
+                }
+            }
+            ctx.push(Instruction::Consume { src: dest });
+        }
         Statement::Assignment {
             target,
             expr,

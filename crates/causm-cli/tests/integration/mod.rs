@@ -14,6 +14,7 @@ pub mod causm_oop;
 pub mod causm_process;
 pub mod causm_reconciliation;
 pub mod causm_semantic;
+pub mod causm_syntax_ergonomics;
 pub mod causm_temporal;
 pub mod causm_temporal_contracts;
 pub mod causm_z3_routine_test;

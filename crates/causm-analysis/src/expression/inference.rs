@@ -107,6 +107,19 @@ pub(crate) fn infer_expression_type(
                     return Ok(Type::Custom(name.clone()));
                 }
             }
+            if let Some(ns) = get_static_target_path(target) {
+                let static_routine_name = format!("{}.{}", ns, method);
+                let is_local_var = analyzer
+                    .branch_contexts
+                    .get(&analyzer.current_branch)
+                    .map(|st| st.types.contains_key(&ns))
+                    .unwrap_or(false);
+                if !is_local_var {
+                    if let Some(info) = analyzer.routines.get(&static_routine_name) {
+                        return Ok(info.return_type.clone());
+                    }
+                }
+            }
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
                 Type::Custom(name) => name.clone(),
@@ -299,5 +312,16 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::FString(_) => Ok(Type::String),
+    }
+}
+
+pub(crate) fn get_static_target_path(expr: &Expression) -> Option<String> {
+    match expr {
+        Expression::Identifier(id) => Some(id.clone()),
+        Expression::FieldAccess { target, field } => {
+            let parent = get_static_target_path(target)?;
+            Some(format!("{}.{}", parent, field))
+        }
+        _ => None,
     }
 }

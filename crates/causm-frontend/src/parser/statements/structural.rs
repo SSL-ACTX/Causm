@@ -160,6 +160,17 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             sc_inner.next().unwrap().as_str().to_string();
                         state_constraint = Some((var_name, state_name));
                     }
+                    Rule::concise_body => {
+                        let expr = current
+                            .into_inner()
+                            .next()
+                            .map(crate::parser::expressions::parse_expression)
+                            .unwrap_or(Expression::Null);
+                        body.push(SpannedStatement {
+                            stmt: Statement::Expression(expr),
+                            span: Span { start: 0, end: 0 },
+                        });
+                    }
                     Rule::statement => {
                         if let Some(s) = current.into_inner().next() {
                             body.push(parse_statement(s));

@@ -55,6 +55,47 @@ fn format_spanned_statement(
                 format_expr(expr)
             ));
         }
+        Statement::DestructureAssignment {
+            fields,
+            mutable,
+            expr,
+        } => {
+            let mut_str = if *mutable { "mut " } else { "" };
+            let fields_str = fields
+                .iter()
+                .map(|(src, alias)| {
+                    if src == alias {
+                        src.clone()
+                    } else {
+                        format!("{} as {}", src, alias)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!(
+                "{}let {}{{ {} }} = {}\n",
+                indent,
+                mut_str,
+                fields_str,
+                format_expr(expr)
+            ));
+        }
+        Statement::Using {
+            binding,
+            resource,
+            body,
+        } => {
+            out.push_str(&format!(
+                "{}using {} = {} {{\n",
+                indent,
+                binding,
+                format_expr(resource)
+            ));
+            for s in body {
+                format_spanned_statement(out, s, indent_step, depth + 1);
+            }
+            out.push_str(&format!("{}}}\n", indent));
+        }
         Statement::RoutineDef {
             name,
             params,
@@ -119,7 +160,9 @@ fn format_spanned_statement(
                 "{}type {} = {}struct{} {{\n",
                 indent, name, ext_str, decay_str
             ));
-            let field_entries: Vec<_> = fields
+            let mut sorted_fields: Vec<_> = fields.iter().collect();
+            sorted_fields.sort_by_key(|(fname, _)| fname.as_str());
+            let field_entries: Vec<_> = sorted_fields
                 .iter()
                 .map(|(fname, fdef)| {
                     format!(
@@ -525,7 +568,9 @@ fn format_spanned_statement(
                     sl
                 ));
             }
-            for (res, amt) in &iso.manifest.resource_budgets {
+            let mut budgets: Vec<_> = iso.manifest.resource_budgets.iter().collect();
+            budgets.sort_by_key(|(res, _)| res.as_str());
+            for (res, amt) in budgets {
                 out.push_str(&format!(
                     "{}enable {}({})\n",
                     " ".repeat(indent_step * (depth + 1)),
@@ -541,8 +586,9 @@ fn format_spanned_statement(
                         cap.path
                     ));
                 } else {
-                    let p_strs = cap
-                        .parameters
+                    let mut sorted_params: Vec<_> = cap.parameters.iter().collect();
+                    sorted_params.sort_by_key(|(k, _)| k.as_str());
+                    let p_strs = sorted_params
                         .iter()
                         .map(|(k, v)| format!("{} = \"{}\"", k, v))
                         .collect::<Vec<_>>()
@@ -867,7 +913,9 @@ fn format_decayed_pattern(pat: &causm_core::DecayedPattern) -> String {
     match pat {
         causm_core::DecayedPattern::Binding(b) => b.clone(),
         causm_core::DecayedPattern::Fields(f) => {
-            let f_strs: Vec<_> = f
+            let mut sorted: Vec<_> = f.iter().collect();
+            sorted.sort_by_key(|(k, _)| k.as_str());
+            let f_strs: Vec<_> = sorted
                 .iter()
                 .map(|(k, v)| match v {
                     causm_core::PatternValue::State(s) => format!("{} = {}", k, s),
@@ -886,8 +934,9 @@ fn format_merge_resolution(res: &MergeResolution) -> String {
         return " reconcile auto".to_string();
     }
     if !res.rules.is_empty() {
-        let entries = res
-            .rules
+        let mut sorted_rules: Vec<_> = res.rules.iter().collect();
+        sorted_rules.sort_by_key(|(k, _)| k.as_str());
+        let entries = sorted_rules
             .iter()
             .map(|(k, v)| {
                 let strat_str = match v {
@@ -972,7 +1021,7 @@ fn format_expr(expr: &Expression) -> String {
         Expression::Call { routine, args } => {
             let args_str =
                 args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
-            format!("call {}({})", routine, args_str)
+            format!("{}({})", routine, args_str)
         }
         Expression::MethodCall {
             target,
@@ -1017,8 +1066,10 @@ fn format_expr(expr: &Expression) -> String {
             } else {
                 String::new()
             };
+            let mut sorted_fields: Vec<_> = fields.iter().collect();
+            sorted_fields.sort_by_key(|(k, _)| k.as_str());
             let mut f_strs = Vec::new();
-            for (k, v) in fields {
+            for (k, v) in sorted_fields {
                 f_strs.push(format!("{} = {}", k, format_expr(v)));
             }
             format!("{}struct {{ {} }}", type_str, f_strs.join(", "))
@@ -1038,8 +1089,10 @@ fn format_expr(expr: &Expression) -> String {
         }
         Expression::ChannelReceive(chan) => format!("chan_recv({})", chan),
         Expression::TopologyLit(fields) => {
+            let mut sorted_fields: Vec<_> = fields.iter().collect();
+            sorted_fields.sort_by_key(|(k, _)| k.as_str());
             let mut f_strs = Vec::new();
-            for (k, v) in fields {
+            for (k, v) in sorted_fields {
                 f_strs.push(format!("{} = {}", k, format_expr(v)));
             }
             format!("topology {{ {} }}", f_strs.join(", "))
@@ -1095,7 +1148,9 @@ fn format_expr(expr: &Expression) -> String {
             params,
             deadline_ms,
         } => {
-            let p_strs = params
+            let mut sorted_params: Vec<_> = params.iter().collect();
+            sorted_params.sort_by_key(|(k, _)| k.as_str());
+            let p_strs = sorted_params
                 .iter()
                 .map(|(k, v)| format!("{} = \"{}\"", k, v))
                 .collect::<Vec<_>>()

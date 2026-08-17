@@ -74,6 +74,8 @@ pub fn estimate_statement_cost(
 ) -> u64 {
     let expr_cost = match stmt {
         Statement::Assignment { expr, .. }
+        | Statement::DestructureAssignment { expr, .. }
+        | Statement::Using { resource: expr, .. }
         | Statement::FieldUpdate { value: expr, .. }
         | Statement::Expression(expr)
         | Statement::Debug(expr) => {

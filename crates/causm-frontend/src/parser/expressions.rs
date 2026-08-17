@@ -208,7 +208,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 deadline_ms,
             }
         }
-        Rule::call_expr => {
+        Rule::call_expr | Rule::direct_call_expr => {
             let mut inner = pair.into_inner();
             let routine = inner
                 .next()
@@ -220,8 +220,19 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     args.push(parse_expression(e));
                 }
             }
+            if routine == "clone" && args.len() == 1 {
+                if let Expression::Identifier(ref name) = args[0] {
+                    return Expression::CloneOp(name.clone());
+                }
+            } else if routine == "chan_recv" && args.len() == 1 {
+                if let Expression::Identifier(ref name) = args[0] {
+                    return Expression::ChannelReceive(name.clone());
+                }
+            }
             Expression::Call { routine, args }
         }
+        Rule::byte_string => parse_byte_string(pair.as_str()),
+        Rule::hex_byte_string => parse_hex_byte_string(pair.as_str()),
         Rule::duration_literal => {
             let str_val = pair.as_str();
             let val = if str_val.ends_with("ns") {
@@ -238,8 +249,22 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             };
             Expression::Integer(val)
         }
+        Rule::hex_integer_literal => {
+            let s = pair.as_str();
+            let val = u64::from_str_radix(&s[2..], 16)
+                .map(|v| v as i64)
+                .unwrap_or(0);
+            Expression::Integer(val)
+        }
         Rule::integer_literal => {
-            let val = pair.as_str().parse::<i64>().unwrap_or(0);
+            let s = pair.as_str();
+            let val = if s.starts_with("0x") || s.starts_with("0X") {
+                u64::from_str_radix(&s[2..], 16)
+                    .map(|v| v as i64)
+                    .unwrap_or(0)
+            } else {
+                s.parse::<i64>().unwrap_or(0)
+            };
             Expression::Integer(val)
         }
         Rule::float_literal => {
@@ -466,4 +491,38 @@ pub(crate) fn unescape_raw_text(inner: &str) -> String {
         }
     }
     out
+}
+
+pub(crate) fn parse_byte_string(raw: &str) -> Expression {
+    let inner = if raw.starts_with("b\"") && raw.ends_with('"') && raw.len() >= 3 {
+        &raw[2..raw.len() - 1]
+    } else {
+        raw
+    };
+    let unescaped = unescape_raw_text(inner);
+    let elements = unescaped
+        .bytes()
+        .map(|b| Expression::Integer(b as i64))
+        .collect();
+    Expression::ArrayLiteral(elements)
+}
+
+pub(crate) fn parse_hex_byte_string(raw: &str) -> Expression {
+    let inner = if raw.starts_with("hex\"") && raw.ends_with('"') && raw.len() >= 5 {
+        &raw[4..raw.len() - 1]
+    } else {
+        raw
+    };
+    let clean: String = inner.chars().filter(|c| !c.is_whitespace()).collect();
+    let mut elements = Vec::new();
+    let chars: Vec<char> = clean.chars().collect();
+    let mut i = 0;
+    while i + 1 < chars.len() {
+        let hex_chunk: String = chars[i..i + 2].iter().collect();
+        if let Ok(byte_val) = u8::from_str_radix(&hex_chunk, 16) {
+            elements.push(Expression::Integer(byte_val as i64));
+        }
+        i += 2;
+    }
+    Expression::ArrayLiteral(elements)
 }

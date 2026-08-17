@@ -148,6 +148,52 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
 
                 Ok(current_clock)
             }
+            Statement::DestructureAssignment { fields, expr, .. } => {
+                self.verify_expression(expr, path_condition, &current_clock)?;
+                for (_src_field, target) in fields {
+                    let is_valid = self.solver.bool_const(&format!(
+                        "{}_valid_{}",
+                        target, spanned.span.start
+                    ));
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &is_valid);
+                    self.solver.assert(&impl_valid);
+                    self.variable_validity.insert(target.clone(), is_valid);
+
+                    let is_leased = self.solver.bool_const(&format!(
+                        "{}_leased_{}",
+                        target, spanned.span.start
+                    ));
+                    let not_leased = self.solver.bool_not(&is_leased);
+                    let impl_not_leased =
+                        self.solver.bool_implies(path_condition, &not_leased);
+                    self.solver.assert(&impl_not_leased);
+                    self.variable_leased.insert(target.clone(), is_leased);
+                }
+                Ok(current_clock)
+            }
+            Statement::Using {
+                binding,
+                resource,
+                body,
+            } => {
+                self.verify_expression(resource, path_condition, &current_clock)?;
+                let is_valid = self.solver.bool_const(&format!(
+                    "{}_valid_{}",
+                    binding, spanned.span.start
+                ));
+                let impl_valid = self.solver.bool_implies(path_condition, &is_valid);
+                self.solver.assert(&impl_valid);
+                self.variable_validity.insert(binding.clone(), is_valid);
+
+                let mut body_clock = current_clock;
+                for stmt in body {
+                    body_clock =
+                        self.verify_statement(stmt, path_condition, &body_clock)?;
+                }
+                self.consume_variable(binding, path_condition, spanned.span.end);
+                Ok(body_clock)
+            }
             Statement::ChannelSend { value_id, .. } | Statement::Yield(value_id) => {
                 self.check_available(value_id, path_condition)?;
                 self.check_not_leased(value_id, path_condition)?;

@@ -79,6 +79,31 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn DestructureAssignment(
+        &mut self,
+        fields: &[(String, String)],
+        mutable: &bool,
+        expr: &Expression,
+    ) -> Result<(), SemanticError> {
+        analyze_expression(self, expr)?;
+        let _inferred_type = crate::expression::infer_expression_type(self, expr)?;
+        for (_source_field, target_var) in fields {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            if *mutable {
+                branch.mutables.insert(target_var.clone());
+            }
+            branch
+                .types
+                .insert(target_var.clone(), causm_core::types::Type::Unknown);
+            branch.produced.insert(target_var.clone());
+            branch.consumed.remove(target_var);
+            branch
+                .instantiated_at
+                .insert(target_var.clone(), branch.accumulated_cost);
+        }
+        Ok(())
+    }
+
     pub(crate) fn FieldUpdate(
         &mut self,
         target: &Expression,
