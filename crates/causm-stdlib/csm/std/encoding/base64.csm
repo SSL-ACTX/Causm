@@ -17,16 +17,22 @@
 
     routine Base64.decode_char(peek c: i32) -> i32 taking _ {
         let v = 0
-        if (c >= 65 and c <= 90) {
-            let v = c - 65
-        } else if (c >= 97 and c <= 122) {
-            let v = c - 71
-        } else if (c >= 48 and c <= 57) {
-            let v = c + 4
-        } else if (c == 43) {
+        if (c == 43) {
             let v = 62
         } else if (c == 47) {
             let v = 63
+        } else if (c >= 65) {
+            if (c <= 90) {
+                let v = c - 65
+            } else if (c >= 97) {
+                if (c <= 122) {
+                    let v = c - 71
+                } reconcile auto
+            } reconcile auto
+        } else if (c >= 48) {
+            if (c <= 57) {
+                let v = c + 4
+            } reconcile auto
         } else {
             let v = 0
         } reconcile auto
@@ -58,7 +64,7 @@
 
     routine Base64.encode(peek bytes: array) -> string taking _ {
         let n = 0
-        for _ in bytes step _ {
+        for _ in bytes step 1ms {
             let n = n + 1
         }
         let out_len = ((n + 2) / 3) * 4
@@ -102,7 +108,7 @@
     routine Base64.decode(peek b64: string) -> array taking _ {
         let encoded_bytes = str_bytes(b64)
         let n = 0
-        for _ in encoded_bytes step _ {
+        for _ in encoded_bytes step 1ms {
             let n = n + 1
         }
         let out_len = (n / 4) * 3

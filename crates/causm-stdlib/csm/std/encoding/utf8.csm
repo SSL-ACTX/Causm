@@ -8,7 +8,7 @@
     routine Utf8.encode_len(peek text: string) -> i32 taking _ {
         let b = str_bytes(text)
         let n = 0
-        for _ in b step _ {
+        for _ in b step 1ms {
             let n = n + 1
         }
         n
