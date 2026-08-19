@@ -3,18 +3,18 @@
         ip: string,
         port: i32
     }
-    type TcpStream = struct decay_after 10000ms {
+    type TcpStream = struct decay_after 10000ms auto_drop("libc.so.6", "close", fd) {
         fd: i32,
         is_connected: bool,
         peer_ip: string,
         peer_port: i32
     }
-    type TcpListener = struct {
+    type TcpListener = struct auto_drop("libc.so.6", "close", fd) {
         bind_port: i32,
         fd: i32,
         is_listening: bool
     }
-    type UdpSocket = struct {
+    type UdpSocket = struct auto_drop("libc.so.6", "close", fd) {
         fd: i32,
         is_bound: bool,
         port: i32

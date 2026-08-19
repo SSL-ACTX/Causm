@@ -91,7 +91,8 @@ impl SsaInstructionProperties for SsaInstruction {
             }
             | SsaInstruction::EndLease {
                 source_reg: src, ..
-            } => {
+            }
+            | SsaInstruction::AutoDrop { target: src, .. } => {
                 regs.push(*src);
             }
             SsaInstruction::ConsumeFieldDynamic { target, index }

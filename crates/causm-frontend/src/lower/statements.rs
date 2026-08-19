@@ -576,6 +576,8 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 if let Some(spec) = ctx.auto_drop_specs.get(&src_type).cloned() {
                     ctx.push(Instruction::AutoDrop { target: dest, spec });
                 }
+            } else if let Some(spec) = ctx.auto_drop_specs.get(&format!("_reg_{}", src.0)).cloned() {
+                ctx.push(Instruction::AutoDrop { target: dest, spec });
             } else {
                 for (type_name, spec) in ctx.auto_drop_specs.clone() {
                     if binding.to_lowercase().contains(&type_name.to_lowercase())

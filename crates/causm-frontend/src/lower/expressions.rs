@@ -126,8 +126,17 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 });
             } else {
                 if let Some(r) = ctx.routines.get(&actual_routine_name) {
-                    if let causm_core::types::Type::Custom(ref t) = r.return_type {
-                        ctx.reg_types.insert(dest.0, t.clone());
+                    match &r.return_type {
+                        causm_core::types::Type::Custom(t) => {
+                            ctx.reg_types.insert(dest.0, t.clone());
+                        }
+                        causm_core::types::Type::Struct(s) => {
+                            if let Some(ref spec) = s.auto_drop {
+                                ctx.auto_drop_specs
+                                    .insert(format!("_reg_{}", dest.0), spec.clone());
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 ctx.push(causm_ir::Instruction::Call {
@@ -146,8 +155,17 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             }
             let dest = ctx.alloc_reg();
             if let Some(r) = ctx.routines.get(routine) {
-                if let causm_core::types::Type::Custom(ref t) = r.return_type {
-                    ctx.reg_types.insert(dest.0, t.clone());
+                match &r.return_type {
+                    causm_core::types::Type::Custom(t) => {
+                        ctx.reg_types.insert(dest.0, t.clone());
+                    }
+                    causm_core::types::Type::Struct(s) => {
+                        if let Some(ref spec) = s.auto_drop {
+                            ctx.auto_drop_specs
+                                .insert(format!("_reg_{}", dest.0), spec.clone());
+                        }
+                    }
+                    _ => {}
                 }
             }
             ctx.push(causm_ir::Instruction::Call {
