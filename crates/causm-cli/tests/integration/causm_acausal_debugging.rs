@@ -96,4 +96,64 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_debugging_runtime_diagnostic_error_formatting() -> anyhow::Result<()> {
+        let code = r#"
+@main: {
+  let x = 42
+}
+"#;
+        let program = parser::parse_causm(code)?;
+        let ir = causm_frontend::lower::lower_program(&program);
+        let mut vm = Vm::new();
+        vm.debug_mode = true;
+        vm.current_span = Some(causm_core::Span { start: 10, end: 20 });
+        let dummy_err = causm_runtime::vm::error::TemporalError::MemoryFault(
+            causm_core::value::MemoryError::AlreadyConsumed,
+        );
+        let diag = vm.format_diagnostic("main", &dummy_err);
+        assert!(diag.contains("span 10-20"));
+        assert!(diag.contains("Branch: 'main'"));
+        assert!(diag.contains("Memory fault"));
+
+        vm.execute_program(&ir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_debugging_tracer_multi_layer_telemetry() -> anyhow::Result<()> {
+        let tracer = causm_devtools::Tracer::new(false);
+        tracer.emit(
+            0,
+            "main",
+            causm_devtools::TraceLayer::Frontend,
+            Some("parse"),
+            "Parsing AST structure",
+        );
+        tracer.emit(
+            5,
+            "main",
+            causm_devtools::TraceLayer::Analysis,
+            Some("z3_solve"),
+            "Proving temporal WCET bounds with Z3",
+        );
+        tracer.emit(
+            10,
+            "main",
+            causm_devtools::TraceLayer::Runtime,
+            Some("vm_exec"),
+            "Executing isochronous loop cycle",
+        );
+
+        let json = tracer.export_json();
+        assert!(json.contains("Parsing AST structure"));
+        assert!(json.contains("Proving temporal WCET bounds with Z3"));
+        assert!(json.contains("Executing isochronous loop cycle"));
+        assert!(json.contains("Frontend"));
+        assert!(json.contains("Analysis"));
+        assert!(json.contains("Runtime"));
+
+        Ok(())
+    }
 }

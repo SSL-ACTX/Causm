@@ -370,13 +370,93 @@ impl Vm {
         field: String,
     ) -> Result<(), TemporalError> {
         self.check_and_apply_decay(branch_id, target.0)?;
-        let field_state = {
+        let (field_state, decay_parent) = {
             let branch = self.get_branch_mut(branch_id)?;
-            branch
-                .arena
-                .consume_field_entropic(target.0, &field)
-                .map_err(TemporalError::MemoryFault)?
+            let idx = target.0 as usize;
+            if idx >= branch.arena.registers.len() {
+                return Err(TemporalError::MemoryFault(
+                    causm_core::value::MemoryError::AlreadyConsumed,
+                ));
+            }
+            match &branch.arena.registers[idx] {
+                EntropicState::Valid(Payload::Struct(fields))
+                | EntropicState::Valid(Payload::Topology(fields)) => {
+                    let val = match fields.get(&field) {
+                        Some(EntropicState::Valid(p)) => p.clone(),
+                        Some(EntropicState::Decayed(_)) => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::StructurallyDecayed,
+                            ))
+                        }
+                        Some(EntropicState::Consumed) => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::AlreadyConsumed,
+                            ))
+                        }
+                        _ => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::KeyNotFound(
+                                    field.clone(),
+                                ),
+                            ))
+                        }
+                    };
+                    (EntropicState::Valid(val), true)
+                }
+                EntropicState::Decayed(fields) => {
+                    let val = match fields.get(&field) {
+                        Some(EntropicState::Valid(p)) => p.clone(),
+                        Some(EntropicState::Decayed(_)) => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::StructurallyDecayed,
+                            ))
+                        }
+                        Some(EntropicState::Consumed) => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::AlreadyConsumed,
+                            ))
+                        }
+                        _ => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::KeyNotFound(
+                                    field.clone(),
+                                ),
+                            ))
+                        }
+                    };
+                    (EntropicState::Valid(val), false)
+                }
+                EntropicState::Consumed => {
+                    return Err(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::AlreadyConsumed,
+                    ))
+                }
+                EntropicState::Leased { .. } => {
+                    return Err(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::Leased,
+                    ))
+                }
+                _ => {
+                    return Err(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::NotAStruct,
+                    ))
+                }
+            }
         };
+
+        if decay_parent {
+            let branch = self.get_branch_mut(branch_id)?;
+            let idx = target.0 as usize;
+            if let EntropicState::Valid(Payload::Struct(fields)) =
+                &branch.arena.registers[idx]
+            {
+                branch.arena.registers[idx] = EntropicState::Decayed(fields.clone());
+            } else if let EntropicState::Valid(Payload::Topology(fields)) =
+                &branch.arena.registers[idx]
+            {
+                branch.arena.registers[idx] = EntropicState::Decayed(fields.clone());
+            }
+        }
 
         let time = {
             let branch = self.get_branch_mut(branch_id)?;

@@ -429,7 +429,28 @@ impl Vm {
                 match instr {
                     $(
                         causm_ir::Instruction::$name $({ $($field),* })? => {
-                            self.$name(branch_id, $($($field),*)?)?
+                            if let Err(e) = self.$name(branch_id, $($($field),*)?) {
+                                if self.debug_mode {
+                                    let span_str = self
+                                        .current_span
+                                        .as_ref()
+                                        .map(|s| format!("span {}-{}", s.start, s.end))
+                                        .unwrap_or_else(|| "unknown span".to_string());
+                                    let clock = self
+                                        .get_branch(branch_id)
+                                        .map(|b| b.local_clock)
+                                        .unwrap_or(0);
+                                    eprintln!(
+                                        "[TVM FAULT] [{}] @{}ms ({}) | instruction: {} -> {}",
+                                        branch_id,
+                                        clock,
+                                        span_str,
+                                        stringify!($name),
+                                        e
+                                    );
+                                }
+                                return Err(e);
+                            }
                         },
                     )*
                 }
@@ -453,6 +474,26 @@ impl Vm {
         }
 
         Ok(())
+    }
+
+    pub fn format_diagnostic(
+        &self,
+        branch_id: &str,
+        error: &TemporalError,
+    ) -> String {
+        let span_info = if let Some(span) = &self.current_span {
+            format!(" at span {}-{}", span.start, span.end)
+        } else {
+            String::new()
+        };
+        let branch_clock = self
+            .get_branch(branch_id)
+            .map(|b| b.local_clock)
+            .unwrap_or(0);
+        format!(
+            "Runtime Error{} [Branch: '{}' @ {}ms]: {}",
+            span_info, branch_id, branch_clock, error
+        )
     }
 
     pub fn commit_tick_buffers(&mut self) {

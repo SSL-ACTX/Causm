@@ -18,6 +18,7 @@ from "std/collection/types" import Buffer
 
     routine Buffer.with_data(peek initial_data: array) -> Buffer taking _ {
         let total_len = len(initial_data)
+        let cap_len = clone(total_len)
         let mut raw = [0; clone(total_len)]
         let mut idx = 0
         for b in initial_data step _ {
@@ -26,13 +27,13 @@ from "std/collection/types" import Buffer
         }
         struct {
             data = raw,
-            len = clone(total_len),
-            capacity = total_len
+            len = total_len,
+            capacity = cap_len
         }
     }
 
     routine Buffer.append(peek buf: Buffer, peek byte_val: i64) -> Buffer taking _ {
-        let cur_len = buf.len
+        let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
         let mut data = buf.data
 
@@ -59,7 +60,7 @@ from "std/collection/types" import Buffer
     }
 
     routine Buffer.append_slice(peek buf: Buffer, peek slice_data: array, peek count: i32) -> Buffer taking _ {
-        let cur_len = buf.len
+        let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
         let mut data = buf.data
 

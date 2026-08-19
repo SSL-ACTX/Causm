@@ -32,7 +32,7 @@ impl EntropicAnalyzer {
             }
         }
 
-        analyze_expression(self, condition)?;
+        crate::expression::analyze_expression_nonconsuming(self, condition)?;
 
         let original_state = self
             .branch_contexts

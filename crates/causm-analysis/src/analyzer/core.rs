@@ -402,6 +402,9 @@ impl EntropicAnalyzer {
 
     pub(crate) fn mark_consumed(&mut self, name: &str) -> Result<(), SemanticError> {
         let state = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        if state.mutables.contains(name) {
+            return Ok(());
+        }
         if state.leased.contains(name) || state.lease_bindings.contains(name) {
             return Err(
                 self.annotate(SemanticErrorKind::LeaseViolation(name.to_string()))
@@ -418,6 +421,9 @@ impl EntropicAnalyzer {
 
     pub(crate) fn mark_decayed(&mut self, name: &str) -> Result<(), SemanticError> {
         let state = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        if state.mutables.contains(name) {
+            return Ok(());
+        }
         if state.consumed.contains(name) {
             return Err(
                 self.annotate(SemanticErrorKind::UseAfterConsume(name.to_string()))

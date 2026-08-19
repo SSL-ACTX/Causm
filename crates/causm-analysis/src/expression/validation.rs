@@ -538,11 +538,13 @@ pub(crate) fn analyze_expression(
                     .branch_contexts
                     .get(&analyzer.current_branch)
                     .unwrap();
-                if state.consumed.contains(&field_path) {
+                let is_borrowed_or_mutable =
+                    state.yields.contains(name) || state.mutables.contains(name);
+                if !is_borrowed_or_mutable && state.consumed.contains(&field_path) {
                     return Err(analyzer
                         .annotate(SemanticErrorKind::UseAfterConsume(field_path)));
                 }
-                if analyzer.inspection_depth == 0 {
+                if !is_borrowed_or_mutable && analyzer.inspection_depth == 0 {
                     analyzer.mark_decayed(name)?;
                     analyzer.mark_consumed(&field_path)?;
                 }

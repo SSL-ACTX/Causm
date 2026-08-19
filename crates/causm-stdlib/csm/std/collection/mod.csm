@@ -2,4 +2,9 @@
     from "std/collection/types" import *
     from "std/collection/array" import *
     from "std/collection/buffer" import *
+    from "std/collection/stack" import *
+    from "std/collection/queue" import *
+    from "std/collection/ring_buffer" import *
+    from "std/collection/bitset" import *
 }
+

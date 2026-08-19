@@ -33,6 +33,14 @@ pub const STD_COLLECTION_ARRAY: &str =
     include_str!("../csm/std/collection/array.csm");
 pub const STD_COLLECTION_BUFFER: &str =
     include_str!("../csm/std/collection/buffer.csm");
+pub const STD_COLLECTION_STACK: &str =
+    include_str!("../csm/std/collection/stack.csm");
+pub const STD_COLLECTION_QUEUE: &str =
+    include_str!("../csm/std/collection/queue.csm");
+pub const STD_COLLECTION_RING_BUFFER: &str =
+    include_str!("../csm/std/collection/ring_buffer.csm");
+pub const STD_COLLECTION_BITSET: &str =
+    include_str!("../csm/std/collection/bitset.csm");
 
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
@@ -68,6 +76,18 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         }
         "std::collection::buffer" | "std/collection/buffer" => {
             Some(STD_COLLECTION_BUFFER)
+        }
+        "std::collection::stack" | "std/collection/stack" => {
+            Some(STD_COLLECTION_STACK)
+        }
+        "std::collection::queue" | "std/collection/queue" => {
+            Some(STD_COLLECTION_QUEUE)
+        }
+        "std::collection::ring_buffer" | "std/collection/ring_buffer" => {
+            Some(STD_COLLECTION_RING_BUFFER)
+        }
+        "std::collection::bitset" | "std/collection/bitset" => {
+            Some(STD_COLLECTION_BITSET)
         }
         _ => None,
     }
