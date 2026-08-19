@@ -441,42 +441,40 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
 
                 for opt in m_inner {
                     match opt.as_rule() {
-                        Rule::param_decl_list => {
-                            for p_pair in opt.into_inner() {
-                                let mut p_inner = p_pair.into_inner();
-                                let first_pair = p_inner.next().unwrap();
-                                let (mode, p_name) = match first_pair.as_str() {
-                                    "consume" => (
-                                        causm_core::ParamMode::Consume,
-                                        p_inner.next().unwrap().as_str().to_string(),
-                                    ),
-                                    "clone" => (
-                                        causm_core::ParamMode::Clone,
-                                        p_inner.next().unwrap().as_str().to_string(),
-                                    ),
-                                    "decay" => (
-                                        causm_core::ParamMode::Decay,
-                                        p_inner.next().unwrap().as_str().to_string(),
-                                    ),
-                                    "peek" => (
-                                        causm_core::ParamMode::Peek,
-                                        p_inner.next().unwrap().as_str().to_string(),
-                                    ),
-                                    "lease" => (
-                                        causm_core::ParamMode::Lease,
-                                        p_inner.next().unwrap().as_str().to_string(),
-                                    ),
-                                    _ => (
-                                        causm_core::ParamMode::Peek,
-                                        first_pair.as_str().to_string(),
-                                    ),
+                        Rule::param_decl_list | Rule::param_decl => {
+                            let pairs_to_process: Vec<_> =
+                                if opt.as_rule() == Rule::param_decl {
+                                    vec![opt]
+                                } else {
+                                    opt.into_inner().collect()
                                 };
-                                let typ = p_inner.next().map(parse_type_name);
-                                params.push(causm_core::ParamDecl {
-                                    mode,
-                                    name: p_name,
-                                    typ,
-                                });
+                            for p in pairs_to_process {
+                                let mut decl = p.into_inner().peekable();
+                                let mut mode = ParamMode::Peek;
+                                if let Some(first) = decl.peek() {
+                                    if first.as_rule() == Rule::param_mode {
+                                        let mode_str = decl.next().unwrap().as_str();
+                                        mode = match mode_str {
+                                            "consume" => ParamMode::Consume,
+                                            "clone" => ParamMode::Clone,
+                                            "decay" => ParamMode::Decay,
+                                            "lease" => ParamMode::Lease,
+                                            _ => ParamMode::Peek,
+                                        };
+                                    }
+                                }
+                                if let Some(name_pair) = decl.next() {
+                                    let param_name = name_pair.as_str().to_string();
+                                    let param_type = decl
+                                        .next()
+                                        .and_then(|tp| tp.into_inner().next())
+                                        .map(parse_type_name);
+                                    params.push(causm_core::ParamDecl {
+                                        mode,
+                                        name: param_name,
+                                        typ: param_type,
+                                    });
+                                }
                             }
                         }
                         Rule::return_annotation => {

@@ -1,4 +1,7 @@
 @0ms: {
+    from "std/time/types" import *
+    from "std/time/ffi" import *
+
     routine now() -> Instant taking _ {
         let mut ts = struct { tv_nsec = 0, tv_sec = 0 }
         let _code = clock_gettime(1, ts)

@@ -1,4 +1,7 @@
 @0ms: {
+    from "std/process/types" import *
+    from "std/process/ffi" import *
+
     routine pid() -> i32 taking _ => getpid()
     routine parent_pid() -> i32 taking _ => getppid()
     routine info() -> ProcessInfo taking _ {

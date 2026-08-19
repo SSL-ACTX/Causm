@@ -1,4 +1,7 @@
 @0ms: {
+    from "std/net/types" import *
+    from "std/net/ffi" import *
+
     routine create_socket() -> i32 taking _ => socket(2, 1, 0)
     routine create_udp_socket() -> i32 taking _ => socket(2, 2, 0)
     routine close_socket(peek fd: i32) -> i32 taking _ => close(fd)
@@ -108,6 +111,22 @@
         let _bind_rc = bind(fd, sa, 16)
         struct { fd = fd, is_bound = true, port = port }
     }
+    routine make_sockaddr_ip(peek ip: string, peek port: i32) -> array taking _ {
+        let raw_ip = inet_addr(ip)
+        let port_hi = port / 256 % 256
+        let port_lo = port % 256
+        let b0 = raw_ip % 256
+        let b1 = raw_ip / 256 % 256
+        let b2 = raw_ip / 65536 % 256
+        let b3 = raw_ip / 16777216 % 256
+        [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+    routine UdpSocket.send_to_ip(peek self, peek buf: i64, peek len: i32, peek ip: string, peek port: i32) -> i32 taking _ {
+        let mut dest_sa = make_sockaddr_ip(ip, port)
+        sendto(self.fd, buf, len, 0, dest_sa, 16)
+    }
+    routine UdpSocket.send_to_addr(peek self, peek buf: i64, peek len: i32, peek addr: SocketAddr) -> i32 taking _ =>
+        UdpSocket.send_to_ip(self, buf, len, addr.ip, addr.port)
     routine UdpSocket.send_to(peek self, peek buf: i64, peek len: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
         let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
         sendto(self.fd, buf, len, 0, dest_sa, 16)

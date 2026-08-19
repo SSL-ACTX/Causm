@@ -177,6 +177,7 @@ impl Vm {
             }
         };
         let chosen_reg = if is_true { true_val } else { false_val };
-        self.Move(branch_id, dest, chosen_reg)
+        let val = self.peek_reg(branch_id, chosen_reg.0)?;
+        self.insert_reg(branch_id, dest.0, EntropicState::Valid(val))
     }
 }

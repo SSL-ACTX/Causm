@@ -896,13 +896,22 @@ fn format_spanned_statement(
             field,
             value,
         } => {
-            out.push_str(&format!(
-                "{}{}.{} = {}\n",
-                indent,
-                format_expr(target),
-                field,
-                format_expr(value)
-            ));
+            if field.is_empty() {
+                out.push_str(&format!(
+                    "{}{} = {}\n",
+                    indent,
+                    format_expr(target),
+                    format_expr(value)
+                ));
+            } else {
+                out.push_str(&format!(
+                    "{}{}.{} = {}\n",
+                    indent,
+                    format_expr(target),
+                    field,
+                    format_expr(value)
+                ));
+            }
         }
         other => {
             eprintln!(

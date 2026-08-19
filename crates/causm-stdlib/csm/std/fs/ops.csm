@@ -1,4 +1,7 @@
 @0ms: {
+    from "std/fs/types" import *
+    from "std/fs/ffi" import *
+
     routine open_readonly(peek path: string) -> File taking _ {
         let raw_fd = open(path, 0, 0)
         struct { fd = raw_fd, is_open = true, path = path }
