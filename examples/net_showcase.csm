@@ -1,86 +1,144 @@
 @0ms: {
     import "std/net" as Net
-    print("=== Causm std/net ===")
-    print("Networking primitives: TCP, UDP, non-blocking, timeouts")
+    import "std/encoding/utf8" as Utf8
+    import "std/encoding/binary" as Binary
+    print("=== Causm std/net Showcase ===")
+    print("Zero-Manual-Close Networking: TCP Client/Server, HTTP Wire Framing, Non-Blocking, UDP Datagrams")
 }
 
 @10ms: {
-    print("Phase 1: TCP Listener + Dot-Method Client")
+    print("Phase 1: TCP HTTP-Style Request & Response (Auto-Dropped via Scoped RAII)")
     using listener = Net.TcpListener.bind(19870) {
-        print("Listener bound on port: 19870")
+        print("HTTP Server listening on port: 19870")
         using client = Net.TcpStream.connect("127.0.0.1", 19870) {
             let server_conn = listener.accept()
-            let payload = [65, 66, 67, 68, 69]
-            let sent = client.send(payload, 5)
-            print(f"Client sent {sent} bytes (ABCDE)")
-            let buf = [0, 0, 0, 0, 0]
-            let recvd = server_conn.recv(buf, 5)
-            print(f"Server received {recvd} bytes")
-            print(f"	Byte[0]={buf[0]}	Byte[4]={buf[4]}")
-            let _cc = server_conn.close()
+
+            // Realistic client HTTP request
+            let req_text = "GET /status HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            let req_bytes = req_text |> Utf8.encode()
+            let req_len = len(req_bytes)
+            let sent = client.send(req_bytes, req_len)
+            print(f"Client sent {sent} bytes HTTP request: {req_text}")
+
+            // Server receives and decodes request
+            let req_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let recvd = server_conn.recv(req_buf, req_len)
+            let recvd_str = Utf8.decode(req_buf)
+            print(f"Server received {recvd} bytes: {recvd_str}")
+
+            // Server responds with realistic 200 OK payload
+            let res_text = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nCAUSM"
+            let res_bytes = res_text |> Utf8.encode()
+            let res_len = len(res_bytes)
+            let sent_res = server_conn.send(res_bytes, res_len)
+
+            // Client receives response
+            let res_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let recvd_res = client.recv(res_buf, res_len)
+            let res_decoded = Utf8.decode(res_buf)
+            print(f"Client received response: {res_decoded}")
+            // No manual close calls needed! All sockets auto-drop on scope exit.
         }
-        print("Phase 1 sockets closed.")
+        print("Phase 1 HTTP session closed automatically.")
     }
 }
 
 @20ms: {
-    print("Phase 2: Timeouts + send / recv")
+    print("Phase 2: Utf8 Dynamic Payload Exchange (Auto-Dropped)")
     using listener2 = Net.TcpListener.bind(19871) {
-        print("Listener 2 bound on port: 19871")
         using stream2 = Net.TcpStream.connect("127.0.0.1", 19871) {
             let client2 = listener2.accept()
-            let sent2 = stream2.send([72, 101, 108, 108, 111], 5)
-            print(f"Sent {sent2} bytes (Hello)")
-            let buf2 = [0, 0, 0, 0, 0]
-            let recvd2 = client2.recv(buf2, 5)
-            print(f"Received {recvd2} bytes")
-            print(f"	Byte[0]={buf2[0]}	Byte[4]={buf2[4]}")
-            let _cc2 = client2.close()
+
+            let chat_msg = "Hello Seuriin! Causm std/encoding + std/net is live."
+            let chat_bytes = chat_msg |> Utf8.encode()
+            let chat_len = len(chat_bytes)
+            let sent2 = stream2.send(chat_bytes, chat_len)
+            print(f"Sent {sent2} bytes: {chat_msg}")
+
+            let buf2 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let recvd2 = client2.recv(buf2, chat_len)
+            let decoded2 = Utf8.decode(buf2)
+            print(f"Received {recvd2} bytes decoded: {decoded2}")
+            // No manual close needed!
         }
-        print("Phase 2 sockets closed.")
+        print("Phase 2 payload exchange closed automatically.")
     }
 }
 
 @30ms: {
-    print("Phase 3: Non-Blocking Socket Control")
+    print("Phase 3: Non-Blocking Real-Time Command Stream (Auto-Dropped)")
     using listener3 = Net.TcpListener.bind(19872) {
         using stream3 = Net.TcpStream.connect("127.0.0.1", 19872) {
             let client3 = listener3.accept()
-            let nb_sent = stream3.send([78, 79, 78, 66, 76, 75], 6)
-            print(f"Non-blocking send: {nb_sent} bytes (NONBLK)")
-            let nb_buf = [0, 0, 0, 0, 0, 0]
-            let nb_recvd = client3.recv(nb_buf, 6)
-            print(f"Received in non-blocking mode: {nb_recvd} bytes")
-            let _cc3 = client3.close()
+            let cmd_text = "STREAM_SYNC_ACK"
+            let cmd_bytes = cmd_text |> Utf8.encode()
+            let cmd_len = len(cmd_bytes)
+            let nb_sent = stream3.send(cmd_bytes, cmd_len)
+            print(f"Non-blocking sent {nb_sent} bytes: {cmd_text}")
+
+            let nb_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let nb_recvd = client3.recv(nb_buf, cmd_len)
+            let cmd_recvd = Utf8.decode(nb_buf)
+            print(f"Received in non-blocking mode: {cmd_recvd}")
+            // No manual close needed!
         }
-        print("Phase 3 sockets closed.")
+        print("Phase 3 non-blocking session closed automatically.")
     }
 }
 
 @40ms: {
-    print("Phase 4: UDP Datagram Bidirectional Loopback")
+    print("Phase 4: UDP Datagram Bidirectional Heartbeat Protocol (Auto-Dropped)")
     using udp_server = Net.udp_bind(19880) {
-        print("UDP server bound on port: 19880")
+        print("UDP Heartbeat server bound on port: 19880")
         using udp_cli_listener = Net.udp_bind(19881) {
-            let cli_fd = Net.create_udp_socket()
-            let c2s = Net.udp_send_to(cli_fd, [80, 73, 78, 71], 4, 19880, 127, 0, 0, 1)
-            print(f"UDP client sent {c2s} bytes (PING)")
-            let ping_buf = [0, 0, 0, 0]
-            let s_recvd = udp_server.recv_from(ping_buf, 4)
-            print(f"UDP server received {s_recvd} bytes")
-            print(f"	Byte[0]={ping_buf[0]}	Byte[3]={ping_buf[3]}")
-            let s2c = udp_server.send_to([80, 79, 78, 71], 4, 19881, 127, 0, 0, 1)
-            print(f"UDP server sent {s2c} bytes (PONG)")
-            let pong_buf = [0, 0, 0, 0]
-            let c_recvd = udp_cli_listener.recv_from(pong_buf, 4)
-            print(f"UDP client received {c_recvd} bytes reply")
-            print(f"	Byte[0]={pong_buf[0]}	Byte[3]={pong_buf[3]}")
-            let _cu = Net.close_socket(cli_fd)
+            using cli_sock = Net.udp_socket() {
+                let ping_msg = "HEARTBEAT_PING"
+                let ping_bytes = ping_msg |> Utf8.encode()
+                let ping_len = len(ping_bytes)
+                let c2s = cli_sock.send_to(ping_bytes, ping_len, 19880, 127, 0, 0, 1)
+                print(f"UDP Client sent {c2s} bytes: {ping_msg}")
+
+                let ping_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                let s_recvd = udp_server.recv_from(ping_buf, ping_len)
+                let s_ping_str = Utf8.decode(ping_buf)
+                print(f"UDP Server received {s_recvd} bytes: {s_ping_str}")
+
+                let pong_msg = "HEARTBEAT_PONG"
+                let pong_bytes = pong_msg |> Utf8.encode()
+                let pong_len = len(pong_bytes)
+                let s2c = udp_server.send_to(pong_bytes, pong_len, 19881, 127, 0, 0, 1)
+                print(f"UDP Server replied {s2c} bytes: {pong_msg}")
+
+                let pong_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                let c_recvd = udp_cli_listener.recv_from(pong_buf, pong_len)
+                let c_pong_str = Utf8.decode(pong_buf)
+                print(f"UDP Client received reply: {c_pong_str}")
+            }
         }
-        print("Phase 4 UDP sockets closed.")
+        print("Phase 4 UDP heartbeat complete and auto-closed.")
     }
 }
 
 @50ms: {
-    print("=== std/net showcase complete ===")
+    print("Phase 5: Binary Header Packing + len() Wire Frames")
+    let port_bytes = Binary.write_u16_be(8080)
+    let plen = len(port_bytes)
+    print(f"Binary-packed port 8080 (BE): {plen} bytes")
+    debug(port_bytes)
+
+    let addr_bytes = Binary.write_u32_be(2130706433)
+    let alen = len(addr_bytes)
+    print(f"Binary-packed IP 127.0.0.1 (BE): {alen} bytes")
+    debug(addr_bytes)
+}
+
+@60ms: {
+    print("=== All Net Showcase Phases Completed Successfully ===")
 }

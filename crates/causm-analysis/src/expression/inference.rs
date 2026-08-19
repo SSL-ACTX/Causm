@@ -266,6 +266,9 @@ pub(crate) fn infer_expression_type(
             None => Err(analyzer
                 .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
         },
+        Expression::StrBytes(_) => Ok(Type::Array(Box::new(Type::Unknown))),
+        Expression::ToStr(_) => Ok(Type::String),
+        Expression::Len(_) => Ok(Type::I32),
         Expression::BinaryOp { left, op, right } => {
             let left_type = infer_expression_type(analyzer, left)?;
             let right_type = infer_expression_type(analyzer, right)?;

@@ -119,6 +119,14 @@
         let tv = struct { tv_sec = sec, tv_usec = usec }
         setsockopt(fd, 1, 21, tv, 16)
     }
+    routine udp_socket() -> UdpSocket taking _ {
+        let fd = create_udp_socket()
+        struct { fd = fd, is_bound = false, port = 0 }
+    }
+    routine UdpSocket.socket() -> UdpSocket taking _ {
+        let fd = create_udp_socket()
+        struct { fd = fd, is_bound = false, port = 0 }
+    }
     routine udp_bind(peek port: i32) -> UdpSocket taking _ {
         let fd = create_udp_socket()
         let _reuse = set_reuseaddr(fd)

@@ -89,10 +89,27 @@ impl Vm {
     }
 
     pub fn trigger_auto_drop(&mut self, branch_id: &str, reg: u32) {
-        if let Ok(causm_core::value::Payload::Struct(fields)) =
-            self.peek_reg(branch_id, reg)
+        let (type_name_opt, payload_opt) = {
+            if let Ok(branch) = self.get_branch_mut(branch_id) {
+                let idx = reg as usize;
+                let t_name = if idx < branch.arena.metadata.len() {
+                    branch.arena.metadata[idx]
+                        .as_ref()
+                        .and_then(|m| m.type_name.clone())
+                } else {
+                    None
+                };
+                let payload = branch.arena.peek(reg);
+                (t_name, payload)
+            } else {
+                (None, None)
+            }
+        };
+
+        if let (Some(type_name), Some(causm_core::value::Payload::Struct(fields))) =
+            (type_name_opt, payload_opt)
         {
-            for spec in self.auto_drop_specs.values() {
+            if let Some(spec) = self.auto_drop_specs.get(&type_name) {
                 if let Some(causm_core::value::EntropicState::Valid(ref field_val)) =
                     fields.get(&spec.field_name)
                 {

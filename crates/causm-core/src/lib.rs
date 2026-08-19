@@ -235,7 +235,7 @@ macro_rules! statements {
             ForStep {
                 item_name: String,
                 source: Expression,
-                step_ms: u64,
+                step_ms: Option<u64>,
                 body: Vec<SpannedStatement>
             },
             Slice {
@@ -314,7 +314,7 @@ impl Statement {
     where
         F: FnMut(&[SpannedStatement]) -> u64,
     {
-        let base = 1;
+        let base: u64 = 1;
         let extra = match self {
             Statement::NetworkRequest { .. } => 5,
             Statement::Split { .. }
@@ -352,7 +352,7 @@ impl Statement {
             } => estimate_block(then_branch)
                 .max(else_branch.as_ref().map(|b| estimate_block(b)).unwrap_or(0)),
             Statement::For { pacing_ms, .. } => pacing_ms.unwrap_or(1),
-            Statement::ForStep { step_ms, .. } => *step_ms,
+            Statement::ForStep { step_ms, .. } => step_ms.unwrap_or(1),
             Statement::Speculate { body, fallback, .. } => {
                 let body_cost = estimate_block(body);
                 let fallback_cost =
@@ -407,10 +407,22 @@ impl Statement {
             Statement::Inspect { body, .. } => estimate_block(body),
             Statement::Lease { duration_ms, .. } => *duration_ms,
             Statement::RoutineDef { .. } => 0,
-            Statement::Loop { max_ms, .. } => *max_ms,
+            Statement::Loop { max_ms, body } => {
+                if *max_ms == u64::MAX {
+                    estimate_block(body)
+                } else {
+                    *max_ms
+                }
+            }
             Statement::LoopTick { .. } => 1,
             Statement::LoopTickOn { .. } => 1,
-            Statement::While { max_ms, .. } => *max_ms,
+            Statement::While { max_ms, body, .. } => {
+                if *max_ms == u64::MAX {
+                    estimate_block(body)
+                } else {
+                    *max_ms
+                }
+            }
             Statement::Slice { .. } => 0,
             Statement::SpeculationMode(_) => 0,
             Statement::Await(_) => 1,
@@ -423,7 +435,7 @@ impl Statement {
             | Statement::ForeignBlock { .. }
             | Statement::Return(_) => 0,
         };
-        base + extra
+        base.saturating_add(extra)
     }
 }
 
@@ -449,6 +461,9 @@ macro_rules! expressions {
                 field: String
             },
             CloneOp(String),
+            StrBytes(Box<Expression>),
+            ToStr(Box<Expression>),
+            Len(Box<Expression>),
             RefOp(Box<Expression>),
             StructLit(std::cell::RefCell<Option<String>>, std::collections::HashMap<String, Expression>),
             TopologyLit(std::collections::HashMap<String, Expression>),

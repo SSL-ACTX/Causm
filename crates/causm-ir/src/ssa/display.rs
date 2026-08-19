@@ -51,6 +51,12 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::Clone { dest, src } => {
                 write!(f, "{} = Clone {}", dest, src)
             }
+            SsaInstruction::StrBytes { dest, src } => {
+                write!(f, "{} = StrBytes {}", dest, src)
+            }
+            SsaInstruction::ToStr { dest, src } => {
+                write!(f, "{} = ToStr {}", dest, src)
+            }
             SsaInstruction::Call {
                 routine,
                 args,
@@ -367,15 +373,23 @@ impl std::fmt::Display for SsaInstruction {
                 item_name: _,
                 source,
                 step_ms,
-            } => {
-                write!(
+            } => match step_ms {
+                Some(ms) => write!(
                     f,
                     "ForStep {}, {} in {} step {}ms",
-                    dest_cond, item_reg, source, step_ms
-                )
-            }
+                    dest_cond, item_reg, source, ms
+                ),
+                None => write!(
+                    f,
+                    "ForStep {}, {} in {} step _",
+                    dest_cond, item_reg, source
+                ),
+            },
             SsaInstruction::EndForStep => {
                 write!(f, "EndForStep")
+            }
+            SsaInstruction::ArrayLen { dest, src } => {
+                write!(f, "ArrayLen {} = len({})", dest, src)
             }
             SsaInstruction::LoopTickOn { chan_id } => {
                 write!(f, "LoopTickOn {}", chan_id)

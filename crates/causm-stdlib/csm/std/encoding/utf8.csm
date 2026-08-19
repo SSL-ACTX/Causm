@@ -1,0 +1,17 @@
+@0ms: {
+    // Encode a Causm string to a UTF-8 byte array
+    routine Utf8.encode(peek text: string) -> array taking _ =>
+        str_bytes(text)
+
+    // Decode a UTF-8 byte array back to a Causm string
+    routine Utf8.decode(peek bytes: array) -> string taking _ =>
+        to_str(bytes)
+
+    // Return the byte-length of a string's UTF-8 encoding
+    routine Utf8.encode_len(peek text: string) -> i32 taking _ =>
+        len(str_bytes(text))
+
+    // Return the length of a byte array
+    routine Utf8.byte_len(peek bytes: array) -> i32 taking _ =>
+        len(bytes)
+}

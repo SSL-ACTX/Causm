@@ -132,6 +132,14 @@ pub enum SsaInstruction {
         dest: SsaReg,
         src: SsaReg,
     },
+    StrBytes {
+        dest: SsaReg,
+        src: SsaReg,
+    },
+    ToStr {
+        dest: SsaReg,
+        src: SsaReg,
+    },
     Call {
         routine: String,
         args: Vec<SsaReg>,
@@ -364,9 +372,13 @@ pub enum SsaInstruction {
         item_reg: SsaReg,
         item_name: String,
         source: SsaReg,
-        step_ms: u64,
+        step_ms: Option<u64>,
     },
     EndForStep,
+    ArrayLen {
+        dest: SsaReg,
+        src: SsaReg,
+    },
     LoopTickOn {
         chan_id: String,
     },

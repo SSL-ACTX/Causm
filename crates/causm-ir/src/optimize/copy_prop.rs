@@ -121,7 +121,10 @@ pub fn copy_propagation(
                         changed = true;
                     }
                 }
-                SsaInstruction::Clone { src, .. } => {
+                SsaInstruction::Clone { src, .. }
+                | SsaInstruction::StrBytes { src, .. }
+                | SsaInstruction::ToStr { src, .. }
+                | SsaInstruction::ArrayLen { src, .. } => {
                     let new_src = resolve(*src);
                     if *src != new_src {
                         *src = new_src;

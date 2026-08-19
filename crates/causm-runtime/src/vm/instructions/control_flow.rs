@@ -287,11 +287,20 @@ impl Vm {
                         causm_core::value::Payload::Array(_)
                             | causm_core::value::Payload::Struct(_)
                     ) {
-                        self.insert_reg(
-                            branch_id,
-                            args[i].0,
-                            causm_core::value::EntropicState::Valid(child_val),
-                        )?;
+                        // Only write back if caller argument was also array/struct or not String
+                        let caller_val = self.peek_reg(branch_id, args[i].0);
+                        if let Ok(cval) = caller_val {
+                            if !matches!(cval, causm_core::value::Payload::String(_))
+                            {
+                                self.insert_reg(
+                                    branch_id,
+                                    args[i].0,
+                                    causm_core::value::EntropicState::Valid(
+                                        child_val,
+                                    ),
+                                )?;
+                            }
+                        }
                     }
                 }
             }

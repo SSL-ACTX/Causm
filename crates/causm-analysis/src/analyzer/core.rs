@@ -883,6 +883,11 @@ impl EntropicAnalyzer {
                 format!("{}.{}", self.expr_snippet(target), field)
             }
             Expression::CloneOp(v) => format!("clone({})", v),
+            Expression::StrBytes(e) => {
+                format!("str_bytes({})", self.expr_snippet(e))
+            }
+            Expression::ToStr(e) => format!("to_str({})", self.expr_snippet(e)),
+            Expression::Len(e) => format!("len({})", self.expr_snippet(e)),
             Expression::RefOp(e) => format!("&{}", self.expr_snippet(e)),
             Expression::Syscall { .. } => "syscall(...)".to_string(),
             Expression::StructLit(_, fields) => {

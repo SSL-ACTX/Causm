@@ -728,23 +728,29 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     unroll_clock =
                         self.verify_statement(stmt, path_condition, &unroll_clock)?;
                 }
-                let limit_int = self.solver.int_from_u64(*max_ms);
-                let violation = self.solver.int_gt(&loop_clock, &limit_int);
-                self.solver.push();
-                let cond_and = self.solver.bool_and(&[path_condition, &violation]);
-                self.solver.assert(&cond_and);
-                if self.solver.check() {
-                    let actual_wcet = self.solver.eval_u64(&loop_clock).unwrap_or(0);
+                if *max_ms != u64::MAX {
+                    let limit_int = self.solver.int_from_u64(*max_ms);
+                    let violation = self.solver.int_gt(&loop_clock, &limit_int);
+                    self.solver.push();
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
+                    self.solver.assert(&cond_and);
+                    if self.solver.check() {
+                        let actual_wcet =
+                            self.solver.eval_u64(&loop_clock).unwrap_or(0);
+                        self.solver.pop(1);
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                actual_wcet,
+                                *max_ms,
+                            ),
+                        ));
+                    }
                     self.solver.pop(1);
-                    return Err(self.analyzer.annotate(
-                        SemanticErrorKind::TemporalAssertionViolation(
-                            actual_wcet,
-                            *max_ms,
-                        ),
-                    ));
+                    Ok(self.solver.int_add(&[in_clock, &limit_int]))
+                } else {
+                    Ok(self.solver.int_add(&[in_clock, &loop_clock]))
                 }
-                self.solver.pop(1);
-                Ok(self.solver.int_add(&[in_clock, &limit_int]))
             }
             Statement::LoopTick { body } => {
                 let slice_ms = self.current_slice_ms.unwrap_or(0);
@@ -792,23 +798,29 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     unroll_clock =
                         self.verify_statement(stmt, path_condition, &unroll_clock)?;
                 }
-                let limit_int = self.solver.int_from_u64(*max_ms);
-                let violation = self.solver.int_gt(&loop_clock, &limit_int);
-                self.solver.push();
-                let cond_and = self.solver.bool_and(&[path_condition, &violation]);
-                self.solver.assert(&cond_and);
-                if self.solver.check() {
-                    let actual_wcet = self.solver.eval_u64(&loop_clock).unwrap_or(0);
+                if *max_ms != u64::MAX {
+                    let limit_int = self.solver.int_from_u64(*max_ms);
+                    let violation = self.solver.int_gt(&loop_clock, &limit_int);
+                    self.solver.push();
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
+                    self.solver.assert(&cond_and);
+                    if self.solver.check() {
+                        let actual_wcet =
+                            self.solver.eval_u64(&loop_clock).unwrap_or(0);
+                        self.solver.pop(1);
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                actual_wcet,
+                                *max_ms,
+                            ),
+                        ));
+                    }
                     self.solver.pop(1);
-                    return Err(self.analyzer.annotate(
-                        SemanticErrorKind::TemporalAssertionViolation(
-                            actual_wcet,
-                            *max_ms,
-                        ),
-                    ));
+                    Ok(self.solver.int_add(&[in_clock, &limit_int]))
+                } else {
+                    Ok(self.solver.int_add(&[in_clock, &loop_clock]))
                 }
-                self.solver.pop(1);
-                Ok(self.solver.int_add(&[in_clock, &limit_int]))
             }
             Statement::ForStep {
                 item_name,
@@ -859,19 +871,25 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_validity.remove(item_name);
                 self.variable_leased.remove(item_name);
 
-                let step_int = self.solver.int_from_u64(*step_ms);
-                let violation = self.solver.int_gt(&loop_clock, &step_int);
-                self.solver.push();
-                let cond_and = self.solver.bool_and(&[path_condition, &violation]);
-                self.solver.assert(&cond_and);
-                if self.solver.check() {
+                if let Some(ms) = step_ms {
+                    let step_int = self.solver.int_from_u64(*ms);
+                    let violation = self.solver.int_gt(&loop_clock, &step_int);
+                    self.solver.push();
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
+                    self.solver.assert(&cond_and);
+                    if self.solver.check() {
+                        self.solver.pop(1);
+                        return Err(self
+                            .analyzer
+                            .annotate(SemanticErrorKind::PacingViolation));
+                    }
                     self.solver.pop(1);
-                    return Err(self
-                        .analyzer
-                        .annotate(SemanticErrorKind::PacingViolation));
+                    Ok(self.solver.int_add(&[in_clock, &step_int]))
+                } else {
+                    // Wildcard step: accumulate loop clock without pacing constraint
+                    Ok(self.solver.int_add(&[in_clock, &loop_clock]))
                 }
-                self.solver.pop(1);
-                Ok(self.solver.int_add(&[in_clock, &step_int]))
             }
             Statement::Slice { milliseconds } => {
                 self.current_slice_ms = Some(*milliseconds);

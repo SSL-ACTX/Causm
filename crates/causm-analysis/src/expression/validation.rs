@@ -578,6 +578,11 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
+        Expression::StrBytes(expr) => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
+        Expression::ToStr(expr) => analyze_expression_nonconsuming(analyzer, expr),
+        Expression::Len(expr) => analyze_expression_nonconsuming(analyzer, expr),
         Expression::StructLit(_, fields) | Expression::TopologyLit(fields) => {
             for inner_expr in fields.values() {
                 analyze_expression(analyzer, inner_expr)?;
@@ -742,6 +747,9 @@ pub(crate) fn analyze_expression_nonconsuming(
             }
             Ok(())
         }
+        Expression::StrBytes(expr) => analyze_expression(analyzer, expr),
+        Expression::ToStr(expr) => analyze_expression(analyzer, expr),
+        Expression::Len(expr) => analyze_expression(analyzer, expr),
         Expression::StructLit(_, fields) | Expression::TopologyLit(fields) => {
             for inner_expr in fields.values() {
                 analyze_expression_nonconsuming(analyzer, inner_expr)?;

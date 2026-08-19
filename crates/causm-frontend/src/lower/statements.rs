@@ -572,19 +572,21 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 lower_spanned(ctx, s);
             }
 
-            for (type_name, spec) in ctx.auto_drop_specs.clone() {
-                if binding.to_lowercase().contains(&type_name.to_lowercase())
-                    || binding.contains("handle")
-                    || binding.contains("file")
-                    || binding.contains("listener")
-                    || binding.contains("client")
-                    || binding.contains("stream")
-                    || binding.contains("socket")
-                {
-                    ctx.push(Instruction::AutoDrop {
-                        target: dest,
-                        spec: spec.clone(),
-                    });
+            if let Some(src_type) = ctx.reg_types.get(&src.0).cloned() {
+                if let Some(spec) = ctx.auto_drop_specs.get(&src_type).cloned() {
+                    ctx.push(Instruction::AutoDrop { target: dest, spec });
+                }
+            } else {
+                for (type_name, spec) in ctx.auto_drop_specs.clone() {
+                    if binding.to_lowercase().contains(&type_name.to_lowercase())
+                        || type_name.to_lowercase().contains(&binding.to_lowercase())
+                    {
+                        ctx.push(Instruction::AutoDrop {
+                            target: dest,
+                            spec: spec.clone(),
+                        });
+                        break;
+                    }
                 }
             }
             ctx.push(Instruction::Consume { src: dest });
@@ -678,16 +680,24 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             // Drop elaboration for auto_drop structs
             let symbols_snapshot: Vec<(String, Reg)> =
                 ctx.symbols.iter().map(|(k, v)| (k.clone(), *v)).collect();
-            for (type_name, spec) in ctx.auto_drop_specs.clone() {
-                for (var_name, reg) in &symbols_snapshot {
+            for (var_name, reg) in &symbols_snapshot {
+                if let Some(t) = ctx.reg_types.get(&reg.0).cloned() {
+                    if let Some(spec) = ctx.auto_drop_specs.get(&t).cloned() {
+                        ctx.push(Instruction::AutoDrop { target: *reg, spec });
+                        continue;
+                    }
+                }
+                for (type_name, spec) in ctx.auto_drop_specs.clone() {
                     if var_name.to_lowercase().contains(&type_name.to_lowercase())
-                        || var_name.contains("handle")
-                        || var_name.contains("file")
+                        || type_name
+                            .to_lowercase()
+                            .contains(&var_name.to_lowercase())
                     {
                         ctx.push(Instruction::AutoDrop {
                             target: *reg,
                             spec: spec.clone(),
                         });
+                        break;
                     }
                 }
             }

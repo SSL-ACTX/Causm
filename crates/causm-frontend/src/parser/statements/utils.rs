@@ -359,7 +359,11 @@ pub fn parse_reconcile_clause(pair: Pair<Rule>) -> MergeResolution {
 
 pub fn parse_duration_limit(pair: Pair<Rule>) -> u64 {
     assert_eq!(pair.as_rule(), Rule::duration_limit);
-    let str_val = pair.as_str().trim_matches(|c| c == '(' || c == ')');
+    let str_val = pair.as_str().trim_matches(|c| c == '(' || c == ')').trim();
+    // Wildcard: `taking _` or `taking ?` means "unconstrained" — use u64::MAX
+    if str_val.contains('_') || str_val.contains('?') {
+        return u64::MAX;
+    }
     let mut num_str = String::new();
     let mut unit_str = String::new();
     for c in str_val.chars() {

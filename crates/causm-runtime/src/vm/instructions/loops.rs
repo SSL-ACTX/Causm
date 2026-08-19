@@ -325,7 +325,8 @@ impl Vm {
         })?;
 
         let total_elapsed = branch.local_clock - start;
-        if limit > 0 && total_elapsed < limit {
+        // limit == u64::MAX is the wildcard sentinel — no padding or overflow
+        if limit > 0 && limit != u64::MAX && total_elapsed < limit {
             let pad = limit - total_elapsed;
             branch.local_clock += pad;
             branch.consume_budget(pad)?;
@@ -400,7 +401,7 @@ impl Vm {
         item_reg: Reg,
         item_name: String,
         source: Reg,
-        step_ms: u64,
+        step_ms: Option<u64>,
     ) -> Result<(), TemporalError> {
         let (header_pc, loop_exists) = {
             let branch = self.get_branch(branch_id)?;
@@ -434,7 +435,7 @@ impl Vm {
                     item_name: item_name.clone(),
                     elements,
                     index: 0,
-                    pacing_ms: Some(step_ms),
+                    pacing_ms: step_ms,
                     max_ms: None,
                     start_local_clock,
                     iteration_start_clock: start_local_clock,
@@ -492,23 +493,47 @@ impl Vm {
                 TemporalError::EvalError("Loop state underflow on EndForStep".into())
             })?;
             let body_cost = branch.local_clock - loop_state.iteration_start_clock;
-            let step_ms = loop_state.pacing_ms.unwrap();
+            let step_ms = loop_state.pacing_ms;
             (step_ms, body_cost, loop_state.header_pc)
         };
 
-        if body_cost > step_ms {
-            return Err(TemporalError::PacingViolation);
+        // When step is a concrete value, enforce pacing; wildcard (None) skips it
+        if let Some(limit) = step_ms {
+            if body_cost > limit {
+                return Err(TemporalError::PacingViolation);
+            }
+            let pad = limit - body_cost;
+            let branch = self.get_branch_mut(branch_id)?;
+            if pad > 0 {
+                branch.local_clock += pad;
+                branch.consume_budget(pad)?;
+            }
         }
 
-        let pad = step_ms - body_cost;
         let branch = self.get_branch_mut(branch_id)?;
-        if pad > 0 {
-            branch.local_clock += pad;
-            branch.consume_budget(pad)?;
-        }
-
         branch.flat_loops.last_mut().unwrap().index += 1;
         branch.pc = header_pc;
         Ok(())
+    }
+
+    pub(crate) fn ArrayLen(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+    ) -> Result<(), TemporalError> {
+        let payload = self.peek_reg(branch_id, src.0)?;
+        let length = match &payload {
+            causm_core::value::Payload::Array(arr) => arr.len() as i64,
+            causm_core::value::Payload::String(s) => s.len() as i64,
+            _ => 0,
+        };
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(
+                causm_core::value::Payload::Integer(length),
+            ),
+        )
     }
 }

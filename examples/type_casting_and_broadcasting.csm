@@ -1,22 +1,21 @@
 @0ms: {
-    routine process_signal(consume raw: array, consume gain: f32, consume bias: i16) -> array taking _ {
-        let multiplied = clone(raw) * gain as float
-        let added = multiplied + bias as int
-        yield added
-    }
-    routine verify_thresholds(consume values: array, consume limit: i32) -> array taking _ {
-        let threshold_float: float = limit as float
-        let diffs = clone(values) - threshold_float
-        yield diffs
-    }
-    let raw_data: array = [10, 20, 30, 40, 50]
-    let factor: f32 = 1.25 as f32
-    let offset: i16 = 5 as i16
+    routine process_signal(raw: array, gain: f32, bias: i16) -> array taking ? =>
+        (raw * (gain as float)) + (bias as int)
+
+    routine verify_thresholds(values: array, limit: i32) -> array taking ? =>
+        values - (limit as float)
+
+    let raw_data = [10, 20, 30, 40, 50]
+    let factor = 1.25 as f32
+    let offset = 5 as i16
     let signal = process_signal(raw_data, factor, offset)
+
     print("Processed signal:")
     debug(clone(signal))
-    let max_allowed: i32 = 40 as i32
+
+    let max_allowed = 40 as i32
     let margins = verify_thresholds(signal, max_allowed)
+
     print("Margins against threshold:")
     debug(margins)
 }

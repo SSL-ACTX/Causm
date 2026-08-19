@@ -1,0 +1,68 @@
+@0ms: {
+    routine Binary.write_u8(peek val: i32) -> array taking _ =>
+        [val % 256]
+
+    routine Binary.write_u16_be(peek val: i32) -> array taking _ {
+        let hi = val / 256 % 256
+        let lo = val % 256
+        [hi, lo]
+    }
+
+    routine Binary.write_u16_le(peek val: i32) -> array taking _ {
+        let lo = val % 256
+        let hi = val / 256 % 256
+        [lo, hi]
+    }
+
+    routine Binary.write_u32_be(peek val: i32) -> array taking _ {
+        let b0 = val / 16777216 % 256
+        let b1 = val / 65536 % 256
+        let b2 = val / 256 % 256
+        let b3 = val % 256
+        [b0, b1, b2, b3]
+    }
+
+    routine Binary.write_u32_le(peek val: i32) -> array taking _ {
+        let b0 = val % 256
+        let b1 = val / 256 % 256
+        let b2 = val / 65536 % 256
+        let b3 = val / 16777216 % 256
+        [b0, b1, b2, b3]
+    }
+
+    routine Binary.write_u64_be(peek val: i32) -> array taking _ {
+        let b0 = val / 72057594037927936 % 256
+        let b1 = val / 281474976710656 % 256
+        let b2 = val / 1099511627776 % 256
+        let b3 = val / 4294967296 % 256
+        let b4 = val / 16777216 % 256
+        let b5 = val / 65536 % 256
+        let b6 = val / 256 % 256
+        let b7 = val % 256
+        [b0, b1, b2, b3, b4, b5, b6, b7]
+    }
+
+    routine Binary.write_u64_le(peek val: i32) -> array taking _ {
+        let b0 = val % 256
+        let b1 = val / 256 % 256
+        let b2 = val / 65536 % 256
+        let b3 = val / 16777216 % 256
+        let b4 = val / 4294967296 % 256
+        let b5 = val / 1099511627776 % 256
+        let b6 = val / 281474976710656 % 256
+        let b7 = val / 72057594037927936 % 256
+        [b0, b1, b2, b3, b4, b5, b6, b7]
+    }
+
+    routine Binary.read_u16_be(peek arr: array) -> i32 taking _ =>
+        arr[0] * 256 + arr[1]
+
+    routine Binary.read_u16_le(peek arr: array) -> i32 taking _ =>
+        arr[0] + arr[1] * 256
+
+    routine Binary.read_u32_be(peek arr: array) -> i32 taking _ =>
+        arr[0] * 16777216 + arr[1] * 65536 + arr[2] * 256 + arr[3]
+
+    routine Binary.read_u32_le(peek arr: array) -> i32 taking _ =>
+        arr[0] + arr[1] * 256 + arr[2] * 65536 + arr[3] * 16777216
+}

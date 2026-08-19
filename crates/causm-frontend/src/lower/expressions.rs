@@ -125,6 +125,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                     budget,
                 });
             } else {
+                if let Some(r) = ctx.routines.get(&actual_routine_name) {
+                    if let causm_core::types::Type::Custom(ref t) = r.return_type {
+                        ctx.reg_types.insert(dest.0, t.clone());
+                    }
+                }
                 ctx.push(causm_ir::Instruction::Call {
                     routine: actual_routine_name,
                     args: arg_regs,
@@ -140,6 +145,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 arg_regs.push(lower_expression(ctx, arg));
             }
             let dest = ctx.alloc_reg();
+            if let Some(r) = ctx.routines.get(routine) {
+                if let causm_core::types::Type::Custom(ref t) = r.return_type {
+                    ctx.reg_types.insert(dest.0, t.clone());
+                }
+            }
             ctx.push(causm_ir::Instruction::Call {
                 routine: routine.clone(),
                 args: arg_regs,
@@ -151,6 +161,24 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let src = ctx.get_reg(name);
             let dest = ctx.alloc_reg();
             ctx.push(causm_ir::Instruction::Clone { dest, src });
+            dest
+        }
+        Expression::StrBytes(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::StrBytes { dest, src });
+            dest
+        }
+        Expression::ToStr(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ToStr { dest, src });
+            dest
+        }
+        Expression::Len(expr) => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ArrayLen { dest, src });
             dest
         }
         Expression::FieldAccess { target, field } => {

@@ -1,0 +1,75 @@
+import "std/encoding" as Encoding
+
+@0ms: {
+    print("=== std/encoding showcase ===")
+
+    // --- utf8 ---
+    print("-- utf8.encode / decode --")
+    let hello_bytes = Encoding.Utf8.encode("Hello, Causm!")
+    debug(clone(hello_bytes))
+    let hello_str = Encoding.Utf8.decode(hello_bytes)
+    debug(hello_str)
+
+    // --- len() intrinsic ---
+    print("-- len() intrinsic --")
+    let n_bytes = Encoding.Utf8.encode_len("Hello, Causm!")
+    debug(n_bytes)
+    let raw = str_bytes("Causm")
+    let raw_len = len(raw)
+    debug(raw_len)
+
+    // --- step _ on a for-in loop ---
+    print("-- for..in..step _ (unconstrained pacing) --")
+    let digits = [48, 49, 50, 51, 52]
+    let sum = 0
+    for b in digits step _ {
+        let sum = sum + b
+    }
+    debug(sum)
+
+    // --- binary: big-endian pack ---
+    print("-- binary: big-endian pack --")
+    let port_be = Encoding.Binary.write_u16_be(19870)
+    debug(clone(port_be))
+    let port_back = Encoding.Binary.read_u16_be(port_be)
+    debug(port_back)
+
+    // --- binary: little-endian pack ---
+    print("-- binary: little-endian pack --")
+    let val_le = Encoding.Binary.write_u32_le(305419896)
+    debug(clone(val_le))
+    let val_back = Encoding.Binary.read_u32_le(val_le)
+    debug(val_back)
+
+    // --- binary: u64 big-endian ---
+    print("-- binary: u64 big-endian --")
+    let ts_be = Encoding.Binary.write_u64_be(1234567890)
+    debug(ts_be)
+
+    // --- base64: chunk encode ---
+    print("-- base64: chunk encode --")
+    let chunk = Encoding.Base64.encode_chunk(77, 97, 110)
+    debug(chunk)
+
+    // --- base64: chunk decode ---
+    print("-- base64: chunk decode --")
+    let decoded = Encoding.Base64.decode_chunk(84, 87, 70, 117)
+    debug(decoded)
+
+    // --- base64: alphabet lookup ---
+    print("-- base64: alphabet lookup --")
+    let a_char  = Encoding.Base64.alphabet_char(0)
+    let z_char  = Encoding.Base64.alphabet_char(25)
+    let small_a = Encoding.Base64.alphabet_char(26)
+    let zero_c  = Encoding.Base64.alphabet_char(52)
+    let plus_c  = Encoding.Base64.alphabet_char(62)
+    let slash_c = Encoding.Base64.alphabet_char(63)
+    debug(a_char)
+    debug(z_char)
+    debug(small_a)
+    debug(zero_c)
+    debug(plus_c)
+    debug(slash_c)
+
+    print("=== encoding showcase complete ===")
+}

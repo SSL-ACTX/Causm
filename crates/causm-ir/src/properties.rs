@@ -32,6 +32,9 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::ConstNull { dest }
             | SsaInstruction::Move { dest, .. }
             | SsaInstruction::Clone { dest, .. }
+            | SsaInstruction::StrBytes { dest, .. }
+            | SsaInstruction::ToStr { dest, .. }
+            | SsaInstruction::ArrayLen { dest, .. }
             | SsaInstruction::Call { dest, .. }
             | SsaInstruction::DynamicCall { dest, .. }
             | SsaInstruction::TypeAssert { dest, .. }
@@ -65,6 +68,9 @@ impl SsaInstructionProperties for SsaInstruction {
             SsaInstruction::UnaryOp { src, .. }
             | SsaInstruction::Move { src, .. }
             | SsaInstruction::Clone { src, .. }
+            | SsaInstruction::StrBytes { src, .. }
+            | SsaInstruction::ToStr { src, .. }
+            | SsaInstruction::ArrayLen { src, .. }
             | SsaInstruction::TypeAssert { src, .. }
             | SsaInstruction::TypeCast { src, .. }
             | SsaInstruction::TryTypeAssert { src, .. }

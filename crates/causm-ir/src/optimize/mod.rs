@@ -310,6 +310,14 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             dest: ssa_reg_to_reg(*dest),
             src: ssa_reg_to_reg(*src),
         },
+        SsaInstruction::StrBytes { dest, src } => Instruction::StrBytes {
+            dest: ssa_reg_to_reg(*dest),
+            src: ssa_reg_to_reg(*src),
+        },
+        SsaInstruction::ToStr { dest, src } => Instruction::ToStr {
+            dest: ssa_reg_to_reg(*dest),
+            src: ssa_reg_to_reg(*src),
+        },
         SsaInstruction::Call {
             routine,
             args,
@@ -653,6 +661,10 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             step_ms: *step_ms,
         },
         SsaInstruction::EndForStep => Instruction::EndForStep,
+        SsaInstruction::ArrayLen { dest, src } => Instruction::ArrayLen {
+            dest: ssa_reg_to_reg(*dest),
+            src: ssa_reg_to_reg(*src),
+        },
         SsaInstruction::LoopTickOn { chan_id } => Instruction::LoopTickOn {
             chan_id: chan_id.clone(),
         },

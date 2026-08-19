@@ -331,12 +331,16 @@ fn format_spanned_statement(
             step_ms,
             body,
         } => {
+            let step_str = match step_ms {
+                Some(ms) => format!("{}ms", ms),
+                None => "_".to_string(),
+            };
             out.push_str(&format!(
-                "{}for {} in {} step {}ms {{\n",
+                "{}for {} in {} step {} {{\n",
                 indent,
                 item_name,
                 format_expr(source),
-                step_ms
+                step_str
             ));
             for s in body {
                 format_spanned_statement(out, s, indent_step, depth + 1);
@@ -1075,6 +1079,9 @@ fn format_expr(expr: &Expression) -> String {
             format!("{}struct {{ {} }}", type_str, f_strs.join(", "))
         }
         Expression::CloneOp(id) => format!("clone({})", id),
+        Expression::StrBytes(expr) => format!("str_bytes({})", format_expr(expr)),
+        Expression::ToStr(expr) => format!("to_str({})", format_expr(expr)),
+        Expression::Len(expr) => format!("len({})", format_expr(expr)),
         Expression::RefOp(inner) => format!("&{}", format_expr(inner)),
         Expression::ArrayLiteral(elements) => {
             let elems_str = elements

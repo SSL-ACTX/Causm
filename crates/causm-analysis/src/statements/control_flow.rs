@@ -110,11 +110,14 @@ impl EntropicAnalyzer {
         max_ms: &u64,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
+        // u64::MAX is the wildcard sentinel for `taking _` — treat as unconstrained
         if *max_ms == 0 {
             return Err(self.annotate(SemanticErrorKind::InvalidLoopBudget));
         }
         let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-        branch.accumulated_cost += *max_ms;
+        if *max_ms != u64::MAX {
+            branch.accumulated_cost += *max_ms;
+        }
         for inner_stmt in body {
             self.analyze_statement(inner_stmt)?;
         }
@@ -197,6 +200,7 @@ impl EntropicAnalyzer {
         max_ms: &u64,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
+        // u64::MAX is the wildcard sentinel for `taking _` — treat as unconstrained
         if *max_ms == 0 {
             return Err(self.annotate(SemanticErrorKind::InvalidLoopBudget));
         }
@@ -214,7 +218,9 @@ impl EntropicAnalyzer {
         }
 
         let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-        branch.accumulated_cost += *max_ms;
+        if *max_ms != u64::MAX {
+            branch.accumulated_cost += *max_ms;
+        }
 
         for inner_stmt in body {
             self.analyze_statement(inner_stmt)?;
@@ -226,7 +232,7 @@ impl EntropicAnalyzer {
         &mut self,
         item_name: &str,
         source: &Expression,
-        step_ms: &u64,
+        step_ms: &Option<u64>,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         crate::expression::analyze_expression_nonconsuming(self, source)?;
@@ -241,11 +247,14 @@ impl EntropicAnalyzer {
             }
         };
 
-        let body_cost = crate::statement::estimate_block_cost(self, body);
-        if body_cost > *step_ms {
-            return Err(self.annotate(SemanticErrorKind::TickLoopBudgetExceeded(
-                body_cost, *step_ms,
-            )));
+        // Only enforce budget when step is a concrete value (not wildcard)
+        if let Some(limit) = step_ms {
+            let body_cost = crate::statement::estimate_block_cost(self, body);
+            if body_cost > *limit {
+                return Err(self.annotate(
+                    SemanticErrorKind::TickLoopBudgetExceeded(body_cost, *limit),
+                ));
+            }
         }
 
         let old_type = {

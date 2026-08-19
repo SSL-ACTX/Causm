@@ -671,6 +671,36 @@ impl SsaTransformer {
                     },
                 }
             }
+            Instruction::StrBytes { dest, src } => {
+                let src_ver = self.current_version(src.0);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::StrBytes {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: SsaReg {
+                        reg: src.0,
+                        version: src_ver,
+                    },
+                }
+            }
+            Instruction::ToStr { dest, src } => {
+                let src_ver = self.current_version(src.0);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ToStr {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: SsaReg {
+                        reg: src.0,
+                        version: src_ver,
+                    },
+                }
+            }
             Instruction::Call {
                 routine,
                 args,
@@ -1190,6 +1220,17 @@ impl SsaTransformer {
                 }
             }
             Instruction::EndForStep => SsaInstruction::EndForStep,
+            Instruction::ArrayLen { dest, src } => {
+                let v = self.next_version(dest.0);
+                self.push_version(dest.0, v);
+                SsaInstruction::ArrayLen {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: v,
+                    },
+                    src: self.current_ssa_reg(*src),
+                }
+            }
             Instruction::LoopTickOn { chan_id } => SsaInstruction::LoopTickOn {
                 chan_id: chan_id.clone(),
             },
@@ -1270,6 +1311,9 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::ConstNull { dest } => f(*dest),
         Instruction::Move { dest, .. } => f(*dest),
         Instruction::Clone { dest, .. } => f(*dest),
+        Instruction::StrBytes { dest, .. } => f(*dest),
+        Instruction::ToStr { dest, .. } => f(*dest),
+        Instruction::ArrayLen { dest, .. } => f(*dest),
         Instruction::Call { dest, .. } => f(*dest),
         Instruction::DynamicCall { dest, .. } => f(*dest),
         Instruction::TypeAssert { dest, .. } => f(*dest),

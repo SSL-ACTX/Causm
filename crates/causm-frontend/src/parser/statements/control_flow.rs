@@ -198,8 +198,21 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 parse_expression(range_pair)
             };
             let step_pair = inner.next().unwrap();
-            let step_str = step_pair.as_str();
-            let step_ms = parse_duration_to_ms(step_str);
+            // step_spec contains either duration_wildcard or duration_literal
+            let step_ms = {
+                let inner_step = step_pair.into_inner().next();
+                match inner_step {
+                    Some(p)
+                        if p.as_rule() == Rule::duration_wildcard
+                            || p.as_str() == "_"
+                            || p.as_str() == "?" =>
+                    {
+                        None
+                    }
+                    Some(p) => Some(parse_duration_to_ms(p.as_str())),
+                    None => None,
+                }
+            };
             let mut body = Vec::new();
             for stmt_pair in inner {
                 if stmt_pair.as_rule() == Rule::statement {
