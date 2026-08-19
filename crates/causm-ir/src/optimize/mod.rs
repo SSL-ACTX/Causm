@@ -318,6 +318,17 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             dest: ssa_reg_to_reg(*dest),
             src: ssa_reg_to_reg(*src),
         },
+        SsaInstruction::ConditionalSelect {
+            dest,
+            cond,
+            true_val,
+            false_val,
+        } => Instruction::ConditionalSelect {
+            dest: ssa_reg_to_reg(*dest),
+            cond: ssa_reg_to_reg(*cond),
+            true_val: ssa_reg_to_reg(*true_val),
+            false_val: ssa_reg_to_reg(*false_val),
+        },
         SsaInstruction::Call {
             routine,
             args,

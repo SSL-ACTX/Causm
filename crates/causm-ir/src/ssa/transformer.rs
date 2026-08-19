@@ -701,6 +701,27 @@ impl SsaTransformer {
                     },
                 }
             }
+            Instruction::ConditionalSelect {
+                dest,
+                cond,
+                true_val,
+                false_val,
+            } => {
+                let cond_ssa = self.current_ssa_reg(*cond);
+                let true_ssa = self.current_ssa_reg(*true_val);
+                let false_ssa = self.current_ssa_reg(*false_val);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ConditionalSelect {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    cond: cond_ssa,
+                    true_val: true_ssa,
+                    false_val: false_ssa,
+                }
+            }
             Instruction::Call {
                 routine,
                 args,
@@ -1350,6 +1371,7 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::Clone { dest, .. } => f(*dest),
         Instruction::StrBytes { dest, .. } => f(*dest),
         Instruction::ToStr { dest, .. } => f(*dest),
+        Instruction::ConditionalSelect { dest, .. } => f(*dest),
         Instruction::ArrayLen { dest, .. } => f(*dest),
         Instruction::Call { dest, .. } => f(*dest),
         Instruction::DynamicCall { dest, .. } => f(*dest),

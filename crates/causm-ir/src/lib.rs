@@ -102,6 +102,12 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 src: $crate::Reg
             },
+            ConditionalSelect {
+                dest: $crate::Reg,
+                cond: $crate::Reg,
+                true_val: $crate::Reg,
+                false_val: $crate::Reg
+            },
 
             // Control Flow
             Jump {

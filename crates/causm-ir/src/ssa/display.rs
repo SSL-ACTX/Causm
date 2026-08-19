@@ -57,6 +57,18 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::ToStr { dest, src } => {
                 write!(f, "{} = ToStr {}", dest, src)
             }
+            SsaInstruction::ConditionalSelect {
+                dest,
+                cond,
+                true_val,
+                false_val,
+            } => {
+                write!(
+                    f,
+                    "{} = Select {} ? {} : {}",
+                    dest, cond, true_val, false_val
+                )
+            }
             SsaInstruction::Call {
                 routine,
                 args,

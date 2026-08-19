@@ -465,42 +465,67 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let cond_reg = lower_expression(ctx, condition);
             let dest_reg = ctx.alloc_reg();
 
-            let jump_to_else_idx = ctx.instructions.len();
-            ctx.push(causm_ir::Instruction::JumpIfNot {
-                cond: cond_reg,
-                target: 0,
-            });
+            if is_pure_scalar_expr(then_branch) && is_pure_scalar_expr(else_branch) {
+                let true_reg = lower_expression(ctx, then_branch);
+                let false_reg = lower_expression(ctx, else_branch);
+                ctx.push(causm_ir::Instruction::ConditionalSelect {
+                    dest: dest_reg,
+                    cond: cond_reg,
+                    true_val: true_reg,
+                    false_val: false_reg,
+                });
+            } else {
+                let jump_to_else_idx = ctx.instructions.len();
+                ctx.push(causm_ir::Instruction::JumpIfNot {
+                    cond: cond_reg,
+                    target: 0,
+                });
 
-            let then_reg = lower_expression(ctx, then_branch);
-            ctx.push(causm_ir::Instruction::Move {
-                dest: dest_reg,
-                src: then_reg,
-            });
+                let then_reg = lower_expression(ctx, then_branch);
+                ctx.push(causm_ir::Instruction::Move {
+                    dest: dest_reg,
+                    src: then_reg,
+                });
 
-            let jump_to_end_idx = ctx.instructions.len();
-            ctx.push(causm_ir::Instruction::Jump { target: 0 });
+                let jump_to_end_idx = ctx.instructions.len();
+                ctx.push(causm_ir::Instruction::Jump { target: 0 });
 
-            let else_start_idx = ctx.instructions.len();
-            if let causm_ir::Instruction::JumpIfNot { ref mut target, .. } =
-                ctx.instructions[jump_to_else_idx]
-            {
-                *target = else_start_idx;
-            }
+                let else_start_idx = ctx.instructions.len();
+                if let causm_ir::Instruction::JumpIfNot { ref mut target, .. } =
+                    ctx.instructions[jump_to_else_idx]
+                {
+                    *target = else_start_idx;
+                }
 
-            let else_reg = lower_expression(ctx, else_branch);
-            ctx.push(causm_ir::Instruction::Move {
-                dest: dest_reg,
-                src: else_reg,
-            });
+                let else_reg = lower_expression(ctx, else_branch);
+                ctx.push(causm_ir::Instruction::Move {
+                    dest: dest_reg,
+                    src: else_reg,
+                });
 
-            let end_idx = ctx.instructions.len();
-            if let causm_ir::Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[jump_to_end_idx]
-            {
-                *target = end_idx;
+                let end_idx = ctx.instructions.len();
+                if let causm_ir::Instruction::Jump { ref mut target, .. } =
+                    ctx.instructions[jump_to_end_idx]
+                {
+                    *target = end_idx;
+                }
             }
 
             dest_reg
         }
+    }
+}
+
+fn is_pure_scalar_expr(expr: &Expression) -> bool {
+    match expr {
+        Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Boolean(_)
+        | Expression::Null => true,
+        Expression::BinaryOp { left, right, .. } => {
+            is_pure_scalar_expr(left) && is_pure_scalar_expr(right)
+        }
+        Expression::UnaryOp { expr, .. } => is_pure_scalar_expr(expr),
+        _ => false,
     }
 }

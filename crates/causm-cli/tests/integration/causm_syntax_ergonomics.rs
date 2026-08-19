@@ -348,3 +348,100 @@ fn test_syntax_nested_if_else_expression() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_branchless_conditional_select_vm_execution() -> anyhow::Result<()> {
+    let mut vm = Vm::new();
+    // Verify ConditionalSelect instruction works directly in TVM
+    let mut instructions = Vec::new();
+    // R0 = true, R1 = 42, R2 = 99, R3 = ConditionalSelect(R0, R1, R2)
+    instructions.push(causm_ir::Instruction::LoadBool {
+        dest: causm_ir::Reg(0),
+        value: true,
+    });
+    instructions.push(causm_ir::Instruction::LoadInt {
+        dest: causm_ir::Reg(1),
+        value: 42,
+    });
+    instructions.push(causm_ir::Instruction::LoadInt {
+        dest: causm_ir::Reg(2),
+        value: 99,
+    });
+    instructions.push(causm_ir::Instruction::ConditionalSelect {
+        dest: causm_ir::Reg(3),
+        cond: causm_ir::Reg(0),
+        true_val: causm_ir::Reg(1),
+        false_val: causm_ir::Reg(2),
+    });
+
+    let block = causm_ir::IrBlock {
+        time: causm_core::TimeCoordinate::Global(0),
+        entropy_mode: None,
+        instructions,
+        spans: Vec::new(),
+    };
+
+    let program = causm_ir::IrProgram {
+        blocks: vec![block],
+        routines: std::collections::HashMap::new(),
+        symbols: std::collections::HashMap::new(),
+        type_decay_limits: std::collections::HashMap::new(),
+        auto_drop_specs: std::collections::HashMap::new(),
+        struct_extends: std::collections::HashMap::new(),
+        decay_handlers: std::collections::HashMap::new(),
+    };
+
+    vm.execute_program(&program)?;
+    assert_eq!(vm.peek_reg("main", 3)?, Payload::Integer(42));
+
+    Ok(())
+}
+
+#[test]
+fn test_branchless_conditional_select_emitted_from_source_syntax(
+) -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let flag = true
+        let chosen = if (flag) { 42 } else { 99 }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    // Verify emitted IR block contains ConditionalSelect and NO Jump instructions
+    assert!(!ir.blocks.is_empty(), "Expected blocks in IrProgram");
+    let block = &ir.blocks[0];
+    let has_cond_select = block.instructions.iter().any(|instr| {
+        matches!(instr, causm_ir::Instruction::ConditionalSelect { .. })
+    });
+    let has_jump = block.instructions.iter().any(|instr| {
+        matches!(
+            instr,
+            causm_ir::Instruction::Jump { .. }
+                | causm_ir::Instruction::JumpIf { .. }
+                | causm_ir::Instruction::JumpIfNot { .. }
+        )
+    });
+
+    assert!(
+        has_cond_select,
+        "Frontend MUST emit ConditionalSelect for pure scalar if-else"
+    );
+    assert!(
+        !has_jump,
+        "Frontend MUST NOT emit Jump instructions for branchless if-else"
+    );
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let chosen_reg = ir.symbols.get("chosen").expect("chosen symbol").0;
+    assert_eq!(vm.peek_reg("main", chosen_reg)?, Payload::Integer(42));
+
+    Ok(())
+}

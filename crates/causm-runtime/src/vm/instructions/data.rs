@@ -158,4 +158,25 @@ impl Vm {
         let result = self.evaluate_unary_operation(val, &op)?;
         self.insert_reg(branch_id, dest.0, EntropicState::Valid(result))
     }
+
+    pub(crate) fn ConditionalSelect(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        cond: Reg,
+        true_val: Reg,
+        false_val: Reg,
+    ) -> Result<(), TemporalError> {
+        let is_true = match self.peek_reg(branch_id, cond.0)? {
+            Payload::Bool(b) => b,
+            other => {
+                return Err(TemporalError::TypeMismatch(format!(
+                    "ConditionalSelect condition must be bool, got {:?}",
+                    other
+                )));
+            }
+        };
+        let chosen_reg = if is_true { true_val } else { false_val };
+        self.Move(branch_id, dest, chosen_reg)
+    }
 }

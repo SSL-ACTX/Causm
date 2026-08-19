@@ -140,6 +140,12 @@ pub enum SsaInstruction {
         dest: SsaReg,
         src: SsaReg,
     },
+    ConditionalSelect {
+        dest: SsaReg,
+        cond: SsaReg,
+        true_val: SsaReg,
+        false_val: SsaReg,
+    },
     Call {
         routine: String,
         args: Vec<SsaReg>,

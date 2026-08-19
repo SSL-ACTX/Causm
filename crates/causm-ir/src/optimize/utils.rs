@@ -48,6 +48,7 @@ pub(crate) fn has_side_effects(instr: &SsaInstruction) -> bool {
             | SsaInstruction::ConstString { .. }
             | SsaInstruction::ConstNull { .. }
             | SsaInstruction::Move { .. }
+            | SsaInstruction::ConditionalSelect { .. }
             | SsaInstruction::Clone { .. }
             | SsaInstruction::StructLit { .. }
             | SsaInstruction::TopologyLit { .. }
