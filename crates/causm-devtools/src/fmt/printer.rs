@@ -1091,6 +1091,20 @@ fn format_expr(expr: &Expression) -> String {
                 .join(", ");
             format!("[{}]", elems_str)
         }
+        Expression::ArrayRepeat { value, count } => {
+            format!("[{}; {}]", format_expr(value), format_expr(count))
+        }
+        Expression::ArraySlice {
+            target,
+            start,
+            end,
+            inclusive,
+        } => {
+            let s_str = start.as_ref().map(|s| format_expr(s)).unwrap_or_default();
+            let dot_str = if *inclusive { "..=" } else { ".." };
+            let e_str = end.as_ref().map(|e| format_expr(e)).unwrap_or_default();
+            format!("{}[{}{}{}]", format_expr(target), s_str, dot_str, e_str)
+        }
         Expression::IndexAccess { target, index } => {
             format!("{}[{}]", format_expr(target), format_expr(index))
         }

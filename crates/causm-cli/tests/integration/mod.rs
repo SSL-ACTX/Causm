@@ -3,6 +3,7 @@ pub mod causm_acausal_debugging;
 pub mod causm_advanced_loops;
 pub mod causm_await_chan_robust;
 pub mod causm_cli_toggles;
+pub mod causm_collection;
 pub mod causm_egc;
 pub mod causm_encoding;
 pub mod causm_entropic;

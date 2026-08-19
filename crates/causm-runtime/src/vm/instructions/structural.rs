@@ -252,6 +252,116 @@ impl Vm {
         )
     }
 
+    pub(crate) fn ArrayRepeat(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        value: Reg,
+        count: Reg,
+    ) -> Result<(), TemporalError> {
+        let elem_val = self.peek_reg(branch_id, value.0)?;
+        let count_val = self.peek_reg(branch_id, count.0)?;
+        let n = match count_val {
+            Payload::Integer(i) if i >= 0 => i as usize,
+            _ => 0,
+        };
+        let values = vec![elem_val; n];
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            EntropicState::Valid(Payload::Array(values)),
+        )
+    }
+
+    pub(crate) fn ArraySlice(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        target: Reg,
+        start: Option<Reg>,
+        end: Option<Reg>,
+        inclusive: bool,
+    ) -> Result<(), TemporalError> {
+        let target_val = self.peek_reg(branch_id, target.0)?;
+        match target_val {
+            Payload::Array(elements) => {
+                let len = elements.len();
+                let s = if let Some(r) = start {
+                    match self.peek_reg(branch_id, r.0)? {
+                        Payload::Integer(i) => (i.max(0) as usize).min(len),
+                        _ => 0,
+                    }
+                } else {
+                    0
+                };
+                let e = if let Some(r) = end {
+                    match self.peek_reg(branch_id, r.0)? {
+                        Payload::Integer(i) => {
+                            let mut end_idx = if i < 0 { 0 } else { i as usize };
+                            if inclusive {
+                                end_idx = end_idx.saturating_add(1);
+                            }
+                            end_idx.min(len)
+                        }
+                        _ => len,
+                    }
+                } else {
+                    len
+                };
+                let sliced = if s <= e {
+                    elements[s..e].to_vec()
+                } else {
+                    Vec::new()
+                };
+                self.insert_reg(
+                    branch_id,
+                    dest.0,
+                    EntropicState::Valid(Payload::Array(sliced)),
+                )
+            }
+            Payload::String(s_val) => {
+                let len = s_val.len();
+                let s = if let Some(r) = start {
+                    match self.peek_reg(branch_id, r.0)? {
+                        Payload::Integer(i) => (i.max(0) as usize).min(len),
+                        _ => 0,
+                    }
+                } else {
+                    0
+                };
+                let e = if let Some(r) = end {
+                    match self.peek_reg(branch_id, r.0)? {
+                        Payload::Integer(i) => {
+                            let mut end_idx = if i < 0 { 0 } else { i as usize };
+                            if inclusive {
+                                end_idx = end_idx.saturating_add(1);
+                            }
+                            end_idx.min(len)
+                        }
+                        _ => len,
+                    }
+                } else {
+                    len
+                };
+                let sliced = if s <= e && e <= len {
+                    s_val[s..e].to_string()
+                } else {
+                    String::new()
+                };
+                self.insert_reg(
+                    branch_id,
+                    dest.0,
+                    EntropicState::Valid(Payload::String(sliced)),
+                )
+            }
+            _ => self.insert_reg(
+                branch_id,
+                dest.0,
+                EntropicState::Valid(Payload::Array(Vec::new())),
+            ),
+        }
+    }
+
     pub(crate) fn FieldAccess(
         &mut self,
         branch_id: &str,

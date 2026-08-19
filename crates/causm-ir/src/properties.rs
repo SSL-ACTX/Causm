@@ -43,6 +43,8 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::StructLit { dest, .. }
             | SsaInstruction::TopologyLit { dest, .. }
             | SsaInstruction::ArrayLit { dest, .. }
+            | SsaInstruction::ArrayRepeat { dest, .. }
+            | SsaInstruction::ArraySlice { dest, .. }
             | SsaInstruction::FieldAccess { dest, .. }
             | SsaInstruction::IndexAccess { dest, .. }
             | SsaInstruction::ChanRecv { dest, .. }
@@ -137,6 +139,21 @@ impl SsaInstructionProperties for SsaInstruction {
             }
             SsaInstruction::ArrayLit { elements, .. } => {
                 regs.extend(elements.iter().cloned());
+            }
+            SsaInstruction::ArrayRepeat { value, count, .. } => {
+                regs.push(*value);
+                regs.push(*count);
+            }
+            SsaInstruction::ArraySlice {
+                target, start, end, ..
+            } => {
+                regs.push(*target);
+                if let Some(s) = start {
+                    regs.push(*s);
+                }
+                if let Some(e) = end {
+                    regs.push(*e);
+                }
             }
             SsaInstruction::Entangle { regs: r_vec } => {
                 regs.extend(r_vec.iter().cloned());

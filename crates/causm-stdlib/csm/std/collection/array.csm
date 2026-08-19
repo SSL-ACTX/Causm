@@ -1,0 +1,80 @@
+// Standard Collection Module - Array Operations
+
+@0ms: {
+    routine Array.concat(peek a: array, peek b: array) -> array taking _ {
+        let len_a = len(a)
+        let len_b = len(b)
+        let total = len_a + len_b
+        let mut result = [0; total]
+        let mut idx = 0
+        for elem in a step _ {
+            result[idx] = elem
+            idx = idx + 1
+        }
+        for elem in b step _ {
+            result[idx] = elem
+            idx = idx + 1
+        }
+        result
+    }
+
+    routine Array.copy(peek src: array, peek src_pos: i32, peek dst: array, peek dst_pos: i32, peek count: i32) -> array taking _ {
+        let mut target = clone(dst)
+        let mut i = 0
+        while (i < count) taking _ {
+            target[dst_pos + i] = src[src_pos + i]
+            i = i + 1
+        }
+        target
+    }
+
+    routine Array.fill(peek arr: array, peek value: i64) -> array taking _ {
+        let mut target = clone(arr)
+        let mut idx = 0
+        for _elem in target step _ {
+            target[idx] = value
+            idx = idx + 1
+        }
+        target
+    }
+
+    routine Array.clone(peek arr: array) -> array taking _ {
+        let total = len(arr)
+        arr[0..total]
+    }
+
+    routine Array.contains(peek arr: array, peek target: i64) -> bool taking _ {
+        let mut found = false
+        for elem in arr step _ {
+            if (elem == target) {
+                found = true
+                break
+            } reconcile auto
+        }
+        found
+    }
+
+    routine Array.find(peek arr: array, peek target: i64) -> i32 taking _ {
+        let mut found_idx = -1
+        let mut idx = 0
+        for elem in arr step _ {
+            if (elem == target) {
+                found_idx = clone(idx)
+                break
+            } reconcile auto
+            idx = idx + 1
+        }
+        found_idx
+    }
+
+    routine Array.reverse(peek arr: array) -> array taking _ {
+        let rev_len = len(arr)
+        let mut result = [0; clone(rev_len)]
+        let mut write_idx = rev_len - 1
+        for elem in arr step _ {
+            result[write_idx] = elem
+            write_idx = write_idx - 1
+        }
+        result
+    }
+}

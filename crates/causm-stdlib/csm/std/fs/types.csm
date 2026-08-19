@@ -1,5 +1,5 @@
 @0ms: {
-    type File = struct decay_after 5000ms auto_drop("libc.so.6", "close", fd) {
+    type File = struct decay_after 5000ms {
         fd: i32,
         is_open: bool,
         path: string

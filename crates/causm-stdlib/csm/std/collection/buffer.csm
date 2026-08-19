@@ -1,0 +1,109 @@
+// Standard Collection Module - Dynamic Buffer
+
+from "std/collection/types" import Buffer
+
+@0ms: {
+    routine Buffer.new(peek capacity: i32) -> Buffer taking _ {
+        let mut cap = 16
+        if (capacity > 0) {
+            cap = clone(capacity)
+        } reconcile auto
+        let raw = [0; cap]
+        struct {
+            data = raw,
+            len = 0,
+            capacity = cap
+        }
+    }
+
+    routine Buffer.with_data(peek initial_data: array) -> Buffer taking _ {
+        let total_len = len(initial_data)
+        let mut raw = [0; clone(total_len)]
+        let mut idx = 0
+        for b in initial_data step _ {
+            raw[idx] = b
+            idx = idx + 1
+        }
+        struct {
+            data = raw,
+            len = clone(total_len),
+            capacity = total_len
+        }
+    }
+
+    routine Buffer.append(peek buf: Buffer, peek byte_val: i64) -> Buffer taking _ {
+        let cur_len = buf.len
+        let mut cur_cap = buf.capacity
+        let mut data = buf.data
+
+        if (cur_len >= cur_cap) {
+            let new_cap = cur_cap * 2
+            let mut new_data = [0; new_cap]
+            let mut idx = 0
+            for b in data step _ {
+                new_data[idx] = b
+                idx = idx + 1
+            }
+            data = new_data
+            cur_cap = new_cap
+        } reconcile auto
+
+        data[cur_len] = byte_val
+        let new_len = cur_len + 1
+
+        struct {
+            data = data,
+            len = new_len,
+            capacity = cur_cap
+        }
+    }
+
+    routine Buffer.append_slice(peek buf: Buffer, peek slice_data: array, peek count: i32) -> Buffer taking _ {
+        let cur_len = buf.len
+        let mut cur_cap = buf.capacity
+        let mut data = buf.data
+
+        if (cur_len + count > cur_cap) {
+            let mut new_cap = cur_cap * 2
+            while (cur_len + count > new_cap) taking _ {
+                new_cap = new_cap * 2
+            }
+            let mut new_data = [0; new_cap]
+            let mut copy_idx = 0
+            for b in data step _ {
+                new_data[copy_idx] = b
+                copy_idx = copy_idx + 1
+            }
+            data = new_data
+            cur_cap = new_cap
+        } reconcile auto
+
+        let mut slice_idx = 0
+        let slice_sub = slice_data[0..count]
+        for b in slice_sub step _ {
+            data[cur_len + slice_idx] = b
+            slice_idx = slice_idx + 1
+        }
+        let new_len = cur_len + count
+
+        struct {
+            data = data,
+            len = new_len,
+            capacity = cur_cap
+        }
+    }
+
+    routine Buffer.as_slice(peek buf: Buffer) -> array taking _ {
+        let slice_len = buf.len
+        let data = buf.data
+        data[0..slice_len]
+    }
+
+    routine Buffer.clear(peek buf: Buffer) -> Buffer taking _ {
+        struct {
+            data = buf.data,
+            len = 0,
+            capacity = buf.capacity
+        }
+    }
+}

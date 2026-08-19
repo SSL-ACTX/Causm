@@ -8,10 +8,10 @@
         read_fd: i32,
         write_fd: i32
     }
-    type PipeReader = struct decay_after 10000ms auto_drop("libc.so.6", "close", fd) {
+    type PipeReader = struct decay_after 10000ms {
         fd: i32
     }
-    type PipeWriter = struct decay_after 10000ms auto_drop("libc.so.6", "close", fd) {
+    type PipeWriter = struct decay_after 10000ms {
         fd: i32
     }
     type PipeEndpoints = struct {

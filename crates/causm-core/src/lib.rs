@@ -471,7 +471,17 @@ macro_rules! expressions {
                 target: Box<Expression>,
                 index: Box<Expression>
             },
+            ArraySlice {
+                target: Box<Expression>,
+                start: Option<Box<Expression>>,
+                end: Option<Box<Expression>>,
+                inclusive: bool
+            },
             ArrayLiteral(Vec<Expression>),
+            ArrayRepeat {
+                value: Box<Expression>,
+                count: Box<Expression>
+            },
             ChannelReceive(String),
             Integer(i64),
             Float(u64), // Using u64 bits to preserve Eq

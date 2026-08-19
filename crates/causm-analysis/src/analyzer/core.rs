@@ -917,6 +917,36 @@ impl EntropicAnalyzer {
                     elements.iter().map(|e| self.expr_snippet(e)).collect();
                 format!("[{}]", parts.join(","))
             }
+            Expression::ArrayRepeat { value, count } => {
+                format!(
+                    "[{}; {}]",
+                    self.expr_snippet(value),
+                    self.expr_snippet(count)
+                )
+            }
+            Expression::ArraySlice {
+                target,
+                start,
+                end,
+                inclusive,
+            } => {
+                let s_str = start
+                    .as_ref()
+                    .map(|s| self.expr_snippet(s))
+                    .unwrap_or_default();
+                let dot_str = if *inclusive { "..=" } else { ".." };
+                let e_str = end
+                    .as_ref()
+                    .map(|e| self.expr_snippet(e))
+                    .unwrap_or_default();
+                format!(
+                    "{}[{}{}{}]",
+                    self.expr_snippet(target),
+                    s_str,
+                    dot_str,
+                    e_str
+                )
+            }
             Expression::Integer(v) => format!("{}", v),
             Expression::Float(bits) => format!("{}", f64::from_bits(*bits)),
             Expression::Deferred { capability, .. } => {

@@ -69,10 +69,7 @@
     // Encodes a byte array to a base64 string
     routine Base64.encode(peek bytes: array) -> string taking _ {
         let n = len(bytes)
-        let mut out = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut out = [0; 64]
         let i = 0
         let j = 0
         while (i + 2 < n) taking _ {
@@ -94,6 +91,7 @@
             let out[j + 1] = chunk[1]
             let out[j + 2] = 61
             let out[j + 3] = 61
+            let j = j + 4
         } else if (i + 2 == n) {
             let b0 = bytes[i]
             let b1 = bytes[i + 1]
@@ -102,17 +100,16 @@
             let out[j + 1] = chunk[1]
             let out[j + 2] = chunk[2]
             let out[j + 3] = 61
+            let j = j + 4
         } reconcile auto
-        to_str(out)
+        to_str(out[0..j])
     }
 
     // Decodes a base64 string to a byte array
     routine Base64.decode(peek b64: string) -> array taking _ {
         let encoded_bytes = str_bytes(b64)
         let n = len(encoded_bytes)
-        let mut out = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut out = [0; 64]
         let i = 0
         let j = 0
         while (i + 3 < n) taking _ {
@@ -127,6 +124,6 @@
             let i = i + 4
             let j = j + 3
         }
-        out
+        out[0..j]
     }
 }

@@ -1,0 +1,7 @@
+@0ms: {
+    type Buffer = struct {
+        capacity: i32,
+        data: array,
+        len: i32
+    }
+}

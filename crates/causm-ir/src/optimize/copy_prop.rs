@@ -197,6 +197,41 @@ pub fn copy_propagation(
                         }
                     }
                 }
+                SsaInstruction::ArrayRepeat { value, count, .. } => {
+                    let new_val = resolve(*value);
+                    if *value != new_val {
+                        *value = new_val;
+                        changed = true;
+                    }
+                    let new_count = resolve(*count);
+                    if *count != new_count {
+                        *count = new_count;
+                        changed = true;
+                    }
+                }
+                SsaInstruction::ArraySlice {
+                    target, start, end, ..
+                } => {
+                    let new_target = resolve(*target);
+                    if *target != new_target {
+                        *target = new_target;
+                        changed = true;
+                    }
+                    if let Some(s) = start {
+                        let new_s = resolve(*s);
+                        if *s != new_s {
+                            *s = new_s;
+                            changed = true;
+                        }
+                    }
+                    if let Some(e) = end {
+                        let new_e = resolve(*e);
+                        if *e != new_e {
+                            *e = new_e;
+                            changed = true;
+                        }
+                    }
+                }
                 SsaInstruction::FieldAccess { target, .. } => {
                     let new_target = resolve(*target);
                     if *target != new_target {

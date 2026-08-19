@@ -12,36 +12,29 @@
         print("HTTP Server listening on port: 19870")
         using client = Net.TcpStream.connect("127.0.0.1", 19870) {
             let server_conn = listener.accept()
+            let req_text = "GET /status HTTP/1.1
+Host: localhost
 
-            // Realistic client HTTP request
-            let req_text = "GET /status HTTP/1.1\r\nHost: localhost\r\n\r\n"
-            let req_bytes = req_text |> Utf8.encode()
+"
+            let req_bytes = Utf8.encode(req_text)
             let req_len = len(req_bytes)
             let sent = client.send(req_bytes, req_len)
             print(f"Client sent {sent} bytes HTTP request: {req_text}")
-
-            // Server receives and decodes request
-            let req_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let req_buf = [0; 48]
             let recvd = server_conn.recv(req_buf, req_len)
-            let recvd_str = Utf8.decode(req_buf)
+            let recvd_str = Utf8.decode(req_buf[0..recvd])
             print(f"Server received {recvd} bytes: {recvd_str}")
+            let res_text = "HTTP/1.1 200 OK
+Content-Length: 5
 
-            // Server responds with realistic 200 OK payload
-            let res_text = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nCAUSM"
-            let res_bytes = res_text |> Utf8.encode()
+CAUSM"
+            let res_bytes = Utf8.encode(res_text)
             let res_len = len(res_bytes)
             let sent_res = server_conn.send(res_bytes, res_len)
-
-            // Client receives response
-            let res_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let res_buf = [0; 48]
             let recvd_res = client.recv(res_buf, res_len)
-            let res_decoded = Utf8.decode(res_buf)
+            let res_decoded = Utf8.decode(res_buf[0..recvd_res])
             print(f"Client received response: {res_decoded}")
-            // No manual close calls needed! All sockets auto-drop on scope exit.
         }
         print("Phase 1 HTTP session closed automatically.")
     }
@@ -52,21 +45,15 @@
     using listener2 = Net.TcpListener.bind(19871) {
         using stream2 = Net.TcpStream.connect("127.0.0.1", 19871) {
             let client2 = listener2.accept()
-
             let chat_msg = "Hello Seuriin! Causm std/encoding + std/net is live."
-            let chat_bytes = chat_msg |> Utf8.encode()
+            let chat_bytes = Utf8.encode(chat_msg)
             let chat_len = len(chat_bytes)
             let sent2 = stream2.send(chat_bytes, chat_len)
             print(f"Sent {sent2} bytes: {chat_msg}")
-
-            let buf2 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let buf2 = [0; 64]
             let recvd2 = client2.recv(buf2, chat_len)
-            let decoded2 = Utf8.decode(buf2)
+            let decoded2 = Utf8.decode(buf2[0..recvd2])
             print(f"Received {recvd2} bytes decoded: {decoded2}")
-            // No manual close needed!
         }
         print("Phase 2 payload exchange closed automatically.")
     }
@@ -78,16 +65,14 @@
         using stream3 = Net.TcpStream.connect("127.0.0.1", 19872) {
             let client3 = listener3.accept()
             let cmd_text = "STREAM_SYNC_ACK"
-            let cmd_bytes = cmd_text |> Utf8.encode()
+            let cmd_bytes = Utf8.encode(cmd_text)
             let cmd_len = len(cmd_bytes)
             let nb_sent = stream3.send(cmd_bytes, cmd_len)
             print(f"Non-blocking sent {nb_sent} bytes: {cmd_text}")
-
-            let nb_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            let nb_buf = [0; 16]
             let nb_recvd = client3.recv(nb_buf, cmd_len)
-            let cmd_recvd = Utf8.decode(nb_buf)
+            let cmd_recvd = Utf8.decode(nb_buf[0..nb_recvd])
             print(f"Received in non-blocking mode: {cmd_recvd}")
-            // No manual close needed!
         }
         print("Phase 3 non-blocking session closed automatically.")
     }
@@ -100,25 +85,22 @@
         using udp_cli_listener = Net.udp_bind(19881) {
             using cli_sock = Net.udp_socket() {
                 let ping_msg = "HEARTBEAT_PING"
-                let ping_bytes = ping_msg |> Utf8.encode()
+                let ping_bytes = Utf8.encode(ping_msg)
                 let ping_len = len(ping_bytes)
                 let c2s = cli_sock.send_to(ping_bytes, ping_len, 19880, 127, 0, 0, 1)
                 print(f"UDP Client sent {c2s} bytes: {ping_msg}")
-
-                let ping_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                let ping_buf = [0; 16]
                 let s_recvd = udp_server.recv_from(ping_buf, ping_len)
-                let s_ping_str = Utf8.decode(ping_buf)
+                let s_ping_str = Utf8.decode(ping_buf[0..s_recvd])
                 print(f"UDP Server received {s_recvd} bytes: {s_ping_str}")
-
                 let pong_msg = "HEARTBEAT_PONG"
-                let pong_bytes = pong_msg |> Utf8.encode()
+                let pong_bytes = Utf8.encode(pong_msg)
                 let pong_len = len(pong_bytes)
                 let s2c = udp_server.send_to(pong_bytes, pong_len, 19881, 127, 0, 0, 1)
                 print(f"UDP Server replied {s2c} bytes: {pong_msg}")
-
-                let pong_buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                let pong_buf = [0; 16]
                 let c_recvd = udp_cli_listener.recv_from(pong_buf, pong_len)
-                let c_pong_str = Utf8.decode(pong_buf)
+                let c_pong_str = Utf8.decode(pong_buf[0..c_recvd])
                 print(f"UDP Client received reply: {c_pong_str}")
             }
         }
@@ -132,7 +114,6 @@
     let plen = len(port_bytes)
     print(f"Binary-packed port 8080 (BE): {plen} bytes")
     debug(port_bytes)
-
     let addr_bytes = Binary.write_u32_be(2130706433)
     let alen = len(addr_bytes)
     print(f"Binary-packed IP 127.0.0.1 (BE): {alen} bytes")

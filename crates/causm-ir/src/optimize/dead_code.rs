@@ -33,12 +33,12 @@ pub fn prune_import_duplicates(ir: &mut IrProgram) {
                 .map(|r| r.instructions.is_empty())
                 .unwrap_or(false);
 
-            if is_target_non_empty && !is_unnamespaced_ffi {
-                if ir.routines.contains_key(&unnamespaced)
-                    || unnamespaced.contains('.')
-                {
-                    alias_map.insert(unnamespaced, key.clone());
-                }
+            if is_target_non_empty
+                && !is_unnamespaced_ffi
+                && (ir.routines.contains_key(&unnamespaced)
+                    || unnamespaced.contains('.'))
+            {
+                alias_map.insert(unnamespaced, key.clone());
             }
         }
     }

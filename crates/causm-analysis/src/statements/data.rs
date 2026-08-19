@@ -22,7 +22,19 @@ impl EntropicAnalyzer {
                 );
             }
         }
+        let was_consumed = {
+            let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+            branch.consumed.contains(target)
+        };
         analyze_expression(self, expr)?;
+        // If target was in consumed due to being read on RHS of its own reassignment (e.g. cur = cur + 1),
+        // restore it if it is mutable.
+        if !was_consumed {
+            let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+            if branch.mutables.contains(target) {
+                branch.consumed.remove(target);
+            }
+        }
         let inferred_type = crate::expression::infer_expression_type(self, expr)?;
 
         let final_type = if let Some(explicit_type_name) = var_type {
@@ -122,6 +134,13 @@ impl EntropicAnalyzer {
                     name.clone(),
                 )));
             }
+        } else if let Expression::IndexAccess {
+            target: inner,
+            index,
+        } = target
+        {
+            crate::expression::analyze_expression_nonconsuming(self, inner)?;
+            crate::expression::analyze_expression_nonconsuming(self, index)?;
         } else {
             analyze_expression(self, target)?;
         }

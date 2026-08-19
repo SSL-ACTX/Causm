@@ -81,6 +81,18 @@ pub(crate) fn infer_expression_type(
                 }
             }
         }
+        Expression::ArrayRepeat { value, .. } => {
+            let elem_type = infer_expression_type(analyzer, value)?;
+            Ok(Type::Array(Box::new(elem_type)))
+        }
+        Expression::ArraySlice { target, .. } => {
+            let target_type = infer_expression_type(analyzer, target)?;
+            match target_type {
+                Type::String => Ok(Type::String),
+                Type::Array(inner) => Ok(Type::Array(inner)),
+                _ => Ok(Type::Array(Box::new(Type::Unknown))),
+            }
+        }
         Expression::ChannelReceive(_) => Ok(Type::Unknown),
         Expression::Deferred { .. } => Ok(Type::Promise(Box::new(Type::Unknown))),
         Expression::Call { routine, .. } => {

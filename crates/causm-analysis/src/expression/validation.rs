@@ -590,11 +590,7 @@ pub(crate) fn analyze_expression(
             Ok(())
         }
         Expression::IndexAccess { target, index } => {
-            if let Expression::Identifier(name) = &**target {
-                analyzer.mark_decayed(name)?;
-            } else {
-                analyze_expression(analyzer, target)?;
-            }
+            analyze_expression_nonconsuming(analyzer, target)?;
             analyze_expression_nonconsuming(analyzer, index)?;
             Ok(())
         }
@@ -629,6 +625,23 @@ pub(crate) fn analyze_expression(
         | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArrayLiteral(_) => Ok(()),
+        Expression::ArrayRepeat { value, count } => {
+            analyze_expression_nonconsuming(analyzer, value)?;
+            analyze_expression_nonconsuming(analyzer, count)?;
+            Ok(())
+        }
+        Expression::ArraySlice {
+            target, start, end, ..
+        } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            if let Some(s) = start {
+                analyze_expression_nonconsuming(analyzer, s)?;
+            }
+            if let Some(e) = end {
+                analyze_expression_nonconsuming(analyzer, e)?;
+            }
+            Ok(())
+        }
         Expression::BinaryOp { left, right, .. } => {
             analyze_expression_nonconsuming(analyzer, left)?;
             analyze_expression_nonconsuming(analyzer, right)?;
@@ -747,9 +760,11 @@ pub(crate) fn analyze_expression_nonconsuming(
             }
             Ok(())
         }
-        Expression::StrBytes(expr) => analyze_expression(analyzer, expr),
-        Expression::ToStr(expr) => analyze_expression(analyzer, expr),
-        Expression::Len(expr) => analyze_expression(analyzer, expr),
+        Expression::StrBytes(expr) => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
+        Expression::ToStr(expr) => analyze_expression_nonconsuming(analyzer, expr),
+        Expression::Len(expr) => analyze_expression_nonconsuming(analyzer, expr),
         Expression::StructLit(_, fields) | Expression::TopologyLit(fields) => {
             for inner_expr in fields.values() {
                 analyze_expression_nonconsuming(analyzer, inner_expr)?;
@@ -765,6 +780,23 @@ pub(crate) fn analyze_expression_nonconsuming(
         Expression::ArrayLiteral(elements) => {
             for inner_expr in elements {
                 analyze_expression_nonconsuming(analyzer, inner_expr)?;
+            }
+            Ok(())
+        }
+        Expression::ArrayRepeat { value, count } => {
+            analyze_expression_nonconsuming(analyzer, value)?;
+            analyze_expression_nonconsuming(analyzer, count)?;
+            Ok(())
+        }
+        Expression::ArraySlice {
+            target, start, end, ..
+        } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            if let Some(s) = start {
+                analyze_expression_nonconsuming(analyzer, s)?;
+            }
+            if let Some(e) = end {
+                analyze_expression_nonconsuming(analyzer, e)?;
             }
             Ok(())
         }

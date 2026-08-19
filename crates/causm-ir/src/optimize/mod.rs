@@ -391,6 +391,26 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             dest: ssa_reg_to_reg(*dest),
             elements: elements.iter().copied().map(ssa_reg_to_reg).collect(),
         },
+        SsaInstruction::ArrayRepeat { dest, value, count } => {
+            Instruction::ArrayRepeat {
+                dest: ssa_reg_to_reg(*dest),
+                value: ssa_reg_to_reg(*value),
+                count: ssa_reg_to_reg(*count),
+            }
+        }
+        SsaInstruction::ArraySlice {
+            dest,
+            target,
+            start,
+            end,
+            inclusive,
+        } => Instruction::ArraySlice {
+            dest: ssa_reg_to_reg(*dest),
+            target: ssa_reg_to_reg(*target),
+            start: start.as_ref().copied().map(ssa_reg_to_reg),
+            end: end.as_ref().copied().map(ssa_reg_to_reg),
+            inclusive: *inclusive,
+        },
         SsaInstruction::FieldAccess {
             dest,
             target,

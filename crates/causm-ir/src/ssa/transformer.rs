@@ -1018,6 +1018,43 @@ impl SsaTransformer {
                     elements: elements_ssa,
                 }
             }
+            Instruction::ArrayRepeat { dest, value, count } => {
+                let val_ssa = self.current_ssa_reg(*value);
+                let count_ssa = self.current_ssa_reg(*count);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ArrayRepeat {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    value: val_ssa,
+                    count: count_ssa,
+                }
+            }
+            Instruction::ArraySlice {
+                dest,
+                target,
+                start,
+                end,
+                inclusive,
+            } => {
+                let target_ssa = self.current_ssa_reg(*target);
+                let start_ssa = start.map(|r| self.current_ssa_reg(r));
+                let end_ssa = end.map(|r| self.current_ssa_reg(r));
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ArraySlice {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    target: target_ssa,
+                    start: start_ssa,
+                    end: end_ssa,
+                    inclusive: *inclusive,
+                }
+            }
             Instruction::FieldAccess {
                 dest,
                 target,
@@ -1324,7 +1361,9 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         }
         Instruction::StructLit { dest, .. } => f(*dest),
         Instruction::TopologyLit { dest, .. } => f(*dest),
-        Instruction::ArrayLit { dest, .. } => f(*dest),
+        Instruction::ArrayLit { dest, .. }
+        | Instruction::ArrayRepeat { dest, .. }
+        | Instruction::ArraySlice { dest, .. } => f(*dest),
         Instruction::FieldAccess { dest, .. } => f(*dest),
         Instruction::IndexAccess { dest, .. } => f(*dest),
         Instruction::Defer { dest, .. } => f(*dest),

@@ -265,6 +265,21 @@ impl std::fmt::Display for SsaInstruction {
                     elements.iter().map(|e| e.to_string()).collect();
                 write!(f, "{} = [ {} ]", dest, elems_str.join(", "))
             }
+            SsaInstruction::ArrayRepeat { dest, value, count } => {
+                write!(f, "{} = [ {}; {} ]", dest, value, count)
+            }
+            SsaInstruction::ArraySlice {
+                dest,
+                target,
+                start,
+                end,
+                inclusive,
+            } => {
+                let s_str = start.map(|r| r.to_string()).unwrap_or_default();
+                let dot_str = if *inclusive { "..=" } else { ".." };
+                let e_str = end.map(|r| r.to_string()).unwrap_or_default();
+                write!(f, "{} = {}[{}{}{}]", dest, target, s_str, dot_str, e_str)
+            }
             SsaInstruction::FieldAccess {
                 dest,
                 target,

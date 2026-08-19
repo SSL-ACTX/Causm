@@ -51,7 +51,14 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 }
             }
 
-            let target_pair = inner.next().unwrap();
+            let target_container = inner.next().unwrap();
+            let target_pair =
+                if target_container.as_rule() == Rule::assignment_target {
+                    target_container.into_inner().next().unwrap()
+                } else {
+                    target_container
+                };
+
             if target_pair.as_rule() == Rule::destructure_pattern {
                 let mut fields = Vec::new();
                 for field_pair in target_pair.into_inner() {
@@ -75,7 +82,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     expr,
                 }
             } else {
-                let target = target_pair.as_str().to_string();
+                let target_expr = parse_expression(target_pair);
                 let mut var_type: Option<TypeName> = None;
                 if let Some(next_pair) = inner.peek() {
                     if next_pair.as_rule() == Rule::type_annotation {
@@ -93,12 +100,35 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     .map(parse_expression)
                     .unwrap_or(Expression::Null);
 
-                Statement::Assignment {
-                    target,
-                    mutable,
-                    var_type,
-                    lifetime,
-                    expr,
+                match target_expr {
+                    Expression::FieldAccess { target, field } => {
+                        Statement::FieldUpdate {
+                            target: *target,
+                            field,
+                            value: expr,
+                        }
+                    }
+                    Expression::IndexAccess { target, index } => {
+                        Statement::FieldUpdate {
+                            target: Expression::IndexAccess { target, index },
+                            field: String::new(),
+                            value: expr,
+                        }
+                    }
+                    Expression::Identifier(target) => Statement::Assignment {
+                        target,
+                        mutable,
+                        var_type,
+                        lifetime,
+                        expr,
+                    },
+                    _ => Statement::Assignment {
+                        target: "_".to_string(),
+                        mutable,
+                        var_type,
+                        lifetime,
+                        expr,
+                    },
                 }
             }
         }
@@ -362,26 +392,15 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     value,
                 }
             } else if let Expression::IndexAccess { target, index } = target_expr {
-                if let Expression::Literal(s) = *index {
-                    Statement::FieldUpdate {
-                        target: *target,
-                        field: s,
-                        value,
-                    }
-                } else {
-                    Statement::Expression(Expression::BinaryOp {
-                        left: Box::new(Expression::IndexAccess {
-                            target,
-                            index: Box::new(*index),
-                        }),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(value),
-                    })
+                Statement::FieldUpdate {
+                    target: Expression::IndexAccess { target, index },
+                    field: String::new(),
+                    value,
                 }
             } else if let Expression::Identifier(name) = target_expr {
                 Statement::Assignment {
                     target: name,
-                    mutable: false,
+                    mutable: true,
                     var_type: None,
                     lifetime: None,
                     expr: value,

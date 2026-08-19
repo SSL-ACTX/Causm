@@ -1043,9 +1043,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                     .borrow_mut()
                     .insert(name.clone(), wcet);
 
-                let budget_limit = taking_ms.or_else(|| {
-                    self.analyzer.routines.get(name).map(|r| r.taking_ms)
-                });
+                let budget_limit = *taking_ms;
 
                 if let Some(limit) = budget_limit {
                     let limit_int = routine_verifier.solver.int_from_u64(limit);

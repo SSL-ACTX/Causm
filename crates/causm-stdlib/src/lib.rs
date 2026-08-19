@@ -26,6 +26,13 @@ pub const STD_PROCESS_MOD: &str = include_str!("../csm/std/process/mod.csm");
 pub const STD_PROCESS_TYPES: &str = include_str!("../csm/std/process/types.csm");
 pub const STD_PROCESS_FFI: &str = include_str!("../csm/std/process/ffi.csm");
 pub const STD_PROCESS_OPS: &str = include_str!("../csm/std/process/ops.csm");
+pub const STD_COLLECTION_MOD: &str = include_str!("../csm/std/collection/mod.csm");
+pub const STD_COLLECTION_TYPES: &str =
+    include_str!("../csm/std/collection/types.csm");
+pub const STD_COLLECTION_ARRAY: &str =
+    include_str!("../csm/std/collection/array.csm");
+pub const STD_COLLECTION_BUFFER: &str =
+    include_str!("../csm/std/collection/buffer.csm");
 
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
@@ -52,6 +59,16 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         "std::process::types" | "std/process/types" => Some(STD_PROCESS_TYPES),
         "std::process::ffi" | "std/process/ffi" => Some(STD_PROCESS_FFI),
         "std::process::ops" | "std/process/ops" => Some(STD_PROCESS_OPS),
+        "std::collection" | "std/collection" => Some(STD_COLLECTION_MOD),
+        "std::collection::types" | "std/collection/types" => {
+            Some(STD_COLLECTION_TYPES)
+        }
+        "std::collection::array" | "std/collection/array" => {
+            Some(STD_COLLECTION_ARRAY)
+        }
+        "std::collection::buffer" | "std/collection/buffer" => {
+            Some(STD_COLLECTION_BUFFER)
+        }
         _ => None,
     }
 }

@@ -91,6 +91,23 @@ pub fn estimate_expression_cost(
                 .map(|e| estimate_expression_cost(analyzer, e))
                 .sum::<u64>()
         }
+        Expression::ArrayRepeat { value, count } => {
+            1 + estimate_expression_cost(analyzer, value)
+                + estimate_expression_cost(analyzer, count)
+        }
+        Expression::ArraySlice {
+            target, start, end, ..
+        } => {
+            1 + estimate_expression_cost(analyzer, target)
+                + start
+                    .as_ref()
+                    .map(|s| estimate_expression_cost(analyzer, s))
+                    .unwrap_or(0)
+                + end
+                    .as_ref()
+                    .map(|e| estimate_expression_cost(analyzer, e))
+                    .unwrap_or(0)
+        }
         Expression::FieldAccess { target, .. } => {
             let target_type =
                 infer_expression_type(analyzer, target).unwrap_or(Type::Unknown);

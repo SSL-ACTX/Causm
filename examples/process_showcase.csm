@@ -22,7 +22,7 @@
     let payload = [80, 73, 80, 69, 33]
     let bytes_written = Process.pipe_write(w_fd, payload, 5)
     print(f"Wrote {bytes_written} bytes into write_fd (PIPE!)")
-    let mut rx_buf = [0, 0, 0, 0, 0]
+    let mut rx_buf = [0; 5]
     let bytes_read = Process.pipe_read(r_fd, rx_buf, 5)
     print(f"Read {bytes_read} bytes from read_fd")
     print(f"	Byte[0]={rx_buf[0]}	Byte[4]={rx_buf[4]}")

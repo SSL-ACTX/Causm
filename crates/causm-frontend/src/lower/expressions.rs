@@ -284,6 +284,36 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             });
             dest
         }
+        Expression::ArrayRepeat { value, count } => {
+            let val_reg = lower_expression(ctx, value);
+            let count_reg = lower_expression(ctx, count);
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ArrayRepeat {
+                dest,
+                value: val_reg,
+                count: count_reg,
+            });
+            dest
+        }
+        Expression::ArraySlice {
+            target,
+            start,
+            end,
+            inclusive,
+        } => {
+            let target_reg = lower_expression(ctx, target);
+            let start_reg = start.as_ref().map(|s| lower_expression(ctx, s));
+            let end_reg = end.as_ref().map(|e| lower_expression(ctx, e));
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ArraySlice {
+                dest,
+                target: target_reg,
+                start: start_reg,
+                end: end_reg,
+                inclusive: *inclusive,
+            });
+            dest
+        }
         Expression::ChannelReceive(chan_id) => {
             let dest = ctx.alloc_reg();
             ctx.push(causm_ir::Instruction::ChanRecv {

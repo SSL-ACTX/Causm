@@ -275,9 +275,48 @@ impl Vm {
                             causm_ir::Instruction::Loop { .. }
                             | causm_ir::Instruction::LoopTick
                             | causm_ir::Instruction::LoopTickOn { .. }
-                            | causm_ir::Instruction::While { .. } => {
+                            | causm_ir::Instruction::While { .. }
+                            | causm_ir::Instruction::For { .. }
+                            | causm_ir::Instruction::ForStep { .. } => {
                                 let b = self.get_branch_mut(branch_id)?;
                                 b.loop_depth += 1;
+                            }
+                            causm_ir::Instruction::EndFor => {
+                                let b = self.get_branch_mut(branch_id)?;
+                                b.loop_depth -= 1;
+                                if b.loop_depth < target_depth {
+                                    self.EndFor(branch_id)?;
+                                    let b = self.get_branch_mut(branch_id)?;
+                                    b.flat_loops.pop();
+                                    b.pc += 1;
+                                    if b.pc < b.instructions.len() {
+                                        if let causm_ir::Instruction::Jump {
+                                            ..
+                                        } = b.instructions[b.pc]
+                                        {
+                                            b.pc += 1;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                            causm_ir::Instruction::EndForStep => {
+                                let b = self.get_branch_mut(branch_id)?;
+                                b.loop_depth -= 1;
+                                if b.loop_depth < target_depth {
+                                    let b = self.get_branch_mut(branch_id)?;
+                                    b.flat_loops.pop();
+                                    b.pc += 1;
+                                    if b.pc < b.instructions.len() {
+                                        if let causm_ir::Instruction::Jump {
+                                            ..
+                                        } = b.instructions[b.pc]
+                                        {
+                                            b.pc += 1;
+                                        }
+                                    }
+                                    break;
+                                }
                             }
                             causm_ir::Instruction::EndLoop { max_ms } => {
                                 let b = self.get_branch_mut(branch_id)?;

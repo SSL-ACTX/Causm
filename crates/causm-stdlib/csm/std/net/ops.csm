@@ -32,7 +32,7 @@
         listen(fd, backlog)
     }
     routine tcp_accept(peek fd: i32) -> i32 taking _ {
-        let mut peer_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut peer_sa = [0; 16]
         let mut addrlen = [16, 0, 0, 0]
         accept(fd, peer_sa, addrlen)
     }
@@ -139,7 +139,7 @@
         sendto(self.fd, buf, len, 0, dest_sa, 16)
     }
     routine UdpSocket.recv_from(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
-        let mut src_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut src_sa = [0; 16]
         let mut addrlen = [16, 0, 0, 0]
         recvfrom(self.fd, buf, len, 0, src_sa, addrlen)
     }
@@ -151,7 +151,7 @@
         sendto(fd, buf, len, 0, dest_sa, 16)
     }
     routine udp_recv_from(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
-        let mut src_sa = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        let mut src_sa = [0; 16]
         let mut addrlen = [16, 0, 0, 0]
         recvfrom(fd, buf, len, 0, src_sa, addrlen)
     }

@@ -26,7 +26,7 @@
         rc == 0
     }
     routine create_pipe() -> ProcessPipe taking _ {
-        let mut fds = [0, 0, 0, 0, 0, 0, 0, 0]
+        let mut fds = [0; 8]
         let rc = pipe(fds)
         let read_fd = fds[0] + fds[1] * 256
         let write_fd = fds[4] + fds[5] * 256
@@ -40,7 +40,7 @@
         struct { code = exit_code, signaled = signaled, success = is_ok }
     }
     routine wait_for_pid(peek pid: i32, peek no_hang: bool) -> i32 taking _ {
-        let mut status = [0, 0, 0, 0, 0, 0, 0, 0]
+        let mut status = [0; 8]
         let mut options = 0
         if (no_hang) {
             let options = 1

@@ -275,19 +275,23 @@ impl Vm {
             }
         }
 
-        // Write back any modified peek/lease/mutable argument payloads from child arena to caller registers
-        for (i, (mode, _, _)) in params.iter().enumerate() {
-            if matches!(
-                mode,
-                causm_core::ParamMode::Peek | causm_core::ParamMode::Lease
-            ) {
+        // Write back any modified lease or FFI pointer buffer argument payloads from child arena to caller registers
+        for (i, (mode, _, expected_type)) in params.iter().enumerate() {
+            let is_ffi_buf = matches!(mode, causm_core::ParamMode::Peek)
+                && matches!(
+                    expected_type,
+                    causm_core::types::Type::I64
+                        | causm_core::types::Type::I32
+                        | causm_core::types::Type::U64
+                        | causm_core::types::Type::Integer
+                );
+            if matches!(mode, causm_core::ParamMode::Lease) || is_ffi_buf {
                 if let Some(child_val) = child_branch.arena.peek(i as u32) {
                     if matches!(
                         child_val,
                         causm_core::value::Payload::Array(_)
                             | causm_core::value::Payload::Struct(_)
                     ) {
-                        // Only write back if caller argument was also array/struct or not String
                         let caller_val = self.peek_reg(branch_id, args[i].0);
                         if let Ok(cval) = caller_val {
                             if !matches!(cval, causm_core::value::Payload::String(_))

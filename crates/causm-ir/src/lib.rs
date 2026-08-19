@@ -237,6 +237,18 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 elements: Vec<$crate::Reg>
             },
+            ArrayRepeat {
+                dest: $crate::Reg,
+                value: $crate::Reg,
+                count: $crate::Reg
+            },
+            ArraySlice {
+                dest: $crate::Reg,
+                target: $crate::Reg,
+                start: Option<$crate::Reg>,
+                end: Option<$crate::Reg>,
+                inclusive: bool
+            },
             FieldAccess {
                 dest: $crate::Reg,
                 target: $crate::Reg,

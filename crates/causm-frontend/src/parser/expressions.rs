@@ -101,13 +101,38 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                         expr = Expression::TryUnwrap(Box::new(expr));
                     }
                     Rule::index_access => {
-                        let index = parse_expression(
-                            access_pair.into_inner().next().unwrap(),
-                        );
-                        expr = Expression::IndexAccess {
-                            target: Box::new(expr),
-                            index: Box::new(index),
-                        };
+                        let inner_pair = access_pair.into_inner().next().unwrap();
+                        if inner_pair.as_rule() == Rule::slice_range {
+                            let raw_str = inner_pair.as_str();
+                            let inclusive = raw_str.contains("..=");
+                            let mut s_inner = inner_pair.into_inner();
+                            let mut start = None;
+                            let mut end = None;
+
+                            let first = s_inner.next();
+                            if let Some(p) = first {
+                                if raw_str.starts_with("..") {
+                                    end = Some(Box::new(parse_expression(p)));
+                                } else {
+                                    start = Some(Box::new(parse_expression(p)));
+                                    if let Some(p2) = s_inner.next() {
+                                        end = Some(Box::new(parse_expression(p2)));
+                                    }
+                                }
+                            }
+                            expr = Expression::ArraySlice {
+                                target: Box::new(expr),
+                                start,
+                                end,
+                                inclusive,
+                            };
+                        } else {
+                            let index = parse_expression(inner_pair);
+                            expr = Expression::IndexAccess {
+                                target: Box::new(expr),
+                                index: Box::new(index),
+                            };
+                        }
                     }
                     Rule::method_call_tail => {
                         let mut call_inner = access_pair.into_inner();
@@ -453,6 +478,37 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             }
         }
         Rule::array_lit => {
+            let inner = pair.into_inner().next().unwrap();
+            match inner.as_rule() {
+                Rule::array_repeat => {
+                    let mut r_inner = inner.into_inner();
+                    let val = parse_expression(r_inner.next().unwrap());
+                    let count = parse_expression(r_inner.next().unwrap());
+                    Expression::ArrayRepeat {
+                        value: Box::new(val),
+                        count: Box::new(count),
+                    }
+                }
+                Rule::array_elements => {
+                    let mut elements = Vec::new();
+                    for expr_pair in inner.into_inner() {
+                        elements.push(parse_expression(expr_pair));
+                    }
+                    Expression::ArrayLiteral(elements)
+                }
+                _ => Expression::ArrayLiteral(Vec::new()),
+            }
+        }
+        Rule::array_repeat => {
+            let mut r_inner = pair.into_inner();
+            let val = parse_expression(r_inner.next().unwrap());
+            let count = parse_expression(r_inner.next().unwrap());
+            Expression::ArrayRepeat {
+                value: Box::new(val),
+                count: Box::new(count),
+            }
+        }
+        Rule::array_elements => {
             let mut elements = Vec::new();
             for expr_pair in pair.into_inner() {
                 elements.push(parse_expression(expr_pair));

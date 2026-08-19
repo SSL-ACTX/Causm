@@ -73,19 +73,19 @@ impl Vm {
             };
 
             let start_local_clock = self.get_branch(branch_id)?.local_clock;
-            self.get_branch_mut(branch_id)?
-                .flat_loops
-                .push(FlatLoopState {
-                    header_pc,
-                    end_pc: 0,
-                    item_name: item_name.clone(),
-                    elements,
-                    index: 0,
-                    pacing_ms,
-                    max_ms,
-                    start_local_clock,
-                    iteration_start_clock: start_local_clock,
-                });
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.loop_depth += 1;
+            branch.flat_loops.push(FlatLoopState {
+                header_pc,
+                end_pc: 0,
+                item_name: item_name.clone(),
+                elements,
+                index: 0,
+                pacing_ms,
+                max_ms,
+                start_local_clock,
+                iteration_start_clock: start_local_clock,
+            });
         }
 
         let (index, elements_len, max_allowed, start_local_clock) = {
@@ -124,6 +124,7 @@ impl Vm {
             )?;
         } else {
             let branch = self.get_branch_mut(branch_id)?;
+            branch.loop_depth = branch.loop_depth.saturating_sub(1);
             branch.flat_loops.pop();
 
             if let Some(max) = max_ms {
@@ -146,7 +147,7 @@ impl Vm {
     }
 
     pub(crate) fn EndFor(&mut self, branch_id: &str) -> Result<(), TemporalError> {
-        let (paced, body_cost, header_pc) = {
+        let (paced, body_cost, _header_pc) = {
             let branch = self.get_branch(branch_id)?;
             let loop_state = branch.flat_loops.last().ok_or_else(|| {
                 TemporalError::EvalError("Loop state underflow on EndFor".into())
@@ -160,7 +161,7 @@ impl Vm {
             return Err(TemporalError::PacingViolation);
         }
 
-        let pad = paced - body_cost;
+        let pad = (paced - body_cost).saturating_sub(1);
         let branch = self.get_branch_mut(branch_id)?;
         if pad > 0 {
             branch.local_clock += pad;
@@ -168,7 +169,6 @@ impl Vm {
         }
 
         branch.flat_loops.last_mut().unwrap().index += 1;
-        branch.pc = header_pc;
         Ok(())
     }
 
@@ -427,19 +427,19 @@ impl Vm {
             };
 
             let start_local_clock = self.get_branch(branch_id)?.local_clock;
-            self.get_branch_mut(branch_id)?
-                .flat_loops
-                .push(FlatLoopState {
-                    header_pc,
-                    end_pc: 0,
-                    item_name: item_name.clone(),
-                    elements,
-                    index: 0,
-                    pacing_ms: step_ms,
-                    max_ms: None,
-                    start_local_clock,
-                    iteration_start_clock: start_local_clock,
-                });
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.loop_depth += 1;
+            branch.flat_loops.push(FlatLoopState {
+                header_pc,
+                end_pc: 0,
+                item_name: item_name.clone(),
+                elements,
+                index: 0,
+                pacing_ms: step_ms,
+                max_ms: None,
+                start_local_clock,
+                iteration_start_clock: start_local_clock,
+            });
         }
 
         let (index, elements_len) = {
@@ -471,6 +471,7 @@ impl Vm {
             )?;
         } else {
             let branch = self.get_branch_mut(branch_id)?;
+            branch.loop_depth = branch.loop_depth.saturating_sub(1);
             branch.flat_loops.pop();
 
             self.insert_reg(
@@ -487,7 +488,7 @@ impl Vm {
         &mut self,
         branch_id: &str,
     ) -> Result<(), TemporalError> {
-        let (step_ms, body_cost, header_pc) = {
+        let (step_ms, body_cost, _header_pc) = {
             let branch = self.get_branch(branch_id)?;
             let loop_state = branch.flat_loops.last().ok_or_else(|| {
                 TemporalError::EvalError("Loop state underflow on EndForStep".into())
@@ -502,7 +503,7 @@ impl Vm {
             if body_cost > limit {
                 return Err(TemporalError::PacingViolation);
             }
-            let pad = limit - body_cost;
+            let pad = (limit - body_cost).saturating_sub(1);
             let branch = self.get_branch_mut(branch_id)?;
             if pad > 0 {
                 branch.local_clock += pad;
@@ -512,7 +513,6 @@ impl Vm {
 
         let branch = self.get_branch_mut(branch_id)?;
         branch.flat_loops.last_mut().unwrap().index += 1;
-        branch.pc = header_pc;
         Ok(())
     }
 

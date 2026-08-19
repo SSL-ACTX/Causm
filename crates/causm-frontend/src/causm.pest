@@ -179,7 +179,8 @@ destructure_field = { identifier ~ (as_keyword ~ identifier)? }
 destructure_pattern = { "{" ~ destructure_field ~ ("," ~ destructure_field)* ~ ","? ~ "}" }
 mut_keyword = @{ "mut" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 mut_opt = { mut_keyword? }
-assignment_stmt = { "let" ~ mut_opt ~ lifetime_annotation? ~ (destructure_pattern | identifier) ~ type_annotation? ~ ("=" ~ expression)? }
+assignment_target = { destructure_pattern | primary_expr }
+assignment_stmt = { "let" ~ mut_opt ~ lifetime_annotation? ~ assignment_target ~ type_annotation? ~ ("=" ~ expression)? }
 
 type_annotation = { ":" ~ type_name }
 type_name = { union_type }
@@ -234,13 +235,16 @@ syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ e
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
 base_expr = { null | path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
-index_access = { "[" ~ expression ~ "]" }
+index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
+slice_range = { expression? ~ ".." ~ "="? ~ expression? }
 bool_literal = { "true" | "false" }
 call_expr = { "call" ~ method_name ~ "(" ~ expression_list? ~ ")" }
 direct_call_expr = { identifier ~ "(" ~ expression_list? ~ ")" }
 expression_list = { expression ~ ("," ~ expression)* }
 
-array_lit = { "[" ~ expression ~ ("," ~ expression)* ~ "]" }
+array_lit = { array_repeat | array_elements }
+array_repeat = { "[" ~ expression ~ ";" ~ expression ~ "]" }
+array_elements = { "[" ~ (expression ~ ("," ~ expression)* ~ ","?)? ~ "]" }
 
 hex_integer_literal = @{ ("0x" | "0X") ~ ASCII_HEX_DIGIT+ }
 integer_literal = @{ hex_integer_literal | "-"? ~ ASCII_DIGIT+ }

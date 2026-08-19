@@ -217,3 +217,126 @@ fn test_stdlib_auto_drop_resource_lifecycle() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_array_repeat_literal() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let zeroes = [0; 8]
+        let zeroes_len = len(zeroes)
+        let fives = [5; 4]
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let zeroes_len_reg = ir
+        .symbols
+        .get("zeroes_len")
+        .expect("zeroes_len not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(zeroes_len_reg),
+        Some(Payload::Integer(8))
+    );
+
+    let zeroes_reg = ir.symbols.get("zeroes").expect("zeroes not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(zeroes_reg),
+        Some(Payload::Array(vec![Payload::Integer(0); 8]))
+    );
+
+    let fives_reg = ir.symbols.get("fives").expect("fives not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(fives_reg),
+        Some(Payload::Array(vec![Payload::Integer(5); 4]))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_array_slicing_inclusive_and_exclusive() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let arr = [10, 20, 30, 40, 50]
+        let slice_ex = arr[1..4]
+        let slice_inc = arr[1..=3]
+        let slice_from_start = arr[..3]
+        let slice_to_end = arr[2..]
+
+        let text = "Hello Causm"
+        let str_slice = text[0..5]
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let slice_ex_reg = ir.symbols.get("slice_ex").expect("slice_ex not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(slice_ex_reg),
+        Some(Payload::Array(vec![
+            Payload::Integer(20),
+            Payload::Integer(30),
+            Payload::Integer(40)
+        ]))
+    );
+
+    let slice_inc_reg = ir.symbols.get("slice_inc").expect("slice_inc not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(slice_inc_reg),
+        Some(Payload::Array(vec![
+            Payload::Integer(20),
+            Payload::Integer(30),
+            Payload::Integer(40)
+        ]))
+    );
+
+    let slice_from_start_reg = ir
+        .symbols
+        .get("slice_from_start")
+        .expect("slice_from_start not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(slice_from_start_reg),
+        Some(Payload::Array(vec![
+            Payload::Integer(10),
+            Payload::Integer(20),
+            Payload::Integer(30)
+        ]))
+    );
+
+    let slice_to_end_reg = ir
+        .symbols
+        .get("slice_to_end")
+        .expect("slice_to_end not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(slice_to_end_reg),
+        Some(Payload::Array(vec![
+            Payload::Integer(30),
+            Payload::Integer(40),
+            Payload::Integer(50)
+        ]))
+    );
+
+    let str_slice_reg = ir.symbols.get("str_slice").expect("str_slice not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(str_slice_reg),
+        Some(Payload::String("Hello".to_string()))
+    );
+
+    Ok(())
+}

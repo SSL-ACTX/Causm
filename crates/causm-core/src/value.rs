@@ -662,6 +662,39 @@ impl Arena {
                 self.registers[idx] = new_state;
                 Ok(())
             }
+            EntropicState::Valid(Payload::Array(mut elems)) => {
+                if let Ok(idx_num) = field.parse::<usize>() {
+                    if idx_num < elems.len() {
+                        elems[idx_num] = new_value;
+                        let new_state = EntropicState::Valid(Payload::Array(elems));
+                        let new_parent_weight = new_state.weight();
+                        if self.used.saturating_sub(old_parent_weight)
+                            + new_parent_weight
+                            > self.capacity
+                        {
+                            self.registers[idx] = EntropicState::Consumed;
+                            return Err(MemoryError::OutOfMemory(
+                                new_parent_weight,
+                                self.capacity - (self.used - old_parent_weight),
+                            ));
+                        }
+                        self.used = self
+                            .used
+                            .saturating_sub(old_parent_weight)
+                            .saturating_add(new_parent_weight);
+                        self.registers[idx] = new_state;
+                        Ok(())
+                    } else {
+                        self.registers[idx] =
+                            EntropicState::Valid(Payload::Array(elems));
+                        Err(MemoryError::AlreadyConsumed)
+                    }
+                } else {
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Array(elems));
+                    Err(MemoryError::NotAStruct)
+                }
+            }
             _ => {
                 self.registers[idx] = state;
                 Err(MemoryError::NotAStruct)
@@ -693,21 +726,83 @@ impl Arena {
         let old_parent_weight = state.weight();
 
         match state {
-            EntropicState::Valid(Payload::Topology(mut fields)) => {
-                let inner_state =
-                    fields.get_mut(index).ok_or(MemoryError::AlreadyConsumed)?;
-                match inner_state {
-                    EntropicState::Valid(Payload::Struct(inner_fields))
-                    | EntropicState::Valid(Payload::Topology(inner_fields)) => {
-                        inner_fields.insert(
-                            field.to_string(),
-                            EntropicState::Valid(new_value),
-                        );
-                    }
-                    _ => {
+            EntropicState::Valid(Payload::Array(mut elems)) if field.is_empty() => {
+                if let Ok(idx_num) = index.parse::<usize>() {
+                    if idx_num < elems.len() {
+                        elems[idx_num] = new_value;
+                        let new_state = EntropicState::Valid(Payload::Array(elems));
+                        let new_parent_weight = new_state.weight();
+                        if self.used.saturating_sub(old_parent_weight)
+                            + new_parent_weight
+                            > self.capacity
+                        {
+                            self.registers[idx] = EntropicState::Consumed;
+                            return Err(MemoryError::OutOfMemory(
+                                new_parent_weight,
+                                self.capacity
+                                    - (self.used.saturating_sub(old_parent_weight)),
+                            ));
+                        }
+                        self.used = self
+                            .used
+                            .saturating_sub(old_parent_weight)
+                            .saturating_add(new_parent_weight);
+                        self.registers[idx] = new_state;
+                        Ok(())
+                    } else {
                         self.registers[idx] =
-                            EntropicState::Valid(Payload::Topology(fields));
-                        return Err(MemoryError::NotAStruct);
+                            EntropicState::Valid(Payload::Array(elems));
+                        Err(MemoryError::AlreadyConsumed)
+                    }
+                } else {
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Array(elems));
+                    Err(MemoryError::AlreadyConsumed)
+                }
+            }
+            EntropicState::Valid(Payload::Struct(mut fields))
+                if field.is_empty() =>
+            {
+                fields.insert(index.to_string(), EntropicState::Valid(new_value));
+                let new_state = EntropicState::Valid(Payload::Struct(fields));
+                let new_parent_weight = new_state.weight();
+                if self.used.saturating_sub(old_parent_weight) + new_parent_weight
+                    > self.capacity
+                {
+                    self.registers[idx] = EntropicState::Consumed;
+                    return Err(MemoryError::OutOfMemory(
+                        new_parent_weight,
+                        self.capacity
+                            - (self.used.saturating_sub(old_parent_weight)),
+                    ));
+                }
+                self.used = self
+                    .used
+                    .saturating_sub(old_parent_weight)
+                    .saturating_add(new_parent_weight);
+                self.registers[idx] = new_state;
+                Ok(())
+            }
+            EntropicState::Valid(Payload::Topology(mut fields)) => {
+                if field.is_empty() {
+                    fields
+                        .insert(index.to_string(), EntropicState::Valid(new_value));
+                } else {
+                    let inner_state =
+                        fields.get_mut(index).ok_or(MemoryError::AlreadyConsumed)?;
+                    match inner_state {
+                        EntropicState::Valid(Payload::Struct(inner_fields))
+                        | EntropicState::Valid(Payload::Topology(inner_fields)) => {
+                            inner_fields.insert(
+                                field.to_string(),
+                                EntropicState::Valid(new_value),
+                            );
+                        }
+                        _ => {
+                            self.registers[idx] =
+                                EntropicState::Valid(Payload::Topology(fields));
+                            return Err(MemoryError::NotAStruct);
+                        }
                     }
                 }
 

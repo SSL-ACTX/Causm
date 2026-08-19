@@ -282,6 +282,18 @@ pub enum SsaInstruction {
         dest: SsaReg,
         elements: Vec<SsaReg>,
     },
+    ArrayRepeat {
+        dest: SsaReg,
+        value: SsaReg,
+        count: SsaReg,
+    },
+    ArraySlice {
+        dest: SsaReg,
+        target: SsaReg,
+        start: Option<SsaReg>,
+        end: Option<SsaReg>,
+        inclusive: bool,
+    },
     FieldAccess {
         dest: SsaReg,
         target: SsaReg,
