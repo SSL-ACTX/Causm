@@ -1,30 +1,15 @@
 @0ms: {
-    routine pid() -> i32 taking _ {
-        getpid()
-    }
-    routine parent_pid() -> i32 taking _ {
-        getppid()
-    }
+    routine pid() -> i32 taking _ => getpid()
+    routine parent_pid() -> i32 taking _ => getppid()
     routine info() -> ProcessInfo taking _ {
         let { pid, ppid } = struct { pid = getpid(), ppid = getppid() }
         struct { is_running = true, pid = pid, ppid = ppid }
     }
-    routine send_signal(peek pid: i32, peek sig: i32) -> i32 taking _ {
-        kill(pid, sig)
-    }
-    routine kill_process(peek pid: i32) -> i32 taking _ {
-        kill(pid, 9)
-    }
-    routine terminate_process(peek pid: i32) -> i32 taking _ {
-        kill(pid, 15)
-    }
-    routine interrupt_process(peek pid: i32) -> i32 taking _ {
-        kill(pid, 2)
-    }
-    routine is_alive(peek pid: i32) -> bool taking _ {
-        let rc = kill(pid, 0)
-        rc == 0
-    }
+    routine send_signal(peek pid: i32, peek sig: i32) -> i32 taking _ => kill(pid, sig)
+    routine kill_process(peek pid: i32) -> i32 taking _ => kill(pid, 9)
+    routine terminate_process(peek pid: i32) -> i32 taking _ => kill(pid, 15)
+    routine interrupt_process(peek pid: i32) -> i32 taking _ => kill(pid, 2)
+    routine is_alive(peek pid: i32) -> bool taking _ => kill(pid, 0) == 0
     routine create_pipe() -> ProcessPipe taking _ {
         let mut fds = [0; 8]
         let rc = pipe(fds)
@@ -41,26 +26,15 @@
     }
     routine wait_for_pid(peek pid: i32, peek no_hang: bool) -> i32 taking _ {
         let mut status = [0; 8]
-        let mut options = 0
-        if (no_hang) {
-            let options = 1
-        }
+        let options = if (no_hang) { 1 } else { 0 }
         waitpid(pid, status, options)
     }
     routine pipe_endpoints() -> PipeEndpoints taking _ {
         let p = create_pipe()
         struct { reader = struct { fd = p.read_fd }, writer = struct { fd = p.write_fd } }
     }
-    routine child_handle(peek pid: i32) -> ChildProcess taking _ {
-        struct { is_running = true, pid = pid }
-    }
-    routine pipe_write(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ {
-        write(fd, buf, len)
-    }
-    routine pipe_read(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ {
-        read(fd, buf, len)
-    }
-    routine close_fd(peek fd: i32) -> i32 taking _ {
-        close(fd)
-    }
+    routine child_handle(peek pid: i32) -> ChildProcess taking _ => struct { is_running = true, pid = pid }
+    routine pipe_write(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => write(fd, buf, len)
+    routine pipe_read(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => read(fd, buf, len)
+    routine close_fd(peek fd: i32) -> i32 taking _ => close(fd)
 }

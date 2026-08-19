@@ -4,10 +4,7 @@ from "std/collection/types" import Stack
 
 @0ms: {
     routine Stack.new(peek capacity: i32) -> Stack taking _ {
-        let mut cap = 16
-        if (capacity > 0) {
-            cap = clone(capacity)
-        } reconcile auto
+        let cap = if (capacity > 0) { clone(capacity) } else { 16 }
         let raw = [0; cap]
         struct {
             data = raw,
@@ -31,7 +28,7 @@ from "std/collection/types" import Stack
             }
             data = new_data
             cur_cap = new_cap
-        } reconcile auto
+        }
 
         data[cur_len] = item
         let new_len = cur_len + 1
@@ -44,11 +41,8 @@ from "std/collection/types" import Stack
     }
 
     routine Stack.pop(peek stack: Stack) -> Stack taking _ {
-        let mut cur_len = stack.len
-        let mut new_len = 0
-        if (cur_len > 0) {
-            new_len = cur_len - 1
-        } reconcile auto
+        let cur_len = stack.len
+        let new_len = if (cur_len > 0) { cur_len - 1 } else { 0 }
         struct {
             data = stack.data,
             len = new_len,
@@ -56,24 +50,11 @@ from "std/collection/types" import Stack
         }
     }
 
-    routine Stack.peek(peek stack: Stack) -> i64 taking _ {
-        let mut cur_len = stack.len
-        let mut top_val = 0
-        if (cur_len > 0) {
-            let top_idx = cur_len - 1
-            let data = stack.data
-            top_val = data[top_idx]
-        } reconcile auto
-        top_val
-    }
+    routine Stack.peek(peek stack: Stack) -> i64 taking _ => if (stack.len > 0) { stack.data[stack.len - 1] } else { 0 }
 
-    routine Stack.is_empty(peek stack: Stack) -> bool taking _ {
-        stack.len == 0
-    }
+    routine Stack.is_empty(peek stack: Stack) -> bool taking _ => stack.len == 0
 
-    routine Stack.len(peek stack: Stack) -> i32 taking _ {
-        stack.len
-    }
+    routine Stack.len(peek stack: Stack) -> i32 taking _ => stack.len
 
     routine Stack.to_array(peek stack: Stack) -> array taking _ {
         let n = stack.len

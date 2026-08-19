@@ -38,10 +38,7 @@
         target
     }
 
-    routine Array.clone(peek arr: array) -> array taking _ {
-        let total = len(arr)
-        arr[0..total]
-    }
+    routine Array.clone(peek arr: array) -> array taking _ => arr[0..len(arr)]
 
     routine Array.contains(peek arr: array, peek target: i64) -> bool taking _ {
         let mut found = false
@@ -49,7 +46,7 @@
             if (elem == target) {
                 found = true
                 break
-            } reconcile auto
+            }
         }
         found
     }
@@ -61,7 +58,7 @@
             if (elem == target) {
                 found_idx = clone(idx)
                 break
-            } reconcile auto
+            }
             idx = idx + 1
         }
         found_idx

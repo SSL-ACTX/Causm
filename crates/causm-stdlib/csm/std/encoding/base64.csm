@@ -1,45 +1,33 @@
 @0ms: {
     // Returns the base64 alphabet character for an index 0-63
-    routine Base64.alphabet_char(peek idx: i32) -> i32 taking _ {
-        let ch = 0
+    routine Base64.alphabet_char(peek idx: i32) -> i32 taking _ =>
         if (idx < 26) {
-            let ch = 65 + idx
+            65 + idx
         } else if (idx < 52) {
-            let ch = 71 + idx
+            71 + idx
         } else if (idx < 62) {
-            let ch = idx - 4
+            idx - 4
         } else if (idx == 62) {
-            let ch = 43
+            43
         } else {
-            let ch = 47
-        } reconcile auto
-        ch
-    }
+            47
+        }
 
     // Decodes a single base64 character to its 6-bit value
-    routine Base64.decode_char(peek c: i32) -> i32 taking _ {
-        let v = 0
+    routine Base64.decode_char(peek c: i32) -> i32 taking _ =>
         if (c == 43) {
-            let v = 62
+            62
         } else if (c == 47) {
-            let v = 63
+            63
+        } else if (c >= 97) {
+            if (c <= 122) { c - 71 } else { 0 }
         } else if (c >= 65) {
-            if (c <= 90) {
-                let v = c - 65
-            } else if (c >= 97) {
-                if (c <= 122) {
-                    let v = c - 71
-                } reconcile auto
-            } reconcile auto
+            if (c <= 90) { c - 65 } else { 0 }
         } else if (c >= 48) {
-            if (c <= 57) {
-                let v = c + 4
-            } reconcile auto
+            if (c <= 57) { c + 4 } else { 0 }
         } else {
-            let v = 0
-        } reconcile auto
-        v
-    }
+            0
+        }
 
     // Encodes 3 bytes to 4 base64 output characters
     routine Base64.encode_chunk(peek b0: i32, peek b1: i32, peek b2: i32) -> array taking _ {
@@ -101,7 +89,7 @@
             let out[j + 2] = chunk[2]
             let out[j + 3] = 61
             let j = j + 4
-        } reconcile auto
+        }
         to_str(out[0..j])
     }
 

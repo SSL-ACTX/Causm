@@ -1,19 +1,9 @@
 @0ms: {
-    routine create_socket() -> i32 taking _ {
-        socket(2, 1, 0)
-    }
-    routine create_udp_socket() -> i32 taking _ {
-        socket(2, 2, 0)
-    }
-    routine close_socket(peek fd: i32) -> i32 taking _ {
-        close(fd)
-    }
-    routine shutdown_stream(peek stream: TcpStream, peek how: i32) -> i32 taking _ {
-        shutdown(stream.fd, how)
-    }
-    routine addr(peek ip: string, peek port: i32) -> SocketAddr taking _ {
-        struct { ip = ip, port = port }
-    }
+    routine create_socket() -> i32 taking _ => socket(2, 1, 0)
+    routine create_udp_socket() -> i32 taking _ => socket(2, 2, 0)
+    routine close_socket(peek fd: i32) -> i32 taking _ => close(fd)
+    routine shutdown_stream(peek stream: TcpStream, peek how: i32) -> i32 taking _ => shutdown(stream.fd, how)
+    routine addr(peek ip: string, peek port: i32) -> SocketAddr taking _ => struct { ip = ip, port = port }
     routine make_sockaddr(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i64 taking _ {
         let port_hi = port / 256 % 256
         let port_lo = port % 256
@@ -53,16 +43,12 @@
         let _listen = tcp_listen(fd, 128)
         struct { bind_port = port, fd = fd, is_listening = true }
     }
-    routine TcpListener.bind(peek port: i32) -> TcpListener taking _ {
-        tcp_listener(port)
-    }
+    routine TcpListener.bind(peek port: i32) -> TcpListener taking _ => tcp_listener(port)
     routine TcpListener.accept(peek self) -> TcpStream taking _ {
         let client_fd = tcp_accept(self.fd)
         struct { fd = client_fd, is_connected = true, peer_ip = "", peer_port = self.bind_port }
     }
-    routine TcpListener.close(peek self) -> i32 taking _ {
-        close_socket(self.fd)
-    }
+    routine TcpListener.close(peek self) -> i32 taking _ => close_socket(self.fd)
     routine tcp_stream_connect(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> TcpStream taking _ {
         let fd = create_socket()
         let _rc = tcp_connect(fd, port, b0, b1, b2, b3)
@@ -81,24 +67,12 @@
         let _rc = connect(fd, sa, 16)
         struct { fd = fd, is_connected = true, peer_ip = ip, peer_port = port }
     }
-    routine TcpStream.connect(peek ip: string, peek port: i32) -> TcpStream taking _ {
-        tcp_stream_connect_ip(ip, port)
-    }
-    routine TcpStream.send(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
-        send(self.fd, buf, len, 0)
-    }
-    routine TcpStream.recv(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
-        recv(self.fd, buf, len, 0)
-    }
-    routine TcpStream.close(peek self) -> i32 taking _ {
-        close_socket(self.fd)
-    }
-    routine tcp_send_all(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
-        tcp_send(fd, buf, len)
-    }
-    routine tcp_recv_exact(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
-        tcp_recv(fd, buf, len)
-    }
+    routine TcpStream.connect(peek ip: string, peek port: i32) -> TcpStream taking _ => tcp_stream_connect_ip(ip, port)
+    routine TcpStream.send(peek self, peek buf: i64, peek len: i32) -> i32 taking _ => send(self.fd, buf, len, 0)
+    routine TcpStream.recv(peek self, peek buf: i64, peek len: i32) -> i32 taking _ => recv(self.fd, buf, len, 0)
+    routine TcpStream.close(peek self) -> i32 taking _ => close_socket(self.fd)
+    routine tcp_send_all(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => tcp_send(fd, buf, len)
+    routine tcp_recv_exact(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => tcp_recv(fd, buf, len)
     routine set_nonblocking(peek fd: i32) -> i32 taking _ {
         let flags = fcntl(fd, 3, 0)
         fcntl(fd, 4, flags + 2048)

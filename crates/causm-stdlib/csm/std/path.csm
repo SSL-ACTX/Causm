@@ -4,16 +4,8 @@
         routine dirname(peek path: string) -> string taking 1ms
         routine strrchr(peek s: string, peek c: i32) -> string taking 1ms
     }
-    routine join(peek dir: string, peek file: string) -> string taking _ {
-        dir + "/" + file
-    }
-    routine path_basename(peek path: string) -> string taking _ {
-        basename(path)
-    }
-    routine path_dirname(peek path: string) -> string taking _ {
-        dirname(path)
-    }
-    routine extension(peek path: string) -> string taking _ {
-        strrchr(path, 46)
-    }
+    routine join(peek dir: string, peek file: string) -> string taking _ => dir + "/" + file
+    routine path_basename(peek path: string) -> string taking _ => basename(path)
+    routine path_dirname(peek path: string) -> string taking _ => dirname(path)
+    routine extension(peek path: string) -> string taking _ => strrchr(path, 46)
 }

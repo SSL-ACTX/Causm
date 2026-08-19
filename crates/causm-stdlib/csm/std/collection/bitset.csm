@@ -40,13 +40,11 @@ from "std/collection/types" import BitSet
         for b in bits step _ {
             if (b != 0) {
                 total = total + 1
-            } reconcile auto
+            }
         }
         total
     }
 
-    routine BitSet.len(peek bs: BitSet) -> i32 taking _ {
-        bs.len
-    }
+    routine BitSet.len(peek bs: BitSet) -> i32 taking _ => bs.len
 }
 

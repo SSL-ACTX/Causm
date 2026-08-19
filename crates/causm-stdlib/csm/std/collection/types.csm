@@ -31,4 +31,10 @@
         bits: array,
         len: i32
     }
+
+    interface Collection {
+        routine len(peek self: Collection) -> i32;
+        routine is_empty(peek self: Collection) -> bool;
+        routine to_array(peek self: Collection) -> array;
+    }
 }

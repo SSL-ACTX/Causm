@@ -4,10 +4,7 @@ from "std/collection/types" import Queue
 
 @0ms: {
     routine Queue.new(peek capacity: i32) -> Queue taking _ {
-        let mut cap = 16
-        if (capacity > 0) {
-            cap = clone(capacity)
-        } reconcile auto
+        let cap = if (capacity > 0) { clone(capacity) } else { 16 }
         let raw = [0; cap]
         struct {
             data = raw,
@@ -38,7 +35,7 @@ from "std/collection/types" import Queue
             cur_head = 0
             cur_tail = clone(cur_len)
             cur_cap = new_cap
-        } reconcile auto
+        }
 
         data[cur_tail] = item
         let next_tail = (cur_tail + 1) % cur_cap
@@ -54,15 +51,14 @@ from "std/collection/types" import Queue
     }
 
     routine Queue.pop(peek queue: Queue) -> Queue taking _ {
-        let mut cur_len = queue.len
-        let mut cur_head = queue.head
-        let mut next_head = clone(cur_head)
-        let mut new_len = 0
-        if (cur_len > 0) {
-            let cur_cap = queue.capacity
-            next_head = (cur_head + 1) % cur_cap
-            new_len = cur_len - 1
-        } reconcile auto
+        let cur_len = queue.len
+        let cur_head = queue.head
+        let next_head = if (cur_len > 0) {
+            (cur_head + 1) % queue.capacity
+        } else {
+            clone(cur_head)
+        }
+        let new_len = if (cur_len > 0) { cur_len - 1 } else { 0 }
         struct {
             data = queue.data,
             head = next_head,
@@ -72,24 +68,11 @@ from "std/collection/types" import Queue
         }
     }
 
-    routine Queue.peek(peek queue: Queue) -> i64 taking _ {
-        let mut cur_len = queue.len
-        let mut head_val = 0
-        if (cur_len > 0) {
-            let head_idx = queue.head
-            let data = queue.data
-            head_val = data[head_idx]
-        } reconcile auto
-        head_val
-    }
+    routine Queue.peek(peek queue: Queue) -> i64 taking _ => if (queue.len > 0) { queue.data[queue.head] } else { 0 }
 
-    routine Queue.is_empty(peek queue: Queue) -> bool taking _ {
-        queue.len == 0
-    }
+    routine Queue.is_empty(peek queue: Queue) -> bool taking _ => queue.len == 0
 
-    routine Queue.len(peek queue: Queue) -> i32 taking _ {
-        queue.len
-    }
+    routine Queue.len(peek queue: Queue) -> i32 taking _ => queue.len
 
     routine Queue.to_array(peek queue: Queue) -> array taking _ {
         let mut cur_len = queue.len

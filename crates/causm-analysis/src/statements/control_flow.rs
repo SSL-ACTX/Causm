@@ -92,11 +92,29 @@ impl EntropicAnalyzer {
                 self.analyze_statement(inner_stmt)?;
             }
         }
-        let else_end_state = self
+        let then_locals: Vec<String> = then_end_state
+            .produced
+            .difference(&original_state.produced)
+            .cloned()
+            .collect();
+        for local in then_locals {
+            then_end_state.remove_variable_scope(&local);
+        }
+
+        let mut else_end_state = self
             .branch_contexts
             .get(&self.current_branch)
             .cloned()
             .unwrap_or_default();
+
+        let else_locals: Vec<String> = else_end_state
+            .produced
+            .difference(&original_state.produced)
+            .cloned()
+            .collect();
+        for local in else_locals {
+            else_end_state.remove_variable_scope(&local);
+        }
 
         self.branch_contexts = previous_contexts;
         let merged = self.merge_states(then_end_state, else_end_state, reconcile)?;
