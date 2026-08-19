@@ -270,3 +270,81 @@ fn test_syntax_pipeline_operator_execution() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_if_statement_omitted_reconcile_clause() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut x = 10
+        if (x > 5) {
+            x = 25
+        }
+        let final_val = x
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let final_val_reg = ir.symbols.get("final_val").expect("final_val symbol").0;
+    let final_val = vm.peek_reg("main", final_val_reg)?;
+    assert_eq!(final_val, Payload::Integer(25));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_if_else_expression_evaluation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let cond_a = true
+        let cond_b = false
+
+        let res_a = if (cond_a) { 100 } else { 200 }
+        let res_b = if (cond_b) { 100 } else { 200 }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_a_reg = ir.symbols.get("res_a").expect("res_a symbol").0;
+    let res_b_reg = ir.symbols.get("res_b").expect("res_b symbol").0;
+    assert_eq!(vm.peek_reg("main", res_a_reg)?, Payload::Integer(100));
+    assert_eq!(vm.peek_reg("main", res_b_reg)?, Payload::Integer(200));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_nested_if_else_expression() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let score = 85
+        let grade = if (score >= 90) { 1 } else if (score >= 80) { 2 } else { 3 }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let grade_reg = ir.symbols.get("grade").expect("grade symbol").0;
+    assert_eq!(vm.peek_reg("main", grade_reg)?, Payload::Integer(2));
+
+    Ok(())
+}

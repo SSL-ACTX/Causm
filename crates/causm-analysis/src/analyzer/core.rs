@@ -1040,6 +1040,18 @@ impl EntropicAnalyzer {
                 s.push('"');
                 s
             }
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                format!(
+                    "if ({}) {{ {} }} else {{ {} }}",
+                    self.expr_snippet(condition),
+                    self.expr_snippet(then_branch),
+                    self.expr_snippet(else_branch)
+                )
+            }
         }
     }
 

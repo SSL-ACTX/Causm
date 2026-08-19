@@ -698,6 +698,50 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            analyze_expression_nonconsuming(analyzer, condition)?;
+            let original_state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .cloned()
+                .unwrap_or_default();
+
+            let mut then_contexts = analyzer.branch_contexts.clone();
+            then_contexts
+                .insert(analyzer.current_branch.clone(), original_state.clone());
+            let previous_contexts =
+                std::mem::replace(&mut analyzer.branch_contexts, then_contexts);
+
+            analyze_expression(analyzer, then_branch)?;
+            let then_end_state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .cloned()
+                .unwrap_or_default();
+
+            let mut else_contexts = previous_contexts.clone();
+            else_contexts.insert(analyzer.current_branch.clone(), original_state);
+            analyzer.branch_contexts = else_contexts;
+
+            analyze_expression(analyzer, else_branch)?;
+            let else_end_state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .cloned()
+                .unwrap_or_default();
+
+            analyzer.branch_contexts = previous_contexts;
+            let merged =
+                analyzer.merge_states(then_end_state, else_end_state, &None)?;
+            analyzer
+                .branch_contexts
+                .insert(analyzer.current_branch.clone(), merged);
+            Ok(())
+        }
     }
 }
 
@@ -861,6 +905,16 @@ pub(crate) fn analyze_expression_nonconsuming(
                     analyze_expression_nonconsuming(analyzer, e)?;
                 }
             }
+            Ok(())
+        }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            analyze_expression_nonconsuming(analyzer, condition)?;
+            analyze_expression_nonconsuming(analyzer, then_branch)?;
+            analyze_expression_nonconsuming(analyzer, else_branch)?;
             Ok(())
         }
     }

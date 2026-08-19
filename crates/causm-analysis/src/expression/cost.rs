@@ -149,5 +149,16 @@ pub fn estimate_expression_cost(
         Expression::StrBytes(expr) => 1 + estimate_expression_cost(analyzer, expr),
         Expression::ToStr(expr) => 1 + estimate_expression_cost(analyzer, expr),
         Expression::Len(expr) => 1 + estimate_expression_cost(analyzer, expr),
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            1 + estimate_expression_cost(analyzer, condition)
+                + std::cmp::max(
+                    estimate_expression_cost(analyzer, then_branch),
+                    estimate_expression_cost(analyzer, else_branch),
+                )
+        }
     }
 }

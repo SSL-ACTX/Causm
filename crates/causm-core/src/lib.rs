@@ -520,6 +520,11 @@ macro_rules! expressions {
             },
             TryUnwrap(Box<Expression>),
             FString(Vec<FStringPart>),
+            If {
+                condition: Box<Expression>,
+                then_branch: Box<Expression>,
+                else_branch: Box<Expression>
+            },
             Null
         }
     };

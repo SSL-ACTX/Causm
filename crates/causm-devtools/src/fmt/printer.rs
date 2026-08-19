@@ -1193,6 +1193,18 @@ fn format_expr(expr: &Expression) -> String {
             s.push('"');
             s
         }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            format!(
+                "if ({}) {{ {} }} else {{ {} }}",
+                format_expr(condition),
+                format_expr(then_branch),
+                format_expr(else_branch)
+            )
+        }
         other => {
             eprintln!("\x1b[33mwarning:\x1b[0m Unhandled expression variant in formatter: {:?}", other);
             "null".to_string()

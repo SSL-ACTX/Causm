@@ -327,6 +327,27 @@ pub(crate) fn infer_expression_type(
             }
         }
         Expression::FString(_) => Ok(Type::String),
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            let cond_t = infer_expression_type(analyzer, condition)?;
+            if cond_t != Type::Bool && cond_t != Type::Unknown {
+                return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                    format!("if condition must be bool, got {:?}", cond_t),
+                )));
+            }
+            let then_t = infer_expression_type(analyzer, then_branch)?;
+            let else_t = infer_expression_type(analyzer, else_branch)?;
+            if then_t == else_t || else_t == Type::Unknown {
+                Ok(then_t)
+            } else if then_t == Type::Unknown {
+                Ok(else_t)
+            } else {
+                Ok(then_t)
+            }
+        }
     }
 }
 

@@ -457,5 +457,50 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             }
             acc
         }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            let cond_reg = lower_expression(ctx, condition);
+            let dest_reg = ctx.alloc_reg();
+
+            let jump_to_else_idx = ctx.instructions.len();
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: cond_reg,
+                target: 0,
+            });
+
+            let then_reg = lower_expression(ctx, then_branch);
+            ctx.push(causm_ir::Instruction::Move {
+                dest: dest_reg,
+                src: then_reg,
+            });
+
+            let jump_to_end_idx = ctx.instructions.len();
+            ctx.push(causm_ir::Instruction::Jump { target: 0 });
+
+            let else_start_idx = ctx.instructions.len();
+            if let causm_ir::Instruction::JumpIfNot { ref mut target, .. } =
+                ctx.instructions[jump_to_else_idx]
+            {
+                *target = else_start_idx;
+            }
+
+            let else_reg = lower_expression(ctx, else_branch);
+            ctx.push(causm_ir::Instruction::Move {
+                dest: dest_reg,
+                src: else_reg,
+            });
+
+            let end_idx = ctx.instructions.len();
+            if let causm_ir::Instruction::Jump { ref mut target, .. } =
+                ctx.instructions[jump_to_end_idx]
+            {
+                *target = end_idx;
+            }
+
+            dest_reg
+        }
     }
 }

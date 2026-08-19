@@ -430,6 +430,17 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let inner_expr = parse_expression(pair.into_inner().next().unwrap());
             Expression::RefOp(Box::new(inner_expr))
         }
+        Rule::if_expr => {
+            let mut inner = pair.into_inner();
+            let cond = parse_expression(inner.next().unwrap());
+            let then_e = parse_expression(inner.next().unwrap());
+            let else_e = parse_expression(inner.next().unwrap());
+            Expression::If {
+                condition: Box::new(cond),
+                then_branch: Box::new(then_e),
+                else_branch: Box::new(else_e),
+            }
+        }
         Rule::match_entropy_expr => {
             let stmt =
                 crate::parser::statements::entropic::parse_entropic_stmt(pair);
