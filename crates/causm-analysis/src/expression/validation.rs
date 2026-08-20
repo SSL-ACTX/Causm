@@ -284,6 +284,9 @@ pub(crate) fn analyze_expression(
                 .split('<')
                 .next()
                 .unwrap_or(&struct_name)
+                .split("::")
+                .next()
+                .unwrap_or(&struct_name)
                 .trim()
                 .to_string();
             let mut resolved = None;

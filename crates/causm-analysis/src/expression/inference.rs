@@ -181,7 +181,15 @@ pub(crate) fn infer_expression_type(
                 }
             }
 
-            let mut current_struct = struct_name.clone();
+            let mut current_struct = struct_name
+                .split('<')
+                .next()
+                .unwrap_or(&struct_name)
+                .split("::")
+                .next()
+                .unwrap_or(&struct_name)
+                .trim()
+                .to_string();
             let mut resolved = None;
             loop {
                 let routine_name = format!("{}.{}", current_struct, method);

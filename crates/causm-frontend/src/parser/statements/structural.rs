@@ -84,20 +84,32 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
             for current in inner {
                 match current.as_rule() {
                     Rule::method_receiver => {
-                        let mut decl = current.into_inner();
-                        if let Some(mode) = decl.next() {
-                            let mode = match mode.as_str() {
-                                "consume" => ParamMode::Consume,
-                                "clone" => ParamMode::Clone,
-                                "decay" => ParamMode::Decay,
-                                _ => ParamMode::Peek,
-                            };
-                            params.push(ParamDecl {
-                                mode,
-                                name: "self".to_string(),
-                                typ: None,
-                            });
+                        let decl = current.into_inner();
+                        let mut mode = ParamMode::Peek;
+                        let mut typ = None;
+                        for part in decl {
+                            match part.as_rule() {
+                                Rule::param_mode => {
+                                    mode = match part.as_str() {
+                                        "consume" => ParamMode::Consume,
+                                        "clone" => ParamMode::Clone,
+                                        "decay" => ParamMode::Decay,
+                                        _ => ParamMode::Peek,
+                                    };
+                                }
+                                Rule::type_annotation => {
+                                    if let Some(inner_t) = part.into_inner().next() {
+                                        typ = Some(parse_type_name(inner_t));
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
+                        params.push(ParamDecl {
+                            mode,
+                            name: "self".to_string(),
+                            typ,
+                        });
                     }
                     Rule::param_decl | Rule::param_decl_list => {
                         let pairs_to_process: Vec<_> =

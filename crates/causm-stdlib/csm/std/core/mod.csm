@@ -1,0 +1,4 @@
+@0ms: {
+    from "std/core/types" import *
+    from "std/core/ops" import *
+}

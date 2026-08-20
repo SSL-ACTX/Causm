@@ -1,6 +1,7 @@
 // Standard Collection Module - Queue (FIFO) Operations
 
 from "std/collection/types" import Queue
+from "std/core" import Option
 
 @0ms: {
     routine Queue.new(peek capacity: i32) -> Queue taking _ {
@@ -69,6 +70,13 @@ from "std/collection/types" import Queue
     }
 
     routine Queue.peek(peek queue: Queue) -> i64 taking _ => if (queue.len > 0) { queue.data[queue.head] } else { 0 }
+
+    routine Queue.try_peek(peek queue: Queue) -> Option taking _ =>
+        if (queue.len > 0) {
+            Option::Some(queue.data[queue.head])
+        } else {
+            Option::None
+        }
 
     routine Queue.is_empty(peek queue: Queue) -> bool taking _ => queue.len == 0
 

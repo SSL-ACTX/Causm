@@ -669,6 +669,9 @@ impl EntropicAnalyzer {
         actual: &Type,
     ) -> bool {
         if let Type::Custom(ref exp_name) = expected {
+            if exp_name == "any" {
+                return true;
+            }
             if self.interfaces.contains_key(exp_name.as_str()) {
                 if let Type::Custom(ref act_name) = actual {
                     if self
@@ -677,6 +680,11 @@ impl EntropicAnalyzer {
                         return true;
                     }
                 }
+            }
+        }
+        if let Type::Custom(ref act_name) = actual {
+            if act_name == "any" {
+                return true;
             }
         }
         if let Type::Custom(name) = expected {
@@ -792,7 +800,15 @@ impl EntropicAnalyzer {
                     && self.types_compatible(exp_rt, act_rt)
             }
             (Type::Custom(exp_name), Type::Custom(act_name)) => {
-                if exp_name == act_name {
+                if exp_name == act_name || exp_name == "any" || act_name == "any" {
+                    true
+                } else if exp_name.split('<').next().unwrap_or(exp_name).trim()
+                    == act_name.split('<').next().unwrap_or(act_name).trim()
+                {
+                    true
+                } else if act_name.starts_with(&format!("{}::", exp_name))
+                    || exp_name.starts_with(&format!("{}::", act_name))
+                {
                     true
                 } else if self.interfaces.contains_key(exp_name.as_str()) {
                     self.implements_interface(act_name.as_str(), exp_name.as_str())

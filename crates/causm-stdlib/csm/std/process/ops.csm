@@ -40,4 +40,8 @@
     routine pipe_write(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => write(fd, buf, len)
     routine pipe_read(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => read(fd, buf, len)
     routine close_fd(peek fd: i32) -> i32 taking _ => close(fd)
+
+    // Method Call Syntax Support on ExitStatus instances
+    routine ExitStatus.is_success(peek self: ExitStatus) -> bool taking _ => self.success
+    routine ExitStatus.exit_code(peek self: ExitStatus) -> i32 taking _ => self.code
 }

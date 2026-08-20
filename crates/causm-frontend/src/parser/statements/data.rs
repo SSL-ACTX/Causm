@@ -133,12 +133,17 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::enum_decl => {
-            let mut inner = pair.into_inner();
+            let mut inner = pair.into_inner().peekable();
             let mut name_pair = inner.next().unwrap();
             if name_pair.as_rule() == Rule::pub_opt {
                 name_pair = inner.next().unwrap();
             }
             let name = name_pair.as_str().to_string();
+            if let Some(p) = inner.peek() {
+                if p.as_rule() == Rule::generic_param_list {
+                    inner.next();
+                }
+            }
             let mut variants = Vec::new();
             if let Some(list_pair) = inner.next() {
                 for variant_pair in list_pair.into_inner() {

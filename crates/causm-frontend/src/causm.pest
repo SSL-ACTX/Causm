@@ -97,7 +97,7 @@ pub_keyword = @{ "pub" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 pub_opt = { pub_keyword? }
 concise_body = { "=>" ~ expression }
 routine_stmt = { pub_opt ~ "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ (concise_body | "{" ~ statement* ~ "}") }
-method_receiver = { param_mode ~ "self" ~ ("for" ~ amount ~ "ms")? }
+method_receiver = { param_mode? ~ "self" ~ type_annotation? ~ ("for" ~ amount ~ "ms")? }
 method_name = { identifier ~ ("<" ~ type_param_list ~ ">")? ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode? ~ identifier ~ type_annotation? }
@@ -283,7 +283,7 @@ interface_term = { identifier ~ decay_opt? | "interface" ~ decay_opt? ~ "{" ~ in
 interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ ("{" ~ statement* ~ "}" | ";")? }
 state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
 
-enum_decl = { pub_opt ~ "enum" ~ identifier ~ "{" ~ enum_variant_list? ~ "}" }
+enum_decl = { pub_opt ~ "enum" ~ identifier ~ generic_param_list? ~ "{" ~ enum_variant_list? ~ "}" }
 enum_variant_list = { enum_variant ~ ("," ~ enum_variant)* ~ ","? }
 enum_variant = { identifier ~ ("(" ~ type_name_list ~ ")")? }
 type_name_list = { type_name ~ ("," ~ type_name)* }

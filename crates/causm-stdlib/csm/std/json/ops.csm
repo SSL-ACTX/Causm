@@ -182,4 +182,23 @@
         result[n] = v
         result
     }
+
+    // Method Call Syntax Support on JsonValue enum instances
+    routine JsonValue.is_null(peek self: JsonValue) -> bool taking _ => Json.is_null(self)
+    routine JsonValue.is_bool(peek self: JsonValue) -> bool taking _ => Json.is_bool(self)
+    routine JsonValue.is_number(peek self: JsonValue) -> bool taking _ => Json.is_number(self)
+    routine JsonValue.is_string(peek self: JsonValue) -> bool taking _ => Json.is_string(self)
+    routine JsonValue.is_array(peek self: JsonValue) -> bool taking _ => Json.is_array(self)
+    routine JsonValue.is_object(peek self: JsonValue) -> bool taking _ => Json.is_object(self)
+    routine JsonValue.as_number(peek self: JsonValue) -> i64 taking _ => Json.as_number(self)
+    routine JsonValue.as_string(peek self: JsonValue) -> string taking _ => Json.as_string(self)
+    routine JsonValue.as_array(peek self: JsonValue) -> array taking _ => Json.as_array(self)
+    routine JsonValue.as_object(peek self: JsonValue) -> array taking _ => Json.as_object(self)
+    routine JsonValue.get(peek self: JsonValue, peek key: string) -> JsonValue taking _ => Json.get(self, key)
+    routine JsonValue.has_key(peek self: JsonValue, peek key: string) -> bool taking _ => Json.has_key(self, key)
+    routine JsonValue.get_int(peek self: JsonValue, peek key: string, peek default_val: i64) -> i64 taking _ => Json.get_int(self, key, default_val)
+    routine JsonValue.get_string(peek self: JsonValue, peek key: string, peek default_val: string) -> string taking _ => Json.get_string(self, key, default_val)
+    routine JsonValue.get_bool(peek self: JsonValue, peek key: string, peek default_val: bool) -> bool taking _ => Json.get_bool(self, key, default_val)
+    routine JsonValue.array_len(peek self: JsonValue) -> i32 taking _ => Json.array_len(self)
+    routine JsonValue.array_get(peek self: JsonValue, peek idx: i32) -> JsonValue taking _ => Json.array_get(self, idx)
 }

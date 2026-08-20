@@ -1,6 +1,7 @@
 // Standard Collection Module - Stack Operations
 
 from "std/collection/types" import Stack
+from "std/core" import Option
 
 @0ms: {
     routine Stack.new(peek capacity: i32) -> Stack taking _ {
@@ -51,6 +52,13 @@ from "std/collection/types" import Stack
     }
 
     routine Stack.peek(peek stack: Stack) -> i64 taking _ => if (stack.len > 0) { stack.data[stack.len - 1] } else { 0 }
+
+    routine Stack.try_peek(peek stack: Stack) -> Option taking _ =>
+        if (stack.len > 0) {
+            Option::Some(stack.data[stack.len - 1])
+        } else {
+            Option::None
+        }
 
     routine Stack.is_empty(peek stack: Stack) -> bool taking _ => stack.len == 0
 

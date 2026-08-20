@@ -99,4 +99,17 @@
             status_text = st_text
         }
     }
+
+    routine HttpResponse.is_success(peek self: HttpResponse) -> bool taking _ =>
+        if (self.status_code >= 200) {
+            if (self.status_code < 300) {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+
+    routine HttpResponse.body_str(peek self: HttpResponse) -> string taking _ => self.body
 }
