@@ -1,6 +1,7 @@
 // src/ast.rs
 
 use crate::types::AutoDropSpec;
+use serde::{Deserialize, Serialize};
 pub mod types;
 pub mod value;
 
@@ -9,7 +10,7 @@ pub struct Program {
     pub timelines: Vec<TimelineBlock>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -29,7 +30,7 @@ pub struct TimelineBlock {
     pub statements: Vec<SpannedStatement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TimeCoordinate {
     Global(u64),
     Relative(u64),
@@ -46,38 +47,39 @@ impl std::fmt::Display for TimeCoordinate {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntropyMode {
     Deterministic,
     Chaos,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpeculationCommitMode {
     Selective,
     Full,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SyscallTarget {
     Number(i64),
     Symbol(String),
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParamDecl {
     pub mode: ParamMode,
     pub name: String,
     pub typ: Option<TypeName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceMethod {
     pub name: String,
     pub params: Vec<ParamDecl>,
     pub return_type: Option<TypeName>,
     pub taking_ms: Option<u64>,
+    #[serde(skip)]
     pub default_body: Option<Vec<SpannedStatement>>,
     pub state_constraint: Option<(String, String)>,
 }
@@ -576,14 +578,15 @@ pub enum FStringPart {
     Expr(Expression),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IsolateBlock {
     pub name: Option<String>,
     pub manifest: Manifest,
+    #[serde(skip)]
     pub body: Vec<SpannedStatement>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
     pub cpu_budget_ms: Option<u64>,
     pub slice_ms: Option<u64>,
@@ -593,28 +596,29 @@ pub struct Manifest {
     pub mode: Option<EntropyMode>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capability {
     pub path: String,
     pub parameters: std::collections::HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MergeResolution {
     pub rules: std::collections::HashMap<String, ResolutionStrategy>,
     pub auto: bool,
+    #[serde(skip)]
     pub fallback: Option<Vec<SpannedStatement>>,
     pub taking_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CausalReversion {
     pub branch: String,
     pub anchor: String,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionStrategy {
     FirstWins,
     Priority(String),
@@ -640,14 +644,14 @@ pub struct SelectCase {
     pub body: Vec<SpannedStatement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LifetimeAnnotation {
     Valid,
     Decayed(u64),
     DecayRate(u64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnumVariantDef {
     pub name: String,
     pub payload_types: Vec<TypeName>,
@@ -690,14 +694,14 @@ pub struct TypeFieldDef {
     pub default_value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlockDirective {
     NoZ3,
     Chaos,
     Deterministic,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TypeName {
     Builtin(BuiltinType),
     Custom(String),
@@ -706,14 +710,14 @@ pub enum TypeName {
     Union(Vec<TypeName>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TypeParam {
     Type(TypeName),
     Amount(u64),
     Duration(u64),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BuiltinType {
     Integer,
     I8,
@@ -734,7 +738,7 @@ pub enum BuiltinType {
     Array,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParamMode {
     Consume,
     Clone,
@@ -743,13 +747,13 @@ pub enum ParamMode {
     Lease,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UnaryOperator {
     Neg,
     Not,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BinaryOperator {
     Add,
     Sub,

@@ -1,7 +1,8 @@
 use causm_core::TimeCoordinate;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Reg(pub u32);
 
 impl std::fmt::Display for Reg {
@@ -10,7 +11,7 @@ impl std::fmt::Display for Reg {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IrSelectCase {
     pub chan_id: String,
     pub dest: Reg,
@@ -396,7 +397,7 @@ macro_rules! instructions {
 
 macro_rules! define_instruction_enum {
     ($($name:ident $({ $($field:ident: $type:ty),* })?),*) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Instruction {
             $($name $({ $($field: $type),* })?),*
         }
@@ -405,7 +406,7 @@ macro_rules! define_instruction_enum {
 
 instructions!(define_instruction_enum);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IrProgram {
     pub blocks: Vec<IrBlock>,
     pub routines: HashMap<String, IrRoutine>,
@@ -416,14 +417,14 @@ pub struct IrProgram {
     pub decay_handlers: HashMap<String, Vec<Instruction>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ForeignBinding {
     pub lib_name: String,
     pub abi: String,
     pub symbol: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IrRoutine {
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub return_type: causm_core::types::Type,
@@ -433,7 +434,7 @@ pub struct IrRoutine {
     pub spans: Vec<Option<causm_core::Span>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IrBlock {
     pub time: TimeCoordinate,
     pub entropy_mode: Option<causm_core::EntropyMode>,

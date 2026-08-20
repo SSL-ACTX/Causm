@@ -295,4 +295,3 @@ fn test_collection_try_peek_option() -> anyhow::Result<()> {
 
     Ok(())
 }
-

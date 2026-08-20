@@ -1,8 +1,9 @@
 use causm_core::{Program, SpannedStatement, Statement};
 use pest::Parser;
 use pest_derive::Parser;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 pub mod expressions;
 pub mod statements;
@@ -10,6 +11,28 @@ pub mod statements;
 #[derive(Parser)]
 #[grammar = "causm.pest"]
 pub struct CausmParser;
+
+static STDLIB_PROGRAM_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Program>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static DISK_ARCHIVE_INIT: std::sync::Once = std::sync::Once::new();
+
+fn get_or_parse_stdlib_program(
+    path: &str,
+    embedded: &str,
+) -> anyhow::Result<Program> {
+    DISK_ARCHIVE_INIT.call_once(|| {
+        let _ = causm_stdlib::archive::CsaArchive::get_or_load_standard_archive();
+    });
+
+    let mut cache = STDLIB_PROGRAM_CACHE.lock().unwrap();
+    if let Some(prog) = cache.get(path) {
+        return Ok(prog.clone());
+    }
+    let prog = parse_causm(embedded)?;
+    cache.insert(path.to_string(), prog.clone());
+    Ok(prog)
+}
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
     let mut pairs = CausmParser::parse(Rule::program, source)?;
@@ -56,7 +79,7 @@ fn expand_spanned_statements(
     for spanned in stmts {
         match spanned.stmt {
             Statement::Import { path, alias } => {
-                let (imported_source, sub_base_dir) = if let Some(embedded) =
+                let (imported_prog, sub_base_dir) = if let Some(embedded) =
                     causm_stdlib::get_module(&path)
                 {
                     let mod_key = format!("embedded::{}::as::{:?}", path, alias);
@@ -64,7 +87,7 @@ fn expand_spanned_statements(
                         continue;
                     }
                     loaded_files.insert(mod_key);
-                    (embedded.to_string(), None)
+                    (get_or_parse_stdlib_program(&path, embedded)?, None)
                 } else {
                     let target_path = if let Some(dir) = base_dir {
                         dir.join(&path)
@@ -76,22 +99,191 @@ fn expand_spanned_statements(
                         continue;
                     }
                     loaded_files.insert(path_str);
-                    (
-                        std::fs::read_to_string(&target_path)?,
-                        target_path.parent().map(|p| p.to_path_buf()),
-                    )
+                    let source = std::fs::read_to_string(&target_path)?;
+                    let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
+                    (parse_causm(&source)?, sub_base_dir)
                 };
-                let imported_prog = parse_causm(&imported_source)?;
+
+                let mut item_stmts = Vec::new();
                 for imp_tl in imported_prog.timelines {
                     let expanded = expand_spanned_statements(
                         imp_tl.statements,
                         sub_base_dir.as_deref(),
                         loaded_files,
                     )?;
-                    let item_stmts = flatten_container_statements(expanded);
-                    for s in item_stmts {
+                    item_stmts.extend(flatten_container_statements(expanded));
+                }
+
+                for s in item_stmts {
+                    result.push(s.clone());
+                    if let Some(ref ns) = alias {
+                        match &s.stmt {
+                            Statement::RoutineDef {
+                                name,
+                                params,
+                                return_type,
+                                taking_ms,
+                                state_constraint,
+                                body,
+                            } => {
+                                if !name.starts_with(&format!("{}.", ns)) {
+                                    let qualified_name = format!("{}.{}", ns, name);
+                                    result.push(SpannedStatement {
+                                        stmt: Statement::RoutineDef {
+                                            name: qualified_name,
+                                            params: params.clone(),
+                                            return_type: return_type.clone(),
+                                            taking_ms: *taking_ms,
+                                            state_constraint: state_constraint
+                                                .clone(),
+                                            body: body.clone(),
+                                        },
+                                        span: s.span.clone(),
+                                    });
+                                }
+                            }
+                            Statement::ForeignBlock {
+                                lib_name,
+                                abi,
+                                routines,
+                            } => {
+                                let qualified_routines = routines
+                                    .iter()
+                                    .map(|r_spanned| {
+                                        if let Statement::RoutineDef {
+                                            name,
+                                            params,
+                                            return_type,
+                                            taking_ms,
+                                            state_constraint,
+                                            body,
+                                        } = &r_spanned.stmt
+                                        {
+                                            let qualified_name = if !name
+                                                .starts_with(&format!("{}.", ns))
+                                            {
+                                                format!("{}.{}", ns, name)
+                                            } else {
+                                                name.clone()
+                                            };
+                                            SpannedStatement {
+                                                stmt: Statement::RoutineDef {
+                                                    name: qualified_name,
+                                                    params: params.clone(),
+                                                    return_type: return_type.clone(),
+                                                    taking_ms: *taking_ms,
+                                                    state_constraint:
+                                                        state_constraint.clone(),
+                                                    body: body.clone(),
+                                                },
+                                                span: r_spanned.span.clone(),
+                                            }
+                                        } else {
+                                            r_spanned.clone()
+                                        }
+                                    })
+                                    .collect();
+                                result.push(SpannedStatement {
+                                    stmt: Statement::ForeignBlock {
+                                        lib_name: lib_name.clone(),
+                                        abi: abi.clone(),
+                                        routines: qualified_routines,
+                                    },
+                                    span: s.span.clone(),
+                                });
+                            }
+                            Statement::TypeDecl {
+                                name,
+                                extends,
+                                fields,
+                                decay_after_ms,
+                                auto_drop,
+                                scoped_branch,
+                            } => {
+                                if !name.starts_with(&format!("{}.", ns)) {
+                                    let qualified_name = format!("{}.{}", ns, name);
+                                    result.push(SpannedStatement {
+                                        stmt: Statement::TypeDecl {
+                                            name: qualified_name,
+                                            extends: extends.clone(),
+                                            fields: fields.clone(),
+                                            decay_after_ms: *decay_after_ms,
+                                            auto_drop: auto_drop.clone(),
+                                            scoped_branch: scoped_branch.clone(),
+                                        },
+                                        span: s.span.clone(),
+                                    });
+                                }
+                            }
+                            Statement::EnumDecl { name, variants } => {
+                                if !name.starts_with(&format!("{}.", ns)) {
+                                    let qualified_name = format!("{}.{}", ns, name);
+                                    result.push(SpannedStatement {
+                                        stmt: Statement::EnumDecl {
+                                            name: qualified_name,
+                                            variants: variants.clone(),
+                                        },
+                                        span: s.span.clone(),
+                                    });
+                                }
+                            }
+                            Statement::InterfaceDecl {
+                                name,
+                                extends,
+                                methods,
+                            } if !name.starts_with(&format!("{}.", ns)) => {
+                                let qualified_name = format!("{}.{}", ns, name);
+                                result.push(SpannedStatement {
+                                    stmt: Statement::InterfaceDecl {
+                                        name: qualified_name,
+                                        extends: extends.clone(),
+                                        methods: methods.clone(),
+                                    },
+                                    span: s.span.clone(),
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Statement::FromImport { path, symbols } => {
+                let (imported_prog, sub_base_dir) = if let Some(embedded) =
+                    causm_stdlib::get_module(&path)
+                {
+                    (get_or_parse_stdlib_program(&path, embedded)?, None)
+                } else {
+                    let target_path = if let Some(dir) = base_dir {
+                        dir.join(&path)
+                    } else {
+                        PathBuf::from(&path)
+                    };
+                    let path_str = target_path.to_string_lossy().to_string();
+                    if loaded_files.contains(&path_str) || !target_path.exists() {
+                        continue;
+                    }
+                    loaded_files.insert(path_str);
+                    let source = std::fs::read_to_string(&target_path)?;
+                    let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
+                    (parse_causm(&source)?, sub_base_dir)
+                };
+
+                let mut item_stmts = Vec::new();
+                for imp_tl in imported_prog.timelines {
+                    let expanded = expand_spanned_statements(
+                        imp_tl.statements,
+                        sub_base_dir.as_deref(),
+                        loaded_files,
+                    )?;
+                    item_stmts.extend(flatten_container_statements(expanded));
+                }
+
+                let is_wildcard = symbols.iter().any(|(s, _)| s == "*");
+                for s in item_stmts {
+                    if is_wildcard {
                         result.push(s.clone());
-                        if let Some(ref ns) = alias {
+                    } else {
+                        for (sym_name, sym_alias) in &symbols {
                             match &s.stmt {
                                 Statement::RoutineDef {
                                     name,
@@ -100,71 +292,18 @@ fn expand_spanned_statements(
                                     taking_ms,
                                     state_constraint,
                                     body,
-                                } => {
-                                    if !name.starts_with(&format!("{}.", ns)) {
-                                        let qualified_name =
-                                            format!("{}.{}", ns, name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::RoutineDef {
-                                                name: qualified_name,
-                                                params: params.clone(),
-                                                return_type: return_type.clone(),
-                                                taking_ms: *taking_ms,
-                                                state_constraint: state_constraint
-                                                    .clone(),
-                                                body: body.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
-                                }
-                                Statement::ForeignBlock {
-                                    lib_name,
-                                    abi,
-                                    routines,
-                                } => {
-                                    let qualified_routines = routines
-                                        .iter()
-                                        .map(|r_spanned| {
-                                            if let Statement::RoutineDef {
-                                                name,
-                                                params,
-                                                return_type,
-                                                taking_ms,
-                                                state_constraint,
-                                                body,
-                                            } = &r_spanned.stmt
-                                            {
-                                                let qualified_name = if !name
-                                                    .starts_with(&format!("{}.", ns))
-                                                {
-                                                    format!("{}.{}", ns, name)
-                                                } else {
-                                                    name.clone()
-                                                };
-                                                SpannedStatement {
-                                                    stmt: Statement::RoutineDef {
-                                                        name: qualified_name,
-                                                        params: params.clone(),
-                                                        return_type: return_type
-                                                            .clone(),
-                                                        taking_ms: *taking_ms,
-                                                        state_constraint:
-                                                            state_constraint.clone(),
-                                                        body: body.clone(),
-                                                    },
-                                                    span: r_spanned.span.clone(),
-                                                }
-                                            } else {
-                                                r_spanned.clone()
-                                            }
-                                        })
-                                        .collect();
+                                } if name == sym_name => {
+                                    let target_name =
+                                        sym_alias.as_ref().unwrap_or(name);
                                     result.push(SpannedStatement {
-                                        stmt: Statement::ForeignBlock {
-                                            lib_name: lib_name.clone(),
-                                            abi: abi.clone(),
-                                            routines: qualified_routines,
+                                        stmt: Statement::RoutineDef {
+                                            name: target_name.clone(),
+                                            params: params.clone(),
+                                            return_type: return_type.clone(),
+                                            taking_ms: *taking_ms,
+                                            state_constraint: state_constraint
+                                                .clone(),
+                                            body: body.clone(),
                                         },
                                         span: s.span.clone(),
                                     });
@@ -176,45 +315,44 @@ fn expand_spanned_statements(
                                     decay_after_ms,
                                     auto_drop,
                                     scoped_branch,
-                                } => {
-                                    if !name.starts_with(&format!("{}.", ns)) {
-                                        let qualified_name =
-                                            format!("{}.{}", ns, name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::TypeDecl {
-                                                name: qualified_name,
-                                                extends: extends.clone(),
-                                                fields: fields.clone(),
-                                                decay_after_ms: *decay_after_ms,
-                                                auto_drop: auto_drop.clone(),
-                                                scoped_branch: scoped_branch.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
+                                } if name == sym_name => {
+                                    let target_name =
+                                        sym_alias.as_ref().unwrap_or(name);
+                                    result.push(SpannedStatement {
+                                        stmt: Statement::TypeDecl {
+                                            name: target_name.clone(),
+                                            extends: extends.clone(),
+                                            fields: fields.clone(),
+                                            decay_after_ms: *decay_after_ms,
+                                            auto_drop: auto_drop.clone(),
+                                            scoped_branch: scoped_branch.clone(),
+                                        },
+                                        span: s.span.clone(),
+                                    });
                                 }
-                                Statement::EnumDecl { name, variants } => {
-                                    if !name.starts_with(&format!("{}.", ns)) {
-                                        let qualified_name =
-                                            format!("{}.{}", ns, name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::EnumDecl {
-                                                name: qualified_name,
-                                                variants: variants.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
+                                Statement::EnumDecl { name, variants }
+                                    if name == sym_name =>
+                                {
+                                    let target_name =
+                                        sym_alias.as_ref().unwrap_or(name);
+                                    result.push(SpannedStatement {
+                                        stmt: Statement::EnumDecl {
+                                            name: target_name.clone(),
+                                            variants: variants.clone(),
+                                        },
+                                        span: s.span.clone(),
+                                    });
                                 }
                                 Statement::InterfaceDecl {
                                     name,
                                     extends,
                                     methods,
-                                } if !name.starts_with(&format!("{}.", ns)) => {
-                                    let qualified_name = format!("{}.{}", ns, name);
+                                } if name == sym_name => {
+                                    let target_name =
+                                        sym_alias.as_ref().unwrap_or(name);
                                     result.push(SpannedStatement {
                                         stmt: Statement::InterfaceDecl {
-                                            name: qualified_name,
+                                            name: target_name.clone(),
                                             extends: extends.clone(),
                                             methods: methods.clone(),
                                         },
@@ -222,123 +360,6 @@ fn expand_spanned_statements(
                                     });
                                 }
                                 _ => {}
-                            }
-                        }
-                    }
-                }
-            }
-            Statement::FromImport { path, symbols } => {
-                let (imported_source, sub_base_dir) = if let Some(embedded) =
-                    causm_stdlib::get_module(&path)
-                {
-                    (embedded.to_string(), None)
-                } else {
-                    let target_path = if let Some(dir) = base_dir {
-                        dir.join(&path)
-                    } else {
-                        PathBuf::from(&path)
-                    };
-                    let path_str = target_path.to_string_lossy().to_string();
-                    if loaded_files.contains(&path_str) || !target_path.exists() {
-                        continue;
-                    }
-                    loaded_files.insert(path_str);
-                    (
-                        std::fs::read_to_string(&target_path)?,
-                        target_path.parent().map(|p| p.to_path_buf()),
-                    )
-                };
-                let imported_prog = parse_causm(&imported_source)?;
-                let is_wildcard = symbols.iter().any(|(s, _)| s == "*");
-                for imp_tl in imported_prog.timelines {
-                    let expanded = expand_spanned_statements(
-                        imp_tl.statements,
-                        sub_base_dir.as_deref(),
-                        loaded_files,
-                    )?;
-                    let item_stmts = flatten_container_statements(expanded);
-                    for s in item_stmts {
-                        if is_wildcard {
-                            result.push(s.clone());
-                        } else {
-                            for (sym_name, sym_alias) in &symbols {
-                                match &s.stmt {
-                                    Statement::RoutineDef {
-                                        name,
-                                        params,
-                                        return_type,
-                                        taking_ms,
-                                        state_constraint,
-                                        body,
-                                    } if name == sym_name => {
-                                        let target_name =
-                                            sym_alias.as_ref().unwrap_or(name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::RoutineDef {
-                                                name: target_name.clone(),
-                                                params: params.clone(),
-                                                return_type: return_type.clone(),
-                                                taking_ms: *taking_ms,
-                                                state_constraint: state_constraint
-                                                    .clone(),
-                                                body: body.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
-                                    Statement::TypeDecl {
-                                        name,
-                                        extends,
-                                        fields,
-                                        decay_after_ms,
-                                        auto_drop,
-                                        scoped_branch,
-                                    } if name == sym_name => {
-                                        let target_name =
-                                            sym_alias.as_ref().unwrap_or(name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::TypeDecl {
-                                                name: target_name.clone(),
-                                                extends: extends.clone(),
-                                                fields: fields.clone(),
-                                                decay_after_ms: *decay_after_ms,
-                                                auto_drop: auto_drop.clone(),
-                                                scoped_branch: scoped_branch.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
-                                    Statement::EnumDecl { name, variants }
-                                        if name == sym_name =>
-                                    {
-                                        let target_name =
-                                            sym_alias.as_ref().unwrap_or(name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::EnumDecl {
-                                                name: target_name.clone(),
-                                                variants: variants.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
-                                    Statement::InterfaceDecl {
-                                        name,
-                                        extends,
-                                        methods,
-                                    } if name == sym_name => {
-                                        let target_name =
-                                            sym_alias.as_ref().unwrap_or(name);
-                                        result.push(SpannedStatement {
-                                            stmt: Statement::InterfaceDecl {
-                                                name: target_name.clone(),
-                                                extends: extends.clone(),
-                                                methods: methods.clone(),
-                                            },
-                                            span: s.span.clone(),
-                                        });
-                                    }
-                                    _ => {}
-                                }
                             }
                         }
                     }

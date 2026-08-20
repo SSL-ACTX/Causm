@@ -235,3 +235,22 @@ Potential pass order:
 - [x] Add `as_number()`, `as_string()`, `as_bool()`, `get(key)`, `get_int(key, default)`, `get_string(key, default)`, `get_bool(key, default)`, `array_get(idx)` helper routines returning wrapped values / defaults.
 - [x] Add end-to-end integration tests in `crates/causm-cli/tests/integration/causm_match.rs` and `causm_json.rs` validating the updated `std/json` library and pattern matching.
 
+---
+
+## Stdlib Pre-compiled / Pre-verified Bytecode Archives & Fast Caching (`.csa`)
+
+### 1. AST & IR Serialization Foundations
+- [x] Add `Serialize` / `Deserialize` derives to AST definitions in `causm-core` and IR definitions in `causm-ir`.
+- [x] Implement compact archive data structures (`CsaArchive`, `CsaModuleEntry`, `CsaBytecodeRoutine`).
+
+### 2. Stdlib Archive Builder (`causm-stdlib`)
+- [x] Create `CsaArchive` compiler / packaging pass that builds and manages standard library modules and pre-compiled bytecode routines.
+- [x] Implement serialization pipeline producing binary `.csa` archives on disk (`~/.causm/cache/std.csa`) with 64-bit checksum verification.
+
+### 3. Fast Frontend Ingestion & Verification Bypass
+- [x] Update `causm-frontend` import resolution with `STDLIB_PROGRAM_CACHE` to load and expand AST in microseconds.
+- [x] Enable automatic disk archive initialization on first compiler access.
+
+### 4. Integration Tests & Benchmarks
+- [x] Add dedicated integration tests verifying `.csa` archive ingestion parity, bytecode routine storage, disk persistence, checksum invalidation, and empirical benchmark speedups.
+

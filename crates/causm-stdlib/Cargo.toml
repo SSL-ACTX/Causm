@@ -6,5 +6,8 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 causm-core = { path = "../causm-core" }
+causm-ir = { path = "../causm-ir" }
 causm-runtime = { path = "../causm-runtime" }
 anyhow = "1.0"
+bincode = "1.3"
+serde = { version = "1.0", features = ["derive"] }

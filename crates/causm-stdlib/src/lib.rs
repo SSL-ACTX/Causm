@@ -1,5 +1,6 @@
 use causm_runtime::vm::Vm;
 
+pub mod archive;
 pub mod io;
 pub mod net;
 
@@ -130,6 +131,53 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         | "std/encoding/json/encode" => Some(STD_JSON_ENCODE),
         _ => None,
     }
+}
+
+pub fn all_embedded_modules() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("std/core", STD_CORE_MOD),
+        ("std/core/types", STD_CORE_TYPES),
+        ("std/core/ops", STD_CORE_OPS),
+        ("std/http", STD_HTTP_MOD),
+        ("std/http/types", STD_HTTP_TYPES),
+        ("std/http/ops", STD_HTTP_OPS),
+        ("std/fs", STD_FS_MOD),
+        ("std/fs/types", STD_FS_TYPES),
+        ("std/fs/ffi", STD_FS_FFI),
+        ("std/fs/ops", STD_FS_OPS),
+        ("std/env", STD_ENV),
+        ("std/path", STD_PATH),
+        ("std/time", STD_TIME_MOD),
+        ("std/time/types", STD_TIME_TYPES),
+        ("std/time/ffi", STD_TIME_FFI),
+        ("std/time/ops", STD_TIME_OPS),
+        ("std/net", STD_NET_MOD),
+        ("std/net/types", STD_NET_TYPES),
+        ("std/net/ffi", STD_NET_FFI),
+        ("std/net/ops", STD_NET_OPS),
+        ("std/encoding", STD_ENCODING_MOD),
+        ("std/encoding/types", STD_ENCODING_TYPES),
+        ("std/encoding/utf8", STD_ENCODING_UTF8),
+        ("std/encoding/base64", STD_ENCODING_BASE64),
+        ("std/encoding/binary", STD_ENCODING_BINARY),
+        ("std/process", STD_PROCESS_MOD),
+        ("std/process/types", STD_PROCESS_TYPES),
+        ("std/process/ffi", STD_PROCESS_FFI),
+        ("std/process/ops", STD_PROCESS_OPS),
+        ("std/collection", STD_COLLECTION_MOD),
+        ("std/collection/types", STD_COLLECTION_TYPES),
+        ("std/collection/array", STD_COLLECTION_ARRAY),
+        ("std/collection/buffer", STD_COLLECTION_BUFFER),
+        ("std/collection/stack", STD_COLLECTION_STACK),
+        ("std/collection/queue", STD_COLLECTION_QUEUE),
+        ("std/collection/ring_buffer", STD_COLLECTION_RING_BUFFER),
+        ("std/collection/bitset", STD_COLLECTION_BITSET),
+        ("std/json", STD_JSON_MOD),
+        ("std/json/types", STD_JSON_TYPES),
+        ("std/json/ops", STD_JSON_OPS),
+        ("std/json/decode", STD_JSON_DECODE),
+        ("std/json/encode", STD_JSON_ENCODE),
+    ]
 }
 
 pub fn register_all(vm: &mut Vm) {

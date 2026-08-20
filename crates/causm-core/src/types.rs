@@ -1,14 +1,15 @@
 use crate::{BuiltinType, TypeName};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutoDropSpec {
     pub lib_name: String,
     pub routine_name: String,
     pub field_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructType {
     pub fields: HashMap<String, Type>,
     pub decay_after_ms: Option<u64>,
@@ -17,7 +18,7 @@ pub struct StructType {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Type {
     Integer,
     I8,
