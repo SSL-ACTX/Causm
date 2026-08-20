@@ -1,0 +1,6 @@
+@0ms: {
+    from "std/sync/types" import *
+    from "std/sync/atomic" import *
+    from "std/sync/mutex" import *
+    from "std/sync/channel" import *
+}

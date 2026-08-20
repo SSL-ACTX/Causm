@@ -57,6 +57,12 @@ pub const STD_JSON_OPS: &str = include_str!("../csm/std/json/ops.csm");
 pub const STD_JSON_DECODE: &str = include_str!("../csm/std/json/decode.csm");
 pub const STD_JSON_ENCODE: &str = include_str!("../csm/std/json/encode.csm");
 
+pub const STD_SYNC_MOD: &str = include_str!("../csm/std/sync/mod.csm");
+pub const STD_SYNC_TYPES: &str = include_str!("../csm/std/sync/types.csm");
+pub const STD_SYNC_ATOMIC: &str = include_str!("../csm/std/sync/atomic.csm");
+pub const STD_SYNC_MUTEX: &str = include_str!("../csm/std/sync/mutex.csm");
+pub const STD_SYNC_CHANNEL: &str = include_str!("../csm/std/sync/channel.csm");
+
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
         "std::core" | "std/core" => Some(STD_CORE_MOD),
@@ -129,6 +135,11 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         | "std/json/encode"
         | "std::encoding::json::encode"
         | "std/encoding/json/encode" => Some(STD_JSON_ENCODE),
+        "std::sync" | "std/sync" => Some(STD_SYNC_MOD),
+        "std::sync::types" | "std/sync/types" => Some(STD_SYNC_TYPES),
+        "std::sync::atomic" | "std/sync/atomic" => Some(STD_SYNC_ATOMIC),
+        "std::sync::mutex" | "std/sync/mutex" => Some(STD_SYNC_MUTEX),
+        "std::sync::channel" | "std/sync/channel" => Some(STD_SYNC_CHANNEL),
         _ => None,
     }
 }
@@ -177,6 +188,11 @@ pub fn all_embedded_modules() -> Vec<(&'static str, &'static str)> {
         ("std/json/ops", STD_JSON_OPS),
         ("std/json/decode", STD_JSON_DECODE),
         ("std/json/encode", STD_JSON_ENCODE),
+        ("std/sync", STD_SYNC_MOD),
+        ("std/sync/types", STD_SYNC_TYPES),
+        ("std/sync/atomic", STD_SYNC_ATOMIC),
+        ("std/sync/mutex", STD_SYNC_MUTEX),
+        ("std/sync/channel", STD_SYNC_CHANNEL),
     ]
 }
 

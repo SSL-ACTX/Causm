@@ -1,0 +1,47 @@
+@0ms: {
+    from "std/sync/types" import AtomicInt, AtomicBool, FetchAddResult, CasIntResult, CasBoolResult
+
+    routine Atomic.new_int(peek initial: int) -> AtomicInt taking _ => struct { val = initial }
+    routine Atomic.load_int(peek a: AtomicInt) -> int taking _ => a.val
+
+    routine Atomic.store_int(consume a: AtomicInt, peek val: int) -> AtomicInt taking _ {
+        let mut res = a
+        res.val = val
+        res
+    }
+
+    routine Atomic.fetch_add(consume a: AtomicInt, peek delta: int) -> FetchAddResult taking _ {
+        let old = a.val
+        let next_val = old + delta
+        let mut next_atomic = a
+        next_atomic.val = next_val
+        struct { atomic = next_atomic, old = old }
+    }
+
+    routine Atomic.cas_int(consume a: AtomicInt, peek expected: int, peek desired: int) -> CasIntResult taking _ {
+        let mut next = a
+        let is_match = next.val == expected
+        if (is_match) {
+            next.val = desired
+        }
+        struct { atomic = next, success = is_match }
+    }
+
+    routine Atomic.new_bool(peek initial: bool) -> AtomicBool taking _ => struct { val = initial }
+    routine Atomic.load_bool(peek a: AtomicBool) -> bool taking _ => a.val
+
+    routine Atomic.store_bool(consume a: AtomicBool, peek val: bool) -> AtomicBool taking _ {
+        let mut res = a
+        res.val = val
+        res
+    }
+
+    routine Atomic.cas_bool(consume a: AtomicBool, peek expected: bool, peek desired: bool) -> CasBoolResult taking _ {
+        let mut next = a
+        let is_match = next.val == expected
+        if (is_match) {
+            next.val = desired
+        }
+        struct { atomic = next, success = is_match }
+    }
+}
