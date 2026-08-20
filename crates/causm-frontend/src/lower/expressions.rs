@@ -132,8 +132,10 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                         }
                         causm_core::types::Type::Struct(s) => {
                             if let Some(ref spec) = s.auto_drop {
-                                ctx.auto_drop_specs
-                                    .insert(format!("_reg_{}", dest.0), spec.clone());
+                                ctx.auto_drop_specs.insert(
+                                    format!("_reg_{}", dest.0),
+                                    spec.clone(),
+                                );
                             }
                         }
                         _ => {}

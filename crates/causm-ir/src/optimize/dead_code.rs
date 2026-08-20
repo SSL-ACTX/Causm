@@ -74,6 +74,72 @@ pub fn prune_import_duplicates(ir: &mut IrProgram) {
         .retain(|_, routine| !routine.instructions.is_empty());
 }
 
+/// Prune uncalled / unreachable routines (tree shaking) from the IR program.
+/// Traverses all Call and DynamicCall sites starting from the root timeline blocks.
+pub fn prune_unreachable_routines(ir: &mut IrProgram) {
+    if ir.blocks.is_empty() {
+        return;
+    }
+
+    let mut reachable: HashSet<String> = HashSet::new();
+    let mut worklist: Vec<String> = Vec::new();
+    let mut dynamic_methods: HashSet<String> = HashSet::new();
+
+    let check_instr = |instr: &Instruction,
+                       worklist: &mut Vec<String>,
+                       reachable: &mut HashSet<String>,
+                       dynamic_methods: &mut HashSet<String>| {
+        match instr {
+            Instruction::Call { routine, .. } => {
+                if reachable.insert(routine.clone()) {
+                    worklist.push(routine.clone());
+                }
+            }
+            Instruction::DynamicCall { method, .. } => {
+                dynamic_methods.insert(method.clone());
+            }
+            _ => {}
+        }
+    };
+
+    // 1. Seed reachability from all root timeline execution blocks
+    for block in &ir.blocks {
+        for instr in &block.instructions {
+            check_instr(instr, &mut worklist, &mut reachable, &mut dynamic_methods);
+        }
+    }
+
+    // 2. If dynamic calls exist, include all candidate matching methods
+    if !dynamic_methods.is_empty() {
+        for name in ir.routines.keys() {
+            for method in &dynamic_methods {
+                if name == method || name.ends_with(&format!(".{}", method)) {
+                    if reachable.insert(name.clone()) {
+                        worklist.push(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Transitively follow all Call instructions in reachable routines
+    while let Some(current_name) = worklist.pop() {
+        if let Some(routine) = ir.routines.get(&current_name) {
+            for instr in &routine.instructions {
+                check_instr(
+                    instr,
+                    &mut worklist,
+                    &mut reachable,
+                    &mut dynamic_methods,
+                );
+            }
+        }
+    }
+
+    // 4. Retain only reachable routines
+    ir.routines.retain(|name, _| reachable.contains(name));
+}
+
 pub struct DeadCodeEliminationPass;
 
 impl OptimizationPass for DeadCodeEliminationPass {

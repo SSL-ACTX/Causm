@@ -29,10 +29,13 @@ use entropy::EntropyOptimizationPass;
 use lease::LeaseOptimizationPass;
 use verifier::VerifierPass;
 
-pub use dead_code::prune_import_duplicates;
+pub use dead_code::{prune_import_duplicates, prune_unreachable_routines};
 
 pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
-    // 0. Pre-scan all IR blocks and routines to build a global set of channel names
+    // 0. Prune uncalled / unreachable routines (tree shaking)
+    dead_code::prune_unreachable_routines(&mut ir);
+
+    // Pre-scan all IR blocks and routines to build a global set of channel names
     //    that are referenced (send/recv/await/loop-tick/select) anywhere in the program.
     //    This is required so that ChannelLivenessPass never eliminates an `OpenChan`
     //    whose uses happen to live in a *different* temporal block.

@@ -261,4 +261,59 @@ mod test {
         let errs = res.unwrap_err();
         assert!(errs.iter().any(|e| matches!(e, ConcurrencyError::UnmergedBranch { ref branch, .. } if branch == "b2")));
     }
+
+    #[test]
+    fn test_dead_routine_tree_shaking_pass() {
+        use crate::optimize::dead_code::prune_unreachable_routines;
+        use crate::{IrBlock, IrProgram, IrRoutine};
+        use std::collections::HashMap;
+
+        let mut routines = HashMap::new();
+        routines.insert(
+            "used_fn".to_string(),
+            IrRoutine {
+                params: Vec::new(),
+                return_type: causm_core::types::Type::Integer,
+                taking_ms: None,
+                foreign_binding: None,
+                instructions: vec![Instruction::Return { src: None }],
+                spans: vec![None],
+            },
+        );
+        routines.insert(
+            "unused_fn".to_string(),
+            IrRoutine {
+                params: Vec::new(),
+                return_type: causm_core::types::Type::Integer,
+                taking_ms: None,
+                foreign_binding: None,
+                instructions: vec![Instruction::Return { src: None }],
+                spans: vec![None],
+            },
+        );
+
+        let mut ir = IrProgram {
+            blocks: vec![IrBlock {
+                time: causm_core::TimeCoordinate::Global(0),
+                entropy_mode: Some(causm_core::EntropyMode::Deterministic),
+                instructions: vec![Instruction::Call {
+                    routine: "used_fn".to_string(),
+                    args: vec![],
+                    dest: Reg(0),
+                }],
+                spans: vec![None],
+            }],
+            routines,
+            symbols: HashMap::new(),
+            type_decay_limits: HashMap::new(),
+            auto_drop_specs: HashMap::new(),
+            struct_extends: HashMap::new(),
+            decay_handlers: HashMap::new(),
+        };
+
+        prune_unreachable_routines(&mut ir);
+
+        assert!(ir.routines.contains_key("used_fn"));
+        assert!(!ir.routines.contains_key("unused_fn"));
+    }
 }
