@@ -98,6 +98,7 @@ pub struct Vm {
     pub causal_trace: Vec<(String, Timeline)>, // Full snapshots for debugging
     pub debug_mode: bool,
     pub next_payload_id: u64,
+    pub next_call_id: u64,
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,

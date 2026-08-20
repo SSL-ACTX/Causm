@@ -616,16 +616,24 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 Expression::Identifier(_) => {
                     ctx.push(Instruction::Consume { src });
                 }
-                Expression::IndexAccess {
-                    target: inner_target,
-                    index,
-                } => {
-                    let graph_reg = lower_expression(ctx, inner_target);
-                    let index_reg = lower_expression(ctx, index);
-                    ctx.push(Instruction::ConsumeFieldDynamic {
-                        target: graph_reg,
-                        index: index_reg,
-                    });
+                Expression::IndexAccess { target, index } => {
+                    if let Expression::Identifier(name) = &**target {
+                        let target_reg = ctx.get_reg(name);
+                        let index_reg = lower_expression(ctx, index);
+                        ctx.push(Instruction::ConsumeFieldDynamic {
+                            target: target_reg,
+                            index: index_reg,
+                        });
+                    }
+                }
+                Expression::FieldAccess { target, field } => {
+                    if let Expression::Identifier(name) = &**target {
+                        let target_reg = ctx.get_reg(name);
+                        ctx.push(Instruction::ConsumeField {
+                            src: target_reg,
+                            field: field.clone(),
+                        });
+                    }
                 }
                 _ => {}
             }
@@ -986,8 +994,11 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             max_ms,
             body,
         } => {
+            let while_limit = *max_ms;
+            ctx.push(Instruction::While {
+                max_ms: while_limit,
+            });
             let start_pc = ctx.instructions.len();
-            ctx.push(Instruction::While { max_ms: *max_ms });
 
             if *is_valid_check {
                 let cond_reg = lower_expression(ctx, condition);
@@ -1004,10 +1015,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     lower_spanned(ctx, s);
                 }
 
-                ctx.push(Instruction::EndWhile { max_ms: *max_ms });
                 ctx.push(Instruction::Jump { target: start_pc });
 
-                let end_pc = ctx.instructions.len();
+                let end_while_idx = ctx.instructions.len();
+                ctx.push(Instruction::EndWhile {
+                    max_ms: while_limit,
+                });
+
                 if let Instruction::MatchEntropy {
                     ref mut valid_target,
                     ref mut decayed_target,
@@ -1017,9 +1031,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 } = ctx.instructions[match_entropy_idx]
                 {
                     *valid_target = Some(match_entropy_idx + 1);
-                    *decayed_target = Some(end_pc);
-                    *pending_target = Some(end_pc);
-                    *consumed_target = Some(end_pc);
+                    *decayed_target = Some(end_while_idx);
+                    *pending_target = Some(end_while_idx);
+                    *consumed_target = Some(end_while_idx);
                 }
             } else {
                 let cond_reg = lower_expression(ctx, condition);
@@ -1033,14 +1047,17 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     lower_spanned(ctx, s);
                 }
 
-                ctx.push(Instruction::EndWhile { max_ms: *max_ms });
                 ctx.push(Instruction::Jump { target: start_pc });
 
-                let end_pc = ctx.instructions.len();
+                let end_while_idx = ctx.instructions.len();
+                ctx.push(Instruction::EndWhile {
+                    max_ms: while_limit,
+                });
+
                 if let Instruction::JumpIfNot { ref mut target, .. } =
                     ctx.instructions[jump_to_end_idx]
                 {
-                    *target = end_pc;
+                    *target = end_while_idx;
                 }
             }
         }

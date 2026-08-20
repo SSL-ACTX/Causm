@@ -113,10 +113,10 @@ pub fn prune_unreachable_routines(ir: &mut IrProgram) {
     if !dynamic_methods.is_empty() {
         for name in ir.routines.keys() {
             for method in &dynamic_methods {
-                if name == method || name.ends_with(&format!(".{}", method)) {
-                    if reachable.insert(name.clone()) {
-                        worklist.push(name.clone());
-                    }
+                if (name == method || name.ends_with(&format!(".{}", method)))
+                    && reachable.insert(name.clone())
+                {
+                    worklist.push(name.clone());
                 }
             }
         }

@@ -1,0 +1,67 @@
+@0ms: {
+    import "std/json" as Json
+    import "std/http" as Http
+
+    print("=== Causm Real-World JSON + HTTP Integration Showcase ===")
+
+    print("-- 1. Constructing Structured Outgoing API Request Body --")
+    let mut profile_members = []
+    profile_members = Json.push_member(profile_members, "username", Json.str_val("chronos_dev"))
+    profile_members = Json.push_member(profile_members, "timeline_id", Json.num_val(4096))
+    profile_members = Json.push_member(profile_members, "is_active", Json.bool_val(true))
+
+    let mut permissions = []
+    permissions = Json.push_value(permissions, Json.str_val("read:entropy"))
+    permissions = Json.push_value(permissions, Json.str_val("write:timeline"))
+    permissions = Json.push_value(permissions, Json.str_val("exec:quantum"))
+    profile_members = Json.push_member(profile_members, "roles", Json.arr_val(permissions))
+
+    let req_obj = Json.obj_val(profile_members)
+    let payload_str = Json.stringify(req_obj)
+    print("Serialized JSON API Payload:")
+    print(payload_str)
+    debug(clone(payload_str))
+
+    print("-- 2. Preparing HTTP POST Request with Serialized JSON --")
+    let http_post_msg = Http.format_post("api.causm.network", "/v1/agents/register", payload_str)
+    print("Prepared HTTP Request:")
+    print(http_post_msg)
+
+    print("-- 3. Simulating Incoming JSON API Response --")
+    let raw_api_response = "{\"status\":\"success\",\"code\":201,\"data\":{\"agent_id\":1042,\"name\":\"CausmWorker\",\"verified\":true},\"tags\":[\"temporal\",\"verified\"]}"
+    print("Raw Incoming JSON:")
+    print(raw_api_response)
+
+    print("-- 4. Parsing and Querying Received JSON --")
+    let parsed = Json.parse(raw_api_response)
+
+    let status_str = Json.get_string(parsed, "status", "unknown")
+    let status_code = Json.get_int(parsed, "code", 0)
+    let has_data = Json.has_key(parsed, "data")
+    debug(status_str)
+    debug(status_code)
+    debug(has_data)
+
+    print("-- 5. Extracting Nested Object Fields --")
+    let data_node = Json.get(parsed, "data")
+    let agent_id = Json.get_int(data_node, "agent_id", -1)
+    let agent_name = Json.get_string(data_node, "name", "")
+    let is_verified = Json.get_bool(data_node, "verified", false)
+    debug(agent_id)
+    debug(agent_name)
+    debug(is_verified)
+
+    print("-- 6. Extracting and Iterating Array Items --")
+    let tags_node = Json.get(parsed, "tags")
+    let tag_count = Json.array_len(tags_node)
+    debug(tag_count)
+
+    let first_tag_val = Json.array_get(tags_node, 0)
+    let first_tag = Json.as_string(first_tag_val)
+    let second_tag_val = Json.array_get(tags_node, 1)
+    let second_tag = Json.as_string(second_tag_val)
+    debug(first_tag)
+    debug(second_tag)
+
+    print("=== JSON + HTTP Integration Showcase Complete ===")
+}

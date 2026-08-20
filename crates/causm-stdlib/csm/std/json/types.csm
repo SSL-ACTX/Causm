@@ -1,0 +1,27 @@
+// Standard JSON Module - Type Definitions
+
+@0ms: {
+    type JsonMember = struct {
+        key: string,
+        val: JsonValue
+    }
+
+    type JsonValue = struct {
+        kind: i32,
+        bool_val: bool,
+        num_val: i64,
+        str_val: string,
+        arr_val: array,
+        obj_val: array
+    }
+
+    type ParseResult = struct {
+        val: JsonValue,
+        next_pos: i32
+    }
+
+    type ParseStrResult = struct {
+        val: string,
+        next_pos: i32
+    }
+}

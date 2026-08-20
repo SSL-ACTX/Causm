@@ -46,6 +46,12 @@ pub const STD_HTTP_MOD: &str = include_str!("../csm/std/http/mod.csm");
 pub const STD_HTTP_TYPES: &str = include_str!("../csm/std/http/types.csm");
 pub const STD_HTTP_OPS: &str = include_str!("../csm/std/http/ops.csm");
 
+pub const STD_JSON_MOD: &str = include_str!("../csm/std/json/mod.csm");
+pub const STD_JSON_TYPES: &str = include_str!("../csm/std/json/types.csm");
+pub const STD_JSON_OPS: &str = include_str!("../csm/std/json/ops.csm");
+pub const STD_JSON_DECODE: &str = include_str!("../csm/std/json/decode.csm");
+pub const STD_JSON_ENCODE: &str = include_str!("../csm/std/json/encode.csm");
+
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
         "std::http" | "std/http" => Some(STD_HTTP_MOD),
@@ -96,6 +102,25 @@ pub fn get_module(path: &str) -> Option<&'static str> {
         "std::collection::bitset" | "std/collection/bitset" => {
             Some(STD_COLLECTION_BITSET)
         }
+        "std::json" | "std/json" | "std::encoding::json" | "std/encoding/json" => {
+            Some(STD_JSON_MOD)
+        }
+        "std::json::types"
+        | "std/json/types"
+        | "std::encoding::json::types"
+        | "std/encoding/json/types" => Some(STD_JSON_TYPES),
+        "std::json::ops"
+        | "std/json/ops"
+        | "std::encoding::json::ops"
+        | "std/encoding/json/ops" => Some(STD_JSON_OPS),
+        "std::json::decode"
+        | "std/json/decode"
+        | "std::encoding::json::decode"
+        | "std/encoding/json/decode" => Some(STD_JSON_DECODE),
+        "std::json::encode"
+        | "std/json/encode"
+        | "std::encoding::json::encode"
+        | "std/encoding/json/encode" => Some(STD_JSON_ENCODE),
         _ => None,
     }
 }

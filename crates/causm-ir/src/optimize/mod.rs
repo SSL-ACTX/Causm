@@ -56,14 +56,11 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     manager.add_pass(Box::new(VerifierPass));
 
     // 1. Optimize routines (routines are self-contained, no global usage tracking needed)
-    let empty_set = HashSet::new();
     for routine in ir.routines.values_mut() {
         if !routine.instructions.is_empty() {
             let cfg = CFG::from_flat_instructions(&routine.instructions);
             let ssa_transformer = SsaTransformer::new(cfg);
-            let mut ssa_cfg = ssa_transformer.transform();
-
-            manager.run(&mut ssa_cfg, &empty_set, true);
+            let ssa_cfg = ssa_transformer.transform();
 
             let destructed_cfg = destruct_ssa(ssa_cfg);
             routine.instructions = flatten_cfg(&destructed_cfg);
@@ -803,11 +800,13 @@ pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {
     for ssa_block in ssa_cfg.blocks.values() {
         for phi in &ssa_block.phi_nodes {
             for &(pred_id, incoming_reg) in &phi.incoming {
-                if phi.original_reg.0 != incoming_reg.reg {
+                let target_reg = ssa_reg_to_reg(phi.dest);
+                let src_reg = ssa_reg_to_reg(incoming_reg);
+                if target_reg != src_reg {
                     if let Some(pred_block) = blocks.get_mut(&pred_id) {
                         pred_block.instructions.push(Instruction::Move {
-                            dest: phi.original_reg,
-                            src: ssa_reg_to_reg(incoming_reg),
+                            dest: target_reg,
+                            src: src_reg,
                         });
                     }
                 }

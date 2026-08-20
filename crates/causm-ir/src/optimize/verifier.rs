@@ -26,7 +26,10 @@ impl OptimizationPass for VerifierPass {
     ) -> bool {
         if let Err(errors) = verify_ssa_cfg(ssa_cfg) {
             for err in errors {
-                eprintln!("\x1b[1;33m[ssa-verifier warning]\x1b[0m {:?}", err);
+                eprintln!(
+                    "\x1b[1;31m[TVM Middle-End Invariant Error]\x1b[0m Invariant violation in Block: {:?}",
+                    err
+                );
             }
         }
         false

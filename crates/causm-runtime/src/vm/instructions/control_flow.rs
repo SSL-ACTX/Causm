@@ -222,7 +222,10 @@ impl Vm {
             }
         }
 
-        let child_id = format!("__routine_{}_{}", routine, self.global_clock);
+        let call_idx = self.next_call_id;
+        self.next_call_id += 1;
+        let child_id =
+            format!("__routine_{}_{}_{}", routine, self.global_clock, call_idx);
         let mut child = crate::vm::state::Timeline::new(
             child_id.clone(),
             1024 * 1024,
@@ -258,6 +261,7 @@ impl Vm {
             b.pc < b.instructions.len()
         } {
             self.execute_instruction(&child_id)?;
+            self.handle_break(&child_id)?;
         }
 
         let child_branch = self

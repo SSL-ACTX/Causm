@@ -114,6 +114,28 @@ pub fn copy_propagation(
                         changed = true;
                     }
                 }
+                SsaInstruction::ConditionalSelect {
+                    cond,
+                    true_val,
+                    false_val,
+                    ..
+                } => {
+                    let new_cond = resolve(*cond);
+                    if *cond != new_cond {
+                        *cond = new_cond;
+                        changed = true;
+                    }
+                    let new_true = resolve(*true_val);
+                    if *true_val != new_true {
+                        *true_val = new_true;
+                        changed = true;
+                    }
+                    let new_false = resolve(*false_val);
+                    if *false_val != new_false {
+                        *false_val = new_false;
+                        changed = true;
+                    }
+                }
                 SsaInstruction::Move { src, .. } => {
                     let new_src = resolve(*src);
                     if *src != new_src {

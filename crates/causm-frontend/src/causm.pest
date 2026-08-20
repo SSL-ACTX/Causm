@@ -285,7 +285,7 @@ type_name_list = { type_name ~ ("," ~ type_name)* }
 if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+string_literal = @{ "\"" ~ (!("\"" | "\\") ~ ANY | "\\" ~ ANY)* ~ "\"" }
 fstring_literal = ${ "f\"" ~ fstring_part* ~ "\"" }
 fstring_part = { fstring_interp | fstring_text }
 fstring_interp = !{ "{" ~ expression ~ "}" }

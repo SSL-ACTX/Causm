@@ -26,6 +26,7 @@ pub struct EntropicAnalyzer {
     pub(crate) known_channels: HashSet<String>,
     pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
     pub entropy_mode: causm_core::EntropyMode,
+    pub analyzed_routines: HashSet<String>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -62,6 +63,7 @@ impl EntropicAnalyzer {
             known_channels: HashSet::new(),
             analyzed_wcet: std::cell::RefCell::new(HashMap::new()),
             entropy_mode: causm_core::EntropyMode::Deterministic,
+            analyzed_routines: HashSet::new(),
         };
         analyzer.register_intrinsics();
         analyzer
@@ -163,6 +165,102 @@ impl EntropicAnalyzer {
         }
     }
 
+    pub(crate) fn pre_register_program_declarations(&mut self, program: &Program) {
+        fn visit_stmts(analyzer: &mut EntropicAnalyzer, stmts: &[SpannedStatement]) {
+            for stmt in stmts {
+                match &stmt.stmt {
+                    Statement::TypeDecl {
+                        name,
+                        extends,
+                        fields,
+                        decay_after_ms,
+                        auto_drop,
+                        scoped_branch,
+                    } => {
+                        let _ = analyzer.TypeDecl(
+                            name,
+                            extends,
+                            fields,
+                            decay_after_ms,
+                            auto_drop,
+                            scoped_branch,
+                        );
+                    }
+                    Statement::InterfaceDecl {
+                        name,
+                        extends,
+                        methods,
+                    } => {
+                        let _ = analyzer.InterfaceDecl(name, extends, methods);
+                    }
+                    Statement::RoutineDef {
+                        name,
+                        params,
+                        return_type,
+                        taking_ms,
+                        state_constraint,
+                        ..
+                    } => {
+                        let preliminary_params = params
+                            .iter()
+                            .map(|p| {
+                                let mut param_type = p
+                                    .typ
+                                    .as_ref()
+                                    .map(causm_core::types::Type::from_typename)
+                                    .unwrap_or(causm_core::types::Type::Unknown);
+                                if p.name == "self" && p.typ.is_none() {
+                                    if let Some(dot_idx) = name.find('.') {
+                                        let struct_name = &name[..dot_idx];
+                                        param_type = causm_core::types::Type::Custom(
+                                            struct_name.to_string(),
+                                        );
+                                    }
+                                }
+                                (p.mode.clone(), p.name.clone(), param_type)
+                            })
+                            .collect();
+                        let r_info = RoutineInfo {
+                            params: preliminary_params,
+                            return_type: return_type
+                                .as_ref()
+                                .map(causm_core::types::Type::from_typename)
+                                .unwrap_or(causm_core::types::Type::Unknown),
+                            taking_ms: taking_ms.unwrap_or(0),
+                            state_constraint: state_constraint.clone(),
+                        };
+                        analyzer.routines.insert(name.clone(), r_info.clone());
+                        let base_name = if let Some(angle_idx) = name.find('<') {
+                            if let Some(dot_idx) = name.find('.') {
+                                let struct_part = &name[..angle_idx];
+                                let method_part = &name[dot_idx..];
+                                format!("{}{}", struct_part, method_part)
+                            } else {
+                                name.clone()
+                            }
+                        } else {
+                            name.clone()
+                        };
+                        if base_name != *name {
+                            analyzer.routines.insert(base_name, r_info);
+                        }
+                    }
+                    Statement::Isolate(iso) => {
+                        visit_stmts(analyzer, &iso.body);
+                    }
+                    Statement::RelativisticBlock { body, .. } => {
+                        visit_stmts(analyzer, body);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for block in &program.timelines {
+            visit_stmts(self, &block.statements);
+        }
+    }
+
     pub fn analyze_program(
         &mut self,
         program: &Program,
@@ -177,9 +275,9 @@ impl EntropicAnalyzer {
         self.capability_stack.clear();
         self.routines.clear();
         self.struct_extends.clear();
-        self.in_entropy_match = false;
-        self.merged_branches.clear();
+        self.analyzed_routines.clear();
         self.register_intrinsics();
+        self.pre_register_program_declarations(program);
 
         for block in &program.timelines {
             let old_branch = self.current_branch.clone();
@@ -606,7 +704,7 @@ impl EntropicAnalyzer {
             return true;
         }
 
-        match (expected, actual) {
+        match (&expected, &actual) {
             (
                 Type::Integer
                 | Type::I8
@@ -639,7 +737,7 @@ impl EntropicAnalyzer {
                     let mut compatible = true;
                     for (name, exp_field_ty) in &exp_struct.fields {
                         if let Some(act_field_ty) = act_struct.fields.get(name) {
-                            if exp_field_ty != act_field_ty {
+                            if !self.types_compatible(exp_field_ty, act_field_ty) {
                                 compatible = false;
                                 break;
                             }
@@ -659,25 +757,25 @@ impl EntropicAnalyzer {
                 }
             }
             (Type::Array(exp_inner), Type::Array(act_inner)) => {
-                self.types_compatible(&exp_inner, &act_inner)
+                self.types_compatible(exp_inner, act_inner)
             }
             (Type::Promise(exp_inner), Type::Promise(act_inner)) => {
-                self.types_compatible(&exp_inner, &act_inner)
+                self.types_compatible(exp_inner, act_inner)
             }
             (Type::Optional(exp_inner), Type::Optional(act_inner)) => {
-                self.types_compatible(&exp_inner, &act_inner)
+                self.types_compatible(exp_inner, act_inner)
             }
             (Type::Optional(exp_inner), act_ty) => {
-                self.types_compatible(&exp_inner, &act_ty)
+                self.types_compatible(exp_inner, act_ty)
             }
             (act_ty, Type::Optional(exp_inner)) => {
-                self.types_compatible(&act_ty, &exp_inner)
+                self.types_compatible(act_ty, exp_inner)
             }
             (Type::Union(exp_types), act_ty) => {
-                exp_types.iter().any(|t| self.types_compatible(t, &act_ty))
+                exp_types.iter().any(|t| self.types_compatible(t, act_ty))
             }
             (act_ty, Type::Union(exp_types)) => {
-                exp_types.iter().any(|t| self.types_compatible(&act_ty, t))
+                exp_types.iter().any(|t| self.types_compatible(act_ty, t))
             }
             (
                 Type::Function {
@@ -694,13 +792,57 @@ impl EntropicAnalyzer {
                         .iter()
                         .zip(act_params.iter())
                         .all(|(e, a)| self.types_compatible(e, a))
-                    && self.types_compatible(&exp_rt, &act_rt)
+                    && self.types_compatible(exp_rt, act_rt)
             }
             (Type::Custom(exp_name), Type::Custom(act_name)) => {
                 if exp_name == act_name {
                     true
                 } else if self.interfaces.contains_key(exp_name.as_str()) {
                     self.implements_interface(act_name.as_str(), exp_name.as_str())
+                } else {
+                    false
+                }
+            }
+            (Type::Custom(exp_name), Type::Struct(act_struct)) => {
+                if let Some(decl_fields) =
+                    self.type_decls.get(exp_name.as_str()).cloned()
+                {
+                    let mut fields_map = std::collections::HashMap::new();
+                    for (k, v) in decl_fields {
+                        fields_map.insert(k, Type::from_typename(&v.typ));
+                    }
+                    let exp_struct = causm_core::types::StructType {
+                        fields: fields_map,
+                        decay_after_ms: None,
+                        auto_drop: None,
+                        scoped_branch: None,
+                    };
+                    self.types_compatible(
+                        &Type::Struct(exp_struct),
+                        &Type::Struct(act_struct.clone()),
+                    )
+                } else {
+                    false
+                }
+            }
+            (Type::Struct(exp_struct), Type::Custom(act_name)) => {
+                if let Some(decl_fields) =
+                    self.type_decls.get(act_name.as_str()).cloned()
+                {
+                    let mut fields_map = std::collections::HashMap::new();
+                    for (k, v) in decl_fields {
+                        fields_map.insert(k, Type::from_typename(&v.typ));
+                    }
+                    let act_struct = causm_core::types::StructType {
+                        fields: fields_map,
+                        decay_after_ms: None,
+                        auto_drop: None,
+                        scoped_branch: None,
+                    };
+                    self.types_compatible(
+                        &Type::Struct(exp_struct.clone()),
+                        &Type::Struct(act_struct),
+                    )
                 } else {
                     false
                 }

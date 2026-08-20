@@ -267,6 +267,7 @@ impl Vm {
                 b.pc < end_pc
             } {
                 self.execute_instruction(&child_name)?;
+                self.handle_break(&child_name)?;
             }
 
             let child_branch = self

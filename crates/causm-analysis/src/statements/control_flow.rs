@@ -278,6 +278,7 @@ impl EntropicAnalyzer {
         let old_type = {
             let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
             branch.produced.insert(item_name.to_owned());
+            branch.yields.insert(item_name.to_owned());
             branch.types.insert(item_name.to_owned(), item_type)
         };
 
@@ -594,7 +595,7 @@ impl EntropicAnalyzer {
         state_constraint: &Option<(String, String)>,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
-        if self.routines.contains_key(name) {
+        if self.analyzed_routines.contains(name) {
             if body.is_empty() {
                 return Ok(());
             }
@@ -603,6 +604,7 @@ impl EntropicAnalyzer {
                 name
             ))));
         }
+        self.analyzed_routines.insert(name.clone());
 
         for stmt in body {
             match &stmt.stmt {
@@ -617,9 +619,56 @@ impl EntropicAnalyzer {
                 _ => {}
             }
         }
+        let base_name = if let Some(angle_idx) = name.find('<') {
+            if let Some(dot_idx) = name.find('.') {
+                let struct_part = &name[..angle_idx];
+                let method_part = &name[dot_idx..];
+                format!("{}{}", struct_part, method_part)
+            } else {
+                name.clone()
+            }
+        } else {
+            name.clone()
+        };
+
+        let preliminary_routine_info = crate::analyzer::RoutineInfo {
+            params: params
+                .iter()
+                .map(|p| {
+                    let mut param_type = p
+                        .typ
+                        .as_ref()
+                        .map(causm_core::types::Type::from_typename)
+                        .unwrap_or(causm_core::types::Type::Unknown);
+                    if p.name == "self" && p.typ.is_none() {
+                        if let Some(dot_idx) = name.find('.') {
+                            let struct_name = &name[..dot_idx];
+                            param_type = causm_core::types::Type::Custom(
+                                struct_name.to_string(),
+                            );
+                        }
+                    }
+                    (p.mode.clone(), p.name.clone(), param_type)
+                })
+                .collect(),
+            return_type: return_type
+                .as_ref()
+                .map(causm_core::types::Type::from_typename)
+                .unwrap_or(causm_core::types::Type::Unknown),
+            taking_ms: taking_ms.unwrap_or(0),
+            state_constraint: state_constraint.clone(),
+        };
 
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
+        routine_analyzer
+            .routines
+            .insert(name.clone(), preliminary_routine_info.clone());
+        if base_name != *name {
+            routine_analyzer
+                .routines
+                .insert(base_name.clone(), preliminary_routine_info);
+        }
         routine_analyzer.type_decls = self.type_decls.clone();
         routine_analyzer.interfaces = self.interfaces.clone();
         routine_analyzer.current_routine = Some(name.clone());
@@ -720,18 +769,6 @@ impl EntropicAnalyzer {
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: final_taking_ms,
             state_constraint: state_constraint.clone(),
-        };
-
-        let base_name = if let Some(angle_idx) = name.find('<') {
-            if let Some(dot_idx) = name.find('.') {
-                let struct_part = &name[..angle_idx];
-                let method_part = &name[dot_idx..];
-                format!("{}{}", struct_part, method_part)
-            } else {
-                name.clone()
-            }
-        } else {
-            name.clone()
         };
 
         self.routines.insert(name.clone(), routine_info.clone());

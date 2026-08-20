@@ -620,8 +620,10 @@ fn main() -> anyhow::Result<()> {
 
         if !config.check_only {
             let mut ir_program = lower::lower_program(&program);
+            causm_ir::optimize::prune_unreachable_routines(&mut ir_program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
+            vm.debug_mode = true;
             if config.chaos {
                 vm.root_timeline.entropy_mode = causm_core::EntropyMode::Chaos;
             }

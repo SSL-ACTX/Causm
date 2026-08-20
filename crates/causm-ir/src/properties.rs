@@ -48,10 +48,17 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::FieldAccess { dest, .. }
             | SsaInstruction::IndexAccess { dest, .. }
             | SsaInstruction::ChanRecv { dest, .. }
+            | SsaInstruction::ConditionalSelect { dest, .. }
             | SsaInstruction::Defer { dest, .. }
+            | SsaInstruction::Syscall { dest, .. }
             | SsaInstruction::Lease {
                 target_reg: dest, ..
             } => Some(*dest),
+
+            SsaInstruction::For { dest_cond, .. }
+            | SsaInstruction::ForStep { dest_cond, .. } => Some(*dest_cond),
+
+            SsaInstruction::SplitMap { item_reg, .. } => Some(*item_reg),
 
             SsaInstruction::FieldUpdate { target, .. }
             | SsaInstruction::IndexFieldUpdate { target, .. } => Some(*target),
@@ -66,6 +73,16 @@ impl SsaInstructionProperties for SsaInstruction {
             SsaInstruction::BinaryOp { left, right, .. } => {
                 regs.push(*left);
                 regs.push(*right);
+            }
+            SsaInstruction::ConditionalSelect {
+                cond,
+                true_val,
+                false_val,
+                ..
+            } => {
+                regs.push(*cond);
+                regs.push(*true_val);
+                regs.push(*false_val);
             }
             SsaInstruction::UnaryOp { src, .. }
             | SsaInstruction::Move { src, .. }
@@ -128,6 +145,9 @@ impl SsaInstructionProperties for SsaInstruction {
                 regs.extend(args.iter().cloned());
             }
             SsaInstruction::DynamicCall { args, .. } => {
+                regs.extend(args.iter().cloned());
+            }
+            SsaInstruction::Syscall { args, .. } => {
                 regs.extend(args.iter().cloned());
             }
             SsaInstruction::StructLit { fields, .. }

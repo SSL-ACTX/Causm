@@ -79,6 +79,17 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         }
 
         if let Some(initial_val) = self.solver.eval_u64(val) {
+            // Fast-path: check if any higher WCET is even possible
+            self.solver.push();
+            let initial_int = self.solver.int_from_u64(initial_val);
+            let check_gt = self.solver.int_gt(val, &initial_int);
+            self.solver.assert(&check_gt);
+            if !self.solver.check() {
+                self.solver.pop(2);
+                return initial_val;
+            }
+            self.solver.pop(1);
+
             low = initial_val;
             if low > high {
                 high = low * 2;
@@ -1011,6 +1022,17 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 body,
                 ..
             } => {
+                let budget_limit = *taking_ms;
+                if budget_limit.is_none() {
+                    let cost =
+                        crate::statement::estimate_block_cost(self.analyzer, body);
+                    self.analyzer
+                        .analyzed_wcet
+                        .borrow_mut()
+                        .insert(name.clone(), cost);
+                    return Ok(in_clock.clone());
+                }
+
                 let mut routine_verifier = FormalVerifier::<S>::new(self.analyzer);
                 let true_bool = routine_verifier.solver.bool_from_bool(true);
                 for p in params {

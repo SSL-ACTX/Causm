@@ -38,6 +38,7 @@ impl Vm {
             causal_trace: Vec::new(),
             debug_mode: false,
             next_payload_id: 0,
+            next_call_id: 0,
             trace_entropy: false,
             _is_decaying: false,
             current_span: None,
@@ -256,134 +257,136 @@ impl Vm {
                 }
 
                 self.execute_instruction(branch_id)?;
+                self.handle_break(branch_id)?;
+            }
+        }
+        Ok(())
+    }
 
+    pub(crate) fn handle_break(
+        &mut self,
+        branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        let b = self.get_branch_mut(branch_id)?;
+        if !b.break_requested {
+            return Ok(());
+        }
+        let target_depth = b.loop_depth;
+        b.break_requested = false;
+
+        while {
+            let b = self.get_branch_mut(branch_id)?;
+            b.pc < b.instructions.len()
+        } {
+            let instr = {
                 let b = self.get_branch_mut(branch_id)?;
-                if b.break_requested {
-                    let target_depth = b.loop_depth;
-                    b.break_requested = false;
-                    let _ = b;
-
-                    while {
+                b.instructions[b.pc].clone()
+            };
+            match instr {
+                causm_ir::Instruction::Loop { .. }
+                | causm_ir::Instruction::LoopTick
+                | causm_ir::Instruction::LoopTickOn { .. }
+                | causm_ir::Instruction::While { .. }
+                | causm_ir::Instruction::For { .. }
+                | causm_ir::Instruction::ForStep { .. } => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth += 1;
+                }
+                causm_ir::Instruction::EndFor => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth -= 1;
+                    if b.loop_depth < target_depth {
+                        self.EndFor(branch_id)?;
                         let b = self.get_branch_mut(branch_id)?;
-                        b.pc < b.instructions.len()
-                    } {
-                        let instr = {
-                            let b = self.get_branch_mut(branch_id)?;
-                            b.instructions[b.pc].clone()
-                        };
-                        match instr {
-                            causm_ir::Instruction::Loop { .. }
-                            | causm_ir::Instruction::LoopTick
-                            | causm_ir::Instruction::LoopTickOn { .. }
-                            | causm_ir::Instruction::While { .. }
-                            | causm_ir::Instruction::For { .. }
-                            | causm_ir::Instruction::ForStep { .. } => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth += 1;
-                            }
-                            causm_ir::Instruction::EndFor => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth -= 1;
-                                if b.loop_depth < target_depth {
-                                    self.EndFor(branch_id)?;
-                                    let b = self.get_branch_mut(branch_id)?;
-                                    b.flat_loops.pop();
-                                    b.pc += 1;
-                                    if b.pc < b.instructions.len() {
-                                        if let causm_ir::Instruction::Jump {
-                                            ..
-                                        } = b.instructions[b.pc]
-                                        {
-                                            b.pc += 1;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            causm_ir::Instruction::EndForStep => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth -= 1;
-                                if b.loop_depth < target_depth {
-                                    let b = self.get_branch_mut(branch_id)?;
-                                    b.flat_loops.pop();
-                                    b.pc += 1;
-                                    if b.pc < b.instructions.len() {
-                                        if let causm_ir::Instruction::Jump {
-                                            ..
-                                        } = b.instructions[b.pc]
-                                        {
-                                            b.pc += 1;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            causm_ir::Instruction::EndLoop { max_ms } => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth -= 1;
-                                if b.loop_depth < target_depth {
-                                    let max_ms_val = max_ms;
-                                    self.EndLoop(branch_id, max_ms_val)?;
-                                    let b = self.get_branch_mut(branch_id)?;
-                                    b.pc += 1;
-                                    // Skip the following Jump if present
-                                    if b.pc < b.instructions.len() {
-                                        if let causm_ir::Instruction::Jump {
-                                            ..
-                                        } = b.instructions[b.pc]
-                                        {
-                                            b.pc += 1;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            causm_ir::Instruction::EndWhile { max_ms } => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth -= 1;
-                                if b.loop_depth < target_depth {
-                                    let max_ms_val = max_ms;
-                                    self.EndWhile(branch_id, max_ms_val)?;
-                                    let b = self.get_branch_mut(branch_id)?;
-                                    b.pc += 1;
-                                    // Skip the following Jump if present
-                                    if b.pc < b.instructions.len() {
-                                        if let causm_ir::Instruction::Jump {
-                                            ..
-                                        } = b.instructions[b.pc]
-                                        {
-                                            b.pc += 1;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            causm_ir::Instruction::EndLoopTick => {
-                                let b = self.get_branch_mut(branch_id)?;
-                                b.loop_depth -= 1;
-                                if b.loop_depth < target_depth {
-                                    self.EndLoopTick(branch_id)?;
-                                    let b = self.get_branch_mut(branch_id)?;
-                                    b.pc += 1;
-                                    // Skip the following Jump if present
-                                    if b.pc < b.instructions.len() {
-                                        if let causm_ir::Instruction::Jump {
-                                            ..
-                                        } = b.instructions[b.pc]
-                                        {
-                                            b.pc += 1;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            _ => {}
-                        }
-                        let b = self.get_branch_mut(branch_id)?;
+                        b.flat_loops.pop();
                         b.pc += 1;
+                        if b.pc < b.instructions.len() {
+                            if let causm_ir::Instruction::Jump { .. } =
+                                b.instructions[b.pc]
+                            {
+                                b.pc += 1;
+                            }
+                        }
+                        break;
                     }
                 }
+                causm_ir::Instruction::EndForStep => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth -= 1;
+                    if b.loop_depth < target_depth {
+                        let b = self.get_branch_mut(branch_id)?;
+                        b.flat_loops.pop();
+                        b.pc += 1;
+                        if b.pc < b.instructions.len() {
+                            if let causm_ir::Instruction::Jump { .. } =
+                                b.instructions[b.pc]
+                            {
+                                b.pc += 1;
+                            }
+                        }
+                        break;
+                    }
+                }
+                causm_ir::Instruction::EndLoop { max_ms } => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth -= 1;
+                    if b.loop_depth < target_depth {
+                        let max_ms_val = max_ms;
+                        self.EndLoop(branch_id, max_ms_val)?;
+                        let b = self.get_branch_mut(branch_id)?;
+                        b.pc += 1;
+                        // Skip the following Jump if present
+                        if b.pc < b.instructions.len() {
+                            if let causm_ir::Instruction::Jump { .. } =
+                                b.instructions[b.pc]
+                            {
+                                b.pc += 1;
+                            }
+                        }
+                        break;
+                    }
+                }
+                causm_ir::Instruction::EndWhile { max_ms } => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth -= 1;
+                    if b.loop_depth < target_depth {
+                        let max_ms_val = max_ms;
+                        self.EndWhile(branch_id, max_ms_val)?;
+                        let b = self.get_branch_mut(branch_id)?;
+                        b.pc += 1;
+                        // Skip the following Jump if present
+                        if b.pc < b.instructions.len() {
+                            if let causm_ir::Instruction::Jump { .. } =
+                                b.instructions[b.pc]
+                            {
+                                b.pc += 1;
+                            }
+                        }
+                        break;
+                    }
+                }
+                causm_ir::Instruction::EndLoopTick => {
+                    let b = self.get_branch_mut(branch_id)?;
+                    b.loop_depth -= 1;
+                    if b.loop_depth < target_depth {
+                        self.EndLoopTick(branch_id)?;
+                        let b = self.get_branch_mut(branch_id)?;
+                        b.pc += 1;
+                        // Skip the following Jump if present
+                        if b.pc < b.instructions.len() {
+                            if let causm_ir::Instruction::Jump { .. } =
+                                b.instructions[b.pc]
+                            {
+                                b.pc += 1;
+                            }
+                        }
+                        break;
+                    }
+                }
+                _ => {}
             }
+            let b = self.get_branch_mut(branch_id)?;
+            b.pc += 1;
         }
         Ok(())
     }

@@ -442,20 +442,10 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 });
                 return dest;
             }
-            // Lower first part into accumulator
-            let mut acc = match &parts[0] {
-                FStringPart::Text(t) => {
-                    let dest = ctx.alloc_reg();
-                    ctx.push(causm_ir::Instruction::LoadString {
-                        dest,
-                        value: t.clone(),
-                    });
-                    dest
-                }
-                FStringPart::Expr(e) => lower_expression(ctx, e),
-            };
-            for part in &parts[1..] {
-                let rhs = match part {
+            let lower_part = |ctx: &mut LoweringContext,
+                              part: &FStringPart|
+             -> Reg {
+                match part {
                     FStringPart::Text(t) => {
                         let dest = ctx.alloc_reg();
                         ctx.push(causm_ir::Instruction::LoadString {
@@ -464,8 +454,17 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                         });
                         dest
                     }
-                    FStringPart::Expr(e) => lower_expression(ctx, e),
-                };
+                    FStringPart::Expr(e) => {
+                        let val = lower_expression(ctx, e);
+                        let dest = ctx.alloc_reg();
+                        ctx.push(causm_ir::Instruction::ToStr { dest, src: val });
+                        dest
+                    }
+                }
+            };
+            let mut acc = lower_part(ctx, &parts[0]);
+            for part in &parts[1..] {
+                let rhs = lower_part(ctx, part);
                 let dest = ctx.alloc_reg();
                 ctx.push(causm_ir::Instruction::BinaryOp {
                     dest,
