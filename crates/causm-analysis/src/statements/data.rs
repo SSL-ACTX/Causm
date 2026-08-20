@@ -134,6 +134,15 @@ impl EntropicAnalyzer {
                     name.clone(),
                 )));
             }
+            if field.is_empty() {
+                if let Ok(val_type) =
+                    crate::expression::infer_expression_type(self, value)
+                {
+                    let branch_mut =
+                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                    branch_mut.types.insert(name.clone(), val_type);
+                }
+            }
         } else if let Expression::IndexAccess {
             target: inner,
             index,

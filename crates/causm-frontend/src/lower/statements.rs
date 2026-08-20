@@ -1233,11 +1233,18 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             Expression::Identifier(name) => {
                 let target_reg = ctx.get_reg(name);
                 let src_reg = lower_expression(ctx, value);
-                ctx.push(Instruction::FieldUpdate {
-                    target: target_reg,
-                    field: field.clone(),
-                    src: src_reg,
-                });
+                if field.is_empty() {
+                    ctx.push(Instruction::Move {
+                        dest: target_reg,
+                        src: src_reg,
+                    });
+                } else {
+                    ctx.push(Instruction::FieldUpdate {
+                        target: target_reg,
+                        field: field.clone(),
+                        src: src_reg,
+                    });
+                }
             }
             Expression::IndexAccess {
                 target: inner_target,

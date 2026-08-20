@@ -364,38 +364,39 @@ impl EntropicAnalyzer {
     }
 
     pub(crate) fn merge_states(
-        &self,
+        &mut self,
         then_end_state: BranchState,
         else_end_state: BranchState,
         reconcile: &Option<MergeResolution>,
     ) -> Result<BranchState, SemanticError> {
         let mut mismatch_vars = Vec::new();
-        for name in then_end_state
-            .consumed
-            .union(&else_end_state.consumed)
-            .cloned()
-        {
-            let in_then = then_end_state.consumed.contains(&name);
-            let in_else = else_end_state.consumed.contains(&name);
-            if in_then != in_else {
-                mismatch_vars.push(name);
+        for var in &then_end_state.consumed {
+            if !else_end_state.consumed.contains(var) {
+                mismatch_vars.push(var.clone());
+            }
+        }
+        for var in &else_end_state.consumed {
+            if !then_end_state.consumed.contains(var) {
+                mismatch_vars.push(var.clone());
             }
         }
 
         if !mismatch_vars.is_empty() {
+            let mut covered_by_reconcile = false;
             if let Some(reconcile_rules) = reconcile {
                 if !reconcile_rules.auto {
-                    for name in &mismatch_vars {
+                    covered_by_reconcile = mismatch_vars.iter().all(|name| {
                         if !reconcile_rules.rules.contains_key(name) {
-                            return Err(self.annotate(
-                                SemanticErrorKind::EntropyMismatch(
-                                    mismatch_vars.join(", "),
-                                ),
-                            ));
+                            return false;
                         }
-                    }
+                        true
+                    });
+                } else {
+                    covered_by_reconcile = true;
                 }
-            } else {
+            }
+
+            if !covered_by_reconcile {
                 return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
                     mismatch_vars.join(", "),
                 )));
@@ -405,27 +406,21 @@ impl EntropicAnalyzer {
         let mut merged_types = then_end_state.types.clone();
         let mut type_conflicts = Vec::new();
         for (name, typ) in &else_end_state.types {
-            merged_types
-                .entry(name.clone())
-                .and_modify(|existing| {
-                    if existing != typ {
-                        if *existing != causm_core::types::Type::Unknown
-                            && *typ != causm_core::types::Type::Unknown
-                        {
-                            type_conflicts.push(name.clone());
-                            *existing = causm_core::types::Type::Unknown;
-                        } else if *existing == causm_core::types::Type::Unknown {
-                            *existing = typ.clone();
-                        }
-                    }
-                })
-                .or_insert(typ.clone());
+            if let Some(existing) = merged_types.get_mut(name) {
+                if !self.types_compatible(existing, typ) {
+                    type_conflicts.push(name.clone());
+                    *existing = causm_core::types::Type::Unknown;
+                } else if *existing == causm_core::types::Type::Unknown {
+                    *existing = typ.clone();
+                }
+            } else {
+                merged_types.insert(name.clone(), typ.clone());
+            }
         }
 
         if !type_conflicts.is_empty() {
             match reconcile {
-                Some(r) if r.auto => {}
-                Some(r) => {
+                Some(r) if !r.auto => {
                     let uncovered: Vec<_> = type_conflicts
                         .iter()
                         .filter(|n| !r.rules.contains_key(*n))
@@ -440,7 +435,7 @@ impl EntropicAnalyzer {
                         ));
                     }
                 }
-                None => {
+                _ => {
                     return Err(self.annotate(SemanticErrorKind::EntropyMismatch(
                         format!("divergent types for {}", type_conflicts.join(", ")),
                     )));

@@ -1183,6 +1183,36 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
                 Ok(current_clock)
             }
+            Statement::FieldUpdate {
+                target,
+                field: _,
+                value,
+            } => {
+                self.verify_expression(value, path_condition, &current_clock)?;
+                if let Expression::Identifier(name) = target {
+                    let is_valid = self.solver.bool_const(&format!(
+                        "{}_valid_{}",
+                        name, spanned.span.start
+                    ));
+                    let impl_valid =
+                        self.solver.bool_implies(path_condition, &is_valid);
+                    self.solver.assert(&impl_valid);
+                    self.variable_validity.insert(name.clone(), is_valid);
+
+                    let is_leased = self.solver.bool_const(&format!(
+                        "{}_leased_{}",
+                        name, spanned.span.start
+                    ));
+                    let not_leased = self.solver.bool_not(&is_leased);
+                    let impl_not_leased =
+                        self.solver.bool_implies(path_condition, &not_leased);
+                    self.solver.assert(&impl_not_leased);
+                    self.variable_leased.insert(name.clone(), is_leased);
+                } else {
+                    self.verify_expression(target, path_condition, &current_clock)?;
+                }
+                Ok(current_clock)
+            }
             _ => Ok(current_clock),
         }
     }

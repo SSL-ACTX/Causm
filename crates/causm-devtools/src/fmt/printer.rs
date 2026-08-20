@@ -123,6 +123,21 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
+            if body.len() == 1 {
+                if let Statement::Expression(ref expr) = body[0].stmt {
+                    out.push_str(&format!(
+                        "{}routine {}({}){}{}{} => {}\n",
+                        indent,
+                        name,
+                        params_str,
+                        ret_str,
+                        contract_str,
+                        state_str,
+                        format_expr(expr)
+                    ));
+                    return;
+                }
+            }
             if body.is_empty() {
                 out.push_str(&format!(
                     "{}routine {}({}){}{}{}\n",
@@ -144,6 +159,7 @@ fn format_spanned_statement(
             extends,
             fields,
             decay_after_ms,
+            auto_drop,
             ..
         } => {
             let ext_str = if let Some(parent) = extends {
@@ -156,9 +172,17 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
+            let drop_str = if let Some(ad) = auto_drop {
+                format!(
+                    " auto_drop(\"{}\", \"{}\", {})",
+                    ad.lib_name, ad.routine_name, ad.field_name
+                )
+            } else {
+                String::new()
+            };
             out.push_str(&format!(
-                "{}type {} = {}struct{} {{\n",
-                indent, name, ext_str, decay_str
+                "{}type {} = {}struct{}{} {{\n",
+                indent, name, ext_str, decay_str, drop_str
             ));
             let mut sorted_fields: Vec<_> = fields.iter().collect();
             sorted_fields.sort_by_key(|(fname, _)| fname.as_str());
@@ -244,29 +268,24 @@ fn format_spanned_statement(
             else_branch,
             reconcile,
         } => {
-            let if_head = if let Some(b) = binding {
-                format!("if let {} = {}", b, format_expr(condition))
-            } else {
-                format!("if ({})", format_expr(condition))
-            };
-            out.push_str(&format!("{}{} {{\n", indent, if_head));
-            for s in then_branch {
-                format_spanned_statement(out, s, indent_step, depth + 1);
-            }
-            if let Some(eb) = else_branch {
-                out.push_str(&format!("{}}} else {{\n", indent));
-                for s in eb {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
-                }
-            }
-            let rec_str = reconcile
-                .as_ref()
-                .map(format_merge_resolution)
-                .unwrap_or_default();
-            out.push_str(&format!("{}}}{}\n", indent, rec_str));
+            format_if_statement(
+                out,
+                binding.as_deref(),
+                condition,
+                then_branch,
+                else_branch.as_deref(),
+                reconcile.as_ref(),
+                indent_step,
+                depth,
+            );
         }
         Statement::Loop { max_ms, body } => {
-            out.push_str(&format!("loop taking {}ms {{\n", max_ms));
+            let taking_str = if *max_ms != u64::MAX {
+                format!(" taking {}ms", max_ms)
+            } else {
+                " taking _".to_string()
+            };
+            out.push_str(&format!("{}loop{} {{\n", indent, taking_str));
             for s in body {
                 format_spanned_statement(out, s, indent_step, depth + 1);
             }
@@ -279,12 +298,17 @@ fn format_spanned_statement(
             body,
         } => {
             let valid_str = if *is_valid_check { "valid " } else { "" };
+            let taking_str = if *max_ms != u64::MAX {
+                format!(" taking {}ms", max_ms)
+            } else {
+                " taking _".to_string()
+            };
             out.push_str(&format!(
-                "{}while {}({}) taking {}ms {{\n",
+                "{}while {}({}){} {{\n",
                 indent,
                 valid_str,
                 format_expr(condition),
-                max_ms
+                taking_str
             ));
             for s in body {
                 format_spanned_statement(out, s, indent_step, depth + 1);
@@ -311,10 +335,9 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
-            let max_str = if let Some(m) = max_ms {
-                format!(" taking {}ms", m)
-            } else {
-                String::new()
+            let max_str = match max_ms {
+                Some(m) if *m != u64::MAX => format!(" taking {}ms", m),
+                _ => String::new(),
             };
             out.push_str(&format!(
                 "{}for {} {} {}{}{} {{\n",
@@ -414,7 +437,12 @@ fn format_spanned_statement(
             body,
             fallback,
         } => {
-            out.push_str(&format!("{}speculate (taking {}ms) {{\n", indent, max_ms));
+            let taking_str = if *max_ms != u64::MAX {
+                format!(" (taking {}ms)", max_ms)
+            } else {
+                String::new()
+            };
+            out.push_str(&format!("{}speculate{} {{\n", indent, taking_str));
             for s in body {
                 format_spanned_statement(out, s, indent_step, depth + 1);
             }
@@ -780,7 +808,12 @@ fn format_spanned_statement(
                 .as_ref()
                 .map(format_merge_resolution)
                 .unwrap_or_default();
-            out.push_str(&format!("{}select (taking {}ms) {{\n", indent, max_ms));
+            let taking_str = if *max_ms != u64::MAX {
+                format!(" (taking {}ms)", max_ms)
+            } else {
+                String::new()
+            };
+            out.push_str(&format!("{}select{} {{\n", indent, taking_str));
             for case in cases {
                 out.push_str(&format!(
                     "{}case {} = {}: {{\n",
@@ -1028,7 +1061,7 @@ fn format_expr(expr: &Expression) -> String {
         Expression::Integer(i) => i.to_string(),
         Expression::Float(bits) => f64::from_bits(*bits).to_string(),
         Expression::Boolean(b) => b.to_string(),
-        Expression::Literal(s) => format!("\"{}\"", s),
+        Expression::Literal(s) => format_string_literal(s),
         Expression::Identifier(id) => id.clone(),
         Expression::Null => "null".to_string(),
         Expression::Call { routine, args } => {
@@ -1050,6 +1083,9 @@ fn format_expr(expr: &Expression) -> String {
             format!("{}.{}", format_expr(target), field)
         }
         Expression::BinaryOp { left, op, right } => {
+            let prec = op_precedence(op);
+            let left_str = format_sub_expr(left, prec, false);
+            let right_str = format_sub_expr(right, prec, true);
             let op_str = match op {
                 BinaryOperator::Add => "+",
                 BinaryOperator::Sub => "-",
@@ -1064,7 +1100,7 @@ fn format_expr(expr: &Expression) -> String {
                 BinaryOperator::Le => "<=",
                 BinaryOperator::Ge => ">=",
             };
-            format!("{} {} {}", format_expr(left), op_str, format_expr(right))
+            format!("{} {} {}", left_str, op_str, right_str)
         }
         Expression::UnaryOp { op, expr } => {
             let op_str = match op {
@@ -1191,7 +1227,18 @@ fn format_expr(expr: &Expression) -> String {
             let mut s = "f\"".to_string();
             for part in parts {
                 match part {
-                    causm_core::FStringPart::Text(t) => s.push_str(t),
+                    causm_core::FStringPart::Text(t) => {
+                        for c in t.chars() {
+                            match c {
+                                '"' => s.push_str("\\\""),
+                                '\\' => s.push_str("\\\\"),
+                                '\n' => s.push_str("\\n"),
+                                '\r' => s.push_str("\\r"),
+                                '\t' => s.push_str("\\t"),
+                                other => s.push(other),
+                            }
+                        }
+                    }
                     causm_core::FStringPart::Expr(e) => {
                         s.push('{');
                         s.push_str(&format_expr(e));
@@ -1219,4 +1266,169 @@ fn format_expr(expr: &Expression) -> String {
             "null".to_string()
         }
     }
+}
+
+fn op_precedence(op: &BinaryOperator) -> u8 {
+    match op {
+        BinaryOperator::Pow => 60,
+        BinaryOperator::Mul | BinaryOperator::Div | BinaryOperator::Rem => 50,
+        BinaryOperator::Add | BinaryOperator::Sub => 40,
+        BinaryOperator::Lt
+        | BinaryOperator::Gt
+        | BinaryOperator::Le
+        | BinaryOperator::Ge => 30,
+        BinaryOperator::Eq | BinaryOperator::Neq => 20,
+    }
+}
+
+fn format_sub_expr(expr: &Expression, parent_prec: u8, is_right: bool) -> String {
+    let s = format_expr(expr);
+    if let Expression::BinaryOp { op, .. } = expr {
+        let prec = op_precedence(op);
+        if prec < parent_prec || (prec == parent_prec && is_right) {
+            return format!("({})", s);
+        }
+    }
+    s
+}
+
+fn format_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn format_if_statement(
+    out: &mut String,
+    binding: Option<&str>,
+    condition: &Expression,
+    then_branch: &[SpannedStatement],
+    else_branch: Option<&[SpannedStatement]>,
+    reconcile: Option<&MergeResolution>,
+    indent_step: usize,
+    depth: usize,
+) {
+    let indent = " ".repeat(indent_step * depth);
+    let if_head = if let Some(b) = binding {
+        format!("if let {} = {}", b, format_expr(condition))
+    } else {
+        format!("if ({})", format_expr(condition))
+    };
+    out.push_str(&format!("{}{} {{\n", indent, if_head));
+    for s in then_branch {
+        format_spanned_statement(out, s, indent_step, depth + 1);
+    }
+    if let Some(eb) = else_branch {
+        if eb.len() == 1 {
+            if let Statement::If {
+                binding: next_binding,
+                condition: next_cond,
+                then_branch: next_then,
+                else_branch: next_else,
+                reconcile: next_rec,
+            } = &eb[0].stmt
+            {
+                out.push_str(&format!("{}}} else ", indent));
+                let next_head = if let Some(b) = next_binding {
+                    format!("if let {} = {}", b, format_expr(next_cond))
+                } else {
+                    format!("if ({})", format_expr(next_cond))
+                };
+                out.push_str(&format!("{} {{\n", next_head));
+                for s in next_then {
+                    format_spanned_statement(out, s, indent_step, depth + 1);
+                }
+                if let Some(n_eb) = next_else {
+                    format_else_chain(
+                        out,
+                        n_eb,
+                        next_rec.as_ref().or(reconcile),
+                        indent_step,
+                        depth,
+                    );
+                    return;
+                } else {
+                    let rec_str = next_rec
+                        .as_ref()
+                        .or(reconcile)
+                        .map(format_merge_resolution)
+                        .unwrap_or_default();
+                    out.push_str(&format!("{}}}{}\n", indent, rec_str));
+                    return;
+                }
+            }
+        }
+        out.push_str(&format!("{}}} else {{\n", indent));
+        for s in eb {
+            format_spanned_statement(out, s, indent_step, depth + 1);
+        }
+    }
+    let rec_str = reconcile.map(format_merge_resolution).unwrap_or_default();
+    out.push_str(&format!("{}}}{}\n", indent, rec_str));
+}
+
+fn format_else_chain(
+    out: &mut String,
+    eb: &[SpannedStatement],
+    reconcile: Option<&MergeResolution>,
+    indent_step: usize,
+    depth: usize,
+) {
+    let indent = " ".repeat(indent_step * depth);
+    if eb.len() == 1 {
+        if let Statement::If {
+            binding: next_binding,
+            condition: next_cond,
+            then_branch: next_then,
+            else_branch: next_else,
+            reconcile: next_rec,
+        } = &eb[0].stmt
+        {
+            out.push_str(&format!("{}}} else ", indent));
+            let next_head = if let Some(b) = next_binding {
+                format!("if let {} = {}", b, format_expr(next_cond))
+            } else {
+                format!("if ({})", format_expr(next_cond))
+            };
+            out.push_str(&format!("{} {{\n", next_head));
+            for s in next_then {
+                format_spanned_statement(out, s, indent_step, depth + 1);
+            }
+            if let Some(n_eb) = next_else {
+                format_else_chain(
+                    out,
+                    n_eb,
+                    next_rec.as_ref().or(reconcile),
+                    indent_step,
+                    depth,
+                );
+                return;
+            } else {
+                let rec_str = next_rec
+                    .as_ref()
+                    .or(reconcile)
+                    .map(format_merge_resolution)
+                    .unwrap_or_default();
+                out.push_str(&format!("{}}}{}\n", indent, rec_str));
+                return;
+            }
+        }
+    }
+    out.push_str(&format!("{}}} else {{\n", indent));
+    for s in eb {
+        format_spanned_statement(out, s, indent_step, depth + 1);
+    }
+    let rec_str = reconcile.map(format_merge_resolution).unwrap_or_default();
+    out.push_str(&format!("{}}}{}\n", indent, rec_str));
 }

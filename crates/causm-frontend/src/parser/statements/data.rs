@@ -398,12 +398,10 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     value,
                 }
             } else if let Expression::Identifier(name) = target_expr {
-                Statement::Assignment {
-                    target: name,
-                    mutable: true,
-                    var_type: None,
-                    lifetime: None,
-                    expr: value,
+                Statement::FieldUpdate {
+                    target: Expression::Identifier(name),
+                    field: String::new(),
+                    value,
                 }
             } else {
                 Statement::Expression(Expression::BinaryOp {
