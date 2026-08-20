@@ -42,8 +42,15 @@ pub const STD_COLLECTION_RING_BUFFER: &str =
 pub const STD_COLLECTION_BITSET: &str =
     include_str!("../csm/std/collection/bitset.csm");
 
+pub const STD_HTTP_MOD: &str = include_str!("../csm/std/http/mod.csm");
+pub const STD_HTTP_TYPES: &str = include_str!("../csm/std/http/types.csm");
+pub const STD_HTTP_OPS: &str = include_str!("../csm/std/http/ops.csm");
+
 pub fn get_module(path: &str) -> Option<&'static str> {
     match path {
+        "std::http" | "std/http" => Some(STD_HTTP_MOD),
+        "std::http::types" | "std/http/types" => Some(STD_HTTP_TYPES),
+        "std::http::ops" | "std/http/ops" => Some(STD_HTTP_OPS),
         "std::fs" | "std/fs" => Some(STD_FS_MOD),
         "std::fs::types" | "std/fs/types" => Some(STD_FS_TYPES),
         "std::fs::ffi" | "std/fs/ffi" => Some(STD_FS_FFI),

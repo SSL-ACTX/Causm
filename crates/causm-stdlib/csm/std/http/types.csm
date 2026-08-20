@@ -1,0 +1,21 @@
+@0ms: {
+    type HttpHeader = struct {
+        key: string,
+        value: string
+    }
+
+    type HttpRequest = struct {
+        body: string,
+        headers: array,
+        host: string,
+        method: string,
+        path: string
+    }
+
+    type HttpResponse = struct {
+        body: string,
+        headers: array,
+        status_code: i32,
+        status_text: string
+    }
+}

@@ -1,0 +1,110 @@
+@0ms: {
+    from "std/http/types" import *
+    import "std/net" as Net
+    import "std/encoding/utf8" as Utf8
+    import "std/collection" as Collection
+
+    routine Http.format_get(peek host: string, peek path: string) -> string taking _ {
+        "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
+    }
+
+    routine Http.format_post(peek host: string, peek path: string, peek body: string) -> string taking _ {
+        let body_len = len(body)
+        f"POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Length: {body_len}\r\nConnection: close\r\n\r\n{body}"
+    }
+
+    routine Http.parse_status_code(peek response_text: string) -> i32 taking _ {
+        let bytes = str_bytes(response_text)
+        let n = len(bytes)
+        let mut code = 0
+        if (n >= 12) {
+            let c0 = bytes[9] - 48
+            let c1 = bytes[10] - 48
+            let c2 = bytes[11] - 48
+            let val = c0 * 100 + c1 * 10 + c2
+            let mut code = val
+        }
+        code
+    }
+
+    routine Http.parse_status_text(peek code: i32) -> string taking _ =>
+        if (code == 200) {
+            "OK"
+        } else if (code == 201) {
+            "Created"
+        } else if (code == 204) {
+            "No Content"
+        } else if (code == 400) {
+            "Bad Request"
+        } else if (code == 401) {
+            "Unauthorized"
+        } else if (code == 403) {
+            "Forbidden"
+        } else if (code == 404) {
+            "Not Found"
+        } else if (code == 500) {
+            "Internal Server Error"
+        } else {
+            "Status"
+        }
+
+    routine Http.get(peek host: string, peek port: i32, peek path: string) -> HttpResponse taking _ {
+        let req_text = Http.format_get(host, path)
+        let req_bytes = Utf8.encode(req_text)
+        let req_len = len(req_bytes)
+
+        let mut res_str = ""
+        let mut status_code = 0
+
+        using client = Net.TcpStream.connect(host, port) {
+            let _sent = client.send(req_bytes, req_len)
+            let mut raw_chunk = [0; 1024]
+            let recvd = client.recv(raw_chunk, 1024)
+            if (recvd > 0) {
+                let chunk_slice = raw_chunk[0..recvd]
+                let decoded = Utf8.decode(chunk_slice)
+                let code = Http.parse_status_code(decoded)
+                let mut res_str = decoded
+                let mut status_code = code
+            }
+        }
+
+        let st_text = Http.parse_status_text(status_code)
+        struct {
+            body = res_str,
+            headers = [],
+            status_code = status_code,
+            status_text = st_text
+        }
+    }
+
+    routine Http.post(peek host: string, peek port: i32, peek path: string, peek body: string) -> HttpResponse taking _ {
+        let req_text = Http.format_post(host, path, body)
+        let req_bytes = Utf8.encode(req_text)
+        let req_len = len(req_bytes)
+
+        let mut res_str = ""
+        let mut status_code = 0
+
+        using client = Net.TcpStream.connect(host, port) {
+            let _sent = client.send(req_bytes, req_len)
+            let mut raw_chunk = [0; 1024]
+            let recvd = client.recv(raw_chunk, 1024)
+            if (recvd > 0) {
+                let chunk_slice = raw_chunk[0..recvd]
+                let decoded = Utf8.decode(chunk_slice)
+                let code = Http.parse_status_code(decoded)
+                let mut res_str = decoded
+                let mut status_code = code
+            }
+        }
+
+        let st_text = Http.parse_status_text(status_code)
+        struct {
+            body = res_str,
+            headers = [],
+            status_code = status_code,
+            status_text = st_text
+        }
+    }
+}

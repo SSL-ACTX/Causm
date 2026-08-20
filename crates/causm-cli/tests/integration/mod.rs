@@ -9,6 +9,7 @@ pub mod causm_encoding;
 pub mod causm_entropic;
 pub mod causm_entropic_channels;
 pub mod causm_expansion;
+pub mod causm_http;
 pub mod causm_import;
 pub mod causm_isochronous;
 pub mod causm_lease;
