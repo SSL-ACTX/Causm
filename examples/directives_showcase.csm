@@ -14,14 +14,10 @@
             print(y)
         }
         @deterministic: {
-            split main into [w]
-            @w: {
-                anchor checkpt
-                print("Worker started")
-                let z = 300
-            }
-            reset w to checkpt
-            print("Rewound worker successfully")
+            anchor checkpt
+            print("Deterministic checkpoint set")
+            let z = 300
+            print(z)
         }
         print("Showcase completed successfully")
     }

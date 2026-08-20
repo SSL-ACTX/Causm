@@ -442,9 +442,6 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::LoopTickOn { chan_id } => {
                 write!(f, "LoopTickOn {}", chan_id)
             }
-            SsaInstruction::NetworkRequest { domain } => {
-                write!(f, "NetworkRequest {}", domain)
-            }
             SsaInstruction::Jump { target } => {
                 write!(f, "Jump Block {}", target)
             }

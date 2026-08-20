@@ -13,10 +13,7 @@
         print("HTTP Server listening on port: 19870")
         using client = Net.TcpStream.connect("127.0.0.1", 19870) {
             let server_conn = listener.accept()
-            let req_text = "GET /status HTTP/1.1
-Host: localhost
-
-"
+            let req_text = "GET /status HTTP/1.1\r\nHost: localhost\r\n\r\n"
             let req_bytes = Utf8.encode(req_text)
             let req_len = len(req_bytes)
             let sent = client.send(req_bytes, req_len)
@@ -28,10 +25,7 @@ Host: localhost
             let slice = Collection.Buffer.as_slice(stream_buf)
             let recvd_str = Utf8.decode(slice)
             print(f"Server received {recvd} bytes into Buffer (len: {stream_buf.len}): {recvd_str}")
-            let res_text = "HTTP/1.1 200 OK
-Content-Length: 5
-
-CAUSM"
+            let res_text = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nCAUSM"
             let res_bytes = Utf8.encode(res_text)
             let res_len = len(res_bytes)
             let sent_res = server_conn.send(res_bytes, res_len)

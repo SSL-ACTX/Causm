@@ -248,14 +248,12 @@ fn causm_semantic_routine_param_return_types() -> anyhow::Result<()> {
 }
 
 #[test]
-fn causm_semantic_inspect_block_does_not_consume() -> anyhow::Result<()> {
+fn causm_semantic_peek_borrow_does_not_consume() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       let p = struct { a = "x", b = "y" }
-      inspect view = p {
-        let x = view.a
-        let y = view.b
-      }
+      let x = &p.a
+      let y = &p.b
       let z = p
     }
     "#;
@@ -707,40 +705,6 @@ fn causm_semantic_isolate_memory_limit_out_of_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn causm_semantic_channel_send_receive() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-      open_chan c(2)
-      split main into [w1,w2]
-    }
-    @w1: {
-      let msg = "hello"
-      chan_send c(msg)
-    }
-    @w2: {
-      let got = chan_recv(c)
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    let mut vm = Vm::new();
-    vm.execute_program(&ir)?;
-
-    let w2 = vm.active_branches.get("w2").unwrap();
-    let got_reg = ir.symbols.get("got").expect("got not found").0;
-    match w2.arena.peek(got_reg) {
-        Some(Payload::String(s)) => assert_eq!(s, "hello"),
-        _ => panic!("expected received string"),
-    }
-
-    Ok(())
-}
-
-#[test]
 fn causm_semantic_clone_and_reuse_variable() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
@@ -893,27 +857,6 @@ fn causm_semantic_analyzer_use_after_consume() -> anyhow::Result<()> {
         result.is_err(),
         "use-after-consume should be rejected by analyzer"
     );
-    Ok(())
-}
-
-#[test]
-fn causm_semantic_channel_receive_from_empty_channel_fails() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-      open_chan c(1)
-      let recv = chan_recv(c)
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    let mut vm = Vm::new();
-    let res = vm.execute_program(&ir);
-    assert!(matches!(res, Err(TemporalError::ChannelFault(_))));
-
     Ok(())
 }
 

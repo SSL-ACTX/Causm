@@ -52,10 +52,8 @@
     let w: PlayableWorker = r
     let bonus = w.play()
     if let robot = w.(PlayableRobot) {
-        inspect r_temp = robot {
-            let model = r_temp.model
-            print("Downcast successful! Model: " + model)
-        }
+        let model = &robot.model
+        print("Downcast successful! Model: " + model)
         robot.work()
     } else {
         print("Downcast failed.")

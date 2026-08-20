@@ -438,34 +438,52 @@ fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                // Two-Tier Safe Round-Trip & Semantic Validation Gate:
-                // 1. Parse formatted source with import resolution
-                match parser::parse_causm_with_imports(&formatted, path.parent()) {
-                    Ok(reparsed_ast) => {
-                        // 2. Validate semantics — only if original was also clean.
-                        let semantic_ok = if pre_analysis_ok {
-                            let mut analyzer = EntropicAnalyzer::new();
-                            analyzer.use_z3 = false;
-                            match analyzer.analyze_program_with_source(
-                                &reparsed_ast,
-                                &formatted,
-                                &path.display().to_string(),
-                            ) {
-                                Ok(_) => true,
-                                Err(err) => {
-                                    let formatted_err =
-                                        analyzer.format_semantic_error(&err);
-                                    eprintln!(
-                                        "\x1b[1;31mFormatting Semantic Regression in {}:\x1b[0m\n  {}\n(Original file preserved untouched)",
-                                        path.display(),
-                                        formatted_err
-                                    );
-                                    false
+                // Safe Round-Trip, AST-Equivalence & Semantic Validation Gate:
+                // 1. Re-parse formatted source directly to compare AST
+                match parser::parse_causm(&formatted) {
+                    Ok(reparsed_program) => {
+                        // 2. Strict AST equivalence check: formatted AST must match original AST
+                        if !causm_core::programs_ast_eq(&program, &reparsed_program)
+                        {
+                            eprintln!(
+                                "\x1b[1;31mFormatting AST Structural Mismatch in {}:\x1b[0m\n  Formatter generated an AST that differs from original.\n  (Original file preserved untouched)",
+                                path.display()
+                            );
+                            continue;
+                        }
+
+                        // 3. Validate semantics if imports are present
+                        let reparsed_with_imports = parser::parse_causm_with_imports(
+                            &formatted,
+                            path.parent(),
+                        );
+                        let semantic_ok = match reparsed_with_imports {
+                            Ok(reparsed_ast) => {
+                                if pre_analysis_ok {
+                                    let mut analyzer = EntropicAnalyzer::new();
+                                    analyzer.use_z3 = false;
+                                    match analyzer.analyze_program_with_source(
+                                        &reparsed_ast,
+                                        &formatted,
+                                        &path.display().to_string(),
+                                    ) {
+                                        Ok(_) => true,
+                                        Err(err) => {
+                                            let formatted_err =
+                                                analyzer.format_semantic_error(&err);
+                                            eprintln!(
+                                                "\x1b[1;31mFormatting Semantic Regression in {}:\x1b[0m\n  {}\n  (Original file preserved untouched)",
+                                                path.display(),
+                                                formatted_err
+                                            );
+                                            false
+                                        }
+                                    }
+                                } else {
+                                    true
                                 }
                             }
-                        } else {
-                            // Source was already non-self-contained; skip check.
-                            true
+                            Err(_) => true,
                         };
 
                         if semantic_ok {

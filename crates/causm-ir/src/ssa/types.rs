@@ -372,9 +372,6 @@ pub enum SsaInstruction {
     Break,
     LoopTick,
     EndLoopTick,
-    NetworkRequest {
-        domain: String,
-    },
     Jump {
         target: usize,
     },

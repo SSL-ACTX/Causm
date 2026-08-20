@@ -1,35 +1,6 @@
 @0ms: {
-    // Returns the base64 alphabet character for an index 0-63
-    routine Base64.alphabet_char(peek idx: i32) -> i32 taking _ =>
-        if (idx < 26) {
-            65 + idx
-        } else if (idx < 52) {
-            71 + idx
-        } else if (idx < 62) {
-            idx - 4
-        } else if (idx == 62) {
-            43
-        } else {
-            47
-        }
-
-    // Decodes a single base64 character to its 6-bit value
-    routine Base64.decode_char(peek c: i32) -> i32 taking _ =>
-        if (c == 43) {
-            62
-        } else if (c == 47) {
-            63
-        } else if (c >= 97) {
-            if (c <= 122) { c - 71 } else { 0 }
-        } else if (c >= 65) {
-            if (c <= 90) { c - 65 } else { 0 }
-        } else if (c >= 48) {
-            if (c <= 57) { c + 4 } else { 0 }
-        } else {
-            0
-        }
-
-    // Encodes 3 bytes to 4 base64 output characters
+    routine Base64.alphabet_char(peek idx: i32) -> i32 taking _ => if (idx < 26) { 65 + idx } else if (idx < 52) { 71 + idx } else if (idx < 62) { idx - 4 } else if (idx == 62) { 43 } else { 47 }
+    routine Base64.decode_char(peek c: i32) -> i32 taking _ => if (c == 43) { 62 } else if (c == 47) { 63 } else if (c >= 97) { if (c <= 122) { c - 71 } else { 0 } } else if (c >= 65) { if (c <= 90) { c - 65 } else { 0 } } else if (c >= 48) { if (c <= 57) { c + 4 } else { 0 } } else { 0 }
     routine Base64.encode_chunk(peek b0: i32, peek b1: i32, peek b2: i32) -> array taking _ {
         let i0 = b0 / 4
         let i1 = (b0 % 4) * 16 + b1 / 16
@@ -41,8 +12,6 @@
         let c3 = Base64.alphabet_char(i3)
         [c0, c1, c2, c3]
     }
-
-    // Decodes 4 base64 characters to 3 raw bytes
     routine Base64.decode_chunk(peek c0: i32, peek c1: i32, peek c2: i32, peek c3: i32) -> array taking _ {
         let v0 = Base64.decode_char(c0)
         let v1 = Base64.decode_char(c1)
@@ -53,8 +22,6 @@
         let b2 = (v2 % 4) * 64 + v3
         [b0, b1, b2]
     }
-
-    // Encodes a byte array to a base64 string
     routine Base64.encode(peek bytes: array) -> string taking _ {
         let n = len(bytes)
         let mut out = [0; 64]
@@ -65,35 +32,33 @@
             let b1 = bytes[i + 1]
             let b2 = bytes[i + 2]
             let chunk = Base64.encode_chunk(b0, b1, b2)
-            let out[j] = chunk[0]
-            let out[j + 1] = chunk[1]
-            let out[j + 2] = chunk[2]
-            let out[j + 3] = chunk[3]
+            out[j] = chunk[0]
+            out[j + 1] = chunk[1]
+            out[j + 2] = chunk[2]
+            out[j + 3] = chunk[3]
             let i = i + 3
             let j = j + 4
         }
         if (i + 1 == n) {
             let b0 = bytes[i]
             let chunk = Base64.encode_chunk(b0, 0, 0)
-            let out[j] = chunk[0]
-            let out[j + 1] = chunk[1]
-            let out[j + 2] = 61
-            let out[j + 3] = 61
+            out[j] = chunk[0]
+            out[j + 1] = chunk[1]
+            out[j + 2] = 61
+            out[j + 3] = 61
             let j = j + 4
         } else if (i + 2 == n) {
             let b0 = bytes[i]
             let b1 = bytes[i + 1]
             let chunk = Base64.encode_chunk(b0, b1, 0)
-            let out[j] = chunk[0]
-            let out[j + 1] = chunk[1]
-            let out[j + 2] = chunk[2]
-            let out[j + 3] = 61
+            out[j] = chunk[0]
+            out[j + 1] = chunk[1]
+            out[j + 2] = chunk[2]
+            out[j + 3] = 61
             let j = j + 4
         }
         to_str(out[0..j])
     }
-
-    // Decodes a base64 string to a byte array
     routine Base64.decode(peek b64: string) -> array taking _ {
         let encoded_bytes = str_bytes(b64)
         let n = len(encoded_bytes)
@@ -106,9 +71,9 @@
             let c2 = encoded_bytes[i + 2]
             let c3 = encoded_bytes[i + 3]
             let chunk = Base64.decode_chunk(c0, c1, c2, c3)
-            let out[j] = chunk[0]
-            let out[j + 1] = chunk[1]
-            let out[j + 2] = chunk[2]
+            out[j] = chunk[0]
+            out[j + 1] = chunk[1]
+            out[j + 2] = chunk[2]
             let i = i + 4
             let j = j + 3
         }

@@ -25,7 +25,6 @@ statement = {
     | split_map_stmt
     | for_stmt
     | lease_stmt
-    | inspect_stmt
     | print_stmt
     | debug_stmt
     | anchor_stmt
@@ -38,7 +37,6 @@ statement = {
     | match_entropy_stmt
     | match_stmt
     | await_stmt
-    | await_chan_stmt
     | if_stmt
     | if_let_stmt
     | break_stmt
@@ -52,13 +50,8 @@ statement = {
     | decay_handler_stmt
     | assert_time_stmt
     | assignment_stmt
-    | open_chan_stmt
-    | chan_send_stmt
     | require_decl
     | timeline_block
-    | watchdog_stmt
-    | reset_stmt
-    | network_request_stmt
     | entangle_stmt
     | field_update_stmt
     | slice_stmt
@@ -122,7 +115,6 @@ match_arm = { match_pattern ~ guard_clause? ~ "=>" ~ (statement_block | statemen
 break_stmt = { "break" }
 
 for_stmt = { "for" ~ identifier ~ param_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
-inspect_stmt = { "inspect" ~ identifier ~ "=" ~ identifier ~ statement_block }
 lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block ~ reconcile_clause? }
 split_map_stmt = { "split_map" ~ identifier ~ param_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
@@ -138,8 +130,6 @@ for_step_stmt = { "for" ~ identifier ~ "in" ~ range_expr ~ "step" ~ step_spec ~ 
 range_expr = { (duration_literal | expression) ~ ".." ~ (duration_literal | expression) | expression }
 
 slice_stmt = { "slice" ~ amount ~ "ms" }
-
-network_request_stmt = { "network_request" ~ string_literal }
 
 isolate_stmt = { "isolate" ~ identifier? ~ "{" ~ manifest ~ statement* ~ "}" }
 manifest     = { (resource_decl | require_decl | slice_decl)* }
@@ -194,18 +184,11 @@ base_type = { "i8" | "i16" | "i32" | "i64" | "int" | "u8" | "u16" | "u32" | "u64
 type_param_list = { type_param ~ ("," ~ type_param)* }
 type_param = { amount ~ "ms" | amount | type_name }
 
-open_chan_stmt = { "open_chan" ~ identifier ~ "(" ~ amount ~ ")" ~ decay_opt? }
-chan_send_stmt = { "chan_send" ~ identifier ~ "(" ~ identifier ~ ")" }
-
-watchdog_stmt = { "watchdog" ~ identifier ~ "timeout" ~ amount ~ "ms" ~ ("recovery" ~ statement_block)? }
-
 await_stmt = { "await" ~ "(" ~ identifier ~ ")" }
 await_expr = { "await" ~ "(" ~ expression ~ ")" }
-await_chan_stmt = { "await_chan" ~ "(" ~ identifier ~ ")" }
 
 defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ duration_limit }
 
-reset_stmt = { "reset" ~ identifier ~ "to" ~ identifier }
 yield_stmt = { "yield" ~ identifier }
 
 expression = { pipeline_expr }

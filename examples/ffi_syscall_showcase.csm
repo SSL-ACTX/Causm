@@ -32,8 +32,7 @@
         let ref_handle = &handle
         print("Native Handle Reference:")
         print(ref_handle)
-        let payload_msg = "Causm Low-Level Syscall Engine Active
-"
+        let payload_msg = "Causm Low-Level Syscall Engine Active\n"
         let msg_len = 38
         let res_sym = syscall("sys_write", handle.fd, payload_msg, msg_len) taking 2ms
         print("Symbolic Syscall Status Code:")

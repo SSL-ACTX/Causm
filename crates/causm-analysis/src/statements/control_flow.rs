@@ -175,42 +175,6 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn LoopTickOn(
-        &mut self,
-        channel: &str,
-        body: &[SpannedStatement],
-    ) -> Result<(), SemanticError> {
-        if !self.known_channels.contains(channel) {
-            return Err(self.annotate(SemanticErrorKind::UndefinedVariable(
-                channel.to_owned(),
-            )));
-        }
-
-        let slice_ms = self
-            .current_slice_ms
-            .ok_or_else(|| self.annotate(SemanticErrorKind::TickLoopWithoutSlice))?;
-
-        let body_cost = crate::statement::estimate_block_cost(self, body);
-        if body_cost > slice_ms {
-            return Err(self.annotate(SemanticErrorKind::TickLoopBudgetExceeded(
-                body_cost, slice_ms,
-            )));
-        }
-
-        let has_break = body
-            .iter()
-            .any(|inner_stmt| matches!(inner_stmt.stmt, Statement::Break));
-
-        if !has_break {
-            return Err(self.annotate(SemanticErrorKind::TickLoopNeedsBreak));
-        }
-
-        for inner_stmt in body {
-            self.analyze_statement(inner_stmt)?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn While(
         &mut self,
         condition: &Expression,
@@ -920,34 +884,6 @@ impl EntropicAnalyzer {
 
     pub(crate) fn Yield(&mut self, name: &str) -> Result<(), SemanticError> {
         self.mark_consumed(name)
-    }
-
-    pub(crate) fn Inspect(
-        &mut self,
-        binding: &str,
-        target: &str,
-        body: &[SpannedStatement],
-    ) -> Result<(), SemanticError> {
-        let snapshot = self
-            .branch_contexts
-            .get(&self.current_branch)
-            .cloned()
-            .unwrap_or_default();
-
-        let target_type = self
-            .get_variable_type(target)
-            .unwrap_or(causm_core::types::Type::Unknown);
-        self.set_variable_type(binding, target_type);
-
-        self.inspection_depth += 1;
-        for inner_stmt in body {
-            self.analyze_statement(inner_stmt)?;
-        }
-        self.inspection_depth -= 1;
-
-        self.branch_contexts
-            .insert(self.current_branch.clone(), snapshot);
-        Ok(())
     }
 
     pub(crate) fn Commit(

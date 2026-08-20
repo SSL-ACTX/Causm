@@ -31,6 +31,7 @@ pub enum IntExpr {
 }
 
 impl BoolExpr {
+    #[allow(clippy::should_implement_trait)]
     pub fn not(self) -> Self {
         match self {
             BoolExpr::Lit(b) => BoolExpr::Lit(!b),

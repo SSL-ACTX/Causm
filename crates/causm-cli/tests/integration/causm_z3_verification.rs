@@ -154,10 +154,9 @@ fn test_z3_for_loop_item_safety() -> anyhow::Result<()> {
 fn test_z3_causal_paradox() -> anyhow::Result<()> {
     let source = r#"
         @main: {
-            let ch = 0
             anchor start
             let x = 10
-            chan_send ch (x) // Commitment!
+            yield x // Commitment!
             rewind_to(start)  // PARADOX: cannot rewind past commitment
         }
     "#;

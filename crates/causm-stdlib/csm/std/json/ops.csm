@@ -1,89 +1,26 @@
-// Standard JSON Module - Core Operations and Helpers
-
 @0ms: {
     from "std/json/types" import *
-
     routine Json.null_val() -> JsonValue taking _ => JsonValue::Null
     routine Json.bool_val(peek b: bool) -> JsonValue taking _ => JsonValue::Bool(b)
     routine Json.num_val(peek n: i64) -> JsonValue taking _ => JsonValue::Number(n)
     routine Json.str_val(peek s: string) -> JsonValue taking _ => JsonValue::String(s)
     routine Json.arr_val(peek items: array) -> JsonValue taking _ => JsonValue::Array(items)
     routine Json.obj_val(peek members: array) -> JsonValue taking _ => JsonValue::Object(members)
-
     routine Json.member(peek key: string, peek val: JsonValue) -> JsonMember taking _ {
         let v = clone(val)
-        struct {
-            key = key,
-            val = v
-        }
+        struct { key = key, val = v }
     }
-
-    routine Json.is_null(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Null => true,
-            _ => false
-        }
-
-    routine Json.is_bool(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Bool(_) => true,
-            _ => false
-        }
-
-    routine Json.is_number(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Number(_) => true,
-            _ => false
-        }
-
-    routine Json.is_string(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::String(_) => true,
-            _ => false
-        }
-
-    routine Json.is_array(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Array(_) => true,
-            _ => false
-        }
-
-    routine Json.is_object(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Object(_) => true,
-            _ => false
-        }
-
-    routine Json.as_bool(peek v: JsonValue) -> bool taking _ =>
-        match v {
-            JsonValue::Bool(b) => b,
-            _ => false
-        }
-
-    routine Json.as_number(peek v: JsonValue) -> i64 taking _ =>
-        match v {
-            JsonValue::Number(n) => n,
-            _ => 0
-        }
-
-    routine Json.as_string(peek v: JsonValue) -> string taking _ =>
-        match v {
-            JsonValue::String(s) => s,
-            _ => ""
-        }
-
-    routine Json.as_array(peek v: JsonValue) -> array taking _ =>
-        match v {
-            JsonValue::Array(arr) => arr,
-            _ => []
-        }
-
-    routine Json.as_object(peek v: JsonValue) -> array taking _ =>
-        match v {
-            JsonValue::Object(obj) => obj,
-            _ => []
-        }
-
+    routine Json.is_null(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Null => true, _ => false }
+    routine Json.is_bool(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Bool(_) => true, _ => false }
+    routine Json.is_number(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Number(_) => true, _ => false }
+    routine Json.is_string(peek v: JsonValue) -> bool taking _ => match v { JsonValue::String(_) => true, _ => false }
+    routine Json.is_array(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Array(_) => true, _ => false }
+    routine Json.is_object(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Object(_) => true, _ => false }
+    routine Json.as_bool(peek v: JsonValue) -> bool taking _ => match v { JsonValue::Bool(b) => b, _ => false }
+    routine Json.as_number(peek v: JsonValue) -> i64 taking _ => match v { JsonValue::Number(n) => n, _ => 0 }
+    routine Json.as_string(peek v: JsonValue) -> string taking _ => match v { JsonValue::String(s) => s, _ => "" }
+    routine Json.as_array(peek v: JsonValue) -> array taking _ => match v { JsonValue::Array(arr) => arr, _ => [] }
+    routine Json.as_object(peek v: JsonValue) -> array taking _ => match v { JsonValue::Object(obj) => obj, _ => [] }
     routine Json.get(peek obj: JsonValue, peek key: string) -> JsonValue taking _ {
         let mut found = JsonValue::Null
         if let JsonValue::Object(members) = obj {
@@ -97,7 +34,6 @@
         }
         found
     }
-
     routine Json.has_key(peek obj: JsonValue, peek key: string) -> bool taking _ {
         let mut found = false
         if let JsonValue::Object(members) = obj {
@@ -110,37 +46,40 @@
         }
         found
     }
-
     routine Json.get_int(peek obj: JsonValue, peek key: string, peek default_val: i64) -> i64 taking _ {
         let v = Json.get(obj, key)
         match v {
-            JsonValue::Number(n) => n,
-            _ => default_val
+            JsonValue::Number(n) => {
+                n
+            }
+            _ => {
+                default_val
+            }
         }
     }
-
     routine Json.get_string(peek obj: JsonValue, peek key: string, peek default_val: string) -> string taking _ {
         let v = Json.get(obj, key)
         match v {
-            JsonValue::String(s) => s,
-            _ => default_val
+            JsonValue::String(s) => {
+                s
+            }
+            _ => {
+                default_val
+            }
         }
     }
-
     routine Json.get_bool(peek obj: JsonValue, peek key: string, peek default_val: bool) -> bool taking _ {
         let v = Json.get(obj, key)
         match v {
-            JsonValue::Bool(b) => b,
-            _ => default_val
+            JsonValue::Bool(b) => {
+                b
+            }
+            _ => {
+                default_val
+            }
         }
     }
-
-    routine Json.array_len(peek arr: JsonValue) -> i32 taking _ =>
-        match arr {
-            JsonValue::Array(items) => len(items),
-            _ => 0
-        }
-
+    routine Json.array_len(peek arr: JsonValue) -> i32 taking _ => match arr { JsonValue::Array(items) => len(items), _ => 0 }
     routine Json.array_get(peek arr: JsonValue, peek idx: i32) -> JsonValue taking _ {
         let mut res = JsonValue::Null
         if let JsonValue::Array(elements) = arr {
@@ -154,7 +93,6 @@
         }
         res
     }
-
     routine Json.push_member(peek members: array, peek key: string, peek val: JsonValue) -> array taking _ {
         let n = len(members)
         let mut result = [struct { key = "", val = JsonValue::Null }; n + 1]
@@ -168,7 +106,6 @@
         result[n] = struct { key = key, val = v }
         result
     }
-
     routine Json.push_value(peek items: array, peek val: JsonValue) -> array taking _ {
         let n = len(items)
         let mut result = [JsonValue::Null; n + 1]
@@ -182,8 +119,6 @@
         result[n] = v
         result
     }
-
-    // Method Call Syntax Support on JsonValue enum instances
     routine JsonValue.is_null(peek self: JsonValue) -> bool taking _ => Json.is_null(self)
     routine JsonValue.is_bool(peek self: JsonValue) -> bool taking _ => Json.is_bool(self)
     routine JsonValue.is_number(peek self: JsonValue) -> bool taking _ => Json.is_number(self)

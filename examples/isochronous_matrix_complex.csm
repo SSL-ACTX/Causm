@@ -1,5 +1,5 @@
 @0ms: {
-    routine compute_ema(consume current, consume prev) taking 20ms {
+    routine compute_ema(peek current: int, peek prev: int) -> int taking 20ms {
         let weight = 2
         let p1 = current * weight
         let p2 = prev * 8
@@ -11,27 +11,15 @@
         enable memory(102400bytes)
         slice 40ms
         require System.Log
-        require Chan.Manage
-        require Chan.Inbound(id = "*")
-        require Chan.Outbound(id = "*")
-        open_chan sensors (16)
-        open_chan signals (16)
+        let mut s1 = 150
+        let mut s2 = 155
+        let mut signal = 0
         loop tick {
-            let packet = topology { s1 = 150, s2 = 155 }
-            chan_send sensors (packet)
+            signal = compute_ema(s2, s1)
             break
         }
         loop tick {
-            let data = chan_recv(sensors)
-            let v1 = data["s1"]
-            let v2 = data["s2"]
-            let result = compute_ema(v2, v1)
-            chan_send signals (result)
-            break
-        }
-        loop tick {
-            let final_val = chan_recv(signals)
-            let display = "Signal: " + final_val
+            let display = "Signal: " + signal
             print(display)
             break
         }

@@ -40,22 +40,6 @@ impl Vm {
         Ok(())
     }
 
-    pub(crate) fn NetworkRequest(
-        &mut self,
-        branch_id: &str,
-        _domain: String,
-    ) -> Result<(), TemporalError> {
-        if !self.capability_handlers.contains_key("System.NetworkFetch") {
-            return Err(TemporalError::MissingCapability(
-                "System.NetworkFetch".to_string(),
-            ));
-        }
-        let branch = self.get_branch_mut(branch_id)?;
-        branch.local_clock += 5;
-        branch.consume_budget(5)?;
-        Ok(())
-    }
-
     pub(crate) fn Syscall(
         &mut self,
         branch_id: &str,

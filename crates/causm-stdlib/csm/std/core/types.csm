@@ -1,12 +1,9 @@
-// Standard Core Module - Core ADT Types
-
 @0ms: {
-    enum Option<T> {
+    enum Option {
         None,
         Some(T)
     }
-
-    enum Result<T, E> {
+    enum Result {
         Ok(T),
         Err(E)
     }

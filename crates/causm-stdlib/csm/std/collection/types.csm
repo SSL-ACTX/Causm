@@ -4,13 +4,11 @@
         data: array,
         len: i32
     }
-
     type Stack = struct {
         capacity: i32,
         data: array,
         len: i32
     }
-
     type Queue = struct {
         capacity: i32,
         data: array,
@@ -18,7 +16,6 @@
         len: i32,
         tail: i32
     }
-
     type RingBuffer = struct {
         capacity: i32,
         data: array,
@@ -26,15 +23,13 @@
         size: i32,
         tail: i32
     }
-
     type BitSet = struct {
         bits: array,
         len: i32
     }
-
     interface Collection {
-        routine len(peek self: Collection) -> i32;
-        routine is_empty(peek self: Collection) -> bool;
-        routine to_array(peek self: Collection) -> array;
+        routine len(peek self: Collection) -> i32
+        routine is_empty(peek self: Collection) -> bool
+        routine to_array(peek self: Collection) -> array
     }
 }

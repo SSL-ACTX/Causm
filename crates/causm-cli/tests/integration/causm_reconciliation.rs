@@ -105,31 +105,6 @@ fn test_reconcile_no_else_success() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_select_reconcile_rules() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-        open_chan ch1(1)
-        open_chan ch2(1)
-        let x = 10
-        select (max 10ms) {
-            case val1 = chan_recv(ch1): {
-                x = 20
-            }
-            case val2 = chan_recv(ch2): {
-                x = 30
-            }
-        } reconcile (x = first_wins)
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    Ok(())
-}
-
-#[test]
 fn test_split_map_reconcile_auto() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {

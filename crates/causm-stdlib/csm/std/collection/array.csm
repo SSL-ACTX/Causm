@@ -1,5 +1,3 @@
-// Standard Collection Module - Array Operations
-
 @0ms: {
     routine Array.concat(peek a: array, peek b: array) -> array taking _ {
         let len_a = len(a)
@@ -17,7 +15,6 @@
         }
         result
     }
-
     routine Array.copy(peek src: array, peek src_pos: i32, peek dst: array, peek dst_pos: i32, peek count: i32) -> array taking _ {
         let mut target = clone(dst)
         let mut i = 0
@@ -27,7 +24,6 @@
         }
         target
     }
-
     routine Array.fill(peek arr: array, peek value: i64) -> array taking _ {
         let mut target = clone(arr)
         let mut idx = 0
@@ -37,9 +33,7 @@
         }
         target
     }
-
     routine Array.clone(peek arr: array) -> array taking _ => arr[0..len(arr)]
-
     routine Array.contains(peek arr: array, peek target: i64) -> bool taking _ {
         let mut found = false
         for elem in arr step _ {
@@ -50,7 +44,6 @@
         }
         found
     }
-
     routine Array.find(peek arr: array, peek target: i64) -> i32 taking _ {
         let mut found_idx = -1
         let mut idx = 0
@@ -63,7 +56,6 @@
         }
         found_idx
     }
-
     routine Array.reverse(peek arr: array) -> array taking _ {
         let rev_len = len(arr)
         let mut result = [0; clone(rev_len)]

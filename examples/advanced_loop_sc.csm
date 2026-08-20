@@ -31,36 +31,14 @@
     }
     debug(sum)
     debug(peak)
-    open_chan signal_bus (8)
-    split main into [producer, consumer]
-}
-
-@50ms: {
-    @producer: {
-        let msg1 = "CRITICAL_ALERT"
-        let msg2 = "SYSTEM_SYNC"
-        let msg3 = "TERMINATE"
-        chan_send signal_bus (msg1)
-        chan_send signal_bus (msg2)
-        chan_send signal_bus (msg3)
+    slice 20ms
+    let count = 0
+    let terminated = false
+    loop tick {
+        let count = count + 1
+        let terminated = true
+        break
     }
-    @consumer: {
-        slice 20ms
-        let count = 0
-        let terminated = false
-        loop tick on signal_bus {
-            let msg = chan_recv(signal_bus)
-            let count = count + 1
-            if (msg == "TERMINATE") {
-                let terminated = true
-            } reconcile auto
-            break
-        }
-        debug(count)
-        debug(terminated)
-    }
-}
-
-@70ms: {
-    merge [producer, consumer] into main reconcile auto
+    debug(count)
+    debug(terminated)
 }

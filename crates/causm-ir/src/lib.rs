@@ -387,9 +387,6 @@ macro_rules! instructions {
             ArrayLen {
                 dest: $crate::Reg,
                 src: $crate::Reg
-            },
-            NetworkRequest {
-                domain: String
             }
         }
     };

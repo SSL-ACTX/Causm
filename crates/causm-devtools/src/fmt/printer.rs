@@ -420,7 +420,7 @@ fn format_spanned_statement(
             out.push_str(&format!("{}anchor {}\n", indent, name));
         }
         Statement::Rewind(name) => {
-            out.push_str(&format!("{}rewind {}\n", indent, name));
+            out.push_str(&format!("{}rewind_to({})\n", indent, name));
         }
         Statement::Commit(body) => {
             out.push_str(&format!("{}commit {{\n", indent));
@@ -454,20 +454,6 @@ fn format_spanned_statement(
             }
             out.push_str(&format!("{}}}\n", indent));
         }
-        Statement::Inspect {
-            binding,
-            target,
-            body,
-        } => {
-            out.push_str(&format!(
-                "{}inspect {} = {} {{\n",
-                indent, binding, target
-            ));
-            for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
-            }
-            out.push_str(&format!("{}}}\n", indent));
-        }
         Statement::Lease {
             binding,
             source,
@@ -487,27 +473,6 @@ fn format_spanned_statement(
                 format_spanned_statement(out, s, indent_step, depth + 1);
             }
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
-        }
-        Statement::ChannelOpen {
-            name,
-            capacity,
-            decay_after_ms,
-        } => {
-            let decay_str = if let Some(ms) = decay_after_ms {
-                format!(" decay_after {}ms", ms)
-            } else {
-                String::new()
-            };
-            out.push_str(&format!(
-                "{}open_chan {} ({}){}\n",
-                indent, name, capacity, decay_str
-            ));
-        }
-        Statement::ChannelSend { chan_id, value_id } => {
-            out.push_str(&format!(
-                "{}chan_send {} ({})\n",
-                indent, chan_id, value_id
-            ));
         }
         Statement::EnumDecl { name, variants } => {
             out.push_str(&format!("{}enum {} {{\n", indent, name));
@@ -812,9 +777,6 @@ fn format_spanned_statement(
         Statement::Await(id) => {
             out.push_str(&format!("{}await({})\n", indent, id));
         }
-        Statement::AwaitChan(id) => {
-            out.push_str(&format!("{}await_chan({})\n", indent, id));
-        }
         Statement::AssertTime {
             operator,
             limit_ms,
@@ -903,13 +865,6 @@ fn format_spanned_statement(
             }
             out.push_str(&format!("{}}}\n", indent));
         }
-        Statement::LoopTickOn { channel, body } => {
-            out.push_str(&format!("{}loop tick on {} {{\n", indent, channel));
-            for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
-            }
-            out.push_str(&format!("{}}}\n", indent));
-        }
         Statement::DirectiveBlock { directives, body } => {
             let dir_strs = directives
                 .iter()
@@ -963,15 +918,6 @@ fn format_spanned_statement(
                 format_spanned_statement(out, s, indent_step, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
-        }
-        Statement::AcausalReset {
-            target,
-            anchor_name,
-        } => {
-            out.push_str(&format!(
-                "{}reset {} to {}\n",
-                indent, target, anchor_name
-            ));
         }
         Statement::Slice { milliseconds } => {
             out.push_str(&format!("{}slice {}ms\n", indent, milliseconds));
@@ -1306,11 +1252,17 @@ fn format_expr(expr: &Expression) -> String {
             then_branch,
             else_branch,
         } => {
+            let else_str = match &**else_branch {
+                Expression::If { .. } => {
+                    format!("else {}", format_expr(else_branch))
+                }
+                _ => format!("else {{ {} }}", format_expr(else_branch)),
+            };
             format!(
-                "if ({}) {{ {} }} else {{ {} }}",
+                "if ({}) {{ {} }} {}",
                 format_expr(condition),
                 format_expr(then_branch),
-                format_expr(else_branch)
+                else_str
             )
         }
         Expression::Match { target, arms } => {
@@ -1393,11 +1345,23 @@ fn op_precedence(op: &BinaryOperator) -> u8 {
 
 fn format_sub_expr(expr: &Expression, parent_prec: u8, is_right: bool) -> String {
     let s = format_expr(expr);
-    if let Expression::BinaryOp { op, .. } = expr {
-        let prec = op_precedence(op);
-        if prec < parent_prec || (prec == parent_prec && is_right) {
+    match expr {
+        Expression::BinaryOp { op, .. } => {
+            let prec = op_precedence(op);
+            if prec < parent_prec
+                || (prec == parent_prec
+                    && (is_right
+                        || *op == BinaryOperator::Rem
+                        || *op == BinaryOperator::Div
+                        || *op == BinaryOperator::Sub))
+            {
+                return format!("({})", s);
+            }
+        }
+        Expression::If { .. } | Expression::Match { .. } => {
             return format!("({})", s);
         }
+        _ => {}
     }
     s
 }
@@ -1419,6 +1383,7 @@ fn format_string_literal(s: &str) -> String {
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 fn format_if_statement(
     out: &mut String,
     binding: Option<&str>,

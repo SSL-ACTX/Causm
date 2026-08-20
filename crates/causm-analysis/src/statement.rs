@@ -19,9 +19,6 @@ impl EntropicAnalyzer {
                 let branch =
                     self.branch_contexts.get_mut(&self.current_branch).unwrap();
                 branch.accumulated_cost += 1;
-                if let Statement::NetworkRequest { .. } = &stmt.stmt {
-                    branch.accumulated_cost += 5;
-                }
             }
         }
 

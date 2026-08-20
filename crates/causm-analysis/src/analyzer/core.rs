@@ -24,7 +24,6 @@ pub struct EntropicAnalyzer {
     pub(crate) interfaces: HashMap<String, Vec<causm_core::InterfaceMethod>>,
     pub(crate) struct_extends: HashMap<String, String>,
     pub(crate) merged_branches: HashSet<String>,
-    pub(crate) known_channels: HashSet<String>,
     pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
     pub entropy_mode: causm_core::EntropyMode,
     pub analyzed_routines: HashSet<String>,
@@ -61,7 +60,6 @@ impl EntropicAnalyzer {
             interfaces: HashMap::new(),
             struct_extends: HashMap::new(),
             merged_branches: HashSet::new(),
-            known_channels: HashSet::new(),
             analyzed_wcet: std::cell::RefCell::new(HashMap::new()),
             entropy_mode: causm_core::EntropyMode::Deterministic,
             analyzed_routines: HashSet::new(),
@@ -800,13 +798,12 @@ impl EntropicAnalyzer {
                     && self.types_compatible(exp_rt, act_rt)
             }
             (Type::Custom(exp_name), Type::Custom(act_name)) => {
-                if exp_name == act_name || exp_name == "any" || act_name == "any" {
-                    true
-                } else if exp_name.split('<').next().unwrap_or(exp_name).trim()
-                    == act_name.split('<').next().unwrap_or(act_name).trim()
-                {
-                    true
-                } else if act_name.starts_with(&format!("{}::", exp_name))
+                if exp_name == act_name
+                    || exp_name == "any"
+                    || act_name == "any"
+                    || exp_name.split('<').next().unwrap_or(exp_name).trim()
+                        == act_name.split('<').next().unwrap_or(act_name).trim()
+                    || act_name.starts_with(&format!("{}::", exp_name))
                     || exp_name.starts_with(&format!("{}::", act_name))
                 {
                     true
@@ -976,26 +973,6 @@ impl EntropicAnalyzer {
                 target_branch,
             } => {
                 format!("send {} to {}", value_id, target_branch)
-            }
-            Statement::ChannelOpen { name, capacity, .. } => {
-                format!("open_chan {}({})", name, capacity)
-            }
-            Statement::ChannelSend { chan_id, value_id } => {
-                format!("chan_send {}({})", chan_id, value_id)
-            }
-            Statement::Watchdog {
-                target, timeout_ms, ..
-            } => {
-                format!("watchdog {} timeout {}ms", target, timeout_ms)
-            }
-            Statement::AcausalReset {
-                target,
-                anchor_name,
-            } => {
-                format!("reset {} to {}", target, anchor_name)
-            }
-            Statement::NetworkRequest { domain } => {
-                format!("network_request \"{}\"", domain)
             }
             Statement::Isolate(block) => format!(
                 "isolate {} {{ ... }}",

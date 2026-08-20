@@ -169,19 +169,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                         max_ms: max_value,
                         body,
                     }
-                } else if first.as_rule() == Rule::identifier {
-                    let channel = first.as_str().to_string();
-                    inner.next(); // consume channel identifier
-                    let mut body = Vec::new();
-                    for stmt_pair in inner {
-                        if stmt_pair.as_rule() == Rule::statement {
-                            if let Some(actual_stmt) = stmt_pair.into_inner().next()
-                            {
-                                body.push(parse_statement(actual_stmt));
-                            }
-                        }
-                    }
-                    Statement::LoopTickOn { channel, body }
                 } else {
                     let mut body = Vec::new();
                     for stmt_pair in inner {

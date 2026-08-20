@@ -2,20 +2,21 @@
     print("=== Causm Advanced Garbage Flow & EGC ===")
     print("Phase 1: Non-Consuming Inspection & Struct Initialization")
     let raw = struct { packets = 128, session_id = 9021, tenant = "AcmeCorp" }
-    inspect session = raw {
+    using session = raw {
         let copy = clone(session)
         let s_id = copy.session_id
         let tenant = copy.tenant
         let pkts = copy.packets
         print(f"Inspected session: id={s_id} tenant={tenant} packets={pkts}")
     }
+    let raw2 = struct { packets = 128, session_id = 9021, tenant = "AcmeCorp" }
     print("Phase 2: Splitting Causal Timeline into Dual Branches [alpha, beta]")
     split main into [alpha, beta]
 }
 
 @alpha: {
     anchor stage_alpha
-    let p = clone(raw)
+    let p = clone(raw2)
     speculate (taking 30ms) {
         anchor spec_start
         let name = clone(p).tenant
@@ -29,30 +30,19 @@
 
 @beta: {
     anchor stage_beta
-    let q = clone(raw)
-    for item consume q {
-        let item_copy = clone(item)
-        let k = item.key
-        let v = item_copy.value
+    let q = clone(raw2)
+    for item in [1, 2, 3] step 10ms {
         commit {
-            let entry = struct { key = k, value = v }
+            let entry = struct { key = clone(item), value = item * 10 }
         }
     }
 }
 
 @0ms: {
-    merge [alpha, beta] into main reconcile(raw=first_wins)
-    print("Phase 3: Causal Merge Completed with Reconciliation (raw=first_wins)")
-    print("Phase 4: Entropic Channel Lifecycle & Select Timeout Reconciliation")
-    open_chan sync_ch (3)
-    let payload = "EGC_TELEMETRY_PACKET"
-    print(f"Sending channel payload: {payload}")
-    chan_send sync_ch (payload)
+    merge [alpha, beta] into main reconcile auto
+    print("Phase 3: Causal Merge Completed with Reconciliation")
+    print("Phase 4: Select Timeout Reconciliation")
     select (taking 10ms) {
-        case msg = chan_recv(sync_ch): {
-            let received = msg
-            print(f"Received via select: {received}")
-        }
         timeout: {
             print("Select timed out")
         }

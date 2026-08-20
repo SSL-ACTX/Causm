@@ -2,40 +2,32 @@
     import "std/json" as Json
     import "std/http" as Http
     import "std/core" as Core
-
     print("=== Causm JSON + HTTP Integration Showcase ===")
-
     print("\n-- 1. Constructing Structured JSON Payload with ADT Enums --")
     let mut profile_members = []
     profile_members = Json.push_member(profile_members, "username", JsonValue::String("chronos_dev"))
     profile_members = Json.push_member(profile_members, "timeline_id", JsonValue::Number(4096))
     profile_members = Json.push_member(profile_members, "is_active", JsonValue::Bool(true))
-
     let mut permissions = []
     permissions = Json.push_value(permissions, JsonValue::String("read:entropy"))
     permissions = Json.push_value(permissions, JsonValue::String("write:timeline"))
     permissions = Json.push_value(permissions, JsonValue::String("exec:quantum"))
     profile_members = Json.push_member(profile_members, "roles", JsonValue::Array(permissions))
-
     let req_obj = JsonValue::Object(profile_members)
     let payload_str = Json.stringify(req_obj)
     print("Serialized Outgoing JSON Payload:")
     print(payload_str)
     debug(clone(payload_str))
-
     print("\n-- 2. Preparing HTTP POST Request with Serialized Body --")
     let http_post_msg = Http.format_post("api.causm.network", "/v1/agents/register", payload_str)
     print("Prepared HTTP Request:")
     print(http_post_msg)
-
     print("\n-- 3. Simulating Incoming JSON API Response --")
     let raw_api_response = "{\"status\":\"success\",\"code\":201,\"data\":{\"agent_id\":1042,\"name\":\"CausmWorker\",\"verified\":true},\"tags\":[\"temporal\",\"verified\"]}"
     print("Raw Incoming JSON:")
     print(raw_api_response)
-
     print("\n-- 4. Parsing and Querying JSON via Method Call Syntax --")
     let parsed = Json.parse(raw_api_response)
-
     let is_obj = parsed.is_object()
     let status_str = parsed.get_string("status", "unknown")
     let status_code = parsed.get_int("code", 0)
@@ -44,20 +36,12 @@
     debug(status_str)
     debug(status_code)
     debug(has_data)
-
     print("\n-- 5. Pattern Matching & if let Destructuring on JSON Enums --")
     let data_node = parsed.get("data")
-    
-    // Direct match destructuring on enum variant payloads
     let agent_id_val = data_node.get("agent_id")
-    let extracted_id = match agent_id_val {
-        JsonValue::Number(id) => id,
-        _ => -1
-    }
+    let extracted_id = match agent_id_val { JsonValue::Number(id) => id, _ => -1 }
     print(f"Extracted Agent ID via match: {extracted_id}")
     debug(extracted_id)
-
-    // if let variant destructuring
     let mut verified_name = "unknown"
     let name_node = data_node.get("name")
     if let JsonValue::String(name) = name_node {
@@ -65,18 +49,12 @@
     }
     print(f"Extracted Agent Name via if let: {verified_name}")
     debug(verified_name)
-
     print("\n-- 6. Modern Core Option Wrapper Usage --")
-    let agent_opt = if (data_node.has_key("agent_id")) {
-        Option::Some(clone(extracted_id))
-    } else {
-        Option::None
-    }
+    let agent_opt = if (data_node.has_key("agent_id")) { Option::Some(clone(extracted_id)) } else { Option::None }
     let is_present = agent_opt.is_some()
     let final_agent_id = agent_opt.unwrap_or(0)
     debug(is_present)
     debug(final_agent_id)
-
     print("\n-- 7. Array Item Extraction via Method Call Syntax --")
     let tags_node = parsed.get("tags")
     let tag_count = tags_node.array_len()
@@ -85,6 +63,5 @@
     debug(tag_count)
     debug(first_tag)
     debug(second_tag)
-
     print("\n=== Modern JSON + HTTP Integration Showcase Complete ===")
 }

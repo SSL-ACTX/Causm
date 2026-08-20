@@ -41,11 +41,9 @@
     let node: AuditNode = v
     let log_status = node.audit()
     if let target_vault = node.(QuantumVault) {
-        inspect vault_ref = target_vault {
-            let id = vault_ref.node_id
-            let status = vault_ref.status
-            print("Downcast successful! Node ID: " + id + " Status: " + status)
-        }
+        let id = &target_vault.node_id
+        let status = &target_vault.status
+        print("Downcast successful! Node ID: " + id + " Status: " + status)
         target_vault.purge()
     } else {
         print("Downcast failed.")

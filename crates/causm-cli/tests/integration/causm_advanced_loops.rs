@@ -97,15 +97,12 @@ fn test_for_step_loop() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_loop_tick_on_channel() -> anyhow::Result<()> {
+fn test_loop_tick() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-        open_chan c(10)
-        let ev = "event"
-        chan_send c(ev)
         slice 10ms
-        loop tick on c {
-            let msg = chan_recv(c)
+        loop tick {
+            let msg = "ticked"
             break
         }
     }

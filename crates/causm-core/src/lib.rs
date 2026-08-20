@@ -150,15 +150,6 @@ macro_rules! statements {
             },
             Expression(Expression),
             Capability(Capability),
-            ChannelOpen {
-                name: String,
-                capacity: usize,
-                decay_after_ms: Option<u64>
-            },
-            ChannelSend {
-                chan_id: String,
-                value_id: String
-            },
             RelativisticBlock {
                 time: TimeCoordinate,
                 body: Vec<SpannedStatement>
@@ -166,14 +157,6 @@ macro_rules! statements {
             DirectiveBlock {
                 directives: Vec<BlockDirective>,
                 body: Vec<SpannedStatement>
-            },
-            NetworkRequest {
-                domain: String
-            },
-            Watchdog {
-                target: String,
-                timeout_ms: u64,
-                recovery: Vec<SpannedStatement>
             },
             Speculate {
                 max_ms: u64,
@@ -207,7 +190,6 @@ macro_rules! statements {
                 reconcile: Option<MergeResolution>
             },
             Await(String),
-            AwaitChan(String),
             If {
                 binding: Option<String>,
                 condition: Expression,
@@ -216,11 +198,6 @@ macro_rules! statements {
                 reconcile: Option<MergeResolution>
             },
             Break,
-            Inspect {
-                binding: String,
-                target: String,
-                body: Vec<SpannedStatement>
-            },
             Lease {
                 binding: String,
                 source: String,
@@ -233,10 +210,6 @@ macro_rules! statements {
                 body: Vec<SpannedStatement>
             },
             LoopTick {
-                body: Vec<SpannedStatement>
-            },
-            LoopTickOn {
-                channel: String,
                 body: Vec<SpannedStatement>
             },
             While {
@@ -281,10 +254,6 @@ macro_rules! statements {
                 body: Vec<SpannedStatement>
             },
             Return(Option<String>),
-            AcausalReset {
-                target: String,
-                anchor_name: String
-            },
             Entangle {
                 variables: Vec<String>
             },
@@ -329,16 +298,12 @@ impl Statement {
     {
         let base: u64 = 1;
         let extra = match self {
-            Statement::NetworkRequest { .. } => 5,
             Statement::Split { .. }
             | Statement::Merge { .. }
             | Statement::Anchor(_)
             | Statement::Rewind(_)
             | Statement::Commit(_)
             | Statement::Send { .. }
-            | Statement::ChannelOpen { .. }
-            | Statement::ChannelSend { .. }
-            | Statement::AcausalReset { .. }
             | Statement::Capability(_)
             | Statement::Assignment { .. }
             | Statement::DestructureAssignment { .. }
@@ -356,7 +321,6 @@ impl Statement {
             Statement::RelativisticBlock { body, .. }
             | Statement::DirectiveBlock { body, .. } => estimate_block(body),
             Statement::Isolate(block) => estimate_block(&block.body),
-            Statement::Watchdog { recovery, .. } => estimate_block(recovery),
             Statement::Debug(_) => 1,
             Statement::If {
                 then_branch,
@@ -428,7 +392,6 @@ impl Statement {
                 .max(else_branch.as_ref().map(|b| estimate_block(b)).unwrap_or(0)),
             Statement::Collapse => 0,
             Statement::SplitMap { body, .. } => 1 + estimate_block(body),
-            Statement::Inspect { body, .. } => estimate_block(body),
             Statement::Lease { duration_ms, .. } => *duration_ms,
             Statement::RoutineDef { .. } => 0,
             Statement::Loop { max_ms, body } => {
@@ -439,7 +402,6 @@ impl Statement {
                 }
             }
             Statement::LoopTick { .. } => 1,
-            Statement::LoopTickOn { .. } => 1,
             Statement::While { max_ms, body, .. } => {
                 if *max_ms == u64::MAX {
                     estimate_block(body)
@@ -450,7 +412,6 @@ impl Statement {
             Statement::Slice { .. } => 0,
             Statement::SpeculationMode(_) => 0,
             Statement::Await(_) => 1,
-            Statement::AwaitChan(_) => 1,
             Statement::Yield(_)
             | Statement::Break
             | Statement::Entangle { .. }
@@ -779,4 +740,577 @@ pub enum PatternValue {
 pub enum DecayedPattern {
     Binding(String),
     Fields(std::collections::HashMap<String, PatternValue>),
+}
+
+pub fn ast_statements_eq(a: &[SpannedStatement], b: &[SpannedStatement]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    for (s1, s2) in a.iter().zip(b.iter()) {
+        if !ast_statement_eq(&s1.stmt, &s2.stmt) {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
+    match (a, b) {
+        (
+            Statement::Assignment {
+                target: t1,
+                mutable: m1,
+                var_type: vt1,
+                lifetime: lt1,
+                expr: e1,
+            },
+            Statement::Assignment {
+                target: t2,
+                mutable: m2,
+                var_type: vt2,
+                lifetime: lt2,
+                expr: e2,
+            },
+        ) => t1 == t2 && m1 == m2 && vt1 == vt2 && lt1 == lt2 && e1 == e2,
+        (
+            Statement::DestructureAssignment {
+                fields: f1,
+                mutable: m1,
+                expr: e1,
+            },
+            Statement::DestructureAssignment {
+                fields: f2,
+                mutable: m2,
+                expr: e2,
+            },
+        ) => f1 == f2 && m1 == m2 && e1 == e2,
+        (
+            Statement::Using {
+                binding: b1,
+                resource: r1,
+                body: bd1,
+            },
+            Statement::Using {
+                binding: b2,
+                resource: r2,
+                body: bd2,
+            },
+        ) => b1 == b2 && r1 == r2 && ast_statements_eq(bd1, bd2),
+        (
+            Statement::RoutineDef {
+                name: n1,
+                params: p1,
+                return_type: rt1,
+                taking_ms: t1,
+                state_constraint: sc1,
+                body: bd1,
+            },
+            Statement::RoutineDef {
+                name: n2,
+                params: p2,
+                return_type: rt2,
+                taking_ms: t2,
+                state_constraint: sc2,
+                body: bd2,
+            },
+        ) => {
+            n1 == n2
+                && p1 == p2
+                && rt1 == rt2
+                && t1 == t2
+                && sc1 == sc2
+                && ast_statements_eq(bd1, bd2)
+        }
+        (
+            Statement::TypeDecl {
+                name: n1,
+                extends: ex1,
+                fields: f1,
+                decay_after_ms: d1,
+                auto_drop: ad1,
+                scoped_branch: sb1,
+            },
+            Statement::TypeDecl {
+                name: n2,
+                extends: ex2,
+                fields: f2,
+                decay_after_ms: d2,
+                auto_drop: ad2,
+                scoped_branch: sb2,
+            },
+        ) => {
+            n1 == n2
+                && ex1 == ex2
+                && f1 == f2
+                && d1 == d2
+                && ad1 == ad2
+                && sb1 == sb2
+        }
+        (
+            Statement::EnumDecl {
+                name: n1,
+                variants: v1,
+            },
+            Statement::EnumDecl {
+                name: n2,
+                variants: v2,
+            },
+        ) => n1 == n2 && v1 == v2,
+        (
+            Statement::InterfaceDecl {
+                name: n1,
+                extends: ex1,
+                methods: m1,
+            },
+            Statement::InterfaceDecl {
+                name: n2,
+                extends: ex2,
+                methods: m2,
+            },
+        ) => n1 == n2 && ex1 == ex2 && m1 == m2,
+        (
+            Statement::Split {
+                parent: p1,
+                branches: b1,
+            },
+            Statement::Split {
+                parent: p2,
+                branches: b2,
+            },
+        ) => p1 == p2 && b1 == b2,
+        (
+            Statement::Merge {
+                branches: b1,
+                target: t1,
+                resolutions: r1,
+            },
+            Statement::Merge {
+                branches: b2,
+                target: t2,
+                resolutions: r2,
+            },
+        ) => b1 == b2 && t1 == t2 && r1 == r2,
+        (Statement::Anchor(n1), Statement::Anchor(n2)) => n1 == n2,
+        (Statement::Rewind(n1), Statement::Rewind(n2)) => n1 == n2,
+        (Statement::Commit(b1), Statement::Commit(b2)) => ast_statements_eq(b1, b2),
+        (Statement::Isolate(iso1), Statement::Isolate(iso2)) => {
+            iso1.name == iso2.name && ast_statements_eq(&iso1.body, &iso2.body)
+        }
+        (
+            Statement::DecayHandler {
+                type_name: t1,
+                body: b1,
+            },
+            Statement::DecayHandler {
+                type_name: t2,
+                body: b2,
+            },
+        ) => t1 == t2 && ast_statements_eq(b1, b2),
+        (
+            Statement::AssertTime {
+                operator: op1,
+                limit_ms: l1,
+                fallback: fb1,
+            },
+            Statement::AssertTime {
+                operator: op2,
+                limit_ms: l2,
+                fallback: fb2,
+            },
+        ) => {
+            op1 == op2
+                && l1 == l2
+                && match (fb1, fb2) {
+                    (Some(x), Some(y)) => ast_statements_eq(x, y),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (
+            Statement::Send {
+                value_id: v1,
+                target_branch: t1,
+            },
+            Statement::Send {
+                value_id: v2,
+                target_branch: t2,
+            },
+        ) => v1 == v2 && t1 == t2,
+        (Statement::Expression(e1), Statement::Expression(e2)) => e1 == e2,
+        (Statement::Capability(c1), Statement::Capability(c2)) => c1 == c2,
+        (
+            Statement::RelativisticBlock { time: t1, body: b1 },
+            Statement::RelativisticBlock { time: t2, body: b2 },
+        ) => t1 == t2 && ast_statements_eq(b1, b2),
+        (
+            Statement::DirectiveBlock {
+                directives: d1,
+                body: b1,
+            },
+            Statement::DirectiveBlock {
+                directives: d2,
+                body: b2,
+            },
+        ) => d1 == d2 && ast_statements_eq(b1, b2),
+        (
+            Statement::Speculate {
+                max_ms: m1,
+                body: b1,
+                fallback: fb1,
+            },
+            Statement::Speculate {
+                max_ms: m2,
+                body: b2,
+                fallback: fb2,
+            },
+        ) => {
+            m1 == m2
+                && ast_statements_eq(b1, b2)
+                && match (fb1, fb2) {
+                    (Some(x), Some(y)) => ast_statements_eq(x, y),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (Statement::Collapse, Statement::Collapse) => true,
+        (Statement::SpeculationMode(m1), Statement::SpeculationMode(m2)) => m1 == m2,
+        (
+            Statement::Select {
+                max_ms: m1,
+                cases: c1,
+                timeout: to1,
+                reconcile: r1,
+            },
+            Statement::Select {
+                max_ms: m2,
+                cases: c2,
+                timeout: to2,
+                reconcile: r2,
+            },
+        ) => {
+            if m1 != m2 || r1 != r2 || c1.len() != c2.len() {
+                return false;
+            }
+            for (case1, case2) in c1.iter().zip(c2.iter()) {
+                if case1.binding != case2.binding
+                    || case1.source != case2.source
+                    || !ast_statements_eq(&case1.body, &case2.body)
+                {
+                    return false;
+                }
+            }
+            match (to1, to2) {
+                (Some(x), Some(y)) => ast_statements_eq(x, y),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        (
+            Statement::MatchEntropy {
+                target: t1,
+                valid_branch: vb1,
+                decayed_branch: db1,
+                pending_branch: pb1,
+                consumed_branch: cb1,
+            },
+            Statement::MatchEntropy {
+                target: t2,
+                valid_branch: vb2,
+                decayed_branch: db2,
+                pending_branch: pb2,
+                consumed_branch: cb2,
+            },
+        ) => {
+            if t1 != t2 {
+                return false;
+            }
+            let check_branch = |b1: &Option<(
+                DecayedPattern,
+                Option<Expression>,
+                Vec<SpannedStatement>,
+            )>,
+                                b2: &Option<(
+                DecayedPattern,
+                Option<Expression>,
+                Vec<SpannedStatement>,
+            )>| {
+                match (b1, b2) {
+                    (Some((p1, g1, bd1)), Some((p2, g2, bd2))) => {
+                        p1 == p2 && g1 == g2 && ast_statements_eq(bd1, bd2)
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+            };
+            if !check_branch(vb1, vb2)
+                || !check_branch(db1, db2)
+                || !check_branch(pb1, pb2)
+            {
+                return false;
+            }
+            match (cb1, cb2) {
+                (Some((g1, bd1)), Some((g2, bd2))) => {
+                    g1 == g2 && ast_statements_eq(bd1, bd2)
+                }
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        (
+            Statement::Match {
+                target: t1,
+                arms: a1,
+            },
+            Statement::Match {
+                target: t2,
+                arms: a2,
+            },
+        ) => {
+            if t1 != t2 || a1.len() != a2.len() {
+                return false;
+            }
+            for (arm1, arm2) in a1.iter().zip(a2.iter()) {
+                if arm1.pattern != arm2.pattern
+                    || arm1.guard != arm2.guard
+                    || !ast_statements_eq(&arm1.body, &arm2.body)
+                {
+                    return false;
+                }
+            }
+            true
+        }
+        (
+            Statement::IfLet {
+                pattern: p1,
+                expr: e1,
+                then_branch: tb1,
+                else_branch: eb1,
+                reconcile: r1,
+            },
+            Statement::IfLet {
+                pattern: p2,
+                expr: e2,
+                then_branch: tb2,
+                else_branch: eb2,
+                reconcile: r2,
+            },
+        ) => {
+            p1 == p2
+                && e1 == e2
+                && r1 == r2
+                && ast_statements_eq(tb1, tb2)
+                && match (eb1, eb2) {
+                    (Some(x), Some(y)) => ast_statements_eq(x, y),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (Statement::Await(a1), Statement::Await(a2)) => a1 == a2,
+        (
+            Statement::If {
+                binding: b1,
+                condition: c1,
+                then_branch: tb1,
+                else_branch: eb1,
+                reconcile: r1,
+            },
+            Statement::If {
+                binding: b2,
+                condition: c2,
+                then_branch: tb2,
+                else_branch: eb2,
+                reconcile: r2,
+            },
+        ) => {
+            b1 == b2
+                && c1 == c2
+                && r1 == r2
+                && ast_statements_eq(tb1, tb2)
+                && match (eb1, eb2) {
+                    (Some(x), Some(y)) => ast_statements_eq(x, y),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (Statement::Break, Statement::Break) => true,
+        (
+            Statement::Lease {
+                binding: b1,
+                source: s1,
+                duration_ms: d1,
+                body: bd1,
+                reconcile: r1,
+            },
+            Statement::Lease {
+                binding: b2,
+                source: s2,
+                duration_ms: d2,
+                body: bd2,
+                reconcile: r2,
+            },
+        ) => {
+            b1 == b2
+                && s1 == s2
+                && d1 == d2
+                && r1 == r2
+                && ast_statements_eq(bd1, bd2)
+        }
+        (
+            Statement::Loop {
+                max_ms: m1,
+                body: b1,
+            },
+            Statement::Loop {
+                max_ms: m2,
+                body: b2,
+            },
+        ) => m1 == m2 && ast_statements_eq(b1, b2),
+        (Statement::LoopTick { body: b1 }, Statement::LoopTick { body: b2 }) => {
+            ast_statements_eq(b1, b2)
+        }
+        (
+            Statement::While {
+                condition: c1,
+                is_valid_check: v1,
+                max_ms: m1,
+                body: b1,
+            },
+            Statement::While {
+                condition: c2,
+                is_valid_check: v2,
+                max_ms: m2,
+                body: b2,
+            },
+        ) => c1 == c2 && v1 == v2 && m1 == m2 && ast_statements_eq(b1, b2),
+        (
+            Statement::ForStep {
+                item_name: n1,
+                source: s1,
+                step_ms: st1,
+                body: b1,
+            },
+            Statement::ForStep {
+                item_name: n2,
+                source: s2,
+                step_ms: st2,
+                body: b2,
+            },
+        ) => n1 == n2 && s1 == s2 && st1 == st2 && ast_statements_eq(b1, b2),
+        (
+            Statement::Slice { milliseconds: m1 },
+            Statement::Slice { milliseconds: m2 },
+        ) => m1 == m2,
+        (
+            Statement::For {
+                item_name: n1,
+                mode: m1,
+                source: s1,
+                body: b1,
+                pacing_ms: p1,
+                max_ms: mx1,
+            },
+            Statement::For {
+                item_name: n2,
+                mode: m2,
+                source: s2,
+                body: b2,
+                pacing_ms: p2,
+                max_ms: mx2,
+            },
+        ) => {
+            n1 == n2
+                && m1 == m2
+                && s1 == s2
+                && p1 == p2
+                && mx1 == mx2
+                && ast_statements_eq(b1, b2)
+        }
+        (
+            Statement::SplitMap {
+                item_name: n1,
+                mode: m1,
+                source: s1,
+                body: b1,
+                reconcile: r1,
+            },
+            Statement::SplitMap {
+                item_name: n2,
+                mode: m2,
+                source: s2,
+                body: b2,
+                reconcile: r2,
+            },
+        ) => {
+            n1 == n2 && m1 == m2 && s1 == s2 && r1 == r2 && ast_statements_eq(b1, b2)
+        }
+        (Statement::Yield(y1), Statement::Yield(y2)) => y1 == y2,
+        (Statement::Print(p1), Statement::Print(p2)) => p1 == p2,
+        (Statement::Debug(d1), Statement::Debug(d2)) => d1 == d2,
+        (Statement::Return(r1), Statement::Return(r2)) => r1 == r2,
+        (
+            Statement::Entangle { variables: v1 },
+            Statement::Entangle { variables: v2 },
+        ) => v1 == v2,
+        (
+            Statement::Import {
+                path: p1,
+                alias: a1,
+            },
+            Statement::Import {
+                path: p2,
+                alias: a2,
+            },
+        ) => p1 == p2 && a1 == a2,
+        (
+            Statement::FromImport {
+                path: p1,
+                symbols: s1,
+            },
+            Statement::FromImport {
+                path: p2,
+                symbols: s2,
+            },
+        ) => p1 == p2 && s1 == s2,
+        (
+            Statement::ForeignBlock {
+                lib_name: l1,
+                abi: a1,
+                routines: r1,
+            },
+            Statement::ForeignBlock {
+                lib_name: l2,
+                abi: a2,
+                routines: r2,
+            },
+        ) => l1 == l2 && a1 == a2 && ast_statements_eq(r1, r2),
+        (
+            Statement::FieldUpdate {
+                target: t1,
+                field: f1,
+                value: v1,
+            },
+            Statement::FieldUpdate {
+                target: t2,
+                field: f2,
+                value: v2,
+            },
+        ) => t1 == t2 && f1 == f2 && v1 == v2,
+        _ => false,
+    }
+}
+
+pub fn programs_ast_eq(a: &Program, b: &Program) -> bool {
+    if a.timelines.len() != b.timelines.len() {
+        return false;
+    }
+    for (t1, t2) in a.timelines.iter().zip(b.timelines.iter()) {
+        if t1.time != t2.time
+            || t1.no_z3 != t2.no_z3
+            || t1.entropy_mode != t2.entropy_mode
+            || !ast_statements_eq(&t1.statements, &t2.statements)
+        {
+            return false;
+        }
+    }
+    true
 }

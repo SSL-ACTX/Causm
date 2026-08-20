@@ -1258,11 +1258,6 @@ impl SsaTransformer {
             Instruction::Break => SsaInstruction::Break,
             Instruction::LoopTick => SsaInstruction::LoopTick,
             Instruction::EndLoopTick => SsaInstruction::EndLoopTick,
-            Instruction::NetworkRequest { domain } => {
-                SsaInstruction::NetworkRequest {
-                    domain: domain.clone(),
-                }
-            }
             Instruction::Jump { target } => SsaInstruction::Jump { target: *target },
             Instruction::JumpIf { cond, target } => SsaInstruction::JumpIf {
                 cond: self.current_ssa_reg(*cond),

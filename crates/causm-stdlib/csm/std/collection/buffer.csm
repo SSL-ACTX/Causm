@@ -1,18 +1,13 @@
-// Standard Collection Module - Dynamic Buffer
-
-from "std/collection/types" import Buffer
+@0ms: {
+    from "std/collection/types" import Buffer
+}
 
 @0ms: {
     routine Buffer.new(peek capacity: i32) -> Buffer taking _ {
         let cap = if (capacity > 0) { clone(capacity) } else { 16 }
         let raw = [0; cap]
-        struct {
-            data = raw,
-            len = 0,
-            capacity = cap
-        }
+        struct { capacity = cap, data = raw, len = 0 }
     }
-
     routine Buffer.with_data(peek initial_data: array) -> Buffer taking _ {
         let total_len = len(initial_data)
         let cap_len = clone(total_len)
@@ -22,18 +17,12 @@ from "std/collection/types" import Buffer
             raw[idx] = b
             idx = idx + 1
         }
-        struct {
-            data = raw,
-            len = total_len,
-            capacity = cap_len
-        }
+        struct { capacity = cap_len, data = raw, len = total_len }
     }
-
     routine Buffer.append(peek buf: Buffer, peek byte_val: i64) -> Buffer taking _ {
         let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
         let mut data = buf.data
-
         if (cur_len >= cur_cap) {
             let new_cap = cur_cap * 2
             let mut new_data = [0; new_cap]
@@ -45,22 +34,14 @@ from "std/collection/types" import Buffer
             data = new_data
             cur_cap = new_cap
         }
-
         data[cur_len] = byte_val
         let new_len = cur_len + 1
-
-        struct {
-            data = data,
-            len = new_len,
-            capacity = cur_cap
-        }
+        struct { capacity = cur_cap, data = data, len = new_len }
     }
-
     routine Buffer.append_slice(peek buf: Buffer, peek slice_data: array, peek count: i32) -> Buffer taking _ {
         let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
         let mut data = buf.data
-
         if (cur_len + count > cur_cap) {
             let mut new_cap = cur_cap * 2
             while (cur_len + count > new_cap) taking _ {
@@ -75,7 +56,6 @@ from "std/collection/types" import Buffer
             data = new_data
             cur_cap = new_cap
         }
-
         let mut slice_idx = 0
         let slice_sub = slice_data[0..count]
         for b in slice_sub step _ {
@@ -83,29 +63,14 @@ from "std/collection/types" import Buffer
             slice_idx = slice_idx + 1
         }
         let new_len = cur_len + count
-
-        struct {
-            data = data,
-            len = new_len,
-            capacity = cur_cap
-        }
+        struct { capacity = cur_cap, data = data, len = new_len }
     }
-
     routine Buffer.as_slice(peek buf: Buffer) -> array taking _ {
         let slice_len = buf.len
         let data = buf.data
         data[0..slice_len]
     }
-
     routine Buffer.len(peek buf: Buffer) -> i32 taking _ => buf.len
-
     routine Buffer.is_empty(peek buf: Buffer) -> bool taking _ => buf.len == 0
-
-    routine Buffer.clear(peek buf: Buffer) -> Buffer taking _ {
-        struct {
-            data = buf.data,
-            len = 0,
-            capacity = buf.capacity
-        }
-    }
+    routine Buffer.clear(peek buf: Buffer) -> Buffer taking _ => struct { capacity = buf.capacity, data = buf.data, len = 0 }
 }

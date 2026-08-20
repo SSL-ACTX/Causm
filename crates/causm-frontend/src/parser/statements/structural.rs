@@ -214,21 +214,6 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
-        Rule::reset_stmt => {
-            let mut inner = pair.into_inner();
-            let target = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let anchor_name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            Statement::AcausalReset {
-                target,
-                anchor_name,
-            }
-        }
         Rule::directive_stmt => {
             let mut inner = pair.into_inner().peekable();
             let mut directives = Vec::new();

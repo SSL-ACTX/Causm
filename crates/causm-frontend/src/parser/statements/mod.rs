@@ -24,8 +24,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::routine_stmt
         | Rule::require_decl
         | Rule::anchor_stmt
-        | Rule::rewind_stmt
-        | Rule::reset_stmt => structural::parse_structural_stmt(pair),
+        | Rule::rewind_stmt => structural::parse_structural_stmt(pair),
 
         // Data
         Rule::assignment_stmt
@@ -52,11 +51,9 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::break_stmt => control_flow::parse_control_flow_stmt(pair),
 
         // Temporal
-        Rule::watchdog_stmt
-        | Rule::assert_time_stmt
+        Rule::assert_time_stmt
         | Rule::slice_stmt
         | Rule::await_stmt
-        | Rule::await_chan_stmt
         | Rule::lease_stmt => temporal::parse_temporal_stmt(pair),
 
         // Entropic
@@ -65,19 +62,15 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         }
 
         // Misc
-        Rule::open_chan_stmt
-        | Rule::chan_send_stmt
-        | Rule::commit_stmt
+        Rule::commit_stmt
         | Rule::speculate_stmt
         | Rule::collapse_stmt
         | Rule::speculation_mode_stmt
-        | Rule::network_request_stmt
         | Rule::import_stmt
         | Rule::from_import_stmt
         | Rule::foreign_block_stmt
         | Rule::print_stmt
-        | Rule::debug_stmt
-        | Rule::inspect_stmt => misc::parse_misc_stmt(pair),
+        | Rule::debug_stmt => misc::parse_misc_stmt(pair),
 
         Rule::expression_stmt => {
             let inner_expr = pair.into_inner().next().unwrap();

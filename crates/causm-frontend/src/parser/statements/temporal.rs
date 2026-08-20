@@ -6,32 +6,6 @@ use pest::iterators::Pair;
 
 pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
-        Rule::watchdog_stmt => {
-            let mut inner = pair.into_inner();
-            let target = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let timeout_ms = inner
-                .next()
-                .map(|p| p.as_str().parse::<u64>().unwrap_or(0))
-                .unwrap_or(0);
-
-            let mut recovery = Vec::new();
-            if let Some(recovery_pair) = inner.next() {
-                for stmt_pair in recovery_pair.into_inner() {
-                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
-                        recovery.push(parse_statement(actual_stmt));
-                    }
-                }
-            }
-
-            Statement::Watchdog {
-                target,
-                timeout_ms,
-                recovery,
-            }
-        }
         Rule::assert_time_stmt => {
             let mut inner = pair.into_inner();
             let op_str = inner.next().map(|p| p.as_str()).unwrap_or("==");
@@ -95,14 +69,6 @@ pub fn parse_temporal_stmt(pair: Pair<Rule>) -> Statement {
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
             Statement::Await(target)
-        }
-        Rule::await_chan_stmt => {
-            let target = pair
-                .into_inner()
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            Statement::AwaitChan(target)
         }
         Rule::lease_stmt => {
             let mut inner = pair.into_inner();

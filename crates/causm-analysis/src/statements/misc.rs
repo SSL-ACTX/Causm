@@ -70,55 +70,6 @@ impl EntropicAnalyzer {
         self.mark_consumed(value_id)
     }
 
-    pub(crate) fn ChannelOpen(
-        &mut self,
-        name: &str,
-        _capacity: &usize,
-        _decay_after_ms: &Option<u64>,
-    ) -> Result<(), SemanticError> {
-        if !self.capability_stack.is_empty()
-            && !self.is_capability_allowed("Chan.Manage")
-        {
-            return Err(self.annotate(SemanticErrorKind::MissingCapability(
-                "Chan.Manage".to_string(),
-            )));
-        }
-        self.known_channels.insert(name.to_string());
-        Ok(())
-    }
-
-    pub(crate) fn ChannelSend(
-        &mut self,
-        chan_id: &str,
-        value_id: &str,
-    ) -> Result<(), SemanticError> {
-        if !self.capability_stack.is_empty() {
-            let key = format!("Chan.Outbound[id={}]", chan_id);
-            if !self.is_capability_allowed("Chan.Outbound")
-                && !self.is_capability_allowed(&key)
-            {
-                return Err(self.annotate(SemanticErrorKind::MissingCapability(
-                    format!("Chan.Outbound(id={})", chan_id),
-                )));
-            }
-        }
-        self.mark_consumed(value_id)
-    }
-
-    pub(crate) fn NetworkRequest(
-        &mut self,
-        _domain: &str,
-    ) -> Result<(), SemanticError> {
-        if !self.capability_stack.is_empty()
-            && !self.is_capability_allowed("System.NetworkFetch")
-        {
-            return Err(self.annotate(SemanticErrorKind::MissingCapability(
-                "System.NetworkFetch".to_string(),
-            )));
-        }
-        Ok(())
-    }
-
     pub(crate) fn Capability(
         &mut self,
         cap: &Capability,

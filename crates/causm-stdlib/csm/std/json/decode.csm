@@ -1,17 +1,6 @@
-// Standard JSON Module - Decoder / Parser
-
 @0ms: {
     from "std/json/types" import *
-
-    routine Json.is_ws(peek b: i32) -> bool taking _ =>
-        match b {
-            32 => true,
-            9 => true,
-            10 => true,
-            13 => true,
-            _ => false
-        }
-
+    routine Json.is_ws(peek b: i32) -> bool taking _ => match b { 32 => true, 9 => true, 10 => true, 13 => true, _ => false }
     routine Json.skip_ws(peek bytes: array, peek pos: i32, peek n: i32) -> i32 taking _ {
         let mut p = clone(pos)
         let mut limit = clone(n)
@@ -26,14 +15,12 @@
         }
         p
     }
-
     routine Json.parse_str_raw(peek bytes: array, peek pos: i32, peek n: i32) -> ParseStrResult taking _ {
         let mut p = pos + 1
         let mut limit = clone(n)
         let mut buf = [0; 256]
         let mut buf_cap = 256
         let mut out_len = 0
-
         while (p < limit) taking _ {
             let mut b = bytes[p]
             if (b == 34) {
@@ -43,18 +30,7 @@
                 p = p + 1
                 if (p < limit) {
                     let mut esc = bytes[p]
-                    let ch = match esc {
-                        110 => 10,
-                        114 => 13,
-                        116 => 9,
-                        98 => 8,
-                        102 => 12,
-                        34 => 34,
-                        92 => 92,
-                        47 => 47,
-                        _ => esc
-                    }
-
+                    let ch = match esc { 110 => 10, 114 => 13, 116 => 9, 98 => 8, 102 => 12, 34 => 34, 92 => 92, 47 => 47, _ => esc }
                     if (out_len >= buf_cap) {
                         let new_cap = buf_cap * 2
                         let mut new_buf = [0; new_cap]
@@ -87,15 +63,10 @@
                 p = p + 1
             }
         }
-
         let slice = buf[0..out_len]
         let s = to_str(slice)
-        struct {
-            val = s,
-            next_pos = p
-        }
+        struct { next_pos = p, val = s }
     }
-
     routine Json.parse_number(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let mut p = clone(pos)
         let mut limit = clone(n)
@@ -122,44 +93,32 @@
             }
         }
         let total = num * sign
-        struct {
-            val = JsonValue::Number(total),
-            next_pos = p
-        }
+        struct { next_pos = p, val = JsonValue::Number(total) }
     }
-
     routine Json.parse_bool_or_null(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let b = bytes[pos]
         match b {
-            116 => struct {
-                val = JsonValue::Bool(true),
-                next_pos = pos + 4
-            },
-            102 => struct {
-                val = JsonValue::Bool(false),
-                next_pos = pos + 5
-            },
-            _ => struct {
-                val = JsonValue::Null,
-                next_pos = pos + 4
+            116 => {
+                struct { next_pos = pos + 4, val = JsonValue::Bool(true) }
+            }
+            102 => {
+                struct { next_pos = pos + 5, val = JsonValue::Bool(false) }
+            }
+            _ => {
+                struct { next_pos = pos + 4, val = JsonValue::Null }
             }
         }
     }
-
     routine Json.parse_val(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let mut limit = clone(n)
         let p = Json.skip_ws(bytes, pos, limit)
-        let mut result = struct { val = JsonValue::Null, next_pos = limit }
+        let mut result = struct { next_pos = limit, val = JsonValue::Null }
         if (p < limit) {
             let mut b = bytes[p]
             if (b == 34) {
                 let res = Json.parse_str_raw(bytes, p, limit)
-                result = struct {
-                    val = JsonValue::String(res.val),
-                    next_pos = res.next_pos
-                }
+                result = struct { next_pos = res.next_pos, val = JsonValue::String(res.val) }
             } else if (b == 123) {
-                // object { ... }
                 let mut cur = p + 1
                 let mut members = []
                 while (cur < limit) taking _ {
@@ -209,12 +168,8 @@
                         cur = cur + 1
                     }
                 }
-                result = struct {
-                    val = JsonValue::Object(members),
-                    next_pos = cur
-                }
+                result = struct { next_pos = cur, val = JsonValue::Object(members) }
             } else if (b == 91) {
-                // array [ ... ]
                 let mut cur = p + 1
                 let mut items = []
                 while (cur < limit) taking _ {
@@ -251,10 +206,7 @@
                         }
                     }
                 }
-                result = struct {
-                    val = JsonValue::Array(items),
-                    next_pos = cur
-                }
+                result = struct { next_pos = cur, val = JsonValue::Array(items) }
             } else if (b == 116) {
                 result = Json.parse_bool_or_null(bytes, p, limit)
             } else if (b == 102) {
@@ -265,23 +217,21 @@
                 if (b <= 57) {
                     result = Json.parse_number(bytes, p, limit)
                 } else {
-                    result = struct { val = JsonValue::Null, next_pos = p + 1 }
+                    result = struct { next_pos = p + 1, val = JsonValue::Null }
                 }
             } else if (b == 45) {
                 result = Json.parse_number(bytes, p, limit)
             } else {
-                result = struct { val = JsonValue::Null, next_pos = p + 1 }
+                result = struct { next_pos = p + 1, val = JsonValue::Null }
             }
         }
         result
     }
-
     routine Json.decode(peek text: string) -> JsonValue taking _ {
         let bytes = str_bytes(text)
         let n = len(bytes)
         let res = Json.parse_val(bytes, 0, n)
         res.val
     }
-
     routine Json.parse(peek text: string) -> JsonValue taking _ => Json.decode(text)
 }

@@ -1,4 +1,6 @@
-from "std/json/types" import *
-from "std/json/ops" import *
-from "std/json/encode" import *
-from "std/json/decode" import *
+@0ms: {
+    from "std/json/types" import *
+    from "std/json/ops" import *
+    from "std/json/encode" import *
+    from "std/json/decode" import *
+}

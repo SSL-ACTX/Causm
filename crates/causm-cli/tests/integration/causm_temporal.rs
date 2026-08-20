@@ -52,7 +52,7 @@ fn causm_temporal_if_equalizes_timing() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       if (1 == 0) {
-        network_request "api.example.com"
+        let y = "first"
       } else {
         let x = "hi"
       }
@@ -65,9 +65,6 @@ fn causm_temporal_if_equalizes_timing() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.NetworkFetch", |_| {
-        Ok(causm_core::value::Payload::Null)
-    });
     vm.execute_program(&ir)?;
 
     // The analyzer ensures timing logic is correct, and execution runs the taken branch.
@@ -145,34 +142,6 @@ fn causm_temporal_routine_call_contract_and_entropy() -> anyhow::Result<()> {
 }
 
 #[test]
-fn causm_temporal_network_request_syntax_parse_and_execute() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-      let a = "x"
-      network_request "api.example.com"
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    let mut vm = Vm::new();
-    vm.register_capability("System.NetworkFetch", |_| {
-        Ok(causm_core::value::Payload::Null)
-    });
-    vm.execute_program(&ir)?;
-
-    // load_string(1), move(1), network_request(5ms cost in core.rs? No, network_request costs 5 in analyzer, 1 in VM currently)
-    // Actually network_request isn't in IR yet, it might be lowered to a capability call or just ignored in current lower_statement.
-    // Let's see lower_statement: it doesn't handle NetworkRequest specifically.
-    assert!(vm.root_timeline.local_clock >= 2);
-
-    Ok(())
-}
-
-#[test]
 fn causm_temporal_defer_await_success() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
@@ -231,10 +200,10 @@ fn causm_temporal_defer_await_timeout() -> anyhow::Result<()> {
 }
 
 #[test]
-fn causm_temporal_relativistic_network_request_merge() -> anyhow::Result<()> {
+fn test_temporal_relativistic_branch_merge_reconciliation() -> anyhow::Result<()> {
     let source = r#"
     @0ms: { split main into [a,b] }
-    @a: { network_request "api.example.com" }
+    @a: { let v = "active" }
     @b: { let v = "fallback" }
     @0ms: { merge [a,b] into main reconcile(v=b) }
     "#;
@@ -245,9 +214,6 @@ fn causm_temporal_relativistic_network_request_merge() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.register_capability("System.NetworkFetch", |_| {
-        Ok(causm_core::value::Payload::Null)
-    });
     vm.execute_program(&ir)?;
 
     let v_reg = ir.symbols.get("v").expect("v not found").0;

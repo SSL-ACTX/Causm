@@ -32,15 +32,26 @@ fn test_csa_archive_roundtrip_serialization() -> anyhow::Result<()> {
         taking_ms: Some(10),
         foreign_binding: None,
         instructions: vec![
-            causm_ir::Instruction::ConstInt { dest: causm_ir::Reg(0), value: 42 },
-            causm_ir::Instruction::Return { src: Some(causm_ir::Reg(0)) },
+            causm_ir::Instruction::ConstInt {
+                dest: causm_ir::Reg(0),
+                value: 42,
+            },
+            causm_ir::Instruction::Return {
+                src: Some(causm_ir::Reg(0)),
+            },
         ],
         spans: vec![None, None],
     };
-    bytecode_archive.insert_bytecode_routine("std/core", "Core.constant_42", dummy_routine.clone());
+    bytecode_archive.insert_bytecode_routine(
+        "std/core",
+        "Core.constant_42",
+        dummy_routine.clone(),
+    );
     let bytecode_bytes = bytecode_archive.to_bytes()?;
     let loaded_bytecode_archive = CsaArchive::from_bytes(&bytecode_bytes)?;
-    let routines = loaded_bytecode_archive.get_bytecode_routines("std/core").expect("routines found");
+    let routines = loaded_bytecode_archive
+        .get_bytecode_routines("std/core")
+        .expect("routines found");
     assert_eq!(routines.len(), 1);
     assert_eq!(routines[0].name, "Core.constant_42");
     assert_eq!(routines[0].routine, dummy_routine);

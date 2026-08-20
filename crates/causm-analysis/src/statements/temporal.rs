@@ -115,18 +115,6 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Watchdog(
-        &mut self,
-        _target: &String,
-        _timeout_ms: &u64,
-        recovery: &[SpannedStatement],
-    ) -> Result<(), SemanticError> {
-        for inner_stmt in recovery {
-            self.analyze_statement(inner_stmt)?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn Await(&mut self, target: &str) -> Result<(), SemanticError> {
         self.check_available(target)?;
         let target_type = self
@@ -140,20 +128,6 @@ impl EntropicAnalyzer {
             other => {
                 return Err(self.annotate(SemanticErrorKind::TypeMismatch(
                     format!("await target must be a Promise, got {:?}", other),
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) fn AwaitChan(&mut self, chan_id: &str) -> Result<(), SemanticError> {
-        if !self.capability_stack.is_empty()
-            && !self.is_capability_allowed("Chan.Inbound")
-        {
-            let key = format!("Chan.Inbound[id={}]", chan_id);
-            if !self.is_capability_allowed(&key) {
-                return Err(self.annotate(SemanticErrorKind::MissingCapability(
-                    format!("Chan.Inbound(id={})", chan_id),
                 )));
             }
         }

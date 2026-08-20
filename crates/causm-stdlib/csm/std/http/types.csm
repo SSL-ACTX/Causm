@@ -3,7 +3,6 @@
         key: string,
         value: string
     }
-
     type HttpRequest = struct {
         body: string,
         headers: array,
@@ -11,7 +10,6 @@
         method: string,
         path: string
     }
-
     type HttpResponse = struct {
         body: string,
         headers: array,

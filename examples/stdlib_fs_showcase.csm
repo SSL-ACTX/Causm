@@ -17,8 +17,7 @@
         print(ext)
         let file = create_file(clone(target_path))
         print(file.path)
-        let payload = "CAUSM_STATUS=INITIALIZED,ENTROPY=0.0,CLOCK=0ms
-"
+        let payload = "CAUSM_STATUS=INITIALIZED,ENTROPY=0.0,CLOCK=0ms\n"
         let bytes_written = write_all(file, clone(payload), 46)
         print(bytes_written)
         let sync_code = flush_file(file)

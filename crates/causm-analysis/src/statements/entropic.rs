@@ -152,24 +152,6 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn AcausalReset(
-        &mut self,
-        _target: &String,
-        _anchor_name: &String,
-    ) -> Result<(), SemanticError> {
-        if self.entropy_mode == causm_core::EntropyMode::Chaos {
-            return Err(self.annotate(SemanticErrorKind::ChaosModePreventsRewind));
-        }
-        if let Some(cap) = self.get_capability("System.Entropy") {
-            if cap.parameters.get("mode").map(|s| s.as_str()) == Some("chaos") {
-                return Err(
-                    self.annotate(SemanticErrorKind::ChaosModePreventsRewind)
-                );
-            }
-        }
-        Ok(())
-    }
-
     pub(crate) fn Entangle(
         &mut self,
         variables: &[String],

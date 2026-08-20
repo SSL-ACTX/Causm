@@ -135,80 +135,6 @@ fn causm_expansion_speculate_inside_split_map() -> anyhow::Result<()> {
 }
 
 #[test]
-fn causm_expansion_loop_tick_double_buffer() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-      isolate producer_consumer {
-        require Chan.Manage
-        require Chan.Outbound(id="c")
-        require Chan.Inbound(id="c")
-        slice 10ms
-        enable cpu(100ms)
-        open_chan c(2)
-        
-        // producer
-        split main into [p, c1]
-        @p: {
-            loop tick {
-                let x = 1
-                chan_send c(x)
-                break
-            }
-            loop tick {
-                let x = 2
-                chan_send c(x)
-                break
-            }
-        }
-        
-        @c1: {
-            // First tick: nothing yet (double buffer)
-            loop tick {
-                // try receive - should fail if it reads from current tick
-                // Reading exclusively from data committed during the PRECEDING tick.
-                break
-            }
-            // Second tick: should get '1'
-            loop tick {
-                let val = chan_recv(c)
-                let out = val
-                break
-            }
-        }
-      }
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    let mut vm = Vm::new();
-    vm.capability_handlers.insert(
-        "System.Log".to_string(),
-        Box::new(|params| {
-            if let Some(msg) = params.get("message") {
-                println!("[LOG] {}", msg);
-            }
-            Ok(causm_core::value::Payload::Null)
-        }),
-    );
-    vm.execute_program(&ir)?;
-
-    let consumer = vm.active_branches.get("c1").unwrap();
-    let out_reg = ir.symbols.get("out").expect("out not found").0;
-    let out_val = consumer.arena.peek(out_reg);
-
-    match out_val {
-        Some(Payload::Integer(v)) => assert_eq!(v, 1),
-        _ => panic!("Expected out=1 (from first tick of producer)"),
-    }
-
-    Ok(())
-}
-
-#[test]
 fn causm_expansion_entanglement_speculation_rollback() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
@@ -255,48 +181,6 @@ fn causm_expansion_entanglement_speculation_rollback() -> anyhow::Result<()> {
         Some(Payload::String(s)) => assert_eq!(s, "Y"),
         _ => panic!("Expected final_y=Y, got {:?}", final_y_val),
     }
-
-    Ok(())
-}
-
-#[test]
-fn causm_expansion_select_timing_determinism() -> anyhow::Result<()> {
-    let source = r#"
-    @0ms: {
-      open_chan c(1)
-      let msg = "ready"
-      chan_send c(msg)
-      slice 1ms
-      loop tick { break } // commit send
-      
-      let out = "init"
-      select (max 10ms) {
-        case data = chan_recv(c):
-          out = data
-        timeout:
-          out = "timeout"
-      }
-      debug(out)
-      assert_time(elapsed >= 10ms)
-    }
-    "#;
-
-    let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut analyzer = EntropicAnalyzer::new();
-    analyzer.analyze_program(&program)?;
-
-    let mut vm = Vm::new();
-    vm.capability_handlers.insert(
-        "System.Log".to_string(),
-        Box::new(|params| {
-            if let Some(msg) = params.get("message") {
-                println!("[LOG] {}", msg);
-            }
-            Ok(causm_core::value::Payload::Null)
-        }),
-    );
-    vm.execute_program(&ir)?;
 
     Ok(())
 }

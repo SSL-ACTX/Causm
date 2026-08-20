@@ -217,9 +217,8 @@ fn causm_entropic_topographical_merge_union() -> anyhow::Result<()> {
         }
         
         @beta: {
-            inspect view = graph {
-                let dead_core = view["core"]
-            }
+            let view = graph
+            let dead_core = view["core"]
         }
     }
 

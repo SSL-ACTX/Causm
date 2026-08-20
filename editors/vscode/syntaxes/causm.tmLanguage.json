@@ -25,15 +25,15 @@
             "patterns": [
                 {
                     "name": "keyword.control.csm",
-                    "match": "\\b(isolate|split|merge|routine|for|inspect|print|debug|log|anchor|rewind_to|commit|speculate|fallback|collapse|speculation_mode|select|case|timeout|match|entropy|await|if|else|break|loop|tick|slice|yield|type|open_chan|chan_send|require|enable|network_request|entangle|reset|into|taking|pacing|max|deadline|on_invalid|to|reconcile|auto|first_wins|decay|priority|topology_union|topology_intersect)\\b"
+                    "match": "\\b(isolate|split|merge|routine|for|using|print|debug|log|anchor|rewind_to|commit|speculate|fallback|collapse|speculation_mode|select|case|timeout|match|entropy|await|if|else|break|loop|tick|slice|yield|type|require|enable|entangle|into|taking|pacing|max|deadline|on_invalid|to|reconcile|auto|first_wins|decay|priority|topology_union|topology_intersect)\\b"
                 },
                 {
                     "name": "storage.type.csm",
-                    "match": "\\b(int|bool|string|struct|topology|array|let)\\b"
+                    "match": "\\b(int|i64|i32|f64|f32|bool|string|struct|enum|interface|topology|array|let|mut)\\b"
                 },
                 {
                     "name": "keyword.other.csm",
-                    "match": "\\b(call|chan_recv|clone)\\b"
+                    "match": "\\b(call|clone|peek|consume|lease|defer)\\b"
                 }
             ]
         },

@@ -530,9 +530,6 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
         SsaInstruction::Break => Instruction::Break,
         SsaInstruction::LoopTick => Instruction::LoopTick,
         SsaInstruction::EndLoopTick => Instruction::EndLoopTick,
-        SsaInstruction::NetworkRequest { domain } => Instruction::NetworkRequest {
-            domain: domain.clone(),
-        },
         SsaInstruction::Print { src } => Instruction::Print {
             src: ssa_reg_to_reg(*src),
         },

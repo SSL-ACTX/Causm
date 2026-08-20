@@ -43,27 +43,13 @@
 }
 
 @30ms: {
-    print("Demonstrating Causal Safety (Paradox Prevention)...")
-    open_chan quantum_bus (1)
-    split main into [sender, receiver]
-}
-
-@40ms: {
-    @sender: {
-        anchor pre_send
-        let signal = "SIGNAL_DETECTED"
-        print("Sender: Emitting signal...")
-        chan_send quantum_bus (signal)
+    print("Demonstrating Speculation and Collapse Safety...")
+    let counter = 10
+    speculate (taking 10ms) {
+        let counter = 20
+        collapse
+    } fallback {
+        print("Speculation safely collapsed, state reverted")
     }
-    @receiver: {
-        let val = chan_recv(quantum_bus)
-        print("Receiver: Observed: " + val)
-    }
-}
-
-@50ms: {
-    @sender: {
-        print("Sender: A rewind to 'pre_send' would now trigger a Causal Paradox.")
-        print("Causality preserved.")
-    }
+    print("Causality preserved.")
 }

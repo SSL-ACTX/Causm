@@ -102,8 +102,13 @@ impl CsaArchive {
             .map(|m| decode_from_binary_bytecode(&m.bytecode))
     }
 
-    pub fn get_bytecode_routines(&self, path: &str) -> Option<&[CsaBytecodeRoutine]> {
-        self.modules.get(path).map(|m| m.bytecode_routines.as_slice())
+    pub fn get_bytecode_routines(
+        &self,
+        path: &str,
+    ) -> Option<&[CsaBytecodeRoutine]> {
+        self.modules
+            .get(path)
+            .map(|m| m.bytecode_routines.as_slice())
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {

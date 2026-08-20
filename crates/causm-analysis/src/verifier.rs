@@ -205,27 +205,25 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.consume_variable(binding, path_condition, spanned.span.end);
                 Ok(body_clock)
             }
-            Statement::ChannelSend { value_id, .. } | Statement::Yield(value_id) => {
+            Statement::Yield(value_id) => {
                 self.check_available(value_id, path_condition)?;
                 self.check_not_leased(value_id, path_condition)?;
                 self.consume_variable(value_id, path_condition, spanned.span.start);
 
-                if matches!(&spanned.stmt, Statement::ChannelSend { .. }) {
-                    let new_horizon = self
-                        .solver
-                        .int_const(&format!("horizon_{}", spanned.span.start));
-                    let eq_clock = self.solver.int_eq(&new_horizon, &current_clock);
-                    let impl_eq_clock =
-                        self.solver.bool_implies(path_condition, &eq_clock);
-                    self.solver.assert(&impl_eq_clock);
-                    let eq_horizon =
-                        self.solver.int_eq(&new_horizon, &self.causal_horizon);
-                    let not_pc = self.solver.bool_not(path_condition);
-                    let impl_eq_horizon =
-                        self.solver.bool_implies(&not_pc, &eq_horizon);
-                    self.solver.assert(&impl_eq_horizon);
-                    self.causal_horizon = new_horizon;
-                }
+                let new_horizon = self
+                    .solver
+                    .int_const(&format!("horizon_{}", spanned.span.start));
+                let eq_clock = self.solver.int_eq(&new_horizon, &current_clock);
+                let impl_eq_clock =
+                    self.solver.bool_implies(path_condition, &eq_clock);
+                self.solver.assert(&impl_eq_clock);
+                let eq_horizon =
+                    self.solver.int_eq(&new_horizon, &self.causal_horizon);
+                let not_pc = self.solver.bool_not(path_condition);
+                let impl_eq_horizon = self.solver.bool_implies(&not_pc, &eq_horizon);
+                self.solver.assert(&impl_eq_horizon);
+                self.causal_horizon = new_horizon;
+
                 Ok(current_clock)
             }
             Statement::RelativisticBlock { body, .. } => {
@@ -259,10 +257,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.anchors.insert(name.clone(), current_clock.clone());
                 Ok(current_clock)
             }
-            Statement::Rewind(name)
-            | Statement::AcausalReset {
-                anchor_name: name, ..
-            } => {
+            Statement::Rewind(name) => {
                 if let Some(anchor_time) = self.anchors.get(name) {
                     let paradox =
                         self.solver.int_lt(anchor_time, &self.causal_horizon);
@@ -736,7 +731,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 for arm in arms {
                     self.variable_validity = pre_match_validity.clone();
                     self.variable_leased = pre_match_leased.clone();
-                    self.bind_pattern_variables(&arm.pattern, path_condition);
+                    self.bind_pattern_variables(&arm.pattern);
                     if let Some(ref g) = arm.guard {
                         self.verify_expression(g, path_condition, &current_clock)?;
                     }
@@ -766,7 +761,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 let pre_if_validity = self.variable_validity.clone();
                 let pre_if_leased = self.variable_leased.clone();
 
-                self.bind_pattern_variables(pattern, path_condition);
+                self.bind_pattern_variables(pattern);
                 let mut then_clock = current_clock.clone();
                 for s in then_branch {
                     then_clock =
@@ -827,21 +822,6 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
             }
             Statement::LoopTick { body } => {
-                let slice_ms = self.current_slice_ms.unwrap_or(0);
-                let mut loop_clock = self.solver.int_from_u64(0);
-                for stmt in body {
-                    loop_clock =
-                        self.verify_statement(stmt, path_condition, &loop_clock)?;
-                }
-                let mut unroll_clock = loop_clock.clone();
-                for stmt in body {
-                    unroll_clock =
-                        self.verify_statement(stmt, path_condition, &unroll_clock)?;
-                }
-                let slice_int = self.solver.int_from_u64(slice_ms);
-                Ok(self.solver.int_add(&[in_clock, &slice_int]))
-            }
-            Statement::LoopTickOn { channel: _, body } => {
                 let slice_ms = self.current_slice_ms.unwrap_or(0);
                 let mut loop_clock = self.solver.int_from_u64(0);
                 for stmt in body {
@@ -1408,7 +1388,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 for arm in arms {
                     self.variable_validity = pre_match_validity.clone();
                     self.variable_leased = pre_match_leased.clone();
-                    self.bind_pattern_variables(&arm.pattern, path_condition);
+                    self.bind_pattern_variables(&arm.pattern);
                     if let Some(ref g) = arm.guard {
                         self.verify_expression(g, path_condition, in_clock)?;
                     }
@@ -1422,11 +1402,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
         }
     }
 
-    fn bind_pattern_variables(
-        &mut self,
-        pattern: &causm_core::Pattern,
-        path_condition: &S::Bool,
-    ) {
+    fn bind_pattern_variables(&mut self, pattern: &causm_core::Pattern) {
         match pattern {
             causm_core::Pattern::Wildcard | causm_core::Pattern::Literal(_) => {}
             causm_core::Pattern::Identifier(name) => {
@@ -1437,7 +1413,7 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
             }
             causm_core::Pattern::EnumVariant { args, .. } => {
                 for arg in args {
-                    self.bind_pattern_variables(arg, path_condition);
+                    self.bind_pattern_variables(arg);
                 }
             }
             causm_core::Pattern::TypeAssert { binding, .. } => {

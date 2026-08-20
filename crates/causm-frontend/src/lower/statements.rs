@@ -846,20 +846,6 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 anchor: name.clone(),
             });
         }
-        Statement::AcausalReset {
-            target,
-            anchor_name,
-        } => {
-            ctx.push(Instruction::Rewind {
-                target: target.clone(),
-                anchor: anchor_name.clone(),
-            });
-        }
-        Statement::NetworkRequest { domain } => {
-            ctx.push(Instruction::NetworkRequest {
-                domain: domain.clone(),
-            });
-        }
         Statement::ForeignBlock {
             lib_name,
             abi,
@@ -915,50 +901,11 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let target = ctx.get_reg(name);
             ctx.push(Instruction::Await { target });
         }
-        Statement::AwaitChan(name) => {
-            ctx.push(Instruction::AwaitChan {
-                chan_id: name.clone(),
-            });
-        }
-        Statement::Inspect {
-            binding,
-            target,
-            body,
-        } => {
-            let orig_symbols = ctx.symbols.clone();
-            if let Some(r) = ctx.symbols.get(target).cloned() {
-                ctx.symbols.insert(binding.clone(), r);
-            }
-            for s in body {
-                lower_spanned(ctx, s);
-            }
-            ctx.symbols = orig_symbols;
-        }
-
         Statement::Commit(body) => {
             for s in body {
                 lower_spanned(ctx, s);
             }
             ctx.push(Instruction::Commit { vars: Vec::new() });
-        }
-
-        Statement::ChannelOpen {
-            name,
-            capacity,
-            decay_after_ms,
-        } => {
-            ctx.push(Instruction::OpenChan {
-                name: name.clone(),
-                capacity: *capacity,
-                decay_after_ms: *decay_after_ms,
-            });
-        }
-        Statement::ChannelSend { chan_id, value_id } => {
-            let src = ctx.get_reg(value_id);
-            ctx.push(Instruction::ChanSend {
-                chan_id: chan_id.clone(),
-                src,
-            });
         }
         Statement::Slice { milliseconds } => {
             ctx.push(Instruction::Slice { ms: *milliseconds });
@@ -1013,15 +960,6 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             ctx.push(Instruction::EndLoop { max_ms: *max_ms });
             ctx.push(Instruction::Jump { target: start_pc });
-        }
-        Statement::LoopTickOn { channel, body } => {
-            ctx.push(Instruction::LoopTickOn {
-                chan_id: channel.clone(),
-            });
-            for s in body {
-                lower_spanned(ctx, s);
-            }
-            ctx.push(Instruction::EndLoopTick);
         }
         Statement::While {
             condition,
@@ -1347,41 +1285,6 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         *target = end_pc;
                     }
                 }
-            }
-        }
-        Statement::Watchdog {
-            target,
-            timeout_ms,
-            recovery,
-        } => {
-            let jump_over_recovery_idx = ctx.instructions.len();
-            ctx.push(Instruction::Watchdog {
-                target: target.clone(),
-                timeout_ms: *timeout_ms,
-                recovery_jump: Some(0),
-            });
-
-            let skip_recovery_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 });
-
-            let recovery_start_idx = ctx.instructions.len();
-            if let Instruction::Watchdog {
-                ref mut recovery_jump,
-                ..
-            } = ctx.instructions[jump_over_recovery_idx]
-            {
-                *recovery_jump = Some(recovery_start_idx);
-            }
-
-            for s in recovery {
-                lower_spanned(ctx, s);
-            }
-
-            let end_idx = ctx.instructions.len();
-            if let Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[skip_recovery_idx]
-            {
-                *target = end_idx;
             }
         }
         Statement::FieldUpdate {

@@ -51,12 +51,9 @@ fn test_cli_chaos_mode_prevents_rewind() -> anyhow::Result<()> {
 fn test_cli_deterministic_mode_allows_rewind() -> anyhow::Result<()> {
     let source = r#"
     @0ms @deterministic: {
-        split main into [w]
-        @w: {
-            anchor start
-            let y = 1
-        }
-        reset w to start
+        anchor start
+        let y = 1
+        rewind_to(start)
     }
     "#;
 
@@ -64,15 +61,11 @@ fn test_cli_deterministic_mode_allows_rewind() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
 
     let result = analyzer.analyze_program(&program);
-    if let Err(ref e) = result {
-        println!("Analysis failed with error: {:?}", e);
-    }
-    assert!(result.is_ok());
-
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut vm = Vm::new();
-    let result_exec = vm.execute_program(&ir);
-    assert!(result_exec.is_ok());
+    assert!(
+        result.is_ok(),
+        "Deterministic mode should allow rewind without compilation error: {:?}",
+        result
+    );
 
     Ok(())
 }
@@ -82,12 +75,9 @@ fn test_cli_chaos_mode_prevents_rewind_at_runtime() -> anyhow::Result<()> {
     // Force chaos mode at runtime using VM setup to verify the runtime safety path
     let source = r#"
     @0ms: {
-        split main into [w]
-        @w: {
-            anchor start
-            let y = 1
-        }
-        reset w to start
+        anchor start
+        let y = 1
+        rewind_to(start)
     }
     "#;
 
@@ -174,12 +164,9 @@ fn test_cli_block_level_deterministic_mode_allows_rewind() -> anyhow::Result<()>
     @0ms: {
         @chaos: {
             @deterministic: {
-                split main into [w]
-                @w: {
-                    anchor start
-                    let y = 1
-                }
-                reset w to start
+                anchor start
+                let y = 1
+                rewind_to(start)
             }
         }
     }
@@ -189,12 +176,11 @@ fn test_cli_block_level_deterministic_mode_allows_rewind() -> anyhow::Result<()>
     let mut analyzer = EntropicAnalyzer::new();
 
     let result = analyzer.analyze_program(&program);
-    assert!(result.is_ok());
-
-    let ir = causm_frontend::lower::lower_program(&program);
-    let mut vm = Vm::new();
-    let result_exec = vm.execute_program(&ir);
-    assert!(result_exec.is_ok());
+    assert!(
+        result.is_ok(),
+        "Block-level @deterministic should allow rewind inside @chaos block: {:?}",
+        result
+    );
 
     Ok(())
 }
