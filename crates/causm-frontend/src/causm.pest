@@ -36,6 +36,7 @@ statement = {
     | speculation_mode_stmt
     | select_stmt
     | match_entropy_stmt
+    | match_stmt
     | await_stmt
     | await_chan_stmt
     | if_stmt
@@ -114,6 +115,9 @@ identifier_or_pattern = { identifier | "{" ~ field_pattern_list ~ "}" }
 field_pattern_list = { field_pattern ~ ("," ~ field_pattern)* ~ ","? }
 field_pattern = { identifier ~ ("=" ~ (entropic_state_name | expression))? }
 entropic_state_name = { "Valid" | "Decayed" | "Pending" | "Consumed" }
+
+match_stmt = { "match" ~ expression ~ "{" ~ match_arm* ~ "}" }
+match_arm = { match_pattern ~ guard_clause? ~ "=>" ~ (statement_block | statement) ~ ","? }
 
 break_stmt = { "break" }
 
@@ -232,9 +236,11 @@ time_unit = { "ns" | "us" | "ms" | "s" }
 duration_literal = @{ ASCII_DIGIT+ ~ time_unit }
 if_expr = { "if" ~ "(" ~ expression ~ ")" ~ ("{" ~ expression ~ "}" | primary_expr) ~ "else" ~ ("{" ~ expression ~ "}" | if_expr | primary_expr) }
 match_entropy_expr = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
+match_expr = { "match" ~ expression ~ "{" ~ match_expr_arm* ~ "}" }
+match_expr_arm = { match_pattern ~ guard_clause? ~ "=>" ~ expression ~ ","? }
 syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ expression)* ~ ")" ~ duration_limit? }
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
-base_expr = { null | if_expr | path_expr | match_entropy_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
+base_expr = { null | if_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
 slice_range = { expression? ~ ".." ~ "="? ~ expression? }
@@ -282,7 +288,22 @@ enum_variant_list = { enum_variant ~ ("," ~ enum_variant)* ~ ","? }
 enum_variant = { identifier ~ ("(" ~ type_name_list ~ ")")? }
 type_name_list = { type_name ~ ("," ~ type_name)* }
 
-if_let_stmt = { "if" ~ "let" ~ identifier ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
+match_pattern = {
+    enum_pattern
+    | literal_pattern
+    | wildcard_pattern
+    | ident_pattern
+}
+enum_pattern = {
+    (identifier ~ "::" ~ identifier ~ ("(" ~ pattern_arg_list? ~ ")")?)
+    | (identifier ~ "(" ~ pattern_arg_list? ~ ")")
+}
+pattern_arg_list = { match_pattern ~ ("," ~ match_pattern)* ~ ","? }
+literal_pattern = { float_literal | integer_literal | bool_literal | string_literal | null }
+wildcard_pattern = { "_" }
+ident_pattern = { identifier }
+
+if_let_stmt = { "if" ~ "let" ~ match_pattern ~ "=" ~ expression ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!("\"" | "\\") ~ ANY | "\\" ~ ANY)* ~ "\"" }

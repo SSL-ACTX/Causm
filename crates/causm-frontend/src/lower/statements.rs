@@ -1,5 +1,5 @@
 use super::context::LoweringContext;
-use super::expressions::lower_expression;
+use super::expressions::{lower_expression, lower_pattern_test};
 use causm_core::{
     BinaryOperator, DecayedPattern, Expression, PatternValue, SpannedStatement,
     Statement,
@@ -49,6 +49,41 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         let ret_reg = lower_expression(&mut sub_ctx, expr);
                         sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
                         continue;
+                    } else if let Statement::Match {
+                        ref target,
+                        ref arms,
+                    } = s.stmt
+                    {
+                        let all_exprs = arms.iter().all(|a| {
+                            a.body.len() == 1
+                                && matches!(a.body[0].stmt, Statement::Expression(_))
+                        });
+                        if all_exprs {
+                            let expr_arms = arms
+                                .iter()
+                                .map(|a| {
+                                    if let Statement::Expression(ref e) =
+                                        a.body[0].stmt
+                                    {
+                                        causm_core::MatchExprArm {
+                                            pattern: a.pattern.clone(),
+                                            guard: a.guard.clone(),
+                                            body: e.clone(),
+                                        }
+                                    } else {
+                                        unreachable!()
+                                    }
+                                })
+                                .collect();
+                            let match_expr = Expression::Match {
+                                target: Box::new(target.clone()),
+                                arms: expr_arms,
+                            };
+                            let ret_reg =
+                                lower_expression(&mut sub_ctx, &match_expr);
+                            sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                            continue;
+                        }
                     }
                 }
                 lower_spanned(&mut sub_ctx, s);
@@ -1187,6 +1222,130 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     ctx.instructions[jump_to_else_idx]
                 {
                     *target = end_idx;
+                }
+            }
+        }
+        Statement::Match { target, arms } => {
+            let target_reg = lower_expression(ctx, target);
+            let mut exit_jumps = Vec::new();
+
+            for arm in arms {
+                let mut fail_jumps = Vec::new();
+                let mut bound_symbols = Vec::new();
+
+                lower_pattern_test(
+                    ctx,
+                    target_reg,
+                    &arm.pattern,
+                    &mut fail_jumps,
+                    &mut bound_symbols,
+                );
+
+                if let Some(ref guard) = arm.guard {
+                    let guard_reg = lower_expression(ctx, guard);
+                    fail_jumps.push(ctx.instructions.len());
+                    ctx.push(Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
+                for s in &arm.body {
+                    lower_spanned(ctx, s);
+                }
+
+                for (name, old) in bound_symbols.into_iter().rev() {
+                    if let Some(o) = old {
+                        ctx.symbols.insert(name, o);
+                    } else {
+                        ctx.symbols.remove(&name);
+                    }
+                }
+
+                exit_jumps.push(ctx.instructions.len());
+                ctx.push(Instruction::Jump { target: 0 });
+
+                let next_arm_target = ctx.instructions.len();
+                for fail_idx in fail_jumps {
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        ctx.instructions[fail_idx]
+                    {
+                        *target = next_arm_target;
+                    }
+                }
+            }
+
+            let end_target = ctx.instructions.len();
+            for exit_idx in exit_jumps {
+                if let Instruction::Jump { ref mut target } =
+                    ctx.instructions[exit_idx]
+                {
+                    *target = end_target;
+                }
+            }
+        }
+        Statement::IfLet {
+            pattern,
+            expr,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            let target_reg = lower_expression(ctx, expr);
+            let mut fail_jumps = Vec::new();
+            let mut bound_symbols = Vec::new();
+
+            lower_pattern_test(
+                ctx,
+                target_reg,
+                pattern,
+                &mut fail_jumps,
+                &mut bound_symbols,
+            );
+
+            for s in then_branch {
+                lower_spanned(ctx, s);
+            }
+
+            for (name, old) in bound_symbols.into_iter().rev() {
+                if let Some(o) = old {
+                    ctx.symbols.insert(name, o);
+                } else {
+                    ctx.symbols.remove(&name);
+                }
+            }
+
+            if let Some(eb) = else_branch {
+                let jump_to_end_idx = ctx.instructions.len();
+                ctx.push(Instruction::Jump { target: 0 });
+
+                let else_start_idx = ctx.instructions.len();
+                for fail_idx in fail_jumps {
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        ctx.instructions[fail_idx]
+                    {
+                        *target = else_start_idx;
+                    }
+                }
+
+                for s in eb {
+                    lower_spanned(ctx, s);
+                }
+
+                let end_pc = ctx.instructions.len();
+                if let Instruction::Jump { ref mut target } =
+                    ctx.instructions[jump_to_end_idx]
+                {
+                    *target = end_pc;
+                }
+            } else {
+                let end_pc = ctx.instructions.len();
+                for fail_idx in fail_jumps {
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        ctx.instructions[fail_idx]
+                    {
+                        *target = end_pc;
+                    }
                 }
             }
         }

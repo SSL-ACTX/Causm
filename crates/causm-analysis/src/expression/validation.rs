@@ -742,6 +742,31 @@ pub(crate) fn analyze_expression(
                 .insert(analyzer.current_branch.clone(), merged);
             Ok(())
         }
+        Expression::Match { target, arms } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            let original_state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .cloned()
+                .unwrap_or_default();
+            for arm in arms {
+                let mut arm_contexts = analyzer.branch_contexts.clone();
+                arm_contexts
+                    .insert(analyzer.current_branch.clone(), original_state.clone());
+                let previous =
+                    std::mem::replace(&mut analyzer.branch_contexts, arm_contexts);
+                crate::statements::control_flow::bind_pattern_variables(
+                    analyzer,
+                    &arm.pattern,
+                );
+                if let Some(ref g) = arm.guard {
+                    analyze_expression(analyzer, g)?;
+                }
+                analyze_expression(analyzer, &arm.body)?;
+                analyzer.branch_contexts = previous;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -915,6 +940,31 @@ pub(crate) fn analyze_expression_nonconsuming(
             analyze_expression_nonconsuming(analyzer, condition)?;
             analyze_expression_nonconsuming(analyzer, then_branch)?;
             analyze_expression_nonconsuming(analyzer, else_branch)?;
+            Ok(())
+        }
+        Expression::Match { target, arms } => {
+            analyze_expression_nonconsuming(analyzer, target)?;
+            let original_state = analyzer
+                .branch_contexts
+                .get(&analyzer.current_branch)
+                .cloned()
+                .unwrap_or_default();
+            for arm in arms {
+                let mut arm_contexts = analyzer.branch_contexts.clone();
+                arm_contexts
+                    .insert(analyzer.current_branch.clone(), original_state.clone());
+                let previous =
+                    std::mem::replace(&mut analyzer.branch_contexts, arm_contexts);
+                crate::statements::control_flow::bind_pattern_variables(
+                    analyzer,
+                    &arm.pattern,
+                );
+                if let Some(ref g) = arm.guard {
+                    analyze_expression_nonconsuming(analyzer, g)?;
+                }
+                analyze_expression_nonconsuming(analyzer, &arm.body)?;
+                analyzer.branch_contexts = previous;
+            }
             Ok(())
         }
     }

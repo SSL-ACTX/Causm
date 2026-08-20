@@ -270,3 +270,74 @@ fn test_json_http_payload_integration() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_json_enum_variant_pattern_matching() -> anyhow::Result<()> {
+    let source = r#"
+    import "std/json" as Json
+
+    @0ms: {
+        let input = "{\"score\": 42, \"flag\": true, \"title\": \"causm\"}"
+        let parsed = Json.parse(input)
+
+        let score_val = Json.get(parsed, "score")
+        let score_extracted = match score_val {
+            JsonValue::Number(n) => n * 10,
+            _ => 0
+        }
+
+        let flag_val = Json.get(parsed, "flag")
+        let flag_extracted = match flag_val {
+            JsonValue::Bool(b) => b,
+            _ => false
+        }
+
+        let title_val = Json.get(parsed, "title")
+        let mut title_extracted = ""
+        if let JsonValue::String(s) = title_val {
+            title_extracted = s
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let score_reg = ir
+        .symbols
+        .get("score_extracted")
+        .expect("score_extracted not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(score_reg),
+        Some(Payload::Integer(420))
+    );
+
+    let flag_reg = ir
+        .symbols
+        .get("flag_extracted")
+        .expect("flag_extracted not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(flag_reg),
+        Some(Payload::Bool(true))
+    );
+
+    let title_reg = ir
+        .symbols
+        .get("title_extracted")
+        .expect("title_extracted not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(title_reg),
+        Some(Payload::String("causm".to_string()))
+    );
+
+    Ok(())
+}

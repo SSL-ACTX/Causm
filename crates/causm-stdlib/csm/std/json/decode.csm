@@ -3,77 +3,13 @@
 @0ms: {
     from "std/json/types" import *
 
-    routine Json.make_null() -> JsonValue taking _ =>
-        struct {
-            kind = 0,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.make_bool(peek b: bool) -> JsonValue taking _ =>
-        struct {
-            kind = 1,
-            bool_val = b,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.make_number(peek n: i64) -> JsonValue taking _ =>
-        struct {
-            kind = 2,
-            bool_val = false,
-            num_val = n,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.make_string(peek s: string) -> JsonValue taking _ =>
-        struct {
-            kind = 3,
-            bool_val = false,
-            num_val = 0,
-            str_val = s,
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.make_array(peek items: array) -> JsonValue taking _ =>
-        struct {
-            kind = 4,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = items,
-            obj_val = []
-        }
-
-    routine Json.make_object(peek members: array) -> JsonValue taking _ =>
-        struct {
-            kind = 5,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = members
-        }
-
     routine Json.is_ws(peek b: i32) -> bool taking _ =>
-        if (b == 32) {
-            true
-        } else if (b == 9) {
-            true
-        } else if (b == 10) {
-            true
-        } else if (b == 13) {
-            true
-        } else {
-            false
+        match b {
+            32 => true,
+            9 => true,
+            10 => true,
+            13 => true,
+            _ => false
         }
 
     routine Json.skip_ws(peek bytes: array, peek pos: i32, peek n: i32) -> i32 taking _ {
@@ -107,15 +43,17 @@
                 p = p + 1
                 if (p < limit) {
                     let mut esc = bytes[p]
-                    let mut ch = esc
-                    if (esc == 110) { ch = 10 }
-                    else if (esc == 114) { ch = 13 }
-                    else if (esc == 116) { ch = 9 }
-                    else if (esc == 98) { ch = 8 }
-                    else if (esc == 102) { ch = 12 }
-                    else if (esc == 34) { ch = 34 }
-                    else if (esc == 92) { ch = 92 }
-                    else if (esc == 47) { ch = 47 }
+                    let ch = match esc {
+                        110 => 10,
+                        114 => 13,
+                        116 => 9,
+                        98 => 8,
+                        102 => 12,
+                        34 => 34,
+                        92 => 92,
+                        47 => 47,
+                        _ => esc
+                    }
 
                     if (out_len >= buf_cap) {
                         let new_cap = buf_cap * 2
@@ -185,41 +123,39 @@
         }
         let total = num * sign
         struct {
-            val = Json.make_number(total),
+            val = JsonValue::Number(total),
             next_pos = p
         }
     }
 
     routine Json.parse_bool_or_null(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
-        let mut b = bytes[pos]
-        let mut res = struct {
-            val = Json.make_null(),
-            next_pos = pos + 4
-        }
-        if (b == 116) {
-            res = struct {
-                val = Json.make_bool(true),
+        let b = bytes[pos]
+        match b {
+            116 => struct {
+                val = JsonValue::Bool(true),
+                next_pos = pos + 4
+            },
+            102 => struct {
+                val = JsonValue::Bool(false),
+                next_pos = pos + 5
+            },
+            _ => struct {
+                val = JsonValue::Null,
                 next_pos = pos + 4
             }
-        } else if (b == 102) {
-            res = struct {
-                val = Json.make_bool(false),
-                next_pos = pos + 5
-            }
         }
-        res
     }
 
     routine Json.parse_val(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let mut limit = clone(n)
         let p = Json.skip_ws(bytes, pos, limit)
-        let mut result = struct { val = Json.make_null(), next_pos = limit }
+        let mut result = struct { val = JsonValue::Null, next_pos = limit }
         if (p < limit) {
             let mut b = bytes[p]
             if (b == 34) {
                 let res = Json.parse_str_raw(bytes, p, limit)
                 result = struct {
-                    val = Json.make_string(res.val),
+                    val = JsonValue::String(res.val),
                     next_pos = res.next_pos
                 }
             } else if (b == 123) {
@@ -248,7 +184,7 @@
                         }
                         let v_res = Json.parse_val(bytes, cur, limit)
                         let mem_n = len(members)
-                        let mut new_members = [struct { key = "", val = Json.make_null() }; mem_n + 1]
+                        let mut new_members = [struct { key = "", val = JsonValue::Null }; mem_n + 1]
                         let mut mi = 0
                         for existing_m in members step _ {
                             let cloned_m = clone(existing_m)
@@ -274,7 +210,7 @@
                     }
                 }
                 result = struct {
-                    val = Json.make_object(members),
+                    val = JsonValue::Object(members),
                     next_pos = cur
                 }
             } else if (b == 91) {
@@ -293,7 +229,7 @@
                     }
                     let v_res = Json.parse_val(bytes, cur, limit)
                     let items_n = len(items)
-                    let mut new_items = [Json.make_null(); items_n + 1]
+                    let mut new_items = [JsonValue::Null; items_n + 1]
                     let mut ii = 0
                     for existing_it in items step _ {
                         let cloned_it = clone(existing_it)
@@ -316,7 +252,7 @@
                     }
                 }
                 result = struct {
-                    val = Json.make_array(items),
+                    val = JsonValue::Array(items),
                     next_pos = cur
                 }
             } else if (b == 116) {
@@ -329,12 +265,12 @@
                 if (b <= 57) {
                     result = Json.parse_number(bytes, p, limit)
                 } else {
-                    result = struct { val = Json.make_null(), next_pos = p + 1 }
+                    result = struct { val = JsonValue::Null, next_pos = p + 1 }
                 }
             } else if (b == 45) {
                 result = Json.parse_number(bytes, p, limit)
             } else {
-                result = struct { val = Json.make_null(), next_pos = p + 1 }
+                result = struct { val = JsonValue::Null, next_pos = p + 1 }
             }
         }
         result

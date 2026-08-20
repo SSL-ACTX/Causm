@@ -1,5 +1,5 @@
 use super::context::LoweringContext;
-use causm_core::{Expression, FStringPart, TypeFieldDef};
+use causm_core::{BinaryOperator, Expression, FStringPart, Pattern, TypeFieldDef};
 use causm_ir::Reg;
 use std::collections::HashMap;
 
@@ -531,6 +531,161 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             }
 
             dest_reg
+        }
+        Expression::Match { target, arms } => {
+            let target_reg = lower_expression(ctx, target);
+            let result_reg = ctx.alloc_reg();
+            let mut exit_jumps = Vec::new();
+
+            for arm in arms {
+                let mut fail_jumps = Vec::new();
+                let mut bound_symbols = Vec::new();
+
+                lower_pattern_test(
+                    ctx,
+                    target_reg,
+                    &arm.pattern,
+                    &mut fail_jumps,
+                    &mut bound_symbols,
+                );
+
+                if let Some(ref guard) = arm.guard {
+                    let guard_reg = lower_expression(ctx, guard);
+                    fail_jumps.push(ctx.instructions.len());
+                    ctx.push(causm_ir::Instruction::JumpIfNot {
+                        cond: guard_reg,
+                        target: 0,
+                    });
+                }
+
+                let body_reg = lower_expression(ctx, &arm.body);
+                ctx.push(causm_ir::Instruction::Move {
+                    dest: result_reg,
+                    src: body_reg,
+                });
+
+                for (name, old) in bound_symbols.into_iter().rev() {
+                    if let Some(o) = old {
+                        ctx.symbols.insert(name, o);
+                    } else {
+                        ctx.symbols.remove(&name);
+                    }
+                }
+
+                exit_jumps.push(ctx.instructions.len());
+                ctx.push(causm_ir::Instruction::Jump { target: 0 });
+
+                let next_arm_target = ctx.instructions.len();
+                for fail_idx in fail_jumps {
+                    if let causm_ir::Instruction::JumpIfNot {
+                        ref mut target, ..
+                    } = ctx.instructions[fail_idx]
+                    {
+                        *target = next_arm_target;
+                    }
+                }
+            }
+
+            let end_target = ctx.instructions.len();
+            for exit_idx in exit_jumps {
+                if let causm_ir::Instruction::Jump { ref mut target } =
+                    ctx.instructions[exit_idx]
+                {
+                    *target = end_target;
+                }
+            }
+            result_reg
+        }
+    }
+}
+
+pub(crate) fn lower_pattern_test(
+    ctx: &mut LoweringContext,
+    target_reg: Reg,
+    pattern: &Pattern,
+    fail_jumps: &mut Vec<usize>,
+    bound_symbols: &mut Vec<(String, Option<Reg>)>,
+) {
+    match pattern {
+        Pattern::Wildcard => {}
+        Pattern::Identifier(name) => {
+            let old = ctx.symbols.insert(name.clone(), target_reg);
+            bound_symbols.push((name.clone(), old));
+        }
+        Pattern::Literal(lit_expr) => {
+            let lit_reg = lower_expression(ctx, lit_expr);
+            let cmp_reg = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::BinaryOp {
+                op: BinaryOperator::Eq,
+                dest: cmp_reg,
+                left: target_reg,
+                right: lit_reg,
+            });
+            fail_jumps.push(ctx.instructions.len());
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: cmp_reg,
+                target: 0,
+            });
+        }
+        Pattern::EnumVariant {
+            enum_name,
+            variant_name,
+            args,
+        } => {
+            let dest_reg = ctx.alloc_reg();
+            let success_reg = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::TryEnumVariant {
+                dest: dest_reg,
+                src: target_reg,
+                enum_name: enum_name.clone(),
+                variant_name: variant_name.clone(),
+                success: success_reg,
+            });
+            fail_jumps.push(ctx.instructions.len());
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: success_reg,
+                target: 0,
+            });
+            for (idx, arg_pat) in args.iter().enumerate() {
+                let field_reg = ctx.alloc_reg();
+                ctx.push(causm_ir::Instruction::FieldAccess {
+                    dest: field_reg,
+                    target: dest_reg,
+                    field: format!("_{}", idx),
+                });
+                lower_pattern_test(
+                    ctx,
+                    field_reg,
+                    arg_pat,
+                    fail_jumps,
+                    bound_symbols,
+                );
+            }
+        }
+        Pattern::TypeAssert {
+            binding,
+            target_type,
+        } => {
+            let dest_reg = ctx.alloc_reg();
+            let success_reg = ctx.alloc_reg();
+            let type_name_str = match target_type {
+                causm_core::TypeName::Custom(ref s) => s.clone(),
+                causm_core::TypeName::Builtin(b) => format!("{:?}", b),
+                _ => format!("{:?}", target_type),
+            };
+            ctx.push(causm_ir::Instruction::TryTypeAssert {
+                dest: dest_reg,
+                src: target_reg,
+                type_name: type_name_str,
+                success: success_reg,
+            });
+            fail_jumps.push(ctx.instructions.len());
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: success_reg,
+                target: 0,
+            });
+            let old = ctx.symbols.insert(binding.clone(), dest_reg);
+            bound_symbols.push((binding.clone(), old));
         }
     }
 }

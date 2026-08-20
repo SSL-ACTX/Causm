@@ -822,6 +822,32 @@ impl SsaTransformer {
                     },
                 }
             }
+            Instruction::TryEnumVariant {
+                dest,
+                src,
+                enum_name,
+                variant_name,
+                success,
+            } => {
+                let src_ssa = self.current_ssa_reg(*src);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                let success_ver = self.next_version(success.0);
+                self.push_version(success.0, success_ver);
+                SsaInstruction::TryEnumVariant {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    src: src_ssa,
+                    enum_name: enum_name.clone(),
+                    variant_name: variant_name.clone(),
+                    success: SsaReg {
+                        reg: success.0,
+                        version: success_ver,
+                    },
+                }
+            }
             Instruction::Print { src } => SsaInstruction::Print {
                 src: self.current_ssa_reg(*src),
             },
@@ -1377,7 +1403,8 @@ fn for_each_dest_reg(instr: &Instruction, mut f: impl FnMut(Reg)) {
         Instruction::DynamicCall { dest, .. } => f(*dest),
         Instruction::TypeAssert { dest, .. } => f(*dest),
         Instruction::TypeCast { dest, .. } => f(*dest),
-        Instruction::TryTypeAssert { dest, success, .. } => {
+        Instruction::TryTypeAssert { dest, success, .. }
+        | Instruction::TryEnumVariant { dest, success, .. } => {
             f(*dest);
             f(*success);
         }

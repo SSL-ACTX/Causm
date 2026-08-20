@@ -1,18 +1,18 @@
 // Standard JSON Module - Type Definitions
 
 @0ms: {
+    enum JsonValue {
+        Null,
+        Bool(bool),
+        Number(i64),
+        String(string),
+        Array(array),
+        Object(array)
+    }
+
     type JsonMember = struct {
         key: string,
         val: JsonValue
-    }
-
-    type JsonValue = struct {
-        kind: i32,
-        bool_val: bool,
-        num_val: i64,
-        str_val: string,
-        arr_val: array,
-        obj_val: array
     }
 
     type ParseResult = struct {

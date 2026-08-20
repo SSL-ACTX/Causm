@@ -185,7 +185,8 @@ pub fn copy_propagation(
                         changed = true;
                     }
                 }
-                SsaInstruction::TryTypeAssert { src, .. } => {
+                SsaInstruction::TryTypeAssert { src, .. }
+                | SsaInstruction::TryEnumVariant { src, .. } => {
                     let new_src = resolve(*src);
                     if *src != new_src {
                         *src = new_src;

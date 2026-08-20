@@ -3,67 +3,12 @@
 @0ms: {
     from "std/json/types" import *
 
-    // Kind constants: 0=Null, 1=Bool, 2=Number, 3=String, 4=Array, 5=Object
-
-    routine Json.null_val() -> JsonValue taking _ =>
-        struct {
-            kind = 0,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.bool_val(peek b: bool) -> JsonValue taking _ =>
-        struct {
-            kind = 1,
-            bool_val = b,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.num_val(peek n: i64) -> JsonValue taking _ =>
-        struct {
-            kind = 2,
-            bool_val = false,
-            num_val = n,
-            str_val = "",
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.str_val(peek s: string) -> JsonValue taking _ =>
-        struct {
-            kind = 3,
-            bool_val = false,
-            num_val = 0,
-            str_val = s,
-            arr_val = [],
-            obj_val = []
-        }
-
-    routine Json.arr_val(peek items: array) -> JsonValue taking _ =>
-        struct {
-            kind = 4,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = items,
-            obj_val = []
-        }
-
-    routine Json.obj_val(peek members: array) -> JsonValue taking _ =>
-        struct {
-            kind = 5,
-            bool_val = false,
-            num_val = 0,
-            str_val = "",
-            arr_val = [],
-            obj_val = members
-        }
+    routine Json.null_val() -> JsonValue taking _ => JsonValue::Null
+    routine Json.bool_val(peek b: bool) -> JsonValue taking _ => JsonValue::Bool(b)
+    routine Json.num_val(peek n: i64) -> JsonValue taking _ => JsonValue::Number(n)
+    routine Json.str_val(peek s: string) -> JsonValue taking _ => JsonValue::String(s)
+    routine Json.arr_val(peek items: array) -> JsonValue taking _ => JsonValue::Array(items)
+    routine Json.obj_val(peek members: array) -> JsonValue taking _ => JsonValue::Object(members)
 
     routine Json.member(peek key: string, peek val: JsonValue) -> JsonMember taking _ {
         let v = clone(val)
@@ -73,84 +18,138 @@
         }
     }
 
-    routine Json.is_null(peek v: JsonValue) -> bool taking _ => v.kind == 0
-    routine Json.is_bool(peek v: JsonValue) -> bool taking _ => v.kind == 1
-    routine Json.is_number(peek v: JsonValue) -> bool taking _ => v.kind == 2
-    routine Json.is_string(peek v: JsonValue) -> bool taking _ => v.kind == 3
-    routine Json.is_array(peek v: JsonValue) -> bool taking _ => v.kind == 4
-    routine Json.is_object(peek v: JsonValue) -> bool taking _ => v.kind == 5
+    routine Json.is_null(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Null => true,
+            _ => false
+        }
 
-    routine Json.as_bool(peek v: JsonValue) -> bool taking _ => v.bool_val
-    routine Json.as_number(peek v: JsonValue) -> i64 taking _ => v.num_val
-    routine Json.as_string(peek v: JsonValue) -> string taking _ => v.str_val
-    routine Json.as_array(peek v: JsonValue) -> array taking _ => v.arr_val
-    routine Json.as_object(peek v: JsonValue) -> array taking _ => v.obj_val
+    routine Json.is_bool(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Bool(_) => true,
+            _ => false
+        }
+
+    routine Json.is_number(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Number(_) => true,
+            _ => false
+        }
+
+    routine Json.is_string(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::String(_) => true,
+            _ => false
+        }
+
+    routine Json.is_array(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Array(_) => true,
+            _ => false
+        }
+
+    routine Json.is_object(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Object(_) => true,
+            _ => false
+        }
+
+    routine Json.as_bool(peek v: JsonValue) -> bool taking _ =>
+        match v {
+            JsonValue::Bool(b) => b,
+            _ => false
+        }
+
+    routine Json.as_number(peek v: JsonValue) -> i64 taking _ =>
+        match v {
+            JsonValue::Number(n) => n,
+            _ => 0
+        }
+
+    routine Json.as_string(peek v: JsonValue) -> string taking _ =>
+        match v {
+            JsonValue::String(s) => s,
+            _ => ""
+        }
+
+    routine Json.as_array(peek v: JsonValue) -> array taking _ =>
+        match v {
+            JsonValue::Array(arr) => arr,
+            _ => []
+        }
+
+    routine Json.as_object(peek v: JsonValue) -> array taking _ =>
+        match v {
+            JsonValue::Object(obj) => obj,
+            _ => []
+        }
 
     routine Json.get(peek obj: JsonValue, peek key: string) -> JsonValue taking _ {
-        let members = obj.obj_val
-        let mut found = Json.null_val()
-        for m in members step _ {
-            if (m.key == key) {
-                let mv = m.val
-                found = clone(mv)
-                break
+        let mut found = JsonValue::Null
+        if let JsonValue::Object(members) = obj {
+            for m in members step _ {
+                if (m.key == key) {
+                    let mv = m.val
+                    found = clone(mv)
+                    break
+                }
             }
         }
         found
     }
 
     routine Json.has_key(peek obj: JsonValue, peek key: string) -> bool taking _ {
-        let members = obj.obj_val
         let mut found = false
-        for m in members step _ {
-            if (m.key == key) {
-                found = true
-                break
+        if let JsonValue::Object(members) = obj {
+            for m in members step _ {
+                if (m.key == key) {
+                    found = true
+                    break
+                }
             }
         }
         found
     }
 
     routine Json.get_int(peek obj: JsonValue, peek key: string, peek default_val: i64) -> i64 taking _ {
-        let mut v = Json.get(obj, key)
-        let mut def = default_val
-        let mut res = def
-        if (v.kind == 2) {
-            res = v.num_val
+        let v = Json.get(obj, key)
+        match v {
+            JsonValue::Number(n) => n,
+            _ => default_val
         }
-        res
     }
 
     routine Json.get_string(peek obj: JsonValue, peek key: string, peek default_val: string) -> string taking _ {
-        let mut v = Json.get(obj, key)
-        let mut def = default_val
-        let mut res = def
-        if (v.kind == 3) {
-            res = v.str_val
+        let v = Json.get(obj, key)
+        match v {
+            JsonValue::String(s) => s,
+            _ => default_val
         }
-        res
     }
 
     routine Json.get_bool(peek obj: JsonValue, peek key: string, peek default_val: bool) -> bool taking _ {
-        let mut v = Json.get(obj, key)
-        let mut def = default_val
-        let mut res = def
-        if (v.kind == 1) {
-            res = v.bool_val
+        let v = Json.get(obj, key)
+        match v {
+            JsonValue::Bool(b) => b,
+            _ => default_val
         }
-        res
     }
 
-    routine Json.array_len(peek arr: JsonValue) -> i32 taking _ => len(arr.arr_val)
+    routine Json.array_len(peek arr: JsonValue) -> i32 taking _ =>
+        match arr {
+            JsonValue::Array(items) => len(items),
+            _ => 0
+        }
 
     routine Json.array_get(peek arr: JsonValue, peek idx: i32) -> JsonValue taking _ {
-        let elements = arr.arr_val
-        let n = len(elements)
-        let mut res = Json.null_val()
-        if (idx >= 0) {
-            if (idx < n) {
-                let it = elements[idx]
-                res = clone(it)
+        let mut res = JsonValue::Null
+        if let JsonValue::Array(elements) = arr {
+            let n = len(elements)
+            if (idx >= 0) {
+                if (idx < n) {
+                    let it = elements[idx]
+                    res = clone(it)
+                }
             }
         }
         res
@@ -158,7 +157,7 @@
 
     routine Json.push_member(peek members: array, peek key: string, peek val: JsonValue) -> array taking _ {
         let n = len(members)
-        let mut result = [struct { key = "", val = Json.null_val() }; n + 1]
+        let mut result = [struct { key = "", val = JsonValue::Null }; n + 1]
         let mut i = 0
         for m in members step _ {
             let member_item = clone(m)
@@ -172,7 +171,7 @@
 
     routine Json.push_value(peek items: array, peek val: JsonValue) -> array taking _ {
         let n = len(items)
-        let mut result = [Json.null_val(); n + 1]
+        let mut result = [JsonValue::Null; n + 1]
         let mut i = 0
         for it in items step _ {
             let val_item = clone(it)

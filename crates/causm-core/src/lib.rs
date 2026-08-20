@@ -193,6 +193,17 @@ macro_rules! statements {
                 pending_branch: Option<(DecayedPattern, Option<Expression>, Vec<SpannedStatement>)>,
                 consumed_branch: Option<(Option<Expression>, Vec<SpannedStatement>)>
             },
+            Match {
+                target: Expression,
+                arms: Vec<MatchArm>
+            },
+            IfLet {
+                pattern: Pattern,
+                expr: Expression,
+                then_branch: Vec<SpannedStatement>,
+                else_branch: Option<Vec<SpannedStatement>>,
+                reconcile: Option<MergeResolution>
+            },
             Await(String),
             AwaitChan(String),
             If {
@@ -402,6 +413,17 @@ impl Statement {
                     .max(pending_cost)
                     .max(consumed_cost)
             }
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .map(|arm| estimate_block(&arm.body))
+                .max()
+                .unwrap_or(0),
+            Statement::IfLet {
+                then_branch,
+                else_branch,
+                ..
+            } => estimate_block(then_branch)
+                .max(else_branch.as_ref().map(|b| estimate_block(b)).unwrap_or(0)),
             Statement::Collapse => 0,
             Statement::SplitMap { body, .. } => 1 + estimate_block(body),
             Statement::Inspect { body, .. } => estimate_block(body),
@@ -525,6 +547,10 @@ macro_rules! expressions {
                 then_branch: Box<Expression>,
                 else_branch: Box<Expression>
             },
+            Match {
+                target: Box<Expression>,
+                arms: Vec<MatchExprArm>
+            },
             Null
         }
     };
@@ -625,6 +651,36 @@ pub enum LifetimeAnnotation {
 pub struct EnumVariantDef {
     pub name: String,
     pub payload_types: Vec<TypeName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pattern {
+    Wildcard,
+    Identifier(String),
+    Literal(Expression),
+    EnumVariant {
+        enum_name: Option<String>,
+        variant_name: String,
+        args: Vec<Pattern>,
+    },
+    TypeAssert {
+        binding: String,
+        target_type: TypeName,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub guard: Option<Expression>,
+    pub body: Vec<SpannedStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchExprArm {
+    pub pattern: Pattern,
+    pub guard: Option<Expression>,
+    pub body: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

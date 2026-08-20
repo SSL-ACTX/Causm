@@ -40,6 +40,7 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::TypeAssert { dest, .. }
             | SsaInstruction::TypeCast { dest, .. }
             | SsaInstruction::TryTypeAssert { dest, .. }
+            | SsaInstruction::TryEnumVariant { dest, .. }
             | SsaInstruction::StructLit { dest, .. }
             | SsaInstruction::TopologyLit { dest, .. }
             | SsaInstruction::ArrayLit { dest, .. }
@@ -93,6 +94,7 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::TypeAssert { src, .. }
             | SsaInstruction::TypeCast { src, .. }
             | SsaInstruction::TryTypeAssert { src, .. }
+            | SsaInstruction::TryEnumVariant { src, .. }
             | SsaInstruction::AssertState { src, .. }
             | SsaInstruction::Print { src }
             | SsaInstruction::Debug { src }

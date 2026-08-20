@@ -1,5 +1,6 @@
 use crate::parser::Rule;
 use causm_core::{FStringPart, *};
+use pest::iterators::Pair;
 use std::collections::HashMap;
 
 pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression {
@@ -450,6 +451,32 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 Expression::Null
             }
         }
+        Rule::match_expr => {
+            let mut inner = pair.into_inner();
+            let target = parse_expression(inner.next().unwrap());
+            let mut arms = Vec::new();
+            for arm_pair in inner {
+                let mut arm_inner = arm_pair.into_inner();
+                let pattern = parse_pattern(arm_inner.next().unwrap());
+                let next = arm_inner.next().unwrap();
+                let (guard, body_pair) = if next.as_rule() == Rule::guard_clause {
+                    let g = parse_expression(next.into_inner().next().unwrap());
+                    (Some(g), arm_inner.next().unwrap())
+                } else {
+                    (None, next)
+                };
+                let body = parse_expression(body_pair);
+                arms.push(MatchExprArm {
+                    pattern,
+                    guard,
+                    body,
+                });
+            }
+            Expression::Match {
+                target: Box::new(target),
+                arms,
+            }
+        }
         Rule::await_expr => {
             let inner_expr = parse_expression(pair.into_inner().next().unwrap());
             if let Expression::Identifier(ref id) = inner_expr {
@@ -620,4 +647,68 @@ pub(crate) fn parse_hex_byte_string(raw: &str) -> Expression {
         i += 2;
     }
     Expression::ArrayLiteral(elements)
+}
+
+pub fn parse_pattern(pair: Pair<Rule>) -> Pattern {
+    match pair.as_rule() {
+        Rule::match_pattern => parse_pattern(pair.into_inner().next().unwrap()),
+        Rule::wildcard_pattern => Pattern::Wildcard,
+        Rule::ident_pattern => Pattern::Identifier(pair.as_str().trim().to_string()),
+        Rule::literal_pattern => {
+            let inner = pair.into_inner().next().unwrap();
+            let expr = parse_expression(inner);
+            Pattern::Literal(expr)
+        }
+        Rule::enum_pattern => {
+            let mut inner: Vec<_> = pair.into_inner().collect();
+            if inner.is_empty() {
+                return Pattern::Wildcard;
+            }
+            if inner.len() == 1 {
+                let first = inner.remove(0).as_str().to_string();
+                Pattern::EnumVariant {
+                    enum_name: None,
+                    variant_name: first,
+                    args: Vec::new(),
+                }
+            } else if inner.len() == 2
+                && inner[1].as_rule() == Rule::pattern_arg_list
+            {
+                let variant_name = inner.remove(0).as_str().to_string();
+                let args_pair = inner.remove(0);
+                let args = args_pair.into_inner().map(parse_pattern).collect();
+                Pattern::EnumVariant {
+                    enum_name: None,
+                    variant_name,
+                    args,
+                }
+            } else if inner.len() == 2 && inner[1].as_rule() == Rule::identifier {
+                let enum_name = inner.remove(0).as_str().to_string();
+                let variant_name = inner.remove(0).as_str().to_string();
+                Pattern::EnumVariant {
+                    enum_name: Some(enum_name),
+                    variant_name,
+                    args: Vec::new(),
+                }
+            } else if inner.len() == 3 {
+                let enum_name = inner.remove(0).as_str().to_string();
+                let variant_name = inner.remove(0).as_str().to_string();
+                let args_pair = inner.remove(0);
+                let args = args_pair.into_inner().map(parse_pattern).collect();
+                Pattern::EnumVariant {
+                    enum_name: Some(enum_name),
+                    variant_name,
+                    args,
+                }
+            } else {
+                let first = inner.remove(0).as_str().to_string();
+                Pattern::EnumVariant {
+                    enum_name: None,
+                    variant_name: first,
+                    args: Vec::new(),
+                }
+            }
+        }
+        _ => Pattern::Wildcard,
+    }
 }

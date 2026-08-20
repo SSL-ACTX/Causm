@@ -127,6 +127,27 @@ impl std::fmt::Display for SsaInstruction {
                     dest, success, src, type_name
                 )
             }
+            SsaInstruction::TryEnumVariant {
+                dest,
+                src,
+                enum_name,
+                variant_name,
+                success,
+            } => {
+                if let Some(e) = enum_name {
+                    write!(
+                        f,
+                        "{}, {} = TryEnumVariant {} as {}::{}",
+                        dest, success, src, e, variant_name
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{}, {} = TryEnumVariant {} as {}",
+                        dest, success, src, variant_name
+                    )
+                }
+            }
             SsaInstruction::Print { src } => {
                 write!(f, "Print {}", src)
             }

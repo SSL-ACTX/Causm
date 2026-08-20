@@ -306,6 +306,13 @@ macro_rules! instructions {
                 type_name: String,
                 success: $crate::Reg
             },
+            TryEnumVariant {
+                dest: $crate::Reg,
+                src: $crate::Reg,
+                enum_name: Option<String>,
+                variant_name: String,
+                success: $crate::Reg
+            },
 
             // Misc
             Print {

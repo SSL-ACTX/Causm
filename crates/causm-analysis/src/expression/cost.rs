@@ -160,5 +160,20 @@ pub fn estimate_expression_cost(
                     estimate_expression_cost(analyzer, else_branch),
                 )
         }
+        Expression::Match { target, arms } => {
+            let max_arm_cost = arms
+                .iter()
+                .map(|arm| {
+                    let guard_cost = arm
+                        .guard
+                        .as_ref()
+                        .map(|g| estimate_expression_cost(analyzer, g))
+                        .unwrap_or(0);
+                    guard_cost + estimate_expression_cost(analyzer, &arm.body)
+                })
+                .max()
+                .unwrap_or(0);
+            1 + estimate_expression_cost(analyzer, target) + max_arm_cost
+        }
     }
 }

@@ -3,6 +3,7 @@ use causm_core::types::{StructType, Type};
 use causm_core::*;
 use std::collections::{HashMap, HashSet};
 
+#[derive(Clone)]
 pub struct EntropicAnalyzer {
     pub branch_contexts: HashMap<String, BranchState>,
     pub current_branch: String,
@@ -1189,6 +1190,9 @@ impl EntropicAnalyzer {
                     self.expr_snippet(then_branch),
                     self.expr_snippet(else_branch)
                 )
+            }
+            Expression::Match { target, .. } => {
+                format!("match {} {{ ... }}", self.expr_snippet(target))
             }
         }
     }

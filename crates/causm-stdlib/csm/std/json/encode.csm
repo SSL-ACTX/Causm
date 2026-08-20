@@ -13,30 +13,36 @@
         out_len = out_len + 1
 
         for b in bytes step _ {
-            let mut ch = b
-            if (ch == 34) {
-                buf[out_len] = 92
-                buf[out_len + 1] = 34
-                out_len = out_len + 2
-            } else if (ch == 92) {
-                buf[out_len] = 92
-                buf[out_len + 1] = 92
-                out_len = out_len + 2
-            } else if (ch == 10) {
-                buf[out_len] = 92
-                buf[out_len + 1] = 110
-                out_len = out_len + 2
-            } else if (ch == 13) {
-                buf[out_len] = 92
-                buf[out_len + 1] = 114
-                out_len = out_len + 2
-            } else if (ch == 9) {
-                buf[out_len] = 92
-                buf[out_len + 1] = 116
-                out_len = out_len + 2
-            } else {
-                buf[out_len] = ch
-                out_len = out_len + 1
+            match b {
+                34 => {
+                    buf[out_len] = 92
+                    buf[out_len + 1] = 34
+                    out_len = out_len + 2
+                },
+                92 => {
+                    buf[out_len] = 92
+                    buf[out_len + 1] = 92
+                    out_len = out_len + 2
+                },
+                10 => {
+                    buf[out_len] = 92
+                    buf[out_len + 1] = 110
+                    out_len = out_len + 2
+                },
+                13 => {
+                    buf[out_len] = 92
+                    buf[out_len + 1] = 114
+                    out_len = out_len + 2
+                },
+                9 => {
+                    buf[out_len] = 92
+                    buf[out_len + 1] = 116
+                    out_len = out_len + 2
+                },
+                _ => {
+                    buf[out_len] = b
+                    out_len = out_len + 1
+                }
             }
         }
 
@@ -78,20 +84,14 @@
     }
 
     routine Json.stringify(peek val: JsonValue) -> string taking _ =>
-        if (val.kind == 0) {
-            "null"
-        } else if (val.kind == 1) {
-            if (val.bool_val) { "true" } else { "false" }
-        } else if (val.kind == 2) {
-            f"{val.num_val}"
-        } else if (val.kind == 3) {
-            Json.escape_string(val.str_val)
-        } else if (val.kind == 4) {
-            Json.stringify_array(val.arr_val)
-        } else if (val.kind == 5) {
-            Json.stringify_object(val.obj_val)
-        } else {
-            "null"
+        match val {
+            JsonValue::Null => "null",
+            JsonValue::Bool(b) => if (b) { "true" } else { "false" },
+            JsonValue::Number(n) => f"{n}",
+            JsonValue::String(s) => Json.escape_string(s),
+            JsonValue::Array(items) => Json.stringify_array(items),
+            JsonValue::Object(members) => Json.stringify_object(members),
+            _ => "null"
         }
 
     routine Json.encode(peek val: JsonValue) -> string taking _ => Json.stringify(val)

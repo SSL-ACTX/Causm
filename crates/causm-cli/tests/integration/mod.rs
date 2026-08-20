@@ -14,6 +14,7 @@ pub mod causm_import;
 pub mod causm_isochronous;
 pub mod causm_json;
 pub mod causm_lease;
+pub mod causm_match;
 pub mod causm_oop;
 pub mod causm_process;
 pub mod causm_reconciliation;

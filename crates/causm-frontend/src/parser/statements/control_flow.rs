@@ -1,4 +1,4 @@
-use crate::parser::expressions::parse_expression;
+use crate::parser::expressions::{parse_expression, parse_pattern};
 use crate::parser::statements::parse_statement;
 use crate::parser::statements::utils::*;
 use crate::parser::Rule;
@@ -8,9 +8,41 @@ use std::collections::HashMap;
 
 pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
+        Rule::match_stmt => {
+            let mut inner = pair.into_inner();
+            let target = parse_expression(inner.next().unwrap());
+            let mut arms = Vec::new();
+            for arm_pair in inner {
+                let mut arm_inner = arm_pair.into_inner();
+                let pattern = parse_pattern(arm_inner.next().unwrap());
+                let next = arm_inner.next().unwrap();
+                let (guard, body_pair) = if next.as_rule() == Rule::guard_clause {
+                    let g = parse_expression(next.into_inner().next().unwrap());
+                    (Some(g), arm_inner.next().unwrap())
+                } else {
+                    (None, next)
+                };
+
+                let body = match body_pair.as_rule() {
+                    Rule::statement_block => body_pair
+                        .into_inner()
+                        .filter_map(|stmt_pair| stmt_pair.into_inner().next())
+                        .map(parse_statement)
+                        .collect(),
+                    _ => vec![parse_statement(body_pair)],
+                };
+
+                arms.push(MatchArm {
+                    pattern,
+                    guard,
+                    body,
+                });
+            }
+            Statement::Match { target, arms }
+        }
         Rule::if_let_stmt => {
             let mut inner = pair.into_inner();
-            let binding = inner.next().unwrap().as_str().to_string();
+            let pattern = parse_pattern(inner.next().unwrap());
             let expr = parse_expression(inner.next().unwrap());
             let then_branch = if let Some(b) = inner.next() {
                 b.into_inner()
@@ -47,9 +79,22 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 }
             }
 
-            Statement::If {
-                binding: Some(binding),
-                condition: expr,
+            // If pattern is simple identifier and expr is TypeAssertion, we can also maintain Statement::If compatibility
+            if let Pattern::Identifier(ref id) = pattern {
+                if let Expression::TypeAssertion { .. } = expr {
+                    return Statement::If {
+                        binding: Some(id.clone()),
+                        condition: expr,
+                        then_branch,
+                        else_branch,
+                        reconcile: reconcile_rules,
+                    };
+                }
+            }
+
+            Statement::IfLet {
+                pattern,
+                expr,
                 then_branch,
                 else_branch,
                 reconcile: reconcile_rules,

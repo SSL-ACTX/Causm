@@ -348,6 +348,18 @@ pub(crate) fn infer_expression_type(
                 Ok(then_t)
             }
         }
+        Expression::Match { arms, .. } => {
+            if let Some(first_arm) = arms.first() {
+                let mut local_analyzer = analyzer.clone();
+                crate::statements::control_flow::bind_pattern_variables(
+                    &mut local_analyzer,
+                    &first_arm.pattern,
+                );
+                infer_expression_type(&local_analyzer, &first_arm.body)
+            } else {
+                Ok(Type::Unknown)
+            }
+        }
     }
 }
 

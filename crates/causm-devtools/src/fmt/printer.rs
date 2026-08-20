@@ -745,6 +745,58 @@ fn format_spanned_statement(
             }
             out.push_str(&format!("{}}}\n", indent));
         }
+        Statement::Match { target, arms } => {
+            out.push_str(&format!("{}match {} {{\n", indent, format_expr(target)));
+            for arm in arms {
+                let g_str = arm
+                    .guard
+                    .as_ref()
+                    .map(|g| format!(" if {}", format_expr(g)))
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "{}{}{} => {{\n",
+                    " ".repeat(indent_step * (depth + 1)),
+                    format_pattern(&arm.pattern),
+                    g_str
+                ));
+                for s in &arm.body {
+                    format_spanned_statement(out, s, indent_step, depth + 2);
+                }
+                out.push_str(&format!(
+                    "{}}}\n",
+                    " ".repeat(indent_step * (depth + 1))
+                ));
+            }
+            out.push_str(&format!("{}}}\n", indent));
+        }
+        Statement::IfLet {
+            pattern,
+            expr,
+            then_branch,
+            else_branch,
+            reconcile,
+        } => {
+            let rec_str = reconcile
+                .as_ref()
+                .map(format_merge_resolution)
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "{}if let {} = {} {{\n",
+                indent,
+                format_pattern(pattern),
+                format_expr(expr)
+            ));
+            for s in then_branch {
+                format_spanned_statement(out, s, indent_step, depth + 1);
+            }
+            if let Some(eb) = else_branch {
+                out.push_str(&format!("{}}} else {{\n", indent));
+                for s in eb {
+                    format_spanned_statement(out, s, indent_step, depth + 1);
+                }
+            }
+            out.push_str(&format!("{}}}{}\n", indent, rec_str));
+        }
         Statement::RelativisticBlock { time, body } => {
             let time_str = match time {
                 causm_core::TimeCoordinate::Global(t) => format!("{}ms", t),
@@ -1261,9 +1313,67 @@ fn format_expr(expr: &Expression) -> String {
                 format_expr(else_branch)
             )
         }
+        Expression::Match { target, arms } => {
+            let arm_strs: Vec<String> = arms
+                .iter()
+                .map(|a| {
+                    let g_str = a
+                        .guard
+                        .as_ref()
+                        .map(|g| format!(" if {}", format_expr(g)))
+                        .unwrap_or_default();
+                    format!(
+                        "{}{} => {}",
+                        format_pattern(&a.pattern),
+                        g_str,
+                        format_expr(&a.body)
+                    )
+                })
+                .collect();
+            format!(
+                "match {} {{ {} }}",
+                format_expr(target),
+                arm_strs.join(", ")
+            )
+        }
         other => {
             eprintln!("\x1b[33mwarning:\x1b[0m Unhandled expression variant in formatter: {:?}", other);
             "null".to_string()
+        }
+    }
+}
+
+pub fn format_pattern(pat: &causm_core::Pattern) -> String {
+    match pat {
+        causm_core::Pattern::Wildcard => "_".to_string(),
+        causm_core::Pattern::Identifier(id) => id.clone(),
+        causm_core::Pattern::Literal(e) => format_expr(e),
+        causm_core::Pattern::EnumVariant {
+            enum_name,
+            variant_name,
+            args,
+        } => {
+            let prefix = if let Some(e) = enum_name {
+                format!("{}::{}", e, variant_name)
+            } else {
+                variant_name.clone()
+            };
+            if args.is_empty() {
+                prefix
+            } else {
+                let args_str = args
+                    .iter()
+                    .map(format_pattern)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", prefix, args_str)
+            }
+        }
+        causm_core::Pattern::TypeAssert {
+            binding,
+            target_type,
+        } => {
+            format!("{} as {:?}", binding, target_type)
         }
     }
 }

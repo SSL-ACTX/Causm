@@ -216,6 +216,104 @@ impl Vm {
         Ok(())
     }
 
+    #[allow(non_snake_case)]
+    pub(crate) fn TryEnumVariant(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        src: Reg,
+        enum_name: Option<String>,
+        variant_name: String,
+        success: Reg,
+    ) -> Result<(), TemporalError> {
+        self.check_and_apply_decay(branch_id, src.0)?;
+        let (matches, payload_val, meta) = {
+            let branch = self.get_branch_mut(branch_id)?;
+            let idx = src.0 as usize;
+            if idx >= branch.arena.registers.len() {
+                (false, None, None)
+            } else {
+                let meta = branch
+                    .arena
+                    .metadata
+                    .get(idx)
+                    .and_then(|m| m.as_ref())
+                    .cloned();
+                let matches = match &branch.arena.registers[idx] {
+                    EntropicState::Valid(Payload::Struct(fields)) => {
+                        let tag_matches = match fields.get("tag") {
+                            Some(EntropicState::Valid(Payload::String(t))) => {
+                                t == &variant_name
+                            }
+                            _ => false,
+                        };
+                        if tag_matches {
+                            if let Some(ref e_name) = enum_name {
+                                if let Some(ref m) = meta {
+                                    if let Some(ref t_name) = m.type_name {
+                                        t_name.starts_with(e_name)
+                                            || t_name.contains(&format!(
+                                                "::{}",
+                                                variant_name
+                                            ))
+                                    } else {
+                                        true
+                                    }
+                                } else {
+                                    true
+                                }
+                            } else {
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                };
+                let val = if matches {
+                    match &branch.arena.registers[idx] {
+                        EntropicState::Valid(p) => Some(p.clone()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                (matches, val, meta)
+            }
+        };
+
+        if matches {
+            if let Some(val) = payload_val {
+                self.insert_reg(
+                    branch_id,
+                    dest.0,
+                    causm_core::value::EntropicState::Valid(val),
+                )?;
+                if let Some(m) = meta {
+                    let branch = self.get_branch_mut(branch_id)?;
+                    branch.arena.metadata[dest.0 as usize] = Some(m);
+                }
+            }
+            self.insert_reg(
+                branch_id,
+                success.0,
+                causm_core::value::EntropicState::Valid(
+                    causm_core::value::Payload::Bool(true),
+                ),
+            )?;
+        } else {
+            self.insert_reg(
+                branch_id,
+                success.0,
+                causm_core::value::EntropicState::Valid(
+                    causm_core::value::Payload::Bool(false),
+                ),
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn TopologyLit(
         &mut self,
         branch_id: &str,

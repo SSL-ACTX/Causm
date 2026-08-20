@@ -373,6 +373,19 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             type_name: type_name.clone(),
             success: ssa_reg_to_reg(*success),
         },
+        SsaInstruction::TryEnumVariant {
+            dest,
+            src,
+            enum_name,
+            variant_name,
+            success,
+        } => Instruction::TryEnumVariant {
+            dest: ssa_reg_to_reg(*dest),
+            src: ssa_reg_to_reg(*src),
+            enum_name: enum_name.clone(),
+            variant_name: variant_name.clone(),
+            success: ssa_reg_to_reg(*success),
+        },
         SsaInstruction::StructLit {
             dest,
             fields,

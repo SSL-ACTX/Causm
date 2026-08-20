@@ -728,6 +728,69 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
 
                 Ok(final_clock)
             }
+            Statement::Match { target, arms } => {
+                self.verify_expression(target, path_condition, &current_clock)?;
+                let pre_match_validity = self.variable_validity.clone();
+                let pre_match_leased = self.variable_leased.clone();
+                let mut out_clocks = Vec::new();
+                for arm in arms {
+                    self.variable_validity = pre_match_validity.clone();
+                    self.variable_leased = pre_match_leased.clone();
+                    self.bind_pattern_variables(&arm.pattern, path_condition);
+                    if let Some(ref g) = arm.guard {
+                        self.verify_expression(g, path_condition, &current_clock)?;
+                    }
+                    let mut arm_clock = current_clock.clone();
+                    for s in &arm.body {
+                        arm_clock =
+                            self.verify_statement(s, path_condition, &arm_clock)?;
+                    }
+                    out_clocks.push(arm_clock);
+                }
+                self.variable_validity = pre_match_validity;
+                self.variable_leased = pre_match_leased;
+                if let Some(first) = out_clocks.into_iter().next() {
+                    Ok(first)
+                } else {
+                    Ok(current_clock)
+                }
+            }
+            Statement::IfLet {
+                pattern,
+                expr,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                self.verify_expression(expr, path_condition, &current_clock)?;
+                let pre_if_validity = self.variable_validity.clone();
+                let pre_if_leased = self.variable_leased.clone();
+
+                self.bind_pattern_variables(pattern, path_condition);
+                let mut then_clock = current_clock.clone();
+                for s in then_branch {
+                    then_clock =
+                        self.verify_statement(s, path_condition, &then_clock)?;
+                }
+
+                self.variable_validity = pre_if_validity.clone();
+                self.variable_leased = pre_if_leased.clone();
+
+                if let Some(eb) = else_branch {
+                    let mut else_clock = current_clock.clone();
+                    for s in eb {
+                        else_clock =
+                            self.verify_statement(s, path_condition, &else_clock)?;
+                    }
+                    self.variable_validity = pre_if_validity;
+                    self.variable_leased = pre_if_leased;
+                    Ok(then_clock)
+                } else {
+                    self.variable_validity = pre_if_validity;
+                    self.variable_leased = pre_if_leased;
+                    Ok(then_clock)
+                }
+            }
             Statement::Loop { max_ms, body } => {
                 let mut loop_clock = self.solver.int_from_u64(0);
                 for stmt in body {
@@ -1338,7 +1401,51 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 }
                 Ok(in_clock.clone())
             }
+            Expression::Match { target, arms } => {
+                self.verify_expression(target, path_condition, in_clock)?;
+                let pre_match_validity = self.variable_validity.clone();
+                let pre_match_leased = self.variable_leased.clone();
+                for arm in arms {
+                    self.variable_validity = pre_match_validity.clone();
+                    self.variable_leased = pre_match_leased.clone();
+                    self.bind_pattern_variables(&arm.pattern, path_condition);
+                    if let Some(ref g) = arm.guard {
+                        self.verify_expression(g, path_condition, in_clock)?;
+                    }
+                    self.verify_expression(&arm.body, path_condition, in_clock)?;
+                }
+                self.variable_validity = pre_match_validity;
+                self.variable_leased = pre_match_leased;
+                Ok(in_clock.clone())
+            }
             _ => Ok(in_clock.clone()),
+        }
+    }
+
+    fn bind_pattern_variables(
+        &mut self,
+        pattern: &causm_core::Pattern,
+        path_condition: &S::Bool,
+    ) {
+        match pattern {
+            causm_core::Pattern::Wildcard | causm_core::Pattern::Literal(_) => {}
+            causm_core::Pattern::Identifier(name) => {
+                let is_valid = self.solver.bool_from_bool(true);
+                let is_leased = self.solver.bool_from_bool(false);
+                self.variable_validity.insert(name.clone(), is_valid);
+                self.variable_leased.insert(name.clone(), is_leased);
+            }
+            causm_core::Pattern::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.bind_pattern_variables(arg, path_condition);
+                }
+            }
+            causm_core::Pattern::TypeAssert { binding, .. } => {
+                let is_valid = self.solver.bool_from_bool(true);
+                let is_leased = self.solver.bool_from_bool(false);
+                self.variable_validity.insert(binding.clone(), is_valid);
+                self.variable_leased.insert(binding.clone(), is_leased);
+            }
         }
     }
 

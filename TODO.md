@@ -218,3 +218,20 @@ Potential pass order:
 - **File:** `crates/causm-ir/src/optimize/dead_code.rs`
 - **Implemented:** Added `prune_import_duplicates` which prunes un-namespaced duplicate routine symbols that only exist for intra-module resolution and are not called directly from the root timeline before emitting `IR`, `SSA`, `SsaOpt`, `SsaDot`, and `SsaDotOpt`.
 
+---
+
+## JSON & Language Ergonomics Modernization
+
+### 1. Enum Variant Payloads & `match` Destructuring (Core / Frontend / Analysis / Runtime)
+- [x] Allow enums to declare and construct variant arguments directly (e.g. `enum JsonValue { Null, Bool(bool), Number(i64), Float(f64), String(string), Array(array), Object(array) }` and `JsonValue::String("hello")`).
+- [x] Add variant payload extraction in `match` pattern arms (`match val { JsonValue::String(s) => ... }`) and `if let` statements (`if let JsonValue::Number(n) = val { ... }`).
+- [x] Wire runtime representation, memory arena tagging, and pattern destructuring in `causm-runtime` via `TryEnumVariant`.
+
+### 2. Refactor `std/json` Types & Operations
+- [x] Migrate `crates/causm-stdlib/csm/std/json/types.csm` to use native tagged union ADT enums.
+- [x] Rewrite `crates/causm-stdlib/csm/std/json/ops.csm`, `crates/causm-stdlib/csm/std/json/decode.csm`, and `crates/causm-stdlib/csm/std/json/encode.csm` to instantiate and match on enum variants directly without allocating blank/dummy fields.
+
+### 3. Ergonomic Accessors & Helpers
+- [x] Add `as_number()`, `as_string()`, `as_bool()`, `get(key)`, `get_int(key, default)`, `get_string(key, default)`, `get_bool(key, default)`, `array_get(idx)` helper routines returning wrapped values / defaults.
+- [x] Add end-to-end integration tests in `crates/causm-cli/tests/integration/causm_match.rs` and `causm_json.rs` validating the updated `std/json` library and pattern matching.
+

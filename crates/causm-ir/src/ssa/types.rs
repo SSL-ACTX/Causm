@@ -177,6 +177,13 @@ pub enum SsaInstruction {
         type_name: String,
         success: SsaReg,
     },
+    TryEnumVariant {
+        dest: SsaReg,
+        src: SsaReg,
+        enum_name: Option<String>,
+        variant_name: String,
+        success: SsaReg,
+    },
     Print {
         src: SsaReg,
     },

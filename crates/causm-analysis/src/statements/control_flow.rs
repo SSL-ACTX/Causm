@@ -258,6 +258,7 @@ impl EntropicAnalyzer {
         let source_type = crate::expression::infer_expression_type(self, source)?;
         let item_type = match source_type {
             causm_core::types::Type::Array(inner) => *inner,
+            causm_core::types::Type::Unknown => causm_core::types::Type::Unknown,
             _ => {
                 return Err(self.annotate(SemanticErrorKind::TypeMismatch(
                     "ForStep source must be an array".to_string(),
@@ -995,4 +996,161 @@ impl EntropicAnalyzer {
         }
         Ok(())
     }
+
+    pub(crate) fn Match(
+        &mut self,
+        target: &Expression,
+        arms: &[MatchArm],
+    ) -> Result<(), SemanticError> {
+        crate::expression::analyze_expression_nonconsuming(self, target)?;
+        for arm in arms {
+            let original_state = self
+                .branch_contexts
+                .get(&self.current_branch)
+                .cloned()
+                .unwrap_or_default();
+            let mut arm_contexts = self.branch_contexts.clone();
+            arm_contexts.insert(self.current_branch.clone(), original_state.clone());
+            let previous_contexts =
+                std::mem::replace(&mut self.branch_contexts, arm_contexts);
+
+            bind_pattern_variables(self, &arm.pattern);
+
+            if let Some(ref guard) = arm.guard {
+                crate::expression::analyze_expression(self, guard)?;
+            }
+
+            for inner_stmt in &arm.body {
+                self.analyze_statement(inner_stmt)?;
+            }
+
+            self.branch_contexts = previous_contexts;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn IfLet(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expression,
+        then_branch: &[SpannedStatement],
+        else_branch: &Option<Vec<SpannedStatement>>,
+        reconcile: &Option<MergeResolution>,
+    ) -> Result<(), SemanticError> {
+        crate::expression::analyze_expression_nonconsuming(self, expr)?;
+
+        let original_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut then_contexts = self.branch_contexts.clone();
+        then_contexts.insert(self.current_branch.clone(), original_state.clone());
+        let previous_contexts =
+            std::mem::replace(&mut self.branch_contexts, then_contexts);
+
+        bind_pattern_variables(self, pattern);
+
+        for inner_stmt in then_branch {
+            self.analyze_statement(inner_stmt)?;
+        }
+
+        let mut then_end_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .unwrap()
+            .clone();
+
+        let bound_vars = collect_pattern_bound_names(pattern);
+        for var in &bound_vars {
+            then_end_state.remove_variable_scope(var);
+            then_end_state.produced.remove(var);
+        }
+
+        self.branch_contexts = previous_contexts;
+
+        let else_end_state = if let Some(else_stmts) = else_branch {
+            let mut else_contexts = self.branch_contexts.clone();
+            else_contexts
+                .insert(self.current_branch.clone(), original_state.clone());
+            let prev = std::mem::replace(&mut self.branch_contexts, else_contexts);
+            for inner_stmt in else_stmts {
+                self.analyze_statement(inner_stmt)?;
+            }
+            let s = self
+                .branch_contexts
+                .get(&self.current_branch)
+                .unwrap()
+                .clone();
+            self.branch_contexts = prev;
+            s
+        } else {
+            original_state
+        };
+
+        let merged = self.merge_states(then_end_state, else_end_state, reconcile)?;
+        self.branch_contexts
+            .insert(self.current_branch.clone(), merged);
+
+        Ok(())
+    }
+}
+
+pub(crate) fn bind_pattern_variables(
+    analyzer: &mut EntropicAnalyzer,
+    pattern: &Pattern,
+) {
+    match pattern {
+        Pattern::Wildcard => {}
+        Pattern::Identifier(name) => {
+            let branch = analyzer
+                .branch_contexts
+                .get_mut(&analyzer.current_branch)
+                .unwrap();
+            branch
+                .types
+                .insert(name.clone(), causm_core::types::Type::Unknown);
+            branch.produced.insert(name.clone());
+            branch
+                .instantiated_at
+                .insert(name.clone(), branch.accumulated_cost);
+        }
+        Pattern::Literal(_) => {}
+        Pattern::EnumVariant { args, .. } => {
+            for arg in args {
+                bind_pattern_variables(analyzer, arg);
+            }
+        }
+        Pattern::TypeAssert {
+            binding,
+            target_type,
+        } => {
+            let cast_type = causm_core::types::Type::from_typename(target_type);
+            let branch = analyzer
+                .branch_contexts
+                .get_mut(&analyzer.current_branch)
+                .unwrap();
+            branch.types.insert(binding.clone(), cast_type);
+            branch.produced.insert(binding.clone());
+            branch
+                .instantiated_at
+                .insert(binding.clone(), branch.accumulated_cost);
+        }
+    }
+}
+
+pub(crate) fn collect_pattern_bound_names(pattern: &Pattern) -> Vec<String> {
+    let mut vars = Vec::new();
+    match pattern {
+        Pattern::Wildcard | Pattern::Literal(_) => {}
+        Pattern::Identifier(name) => vars.push(name.clone()),
+        Pattern::EnumVariant { args, .. } => {
+            for arg in args {
+                vars.extend(collect_pattern_bound_names(arg));
+            }
+        }
+        Pattern::TypeAssert { binding, .. } => vars.push(binding.clone()),
+    }
+    vars
 }
