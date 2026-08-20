@@ -1,5 +1,4 @@
 pub mod backend;
-pub mod verifier;
 
+pub use crate::verifier::FormalVerifier;
 pub use backend::Z3Backend;
-pub use verifier::FormalVerifier;

@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 
+[features]
+default = ["oxiz"]
+oxiz = []
+z3 = ["dep:z3"]
+
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
-z3 = ">=0.20"
+z3 = { version = ">=0.20", optional = true }
 thiserror = "2.0.18"
 anyhow = "1.0"

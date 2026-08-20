@@ -6,7 +6,7 @@ use causm_core::{
 };
 use std::collections::{HashMap, HashSet};
 
-pub struct FormalVerifier<'a, S: SolverBackend = super::backend::Z3Backend> {
+pub struct FormalVerifier<'a, S: SolverBackend = crate::oxiz::OxiZBackend> {
     solver: S,
     analyzer: &'a EntropicAnalyzer,
     variable_validity: HashMap<String, S::Bool>,

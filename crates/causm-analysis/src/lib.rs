@@ -1,6 +1,9 @@
 pub mod analyzer;
 pub mod expression;
+pub mod oxiz;
 pub mod solver;
 pub mod statement;
 pub mod statements;
+pub mod verifier;
+#[cfg(feature = "z3")]
 pub mod z3;

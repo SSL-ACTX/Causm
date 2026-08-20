@@ -681,7 +681,14 @@ impl EntropicAnalyzer {
         for param in params {
             let routine_state =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();
-            routine_state.yields.insert(param.name.clone());
+            routine_state.produced.insert(param.name.clone());
+            routine_state.consumed.remove(&param.name);
+            routine_state.decayed.remove(&param.name);
+            if matches!(param.mode, ParamMode::Peek | ParamMode::Lease) {
+                routine_state.mutables.insert(param.name.clone());
+            } else {
+                routine_state.yields.insert(param.name.clone());
+            }
             let mut param_type = param
                 .typ
                 .as_ref()

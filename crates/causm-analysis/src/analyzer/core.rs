@@ -344,8 +344,9 @@ impl EntropicAnalyzer {
         }
 
         if self.use_z3 {
-            let mut verifier =
-                crate::z3::FormalVerifier::<crate::z3::Z3Backend>::new(self);
+            let mut verifier = crate::verifier::FormalVerifier::<
+                crate::oxiz::OxiZBackend,
+            >::new(self);
             verifier.verify(program)?;
         }
 
