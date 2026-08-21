@@ -63,6 +63,8 @@ pub enum SemanticErrorKind {
     InactiveTimeline(String),
     #[error("Temporal Contract Violated: routine '{0}' inferred cost {1}ms exceeds interface budget {2}ms")]
     TemporalContractViolated(String, u64, u64),
+    #[error("Periodic Deadline Unachievable: continuous epoch block WCET ({0}ms) exceeds period interval ({1}ms)")]
+    PeriodicDeadlineUnachievable(u64, u64),
 }
 
 #[derive(Debug)]

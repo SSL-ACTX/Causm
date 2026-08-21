@@ -463,6 +463,24 @@ impl std::fmt::Display for SsaInstruction {
                     target, spec.lib_name, spec.routine_name, spec.field_name
                 )
             }
+            SsaInstruction::SetSaturationPolicy { target, policy } => {
+                write!(f, "SetSaturationPolicy {:?} = {:?}", target, policy)
+            }
+            SsaInstruction::PeriodicEpoch { interval_ms, .. } => {
+                write!(f, "PeriodicEpoch @every {}ms", interval_ms)
+            }
+            SsaInstruction::EndPeriodicEpoch { interval_ms } => {
+                write!(f, "EndPeriodicEpoch @every {}ms", interval_ms)
+            }
+            SsaInstruction::FreezeBaseWatermark => {
+                write!(f, "FreezeBaseWatermark")
+            }
+            SsaInstruction::ResetBaseWatermark => {
+                write!(f, "ResetBaseWatermark")
+            }
+            SsaInstruction::ArenaIntrospect { dest, kind } => {
+                write!(f, "{} = ArenaIntrospect({:?})", dest, kind)
+            }
             SsaInstruction::Other(s) => {
                 write!(f, "{}", s)
             }

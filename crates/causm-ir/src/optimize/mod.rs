@@ -733,6 +733,34 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
             target: ssa_reg_to_reg(*target),
             spec: spec.clone(),
         },
+        SsaInstruction::SetSaturationPolicy { target, policy } => {
+            Instruction::SetSaturationPolicy {
+                target: *target,
+                policy: *policy,
+            }
+        }
+        SsaInstruction::PeriodicEpoch {
+            interval_ms,
+            block_pc,
+            block_len,
+        } => Instruction::PeriodicEpoch {
+            interval_ms: *interval_ms,
+            block_pc: *block_pc,
+            block_len: *block_len,
+        },
+        SsaInstruction::EndPeriodicEpoch { interval_ms } => {
+            Instruction::EndPeriodicEpoch {
+                interval_ms: *interval_ms,
+            }
+        }
+        SsaInstruction::FreezeBaseWatermark => Instruction::FreezeBaseWatermark,
+        SsaInstruction::ResetBaseWatermark => Instruction::ResetBaseWatermark,
+        SsaInstruction::ArenaIntrospect { dest, kind } => {
+            Instruction::ArenaIntrospect {
+                dest: ssa_reg_to_reg(*dest),
+                kind: *kind,
+            }
+        }
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }

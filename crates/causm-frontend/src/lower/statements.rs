@@ -277,42 +277,53 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
         }
         Statement::RelativisticBlock { time, body } => {
-            let target = match time {
-                causm_core::TimeCoordinate::Branch(b) => b.clone(),
-                _ => "main".to_string(),
-            };
+            if let causm_core::TimeCoordinate::Periodic(interval_ms) = time {
+                ctx.push(Instruction::FreezeBaseWatermark);
+                for s in body {
+                    lower_spanned(ctx, s);
+                }
+                ctx.push(Instruction::ResetBaseWatermark);
+                ctx.push(Instruction::EndPeriodicEpoch {
+                    interval_ms: *interval_ms,
+                });
+            } else {
+                let target = match time {
+                    causm_core::TimeCoordinate::Branch(b) => b.clone(),
+                    _ => "main".to_string(),
+                };
 
-            let rb_instr_idx = ctx.instructions.len();
-            ctx.push(Instruction::RelativisticBlock {
-                target: target.clone(),
-                block_pc: 0,
-                block_len: 0,
-            });
+                let rb_instr_idx = ctx.instructions.len();
+                ctx.push(Instruction::RelativisticBlock {
+                    target: target.clone(),
+                    block_pc: 0,
+                    block_len: 0,
+                });
 
-            let jump_over_idx = ctx.instructions.len();
-            ctx.push(Instruction::Jump { target: 0 });
+                let jump_over_idx = ctx.instructions.len();
+                ctx.push(Instruction::Jump { target: 0 });
 
-            let start_pc = ctx.instructions.len();
-            for s in body {
-                lower_spanned(ctx, s);
-            }
-            let len = ctx.instructions.len() - start_pc;
+                let start_pc = ctx.instructions.len();
+                for s in body {
+                    lower_spanned(ctx, s);
+                }
+                let len = ctx.instructions.len() - start_pc;
 
-            if let Instruction::RelativisticBlock {
-                ref mut block_pc,
-                ref mut block_len,
-                ..
-            } = ctx.instructions[rb_instr_idx]
-            {
-                *block_pc = start_pc;
-                *block_len = len;
-            }
+                if let Instruction::RelativisticBlock {
+                    ref mut block_pc,
+                    ref mut block_len,
+                    ..
+                } = ctx.instructions[rb_instr_idx]
+                {
+                    *block_pc = start_pc;
+                    *block_len = len;
+                }
 
-            let end_idx = ctx.instructions.len();
-            if let Instruction::Jump { ref mut target, .. } =
-                ctx.instructions[jump_over_idx]
-            {
-                *target = end_idx;
+                let end_idx = ctx.instructions.len();
+                if let Instruction::Jump { ref mut target, .. } =
+                    ctx.instructions[jump_over_idx]
+                {
+                    *target = end_idx;
+                }
             }
         }
         Statement::MatchEntropy {
@@ -1430,6 +1441,26 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .unwrap_or(causm_core::EntropyMode::Deterministic);
                 ctx.push(causm_ir::Instruction::SetEntropyMode { mode: prev_mode });
             }
+        }
+        Statement::StateDecl { target, expr, .. } => {
+            let src = lower_expression(ctx, expr);
+            let dest = ctx.get_reg(target);
+            ctx.push(causm_ir::Instruction::Move { dest, src });
+        }
+        Statement::PolicyStmt { target, policy } => {
+            ctx.push(causm_ir::Instruction::SetSaturationPolicy {
+                target: *target,
+                policy: *policy,
+            });
+        }
+        Statement::LoopOn { target, body } => {
+            let start_pc = ctx.instructions.len();
+            let _target_reg = lower_expression(ctx, target);
+            for s in body {
+                lower_spanned(ctx, s);
+            }
+            ctx.push(causm_ir::Instruction::ResetBaseWatermark);
+            ctx.push(causm_ir::Instruction::Jump { target: start_pc });
         }
         _ => {}
     }

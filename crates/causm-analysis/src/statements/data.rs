@@ -179,4 +179,44 @@ impl EntropicAnalyzer {
         }
         Ok(())
     }
+
+    pub(crate) fn StateDecl(
+        &mut self,
+        target: &str,
+        var_type: &Option<TypeName>,
+        expr: &Expression,
+    ) -> Result<(), SemanticError> {
+        analyze_expression(self, expr)?;
+        let inferred_type = crate::expression::infer_expression_type(self, expr)?;
+        let final_type = if let Some(explicit_type_name) = var_type {
+            let explicit_type =
+                causm_core::types::Type::from_typename(explicit_type_name);
+            if !self.types_compatible(&explicit_type, &inferred_type) {
+                return Err(self.annotate(SemanticErrorKind::TypeMismatch(
+                    format!(
+                    "explicit state type {:?} does not match expression type {:?}",
+                    explicit_type, inferred_type
+                ),
+                )));
+            }
+            explicit_type
+        } else {
+            inferred_type
+        };
+
+        let branch = self.branch_contexts.get_mut(&self.current_branch).unwrap();
+        branch.mutables.insert(target.to_string());
+        branch.types.insert(target.to_string(), final_type);
+        branch.produced.insert(target.to_string());
+        branch.consumed.remove(target);
+        Ok(())
+    }
+
+    pub(crate) fn PolicyStmt(
+        &mut self,
+        _target: &PolicyTarget,
+        _policy: &SaturationPolicy,
+    ) -> Result<(), SemanticError> {
+        Ok(())
+    }
 }

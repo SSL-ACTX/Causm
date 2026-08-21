@@ -10,6 +10,7 @@ pub(crate) fn infer_expression_type(
         Expression::Null => Ok(Type::Unknown),
         Expression::Boolean(_) => Ok(Type::Bool),
         Expression::Integer(_) => Ok(Type::Integer),
+        Expression::ArenaIntrospect(_) => Ok(Type::Integer),
         Expression::Float(_) => Ok(Type::Float),
         Expression::Literal(_) => Ok(Type::String),
         Expression::Identifier(name) => match analyzer.get_variable_type(name) {

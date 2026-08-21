@@ -208,6 +208,24 @@ macro_rules! instructions {
                 block_pc: usize,
                 block_len: usize
             },
+            PeriodicEpoch {
+                interval_ms: u64,
+                block_pc: usize,
+                block_len: usize
+            },
+            EndPeriodicEpoch {
+                interval_ms: u64
+            },
+            FreezeBaseWatermark,
+            ResetBaseWatermark,
+            SetSaturationPolicy {
+                target: causm_core::PolicyTarget,
+                policy: causm_core::SaturationPolicy
+            },
+            ArenaIntrospect {
+                dest: $crate::Reg,
+                kind: causm_core::ArenaIntrospect
+            },
             SpeculationMode {
                 mode: causm_core::SpeculationCommitMode
             },

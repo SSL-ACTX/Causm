@@ -33,6 +33,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::LoadNull { dest });
             dest
         }
+        Expression::ArenaIntrospect(kind) => {
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::ArenaIntrospect { dest, kind: *kind });
+            dest
+        }
         Expression::Identifier(name) => ctx.get_reg(name),
         Expression::BinaryOp { left, op, right } => {
             let l = lower_expression(ctx, left);

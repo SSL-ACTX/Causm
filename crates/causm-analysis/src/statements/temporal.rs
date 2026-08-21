@@ -10,6 +10,14 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         let old_branch = self.current_branch.clone();
         if let TimeCoordinate::Branch(id) = time {
+            if !self.branch_contexts.contains_key(id) {
+                let parent_state = self
+                    .branch_contexts
+                    .get(&self.current_branch)
+                    .cloned()
+                    .unwrap_or_default();
+                self.branch_contexts.insert(id.clone(), parent_state);
+            }
             self.current_branch = id.clone();
         }
         for inner_stmt in body {

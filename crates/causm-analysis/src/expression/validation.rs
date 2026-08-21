@@ -770,6 +770,7 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
+        Expression::ArenaIntrospect(_) => Ok(()),
     }
 }
 
@@ -904,6 +905,7 @@ pub(crate) fn analyze_expression_nonconsuming(
         | Expression::Integer(_)
         | Expression::Float(_)
         | Expression::Boolean(_)
+        | Expression::ArenaIntrospect(_)
         | Expression::Null => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
             analyze_expression_nonconsuming(analyzer, left)?;

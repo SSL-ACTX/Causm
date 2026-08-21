@@ -1338,6 +1338,39 @@ impl SsaTransformer {
                 target: self.current_ssa_reg(*target),
                 spec: spec.clone(),
             },
+            Instruction::SetSaturationPolicy { target, policy } => {
+                SsaInstruction::SetSaturationPolicy {
+                    target: *target,
+                    policy: *policy,
+                }
+            }
+            Instruction::PeriodicEpoch {
+                interval_ms,
+                block_pc,
+                block_len,
+            } => SsaInstruction::PeriodicEpoch {
+                interval_ms: *interval_ms,
+                block_pc: *block_pc,
+                block_len: *block_len,
+            },
+            Instruction::EndPeriodicEpoch { interval_ms } => {
+                SsaInstruction::EndPeriodicEpoch {
+                    interval_ms: *interval_ms,
+                }
+            }
+            Instruction::FreezeBaseWatermark => SsaInstruction::FreezeBaseWatermark,
+            Instruction::ResetBaseWatermark => SsaInstruction::ResetBaseWatermark,
+            Instruction::ArenaIntrospect { dest, kind } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::ArenaIntrospect {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    kind: *kind,
+                }
+            }
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }

@@ -137,6 +137,15 @@ impl Type {
                         };
                     Type::Promise(inner_type)
                 }
+                "array" | "Array" => {
+                    let inner_type =
+                        if let Some(crate::TypeParam::Type(t)) = params.first() {
+                            Box::new(Type::from_typename(t))
+                        } else {
+                            Box::new(Type::Unknown)
+                        };
+                    Type::Array(inner_type)
+                }
                 _ => Type::Custom(name.clone()),
             },
             TypeName::Optional(inner) => {

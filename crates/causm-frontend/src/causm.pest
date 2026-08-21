@@ -4,7 +4,7 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "#" ~ (!"\n" ~ ANY)* }
 
 program = { SOI ~ (timeline_block | statement)* ~ EOI }
 
-timeline_block = { "@" ~ time_coord ~ timeline_directive* ~ ":" ~ statement_block }
+timeline_block = { ("@every" ~ duration_literal | "@" ~ time_coord) ~ timeline_directive* ~ ":" ~ statement_block }
 timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") }
 directive_stmt = { timeline_directive+ ~ ":" ~ statement_block }
 
@@ -37,8 +37,8 @@ statement = {
     | match_entropy_stmt
     | match_stmt
     | await_stmt
-    | if_stmt
     | if_let_stmt
+    | if_stmt
     | break_stmt
     | loop_stmt
     | while_stmt
@@ -49,11 +49,13 @@ statement = {
     | interface_decl
     | decay_handler_stmt
     | assert_time_stmt
+    | state_stmt
+    | policy_stmt
+    | field_update_stmt
     | assignment_stmt
     | require_decl
     | timeline_block
     | entangle_stmt
-    | field_update_stmt
     | slice_stmt
     | import_stmt
     | from_import_stmt
@@ -123,11 +125,16 @@ pacing_opt = { "pacing" ~ duration_limit }
 debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
 if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
-loop_stmt = { "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
+loop_stmt = { "loop" ~ "on" ~ expression ~ statement_block | "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
 while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
 step_spec = { duration_wildcard | duration_literal }
 for_step_stmt = { "for" ~ identifier ~ "in" ~ range_expr ~ "step" ~ step_spec ~ "{" ~ statement* ~ "}" }
 range_expr = { (duration_literal | expression) ~ ".." ~ (duration_literal | expression) | expression }
+
+state_stmt = { "state" ~ identifier ~ type_annotation? ~ "=" ~ expression }
+policy_target = { "on_full" | "on_deadline_breach" | "on_overflow" }
+policy_kind = { "EvictDecayed" | "RingBuffer" | "Throttle" | "FailFast" }
+policy_stmt = { "policy" ~ policy_target ~ "=" ~ policy_kind }
 
 slice_stmt = { "slice" ~ amount ~ "ms" }
 
@@ -180,7 +187,8 @@ type_annotation = { ":" ~ type_name }
 type_name = { union_type }
 union_type = { optional_type ~ ("|" ~ optional_type)* }
 optional_type = { base_type ~ "?"? }
-base_type = { "i8" | "i16" | "i32" | "i64" | "int" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "float" | "bool" | "string" | "struct" | "topology" | "array" | identifier ~ ("<" ~ type_param_list ~ ">")? }
+array_bracket_type = { "[" ~ type_name ~ "]" }
+base_type = { array_bracket_type | "i8" | "i16" | "i32" | "i64" | "int" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "float" | "bool" | "string" | "struct" | "topology" | "array" | identifier ~ ("<" ~ type_param_list ~ ">")? }
 type_param_list = { type_param ~ ("," ~ type_param)* }
 type_param = { amount ~ "ms" | amount | type_name }
 
@@ -223,7 +231,9 @@ match_expr = { "match" ~ expression ~ "{" ~ match_expr_arm* ~ "}" }
 match_expr_arm = { match_pattern ~ guard_clause? ~ "=>" ~ expression ~ ","? }
 syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ expression)* ~ ")" ~ duration_limit? }
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
-base_expr = { null | if_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
+arena_introspect_kind = { "remaining" | "used_bytes" | "capacity" }
+arena_expr = { "arena" ~ "." ~ arena_introspect_kind ~ "(" ~ ")" }
+base_expr = { null | if_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
 slice_range = { expression? ~ ".." ~ "="? ~ expression? }
@@ -257,7 +267,7 @@ auto_drop_opt = { "auto_drop" ~ "(" ~ string_literal ~ "," ~ string_literal ~ ",
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
 generic_param = { identifier ~ (":" ~ identifier)? }
 generic_param_list = { "<" ~ generic_param ~ ("," ~ generic_param)* ~ ">" }
-type_decl = { pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" }
+type_decl = { pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? }
 assoc_type_decl = { "type" ~ identifier ~ (":" ~ identifier)? }
 interface_item = { assoc_type_decl | interface_method }
 interface_decl = { pub_opt ~ "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }

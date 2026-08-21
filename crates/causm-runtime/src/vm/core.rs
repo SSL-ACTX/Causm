@@ -235,7 +235,13 @@ impl Vm {
                 TimeCoordinate::Global(_) => "main",
                 TimeCoordinate::Relative(_) => "main",
                 TimeCoordinate::Branch(name) => name.as_str(),
+                TimeCoordinate::Periodic(_) => "main",
             };
+
+            if matches!(&block.time, TimeCoordinate::Periodic(_)) {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.arena.freeze_base_watermark();
+            }
 
             {
                 let branch = self.get_branch_mut(branch_id)?;
@@ -258,6 +264,16 @@ impl Vm {
 
                 self.execute_instruction(branch_id)?;
                 self.handle_break(branch_id)?;
+            }
+
+            if let TimeCoordinate::Periodic(interval_ms) = &block.time {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.arena.reset_to_base_watermark();
+                if branch.local_clock < *interval_ms {
+                    let padding = *interval_ms - branch.local_clock;
+                    branch.local_clock = *interval_ms;
+                    branch.consume_budget(padding)?;
+                }
             }
         }
         Ok(())
@@ -697,6 +713,7 @@ impl Timeline {
             loop_depth: 0,
             loop_stack: Vec::new(),
             flat_loops: Vec::new(),
+            saturation_policies: HashMap::new(),
             pc: 0,
             instructions: Vec::new(),
             spans: Vec::new(),

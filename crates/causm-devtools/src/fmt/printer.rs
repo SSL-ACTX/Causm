@@ -10,13 +10,14 @@ pub fn format_program(program: &Program, config: &FormatConfig) -> String {
         if i > 0 {
             out.push('\n');
         }
-        let time_str = match &tb.time {
-            causm_core::TimeCoordinate::Global(t) => format!("{}ms", t),
-            causm_core::TimeCoordinate::Relative(t) => format!("+{}ms", t),
-            causm_core::TimeCoordinate::Branch(b) => b.clone(),
+        let header = match &tb.time {
+            causm_core::TimeCoordinate::Global(t) => format!("@{}ms", t),
+            causm_core::TimeCoordinate::Relative(t) => format!("@+{}ms", t),
+            causm_core::TimeCoordinate::Branch(b) => format!("@{}", b),
+            causm_core::TimeCoordinate::Periodic(t) => format!("@every {}ms", t),
         };
         let directives = if tb.no_z3 { " @no_z3" } else { "" };
-        out.push_str(&format!("@{}{}: {{\n", time_str, directives));
+        out.push_str(&format!("{}{}: {{\n", header, directives));
         for stmt in &tb.statements {
             format_spanned_statement(&mut out, stmt, config.indent_spaces, 1);
         }
@@ -763,12 +764,13 @@ fn format_spanned_statement(
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
         }
         Statement::RelativisticBlock { time, body } => {
-            let time_str = match time {
-                causm_core::TimeCoordinate::Global(t) => format!("{}ms", t),
-                causm_core::TimeCoordinate::Relative(t) => format!("+{}ms", t),
-                causm_core::TimeCoordinate::Branch(b) => b.clone(),
+            let header = match time {
+                causm_core::TimeCoordinate::Global(t) => format!("@{}ms", t),
+                causm_core::TimeCoordinate::Relative(t) => format!("@+{}ms", t),
+                causm_core::TimeCoordinate::Branch(b) => format!("@{}", b),
+                causm_core::TimeCoordinate::Periodic(t) => format!("@every {}ms", t),
             };
-            out.push_str(&format!("{}@{}: {{\n", indent, time_str));
+            out.push_str(&format!("{}{}: {{\n", indent, header));
             for s in body {
                 format_spanned_statement(out, s, indent_step, depth + 1);
             }

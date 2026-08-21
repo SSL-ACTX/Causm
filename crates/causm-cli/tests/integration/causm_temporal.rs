@@ -1162,3 +1162,88 @@ fn test_stdlib_path_module() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_continuous_periodic_epoch_and_arena_dual_partition() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        state persistent_counter: int = 100
+        policy on_full = EvictDecayed
+
+        @every 50ms: {
+            let transient_scratch = 42
+            let rem_bytes = arena.remaining()
+            let used_bytes = arena.used_bytes()
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let counter_reg = ir.symbols.get("persistent_counter").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(counter_reg),
+        Some(causm_core::value::Payload::Integer(100))
+    );
+    // Baseline watermark froze the persistent partition state
+    assert!(vm.root_timeline.arena.base_watermark_used > 0);
+    // After periodic tick completion, local clock advanced by interval
+    assert_eq!(vm.root_timeline.local_clock, 50);
+
+    Ok(())
+}
+
+#[test]
+fn test_continuous_periodic_deadline_unachievable_compile_error() {
+    let source = r#"
+    @every 2ms: {
+        slice 10ms
+        let a = 1
+        let b = 2
+        let c = 3
+    }
+    "#;
+
+    let program = parser::parse_causm(source).unwrap();
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    let err_msg = format!("{}", res.err().unwrap());
+    assert!(err_msg.contains("Periodic Deadline Unachievable"));
+}
+
+#[test]
+fn test_continuous_loop_on_event_syntax_and_lowering() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        state active = true
+        loop on active {
+            let msg = 123
+            break
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let active_reg = ir.symbols.get("active").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(active_reg),
+        Some(causm_core::value::Payload::Bool(true))
+    );
+    Ok(())
+}

@@ -381,6 +381,16 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let inner = pair.into_inner().next().unwrap();
             Expression::StrBytes(Box::new(parse_expression(inner)))
         }
+        Rule::arena_expr => {
+            let kind_pair = pair.into_inner().next().unwrap();
+            let kind = match kind_pair.as_str() {
+                "remaining" => ArenaIntrospect::Remaining,
+                "used_bytes" => ArenaIntrospect::UsedBytes,
+                "capacity" => ArenaIntrospect::Capacity,
+                _ => ArenaIntrospect::Remaining,
+            };
+            Expression::ArenaIntrospect(kind)
+        }
         Rule::to_str_expr => {
             let inner = pair.into_inner().next().unwrap();
             Expression::ToStr(Box::new(parse_expression(inner)))

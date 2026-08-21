@@ -132,6 +132,44 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 }
             }
         }
+        Rule::state_stmt => {
+            let mut inner = pair.into_inner();
+            let target = inner.next().unwrap().as_str().to_string();
+            let next = inner.next().unwrap();
+            let (var_type, expr_pair) = if next.as_rule() == Rule::type_annotation {
+                (
+                    Some(parse_type_name(next.into_inner().next().unwrap())),
+                    inner.next().unwrap(),
+                )
+            } else {
+                (None, next)
+            };
+            let expr = parse_expression(expr_pair);
+            Statement::StateDecl {
+                target,
+                var_type,
+                expr,
+            }
+        }
+        Rule::policy_stmt => {
+            let mut inner = pair.into_inner();
+            let target_str = inner.next().unwrap().as_str();
+            let kind_str = inner.next().unwrap().as_str();
+            let target = match target_str {
+                "on_full" => PolicyTarget::OnFull,
+                "on_deadline_breach" => PolicyTarget::OnDeadlineBreach,
+                "on_overflow" => PolicyTarget::OnOverflow,
+                _ => PolicyTarget::OnFull,
+            };
+            let policy = match kind_str {
+                "EvictDecayed" => SaturationPolicy::EvictDecayed,
+                "RingBuffer" => SaturationPolicy::RingBuffer,
+                "Throttle" => SaturationPolicy::Throttle,
+                "FailFast" => SaturationPolicy::FailFast,
+                _ => SaturationPolicy::EvictDecayed,
+            };
+            Statement::PolicyStmt { target, policy }
+        }
         Rule::enum_decl => {
             let mut inner = pair.into_inner().peekable();
             let mut name_pair = inner.next().unwrap();

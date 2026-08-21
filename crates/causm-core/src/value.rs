@@ -303,8 +303,11 @@ pub struct ValueMetadata {
 pub struct Arena {
     pub capacity: u64,
     pub used: u64,
+    pub base_watermark_used: u64,
+    pub base_watermark_regs: usize,
     pub registers: Vec<EntropicState>,
     pub metadata: Vec<Option<ValueMetadata>>,
+    pub is_persistent_partition: bool,
 }
 
 impl Arena {
@@ -312,8 +315,51 @@ impl Arena {
         Self {
             capacity,
             used: 0,
+            base_watermark_used: 0,
+            base_watermark_regs: 0,
             registers: Vec::new(),
             metadata: Vec::new(),
+            is_persistent_partition: false,
+        }
+    }
+
+    pub fn freeze_base_watermark(&mut self) {
+        self.base_watermark_used = self.used;
+        self.base_watermark_regs = self.registers.len();
+    }
+
+    pub fn reset_to_base_watermark(&mut self) {
+        if self.registers.len() > self.base_watermark_regs {
+            self.registers.truncate(self.base_watermark_regs);
+        }
+        if self.metadata.len() > self.base_watermark_regs {
+            self.metadata.truncate(self.base_watermark_regs);
+        }
+        self.used = self.base_watermark_used;
+    }
+
+    pub fn remaining(&self) -> u64 {
+        self.capacity.saturating_sub(self.used)
+    }
+
+    pub fn used_bytes(&self) -> u64 {
+        self.used
+    }
+
+    pub fn evict_decayed(&mut self) {
+        for (i, state) in self.registers.iter_mut().enumerate() {
+            if matches!(state, EntropicState::Decayed(_)) {
+                let old_weight = state.weight();
+                *state = EntropicState::Consumed;
+                let new_weight = state.weight();
+                self.used = self
+                    .used
+                    .saturating_sub(old_weight)
+                    .saturating_add(new_weight);
+                if i < self.metadata.len() {
+                    self.metadata[i] = None;
+                }
+            }
         }
     }
 
@@ -367,6 +413,8 @@ impl Arena {
         self.registers.clear();
         self.metadata.clear();
         self.used = 0;
+        self.base_watermark_used = 0;
+        self.base_watermark_regs = 0;
     }
 
     /// Optionally compact consumed entries at branch boundaries.

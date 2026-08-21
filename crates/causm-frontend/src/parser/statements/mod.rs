@@ -28,6 +28,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
 
         // Data
         Rule::assignment_stmt
+        | Rule::state_stmt
+        | Rule::policy_stmt
         | Rule::type_decl
         | Rule::enum_decl
         | Rule::interface_decl
@@ -89,24 +91,37 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
 pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
     let mut inner = pair.into_inner().peekable();
     let time_coord_pair = inner.next().expect("Timeline missing time");
-    let time_pair = time_coord_pair
-        .into_inner()
-        .next()
-        .expect("Invalid time structure");
 
-    let time = match time_pair.as_rule() {
-        Rule::absolute_time => TimeCoordinate::Global(
-            time_pair.as_str().replace("ms", "").parse().unwrap_or(0),
-        ),
-        Rule::relative_time => TimeCoordinate::Relative(
-            time_pair
-                .as_str()
-                .replace("+", "")
-                .replace("ms", "")
-                .parse()
-                .unwrap_or(0),
-        ),
-        Rule::branch_name => TimeCoordinate::Branch(time_pair.as_str().to_string()),
+    let time = match time_coord_pair.as_rule() {
+        Rule::duration_literal => {
+            let ms = crate::parser::statements::utils::parse_duration_to_ms(
+                time_coord_pair.as_str(),
+            );
+            TimeCoordinate::Periodic(ms)
+        }
+        Rule::time_coord => {
+            let time_pair = time_coord_pair
+                .into_inner()
+                .next()
+                .expect("Invalid time structure");
+            match time_pair.as_rule() {
+                Rule::absolute_time => TimeCoordinate::Global(
+                    time_pair.as_str().replace("ms", "").parse().unwrap_or(0),
+                ),
+                Rule::relative_time => TimeCoordinate::Relative(
+                    time_pair
+                        .as_str()
+                        .replace("+", "")
+                        .replace("ms", "")
+                        .parse()
+                        .unwrap_or(0),
+                ),
+                Rule::branch_name => {
+                    TimeCoordinate::Branch(time_pair.as_str().to_string())
+                }
+                _ => TimeCoordinate::Global(0),
+            }
+        }
         _ => TimeCoordinate::Global(0),
     };
 

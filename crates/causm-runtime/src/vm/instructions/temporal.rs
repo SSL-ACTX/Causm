@@ -456,4 +456,86 @@ impl Vm {
 
         Ok(())
     }
+
+    pub(crate) fn PeriodicEpoch(
+        &mut self,
+        branch_id: &str,
+        _interval_ms: u64,
+        _block_pc: usize,
+        _block_len: usize,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.arena.freeze_base_watermark();
+        Ok(())
+    }
+
+    pub(crate) fn EndPeriodicEpoch(
+        &mut self,
+        branch_id: &str,
+        interval_ms: u64,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.arena.reset_to_base_watermark();
+        if branch.local_clock < interval_ms {
+            let padding = interval_ms - branch.local_clock;
+            branch.local_clock = interval_ms;
+            branch.consume_budget(padding)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn FreezeBaseWatermark(
+        &mut self,
+        branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.arena.freeze_base_watermark();
+        Ok(())
+    }
+
+    pub(crate) fn ResetBaseWatermark(
+        &mut self,
+        branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.arena.reset_to_base_watermark();
+        Ok(())
+    }
+
+    pub(crate) fn SetSaturationPolicy(
+        &mut self,
+        branch_id: &str,
+        target: causm_core::PolicyTarget,
+        policy: causm_core::SaturationPolicy,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.saturation_policies.insert(target, policy);
+        Ok(())
+    }
+
+    pub(crate) fn ArenaIntrospect(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        kind: causm_core::ArenaIntrospect,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch(branch_id)?;
+        let val = match kind {
+            causm_core::ArenaIntrospect::Remaining => {
+                branch.arena.remaining() as i64
+            }
+            causm_core::ArenaIntrospect::UsedBytes => {
+                branch.arena.used_bytes() as i64
+            }
+            causm_core::ArenaIntrospect::Capacity => branch.arena.capacity as i64,
+        };
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(
+                causm_core::value::Payload::Integer(val),
+            ),
+        )?;
+        Ok(())
+    }
 }

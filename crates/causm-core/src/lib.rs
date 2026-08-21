@@ -35,6 +35,7 @@ pub enum TimeCoordinate {
     Global(u64),
     Relative(u64),
     Branch(String),
+    Periodic(u64),
 }
 
 impl std::fmt::Display for TimeCoordinate {
@@ -43,8 +44,31 @@ impl std::fmt::Display for TimeCoordinate {
             TimeCoordinate::Global(t) => write!(f, "Global({})", t),
             TimeCoordinate::Relative(t) => write!(f, "+{}ms", t),
             TimeCoordinate::Branch(b) => write!(f, "{}", b),
+            TimeCoordinate::Periodic(t) => write!(f, "@every {}ms", t),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SaturationPolicy {
+    EvictDecayed,
+    RingBuffer,
+    Throttle,
+    FailFast,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PolicyTarget {
+    OnFull,
+    OnDeadlineBreach,
+    OnOverflow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ArenaIntrospect {
+    Remaining,
+    UsedBytes,
+    Capacity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -274,6 +298,19 @@ macro_rules! statements {
                 target: Expression,
                 field: String,
                 value: Expression
+            },
+            StateDecl {
+                target: String,
+                var_type: Option<TypeName>,
+                expr: Expression
+            },
+            PolicyStmt {
+                target: PolicyTarget,
+                policy: SaturationPolicy
+            },
+            LoopOn {
+                target: Expression,
+                body: Vec<SpannedStatement>
             }
         }
     };
@@ -311,6 +348,8 @@ impl Statement {
             | Statement::EnumDecl { .. }
             | Statement::InterfaceDecl { .. }
             | Statement::FieldUpdate { .. }
+            | Statement::StateDecl { .. }
+            | Statement::PolicyStmt { .. }
             | Statement::Expression(_)
             | Statement::Print(_) => 0,
             Statement::Using { body, .. } => estimate_block(body),
@@ -349,7 +388,11 @@ impl Statement {
                     .unwrap_or(0);
                 let timeout_cost =
                     timeout.as_ref().map(|b| estimate_block(b)).unwrap_or(0);
-                *max_ms + case_max_cost.max(timeout_cost)
+                if *max_ms == u64::MAX {
+                    case_max_cost.max(timeout_cost)
+                } else {
+                    *max_ms
+                }
             }
             Statement::MatchEntropy {
                 valid_branch,
@@ -360,19 +403,19 @@ impl Statement {
             } => {
                 let valid_cost = valid_branch
                     .as_ref()
-                    .map(|(_, _, b)| estimate_block(b))
+                    .map(|b| estimate_block(&b.2))
                     .unwrap_or(0);
                 let decayed_cost = decayed_branch
                     .as_ref()
-                    .map(|(_, _, b)| estimate_block(b))
+                    .map(|b| estimate_block(&b.2))
                     .unwrap_or(0);
                 let pending_cost = pending_branch
                     .as_ref()
-                    .map(|(_, _, b)| estimate_block(b))
+                    .map(|b| estimate_block(&b.2))
                     .unwrap_or(0);
                 let consumed_cost = consumed_branch
                     .as_ref()
-                    .map(|(_, b)| estimate_block(b))
+                    .map(|b| estimate_block(&b.1))
                     .unwrap_or(0);
                 valid_cost
                     .max(decayed_cost)
@@ -381,7 +424,7 @@ impl Statement {
             }
             Statement::Match { arms, .. } => arms
                 .iter()
-                .map(|arm| estimate_block(&arm.body))
+                .map(|a| estimate_block(&a.body))
                 .max()
                 .unwrap_or(0),
             Statement::IfLet {
@@ -393,7 +436,7 @@ impl Statement {
             Statement::Collapse => 0,
             Statement::SplitMap { body, .. } => 1 + estimate_block(body),
             Statement::Lease { duration_ms, .. } => *duration_ms,
-            Statement::RoutineDef { .. } => 0,
+            Statement::RoutineDef { body, .. } => estimate_block(body),
             Statement::Loop { max_ms, body } => {
                 if *max_ms == u64::MAX {
                     estimate_block(body)
@@ -402,6 +445,7 @@ impl Statement {
                 }
             }
             Statement::LoopTick { .. } => 1,
+            Statement::LoopOn { body, .. } => estimate_block(body),
             Statement::While { max_ms, body, .. } => {
                 if *max_ms == u64::MAX {
                     estimate_block(body)
@@ -514,6 +558,7 @@ macro_rules! expressions {
                 target: Box<Expression>,
                 arms: Vec<MatchExprArm>
             },
+            ArenaIntrospect(ArenaIntrospect),
             Null
         }
     };

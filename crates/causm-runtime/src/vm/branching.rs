@@ -53,6 +53,7 @@ impl Vm {
                 loop_depth: 0,
                 loop_stack: Vec::new(),
                 flat_loops: Vec::new(),
+                saturation_policies: HashMap::new(),
                 pc: 0,
                 instructions: Vec::new(),
                 spans: Vec::new(),

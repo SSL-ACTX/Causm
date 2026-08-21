@@ -34,7 +34,21 @@ pub fn parse_type_name(pair: Pair<Rule>) -> TypeName {
                 base_type
             }
         }
+        Rule::array_bracket_type => {
+            let inner = pair.into_inner().next().unwrap();
+            let element_type = parse_type_name(inner);
+            TypeName::Generic(
+                "array".to_string(),
+                vec![TypeParam::Type(element_type)],
+            )
+        }
         Rule::base_type => {
+            let mut inner_pairs = pair.clone().into_inner();
+            if let Some(first) = inner_pairs.next() {
+                if first.as_rule() == Rule::array_bracket_type {
+                    return parse_type_name(first);
+                }
+            }
             let text = pair.as_str().trim();
             match text {
                 "int" => TypeName::Builtin(BuiltinType::Integer),

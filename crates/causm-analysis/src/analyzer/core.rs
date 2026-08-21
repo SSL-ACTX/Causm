@@ -247,6 +247,26 @@ impl EntropicAnalyzer {
                     Statement::Isolate(iso) => {
                         visit_stmts(analyzer, &iso.body);
                     }
+                    Statement::StateDecl {
+                        target,
+                        var_type,
+                        expr,
+                    } => {
+                        let typ = if let Some(explicit) = var_type {
+                            causm_core::types::Type::from_typename(explicit)
+                        } else if let Ok(inferred) =
+                            crate::expression::infer_expression_type(analyzer, expr)
+                        {
+                            inferred
+                        } else {
+                            causm_core::types::Type::Unknown
+                        };
+                        let branch =
+                            analyzer.branch_contexts.get_mut("main").unwrap();
+                        branch.mutables.insert(target.clone());
+                        branch.types.insert(target.clone(), typ);
+                        branch.produced.insert(target.clone());
+                    }
                     Statement::RelativisticBlock { body, .. } => {
                         visit_stmts(analyzer, body);
                     }
@@ -310,6 +330,23 @@ impl EntropicAnalyzer {
                         self.branch_contexts.get_mut(&self.current_branch).unwrap();
                     state.accumulated_cost += *t;
                 }
+                TimeCoordinate::Periodic(interval_ms) => {
+                    let block_cost = crate::statement::estimate_block_cost(
+                        self,
+                        &block.statements,
+                    );
+                    if block_cost > *interval_ms {
+                        return Err(self.annotate(
+                            SemanticErrorKind::PeriodicDeadlineUnachievable(
+                                block_cost,
+                                *interval_ms,
+                            ),
+                        ));
+                    }
+                    let state =
+                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                    state.accumulated_cost += *interval_ms;
+                }
             }
 
             for stmt in &block.statements {
@@ -318,9 +355,15 @@ impl EntropicAnalyzer {
                 self.current_statement = Some(self.statement_snippet(stmt));
                 self.current_span = Some(stmt.span.clone());
                 self.analyze_statement(stmt)?;
-                self.record_state(stmt.span.clone());
                 self.current_statement = old_stmt;
                 self.current_span = old_span;
+            }
+
+            if matches!(&block.time, TimeCoordinate::Periodic(_)) {
+                // Reset transient local variables at epoch boundary
+                let state =
+                    self.branch_contexts.get_mut(&self.current_branch).unwrap();
+                state.consumed.clear();
             }
 
             self.current_branch = old_branch;
@@ -1187,6 +1230,17 @@ impl EntropicAnalyzer {
             Expression::Match { target, .. } => {
                 format!("match {} {{ ... }}", self.expr_snippet(target))
             }
+            Expression::ArenaIntrospect(kind) => match kind {
+                causm_core::ArenaIntrospect::Remaining => {
+                    "arena.remaining()".to_string()
+                }
+                causm_core::ArenaIntrospect::UsedBytes => {
+                    "arena.used_bytes()".to_string()
+                }
+                causm_core::ArenaIntrospect::Capacity => {
+                    "arena.capacity()".to_string()
+                }
+            },
         }
     }
 

@@ -1031,6 +1031,18 @@ impl EntropicAnalyzer {
 
         Ok(())
     }
+
+    pub(crate) fn LoopOn(
+        &mut self,
+        target: &Expression,
+        body: &[SpannedStatement],
+    ) -> Result<(), SemanticError> {
+        crate::expression::analyze_expression(self, target)?;
+        for s in body {
+            self.analyze_statement(s)?;
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn bind_pattern_variables(

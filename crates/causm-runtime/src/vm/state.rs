@@ -136,6 +136,8 @@ pub struct Timeline {
     pub loop_depth: u32,
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
     pub flat_loops: Vec<FlatLoopState>,
+    pub saturation_policies:
+        HashMap<causm_core::PolicyTarget, causm_core::SaturationPolicy>,
     pub pc: usize,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,

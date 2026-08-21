@@ -150,12 +150,27 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::loop_stmt => {
+            let s_str = pair.as_str().trim_start();
             let mut inner = pair.into_inner();
-            let first = inner.clone().next();
-            if let Some(first) = first {
+            let first = inner.next();
+            if s_str.starts_with("loop on ") {
+                let target_expr = parse_expression(first.unwrap());
+                let body_pair = inner.next().unwrap();
+                let body = match body_pair.as_rule() {
+                    Rule::statement_block => body_pair
+                        .into_inner()
+                        .filter_map(|p| p.into_inner().next())
+                        .map(parse_statement)
+                        .collect(),
+                    _ => vec![parse_statement(body_pair)],
+                };
+                Statement::LoopOn {
+                    target: target_expr,
+                    body,
+                }
+            } else if let Some(first) = first {
                 if first.as_rule() == Rule::duration_limit {
                     let max_value = parse_duration_limit(first);
-                    inner.next();
                     let mut body = Vec::new();
                     for stmt_pair in inner {
                         if stmt_pair.as_rule() == Rule::statement {
