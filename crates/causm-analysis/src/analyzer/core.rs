@@ -162,6 +162,59 @@ impl EntropicAnalyzer {
                 },
             );
         }
+
+        let collection_intrinsics = vec![
+            (
+                "push",
+                vec![Type::Array(Box::new(Type::Unknown)), Type::Unknown],
+                Type::Array(Box::new(Type::Unknown)),
+            ),
+            (
+                "pop",
+                vec![Type::Array(Box::new(Type::Unknown))],
+                Type::Unknown,
+            ),
+            (
+                "array_push",
+                vec![Type::Array(Box::new(Type::Unknown)), Type::Unknown],
+                Type::Array(Box::new(Type::Unknown)),
+            ),
+            (
+                "array_slice",
+                vec![
+                    Type::Array(Box::new(Type::Unknown)),
+                    Type::Integer,
+                    Type::Integer,
+                ],
+                Type::Array(Box::new(Type::Unknown)),
+            ),
+            (
+                "string_from_bytes",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::String,
+            ),
+            ("char_at", vec![Type::String, Type::Integer], Type::Integer),
+            (
+                "str_slice",
+                vec![Type::String, Type::Integer, Type::Integer],
+                Type::String,
+            ),
+        ];
+
+        for (name, params, ret) in collection_intrinsics {
+            self.routines.insert(
+                name.to_string(),
+                RoutineInfo {
+                    params: params
+                        .into_iter()
+                        .map(|t| (causm_core::ParamMode::Peek, "arg".to_string(), t))
+                        .collect(),
+                    return_type: ret,
+                    taking_ms: 1,
+                    state_constraint: None,
+                },
+            );
+        }
     }
 
     pub(crate) fn pre_register_program_declarations(&mut self, program: &Program) {

@@ -445,3 +445,61 @@ fn test_branchless_conditional_select_emitted_from_source_syntax(
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_collection_and_string_primitives_execution() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut list = [10, 20]
+        list = push(list, 30)
+        let last = pop(list)
+
+        let sliced = array_slice(list, 0, 1)
+
+        let ascii_bytes = [72, 101, 108, 108, 111]
+        let greeting = string_from_bytes(ascii_bytes)
+        let first_ch = char_at(greeting, 0)
+        let sub = str_slice(greeting, 0, 4)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let list_reg = ir.symbols.get("list").expect("list symbol").0;
+    let last_reg = ir.symbols.get("last").expect("last symbol").0;
+    let sliced_reg = ir.symbols.get("sliced").expect("sliced symbol").0;
+    let greeting_reg = ir.symbols.get("greeting").expect("greeting symbol").0;
+    let first_ch_reg = ir.symbols.get("first_ch").expect("first_ch symbol").0;
+    let sub_reg = ir.symbols.get("sub").expect("sub symbol").0;
+
+    assert_eq!(
+        vm.peek_reg("main", list_reg)?,
+        Payload::Array(vec![
+            Payload::Integer(10),
+            Payload::Integer(20),
+            Payload::Integer(30)
+        ])
+    );
+    assert_eq!(vm.peek_reg("main", last_reg)?, Payload::Integer(30));
+    assert_eq!(
+        vm.peek_reg("main", sliced_reg)?,
+        Payload::Array(vec![Payload::Integer(10)])
+    );
+    assert_eq!(
+        vm.peek_reg("main", greeting_reg)?,
+        Payload::String("Hello".to_string())
+    );
+    assert_eq!(vm.peek_reg("main", first_ch_reg)?, Payload::Integer(72));
+    assert_eq!(
+        vm.peek_reg("main", sub_reg)?,
+        Payload::String("Hell".to_string())
+    );
+
+    Ok(())
+}

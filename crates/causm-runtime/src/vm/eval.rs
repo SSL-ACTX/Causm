@@ -17,6 +17,13 @@ impl Vm {
                 | "floor"
                 | "ceil"
                 | "round"
+                | "push"
+                | "pop"
+                | "array_push"
+                | "array_slice"
+                | "string_from_bytes"
+                | "char_at"
+                | "str_slice"
         )
     }
 
@@ -25,29 +32,183 @@ impl Vm {
         name: &str,
         args: Vec<Payload>,
     ) -> Result<Payload, TemporalError> {
-        if args.len() != 1 {
-            return Err(TemporalError::EvalError(format!(
-                "{} expects 1 argument",
-                name
-            )));
+        match name {
+            "push" | "array_push" => {
+                if args.len() != 2 {
+                    return Err(TemporalError::EvalError(format!(
+                        "{} expects (array, item)",
+                        name
+                    )));
+                }
+                match &args[0] {
+                    Payload::Array(arr) => {
+                        let mut next = arr.clone();
+                        next.push(args[1].clone());
+                        Ok(Payload::Array(next))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(format!(
+                        "{} expects first argument to be array",
+                        name
+                    ))),
+                }
+            }
+            "pop" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "pop expects (array)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Payload::Array(arr) => {
+                        Ok(arr.last().cloned().unwrap_or(Payload::Null))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "pop expects argument to be array".to_string(),
+                    )),
+                }
+            }
+            "array_slice" => {
+                if args.len() != 3 {
+                    return Err(TemporalError::EvalError(
+                        "array_slice expects (array, start, end)".to_string(),
+                    ));
+                }
+                let start = match args[1] {
+                    Payload::Integer(i) => i.max(0) as usize,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "array_slice start must be integer".to_string(),
+                        ))
+                    }
+                };
+                let end = match args[2] {
+                    Payload::Integer(i) => i.max(0) as usize,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "array_slice end must be integer".to_string(),
+                        ))
+                    }
+                };
+                match &args[0] {
+                    Payload::Array(arr) => {
+                        let clamped_start = start.min(arr.len());
+                        let clamped_end = end.min(arr.len()).max(clamped_start);
+                        Ok(Payload::Array(arr[clamped_start..clamped_end].to_vec()))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "array_slice expects array".to_string(),
+                    )),
+                }
+            }
+            "string_from_bytes" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "string_from_bytes expects (array_of_bytes)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Payload::Array(arr) => {
+                        let bytes: Vec<u8> = arr
+                            .iter()
+                            .filter_map(|p| match p {
+                                Payload::Integer(i) => Some(*i as u8),
+                                _ => None,
+                            })
+                            .collect();
+                        let s = String::from_utf8_lossy(&bytes).to_string();
+                        Ok(Payload::String(s))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "string_from_bytes expects array".to_string(),
+                    )),
+                }
+            }
+            "char_at" => {
+                if args.len() != 2 {
+                    return Err(TemporalError::EvalError(
+                        "char_at expects (string, index)".to_string(),
+                    ));
+                }
+                let idx = match args[1] {
+                    Payload::Integer(i) => i.max(0) as usize,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "char_at index must be integer".to_string(),
+                        ))
+                    }
+                };
+                match &args[0] {
+                    Payload::String(s) => {
+                        let ch = s.chars().nth(idx).map(|c| c as i64).unwrap_or(0);
+                        Ok(Payload::Integer(ch))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "char_at expects string".to_string(),
+                    )),
+                }
+            }
+            "str_slice" => {
+                if args.len() != 3 {
+                    return Err(TemporalError::EvalError(
+                        "str_slice expects (string, start, end)".to_string(),
+                    ));
+                }
+                let start = match args[1] {
+                    Payload::Integer(i) => i.max(0) as usize,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "str_slice start must be integer".to_string(),
+                        ))
+                    }
+                };
+                let end = match args[2] {
+                    Payload::Integer(i) => i.max(0) as usize,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "str_slice end must be integer".to_string(),
+                        ))
+                    }
+                };
+                match &args[0] {
+                    Payload::String(s) => {
+                        let chars: Vec<char> = s.chars().collect();
+                        let clamped_start = start.min(chars.len());
+                        let clamped_end = end.min(chars.len()).max(clamped_start);
+                        let sliced: String =
+                            chars[clamped_start..clamped_end].iter().collect();
+                        Ok(Payload::String(sliced))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "str_slice expects string".to_string(),
+                    )),
+                }
+            }
+            _ => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(format!(
+                        "{} expects 1 argument",
+                        name
+                    )));
+                }
+                let f = args[0].as_float().ok_or_else(|| {
+                    TemporalError::TypeMismatch(format!("{} expects numeric", name))
+                })?;
+                let res = match name {
+                    "sqrt" => f.sqrt(),
+                    "sin" => f.sin(),
+                    "cos" => f.cos(),
+                    "tan" => f.tan(),
+                    "exp" => f.exp(),
+                    "ln" => f.ln(),
+                    "log10" => f.log10(),
+                    "floor" => f.floor(),
+                    "ceil" => f.ceil(),
+                    "round" => f.round(),
+                    _ => unreachable!(),
+                };
+                Ok(Payload::Float(res.to_bits()))
+            }
         }
-        let f = args[0].as_float().ok_or_else(|| {
-            TemporalError::TypeMismatch(format!("{} expects numeric", name))
-        })?;
-        let res = match name {
-            "sqrt" => f.sqrt(),
-            "sin" => f.sin(),
-            "cos" => f.cos(),
-            "tan" => f.tan(),
-            "exp" => f.exp(),
-            "ln" => f.ln(),
-            "log10" => f.log10(),
-            "floor" => f.floor(),
-            "ceil" => f.ceil(),
-            "round" => f.round(),
-            _ => unreachable!(),
-        };
-        Ok(Payload::Float(res.to_bits()))
     }
 
     pub(crate) fn evaluate_unary_operation(

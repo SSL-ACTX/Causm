@@ -6,27 +6,13 @@
 @0ms: {
     routine Stack.new(peek capacity: i32) -> Stack taking _ {
         let cap = if (capacity > 0) { clone(capacity) } else { 16 }
-        let raw = [0; cap]
+        let raw = []
         struct { capacity = cap, data = raw, len = 0 }
     }
     routine Stack.push(peek stack: Stack, peek item: i64) -> Stack taking _ {
-        let mut cur_len = stack.len
-        let mut cur_cap = stack.capacity
-        let mut data = stack.data
-        if (cur_len >= cur_cap) {
-            let new_cap = cur_cap * 2
-            let mut new_data = [0; new_cap]
-            let mut idx = 0
-            for elem in data step _ {
-                new_data[idx] = elem
-                idx = idx + 1
-            }
-            data = new_data
-            cur_cap = new_cap
-        }
-        data[cur_len] = item
-        let new_len = cur_len + 1
-        struct { capacity = cur_cap, data = data, len = new_len }
+        let data = push(stack.data, item)
+        let new_len = len(data)
+        struct { capacity = stack.capacity, data = data, len = new_len }
     }
     routine Stack.pop(peek stack: Stack) -> Stack taking _ {
         let cur_len = stack.len

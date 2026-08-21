@@ -24,59 +24,53 @@
     }
     routine Base64.encode(peek bytes: array) -> string taking _ {
         let n = len(bytes)
-        let mut out = [0; 64]
-        let i = 0
-        let j = 0
+        let mut out = []
+        let mut i = 0
         while (i + 2 < n) taking _ {
             let b0 = bytes[i]
             let b1 = bytes[i + 1]
             let b2 = bytes[i + 2]
             let chunk = Base64.encode_chunk(b0, b1, b2)
-            out[j] = chunk[0]
-            out[j + 1] = chunk[1]
-            out[j + 2] = chunk[2]
-            out[j + 3] = chunk[3]
-            let i = i + 3
-            let j = j + 4
+            out = push(out, chunk[0])
+            out = push(out, chunk[1])
+            out = push(out, chunk[2])
+            out = push(out, chunk[3])
+            i = i + 3
         }
         if (i + 1 == n) {
             let b0 = bytes[i]
             let chunk = Base64.encode_chunk(b0, 0, 0)
-            out[j] = chunk[0]
-            out[j + 1] = chunk[1]
-            out[j + 2] = 61
-            out[j + 3] = 61
-            let j = j + 4
+            out = push(out, chunk[0])
+            out = push(out, chunk[1])
+            out = push(out, 61)
+            out = push(out, 61)
         } else if (i + 2 == n) {
             let b0 = bytes[i]
             let b1 = bytes[i + 1]
             let chunk = Base64.encode_chunk(b0, b1, 0)
-            out[j] = chunk[0]
-            out[j + 1] = chunk[1]
-            out[j + 2] = chunk[2]
-            out[j + 3] = 61
-            let j = j + 4
+            out = push(out, chunk[0])
+            out = push(out, chunk[1])
+            out = push(out, chunk[2])
+            out = push(out, 61)
         }
-        to_str(out[0..j])
+        string_from_bytes(out)
     }
     routine Base64.decode(peek b64: string) -> array taking _ {
         let encoded_bytes = str_bytes(b64)
         let n = len(encoded_bytes)
-        let mut out = [0; 64]
-        let i = 0
-        let j = 0
+        let mut out = []
+        let mut i = 0
         while (i + 3 < n) taking _ {
             let c0 = encoded_bytes[i]
             let c1 = encoded_bytes[i + 1]
             let c2 = encoded_bytes[i + 2]
             let c3 = encoded_bytes[i + 3]
             let chunk = Base64.decode_chunk(c0, c1, c2, c3)
-            out[j] = chunk[0]
-            out[j + 1] = chunk[1]
-            out[j + 2] = chunk[2]
-            let i = i + 4
-            let j = j + 3
+            out = push(out, chunk[0])
+            out = push(out, chunk[1])
+            out = push(out, chunk[2])
+            i = i + 4
         }
-        out[0..j]
+        out
     }
 }
