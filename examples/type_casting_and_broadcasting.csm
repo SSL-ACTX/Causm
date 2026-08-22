@@ -1,6 +1,8 @@
 @0ms: {
     routine process_signal(peek raw: array, peek gain: f32, peek bias: i16) -> array taking _ => raw * gain as float + bias as int
+
     routine verify_thresholds(peek values: array, peek limit: i32) -> array taking _ => values - limit as float
+
     let raw_data = [10, 20, 30, 40, 50]
     let factor = 1.25 as f32
     let offset = 5 as i16

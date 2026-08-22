@@ -2,6 +2,7 @@
     from "std/sync/types" import AtomicInt, AtomicBool, FetchAddResult, CasIntResult, CasBoolResult
 
     routine Atomic.new_int(peek initial: int) -> AtomicInt taking _ => struct { val = initial }
+
     routine Atomic.load_int(peek a: AtomicInt) -> int taking _ => a.val
 
     routine Atomic.store_int(consume a: AtomicInt, peek val: int) -> AtomicInt taking _ {
@@ -28,6 +29,7 @@
     }
 
     routine Atomic.new_bool(peek initial: bool) -> AtomicBool taking _ => struct { val = initial }
+
     routine Atomic.load_bool(peek a: AtomicBool) -> bool taking _ => a.val
 
     routine Atomic.store_bool(consume a: AtomicBool, peek val: bool) -> AtomicBool taking _ {

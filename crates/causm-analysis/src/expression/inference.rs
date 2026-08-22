@@ -299,7 +299,9 @@ pub(crate) fn infer_expression_type(
                 | BinaryOperator::Lt
                 | BinaryOperator::Gt
                 | BinaryOperator::Le
-                | BinaryOperator::Ge => Ok(Type::Bool),
+                | BinaryOperator::Ge
+                | BinaryOperator::LogicalAnd
+                | BinaryOperator::LogicalOr => Ok(Type::Bool),
                 BinaryOperator::Add
                 | BinaryOperator::Sub
                 | BinaryOperator::Mul

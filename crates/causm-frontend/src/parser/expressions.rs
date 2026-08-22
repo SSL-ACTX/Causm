@@ -41,6 +41,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             left
         }
         Rule::expression
+        | Rule::logical_or_expr
+        | Rule::logical_and_expr
         | Rule::relational_expr
         | Rule::additive_expr
         | Rule::multiplicative_expr
@@ -53,6 +55,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut left = first.unwrap();
             while let Some(op_pair) = inner.next() {
                 let op = match op_pair.as_str() {
+                    "||" => causm_core::BinaryOperator::LogicalOr,
+                    "&&" => causm_core::BinaryOperator::LogicalAnd,
                     "+" => causm_core::BinaryOperator::Add,
                     "-" => causm_core::BinaryOperator::Sub,
                     "*" => causm_core::BinaryOperator::Mul,

@@ -1220,6 +1220,8 @@ impl EntropicAnalyzer {
                     BinaryOperator::Gt => ">",
                     BinaryOperator::Le => "<=",
                     BinaryOperator::Ge => ">=",
+                    BinaryOperator::LogicalAnd => "&&",
+                    BinaryOperator::LogicalOr => "||",
                 };
                 format!(
                     "({} {} {})",

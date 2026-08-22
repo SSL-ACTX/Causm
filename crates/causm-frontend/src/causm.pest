@@ -200,7 +200,11 @@ defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ duration_li
 yield_stmt = { "yield" ~ identifier }
 
 expression = { pipeline_expr }
-pipeline_expr = { relational_expr ~ ("|>" ~ relational_expr)* }
+pipeline_expr = { logical_or_expr ~ ("|>" ~ logical_or_expr)* }
+logical_or_expr = { logical_and_expr ~ (logor ~ logical_and_expr)* }
+logical_and_expr = { relational_expr ~ (logand ~ relational_expr)* }
+logor = { "||" }
+logand = { "&&" }
 relational_expr = {
     additive_expr ~ (relop ~ additive_expr)*
 }

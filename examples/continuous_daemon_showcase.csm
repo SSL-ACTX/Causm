@@ -1,9 +1,7 @@
 @0ms: {
     state total_cycles: int = 0
     state persistent_buffer: [int] = [0, 0, 0, 0]
-    
     policy on_full = EvictDecayed
-
     let base_used = arena.used_bytes()
     let base_cap = arena.capacity()
     print("=== Continuous Daemon Initialized ===")
@@ -14,31 +12,26 @@
 }
 
 @every 300ms: {
-    for i in 0..3 step 80ms {
+    for i in [0, 1, 2] step 80ms {
         let frame_seq = clone(i)
         let frame_pitch = 10 + clone(i)
         let frame_roll = -5 + clone(i)
-
         let raw_frame = struct {
-            seq = frame_seq,
             pitch = frame_pitch,
             roll = frame_roll,
+            seq = frame_seq,
             yaw = 2
         }
-
         let p = raw_frame.pitch
         let r = raw_frame.roll
         let computed_throttle = p * 3 + r
-
         let cmd = struct {
             seq = clone(i),
-            throttle = computed_throttle,
-            status = "ACTUATED"
+            status = "ACTUATED",
+            throttle = computed_throttle
         }
-
         let transient_alloc = arena.used_bytes()
         let remaining_before_reset = arena.remaining()
-        
         print("Loop iteration transient usage (bytes):")
         print(transient_alloc)
         print("Remaining headroom:")
@@ -51,7 +44,6 @@
 @every 400ms: {
     let post_reset_bytes = arena.used_bytes()
     let final_headroom = arena.remaining()
-
     print("Post-reset baseline verification (bytes):")
     print(post_reset_bytes)
     print("Final headroom:")

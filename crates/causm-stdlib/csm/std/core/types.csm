@@ -3,6 +3,7 @@
         None,
         Some(T)
     }
+
     enum Result {
         Ok(T),
         Err(E)

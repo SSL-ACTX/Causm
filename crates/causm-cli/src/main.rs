@@ -449,6 +449,18 @@ fn main() -> anyhow::Result<()> {
                                 "\x1b[1;31mFormatting AST Structural Mismatch in {}:\x1b[0m\n  Formatter generated an AST that differs from original.\n  (Original file preserved untouched)",
                                 path.display()
                             );
+                            for (i, (s1, s2)) in program.timelines[0]
+                                .statements
+                                .iter()
+                                .zip(reparsed_program.timelines[0].statements.iter())
+                                .enumerate()
+                            {
+                                if !causm_core::ast_statement_eq(&s1.stmt, &s2.stmt)
+                                {
+                                    eprintln!("  Statement {} mismatch:\n    original: {:#?}\n    reparsed: {:#?}", i, s1.stmt, s2.stmt);
+                                    break;
+                                }
+                            }
                             continue;
                         }
 

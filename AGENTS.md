@@ -61,6 +61,10 @@ When adding new syntax, instructions, or VM capabilities:
 ### 3.2 Read Rules Before Acting
 *   **Check Copilot Instructions:** Always read `.github/copilot-instructions.md` and this `AGENTS.md` document first to understand project constraints before making changes.
 
+### 3.3 Strict Tooling & Scope Isolation
+*   **Formatter vs Compiler Isolation:** When working on developer tooling (such as `causm fmt` or `crates/causm-devtools`), NEVER modify the compiler, parser, AST types, analysis, IR lowering, or runtime crates (`causm-core`, `causm-frontend`, `causm-analysis`, `causm-ir`, `causm-runtime`) unless explicitly ordered by the user. Formatter modifications MUST remain strictly isolated within `crates/causm-devtools`.
+*   **Preserve Working Systems:** Never destabilize or rewrite working compiler subsystems to suit peripheral tooling. Tooling must adapt to the compiler architecture, never the other way around.
+
 ---
 
 ## 4. Git Commit Standards

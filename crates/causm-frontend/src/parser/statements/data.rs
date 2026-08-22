@@ -479,9 +479,38 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 let mut taking_ms = None;
                 let mut default_body = None;
                 let mut state_constraint = None;
-
                 for opt in m_inner {
                     match opt.as_rule() {
+                        Rule::method_receiver => {
+                            let decl = opt.into_inner();
+                            let mut mode = ParamMode::Peek;
+                            let mut typ = None;
+                            for part in decl {
+                                match part.as_rule() {
+                                    Rule::param_mode => {
+                                        mode = match part.as_str() {
+                                            "consume" => ParamMode::Consume,
+                                            "clone" => ParamMode::Clone,
+                                            "decay" => ParamMode::Decay,
+                                            _ => ParamMode::Peek,
+                                        };
+                                    }
+                                    Rule::type_annotation => {
+                                        if let Some(inner_t) =
+                                            part.into_inner().next()
+                                        {
+                                            typ = Some(parse_type_name(inner_t));
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            params.push(causm_core::ParamDecl {
+                                mode,
+                                name: "self".to_string(),
+                                typ,
+                            });
+                        }
                         Rule::param_decl_list | Rule::param_decl => {
                             let pairs_to_process: Vec<_> =
                                 if opt.as_rule() == Rule::param_decl {

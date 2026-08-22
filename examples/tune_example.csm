@@ -4,12 +4,14 @@
         gain: int,
         raw_voltage: int
     }
+
     routine filter_signal(peek packet: SensorPacket) -> int taking 19ms {
         let normalized = packet.raw_voltage - packet.baseline
         let amplified = normalized * packet.gain
         let filtered = amplified / 2
         yield filtered
     }
+
     let sample: SensorPacket = struct { baseline = 128, gain = 4, raw_voltage = 1024 }
     let result = filter_signal(sample)
     print(result)

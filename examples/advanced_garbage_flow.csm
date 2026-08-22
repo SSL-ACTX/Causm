@@ -1,7 +1,11 @@
 @0ms: {
     print("=== Causm Advanced Garbage Flow & EGC ===")
     print("Phase 1: Non-Consuming Inspection & Struct Initialization")
-    let raw = struct { packets = 128, session_id = 9021, tenant = "AcmeCorp" }
+    let raw = struct {
+        packets = 128,
+        session_id = 9021,
+        tenant = "AcmeCorp"
+    }
     using session = raw {
         let copy = clone(session)
         let s_id = copy.session_id
@@ -9,7 +13,11 @@
         let pkts = copy.packets
         print(f"Inspected session: id={s_id} tenant={tenant} packets={pkts}")
     }
-    let raw2 = struct { packets = 128, session_id = 9021, tenant = "AcmeCorp" }
+    let raw2 = struct {
+        packets = 128,
+        session_id = 9021,
+        tenant = "AcmeCorp"
+    }
     print("Phase 2: Splitting Causal Timeline into Dual Branches [alpha, beta]")
     split main into [alpha, beta]
 }

@@ -3,13 +3,16 @@
         node_id: int,
         status: string
     }
+
     type QuantumVault = SecurityNode + struct {
         clearance_level: int,
         vault_code: int
     }
+
     interface Encryptable {
         routine encrypt_payload(peek self) -> int taking 15ms
     }
+
     interface AuditNode = Encryptable + interface {
         routine audit(peek self) -> int taking 10ms {
             print("Audit log recorded to immutable ledger.")
@@ -17,25 +20,35 @@
             yield ok
         }
     }
+
     routine QuantumVault<int>.inspect_secure(peek self) -> int taking 20ms {
         let code = self.vault_code
         print("Quantum Vault leased securely. Decrypted Code: " + code)
         yield code
     }
+
     routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
         let level = self.clearance_level
         print("Clearance Verified Level: " + level)
         yield level
     }
+
     routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
         let code = self.vault_code
         print("Payload Encrypted with Quantum Entanglement.")
         yield code
     }
+
     routine QuantumVault.purge(consume self) taking 15ms {
         print("Quantum Vault state purged and memory reclaimed.")
     }
-    let v: QuantumVault = struct { clearance_level = 9, node_id = 8192, status = "OPERATIONAL", vault_code = 987654 }
+
+    let v: QuantumVault = struct {
+        clearance_level = 9,
+        node_id = 8192,
+        status = "OPERATIONAL",
+        vault_code = 987654
+    }
     let code = v.inspect_secure()
     let level = v.verify_clearance()
     let node: AuditNode = v

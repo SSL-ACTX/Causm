@@ -1,6 +1,14 @@
 @0ms: {
     from "std/json/types" import *
-    routine Json.is_ws(peek b: i32) -> bool taking _ => match b { 32 => true, 9 => true, 10 => true, 13 => true, _ => false }
+
+    routine Json.is_ws(peek b: i32) -> bool taking _ => match b {
+        32 => true,
+        9 => true,
+        10 => true,
+        13 => true,
+        _ => false,
+    }
+
     routine Json.skip_ws(peek bytes: array, peek pos: i32, peek n: i32) -> i32 taking _ {
         let mut p = clone(pos)
         let mut limit = clone(n)
@@ -15,6 +23,7 @@
         }
         p
     }
+
     routine Json.parse_str_raw(peek bytes: array, peek pos: i32, peek n: i32) -> ParseStrResult taking _ {
         let mut p = pos + 1
         let mut limit = clone(n)
@@ -28,7 +37,17 @@
                 p = p + 1
                 if (p < limit) {
                     let mut esc = bytes[p]
-                    let ch = match esc { 110 => 10, 114 => 13, 116 => 9, 98 => 8, 102 => 12, 34 => 34, 92 => 92, 47 => 47, _ => esc }
+                    let ch = match esc {
+                        110 => 10,
+                        114 => 13,
+                        116 => 9,
+                        98 => 8,
+                        102 => 12,
+                        34 => 34,
+                        92 => 92,
+                        47 => 47,
+                        _ => esc,
+                    }
                     buf = push(buf, ch)
                     p = p + 1
                 }
@@ -40,6 +59,7 @@
         let s = string_from_bytes(buf)
         struct { next_pos = p, val = s }
     }
+
     routine Json.parse_number(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let mut p = clone(pos)
         let mut limit = clone(n)
@@ -68,6 +88,7 @@
         let total = num * sign
         struct { next_pos = p, val = JsonValue::Number(total) }
     }
+
     routine Json.parse_bool_or_null(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let b = bytes[pos]
         match b {
@@ -82,6 +103,7 @@
             }
         }
     }
+
     routine Json.parse_val(peek bytes: array, peek pos: i32, peek n: i32) -> ParseResult taking _ {
         let mut limit = clone(n)
         let p = Json.skip_ws(bytes, pos, limit)
@@ -90,7 +112,10 @@
             let mut b = bytes[p]
             if (b == 34) {
                 let res = Json.parse_str_raw(bytes, p, limit)
-                result = struct { next_pos = res.next_pos, val = JsonValue::String(res.val) }
+                result = struct {
+                    next_pos = res.next_pos,
+                    val = JsonValue::String(res.val)
+                }
             } else if (b == 123) {
                 let mut cur = p + 1
                 let mut members = []
@@ -200,11 +225,13 @@
         }
         result
     }
+
     routine Json.decode(peek text: string) -> JsonValue taking _ {
         let bytes = str_bytes(text)
         let n = len(bytes)
         let res = Json.parse_val(bytes, 0, n)
         res.val
     }
+
     routine Json.parse(peek text: string) -> JsonValue taking _ => Json.decode(text)
 }

@@ -3,49 +3,64 @@
         id: int,
         name: string
     }
+
     type Robot = Actor + struct decay_after 100ms {
         model: string
     }
+
     type PlayableRobot = Robot + struct {
         score: int
     }
+
     routine Actor.introduce(peek self) -> int taking 20ms {
         let name = self.name
         print("Hello, I am Actor: " + name)
         let res = 0
         yield res
     }
+
     routine Robot.status(peek self) -> int taking 20ms {
         print("Robot status: active")
         let res = 0
         yield res
     }
+
     routine PlayableRobot.status(peek self) -> int taking 20ms {
         let score = self.score
         print("Playable Robot status: active, score=" + score)
         let res = 0
         yield res
     }
+
     interface Worker {
         routine work(consume self) -> int taking 20ms
     }
+
     interface PlayableWorker = Worker + interface {
         routine play(peek self) -> int taking 20ms {
             let bonus = 100
             yield bonus
         }
     }
+
     routine PlayableRobot.work(consume self) -> int taking 20ms {
         print("Robot is working...")
         let res = 0
         yield res
     }
+
     routine Robot.check_battery(peek self) -> int taking 20ms where self.state == Valid {
         print("Battery OK")
         let res = 0
         yield res
     }
-    let r: PlayableRobot = struct { id = 42, model = "Cyberdyne Model 101", name = "T-800", score = 999 }
+
+    let r: PlayableRobot = struct {
+        id = 42,
+        model = "Cyberdyne Model 101",
+        name = "T-800",
+        score = 999
+    }
     r.introduce()
     r.status()
     r.check_battery()

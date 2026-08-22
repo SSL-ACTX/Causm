@@ -1,9 +1,33 @@
 @0ms: {
     from "std/core/types" import *
-    routine Option.is_some(peek self: Option) -> bool taking _ => match self { Option::Some(_) => true, _ => false }
-    routine Option.is_none(peek self: Option) -> bool taking _ => match self { Option::None => true, _ => false }
-    routine Option.unwrap_or(peek self: Option, peek default_val: any) -> any taking _ => match self { Option::Some(v) => v, _ => default_val }
-    routine Result.is_ok(peek self: Result) -> bool taking _ => match self { Result::Ok(_) => true, _ => false }
-    routine Result.is_err(peek self: Result) -> bool taking _ => match self { Result::Err(_) => true, _ => false }
-    routine Result.unwrap_or(peek self: Result, peek default_val: any) -> any taking _ => match self { Result::Ok(v) => v, _ => default_val }
+
+    routine Option.is_some(peek self: Option) -> bool taking _ => match self {
+        Option::Some(_) => true,
+        _ => false,
+    }
+
+    routine Option.is_none(peek self: Option) -> bool taking _ => match self {
+        Option::None => true,
+        _ => false,
+    }
+
+    routine Option.unwrap_or(peek self: Option, peek default_val: any) -> any taking _ => match self {
+        Option::Some(v) => v,
+        _ => default_val,
+    }
+
+    routine Result.is_ok(peek self: Result) -> bool taking _ => match self {
+        Result::Ok(_) => true,
+        _ => false,
+    }
+
+    routine Result.is_err(peek self: Result) -> bool taking _ => match self {
+        Result::Err(_) => true,
+        _ => false,
+    }
+
+    routine Result.unwrap_or(peek self: Result, peek default_val: any) -> any taking _ => match self {
+        Result::Ok(v) => v,
+        _ => default_val,
+    }
 }

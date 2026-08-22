@@ -9,20 +9,39 @@
         let raw = []
         struct { capacity = cap, data = raw, len = 0 }
     }
+
     routine Stack.push(peek stack: Stack, peek item: i64) -> Stack taking _ {
         let data = push(stack.data, item)
         let new_len = len(data)
-        struct { capacity = stack.capacity, data = data, len = new_len }
+        struct {
+            capacity = stack.capacity,
+            data = data,
+            len = new_len
+        }
     }
+
     routine Stack.pop(peek stack: Stack) -> Stack taking _ {
         let cur_len = stack.len
         let new_len = if (cur_len > 0) { cur_len - 1 } else { 0 }
-        struct { capacity = stack.capacity, data = stack.data, len = new_len }
+        struct {
+            capacity = stack.capacity,
+            data = stack.data,
+            len = new_len
+        }
     }
+
     routine Stack.peek(peek stack: Stack) -> i64 taking _ => if (stack.len > 0) { stack.data[stack.len - 1] } else { 0 }
-    routine Stack.try_peek(peek stack: Stack) -> Option taking _ => if (stack.len > 0) { Option::Some(stack.data[stack.len - 1]) } else { Option::None }
+
+    routine Stack.try_peek(peek stack: Stack) -> Option taking _ => if (stack.len > 0) {
+        Option::Some(stack.data[stack.len - 1])
+    } else {
+        Option::None
+    }
+
     routine Stack.is_empty(peek stack: Stack) -> bool taking _ => stack.len == 0
+
     routine Stack.len(peek stack: Stack) -> i32 taking _ => stack.len
+
     routine Stack.to_array(peek stack: Stack) -> array taking _ {
         let n = stack.len
         let data = stack.data

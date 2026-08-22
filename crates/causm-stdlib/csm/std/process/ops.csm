@@ -1,17 +1,26 @@
 @0ms: {
     from "std/process/types" import *
     from "std/process/ffi" import *
+
     routine pid() -> i32 taking _ => getpid()
+
     routine parent_pid() -> i32 taking _ => getppid()
+
     routine info() -> ProcessInfo taking _ {
         let { pid, ppid } = struct { pid = getpid(), ppid = getppid() }
         struct { is_running = true, pid = pid, ppid = ppid }
     }
+
     routine send_signal(peek pid: i32, peek sig: i32) -> i32 taking _ => kill(pid, sig)
+
     routine kill_process(peek pid: i32) -> i32 taking _ => kill(pid, 9)
+
     routine terminate_process(peek pid: i32) -> i32 taking _ => kill(pid, 15)
+
     routine interrupt_process(peek pid: i32) -> i32 taking _ => kill(pid, 2)
+
     routine is_alive(peek pid: i32) -> bool taking _ => kill(pid, 0) == 0
+
     routine create_pipe() -> ProcessPipe taking _ {
         let mut fds = [0; 8]
         let rc = pipe(fds)
@@ -19,26 +28,42 @@
         let write_fd = fds[4] + fds[5] * 256
         struct { read_fd = read_fd, write_fd = write_fd }
     }
+
     routine run_command(peek cmd: string) -> ExitStatus taking _ {
         let raw_status = system(cmd)
         let exit_code = (raw_status / 256) % 256
         let signaled = raw_status % 128 != 0
         let is_ok = exit_code == 0
-        struct { code = exit_code, signaled = signaled, success = is_ok }
+        struct {
+            code = exit_code,
+            signaled = signaled,
+            success = is_ok
+        }
     }
+
     routine wait_for_pid(peek pid: i32, peek no_hang: bool) -> i32 taking _ {
         let mut status = [0; 8]
         let options = if (no_hang) { 1 } else { 0 }
         waitpid(pid, status, options)
     }
+
     routine pipe_endpoints() -> PipeEndpoints taking _ {
         let p = create_pipe()
-        struct { reader = struct { fd = p.read_fd }, writer = struct { fd = p.write_fd } }
+        struct {
+            reader = struct { fd = p.read_fd },
+            writer = struct { fd = p.write_fd }
+        }
     }
+
     routine child_handle(peek pid: i32) -> ChildProcess taking _ => struct { is_running = true, pid = pid }
+
     routine pipe_write(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => write(fd, buf, len)
+
     routine pipe_read(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => read(fd, buf, len)
+
     routine close_fd(peek fd: i32) -> i32 taking _ => close(fd)
+
     routine ExitStatus.is_success(peek self: ExitStatus) -> bool taking _ => self.success
+
     routine ExitStatus.exit_code(peek self: ExitStatus) -> i32 taking _ => self.code
 }

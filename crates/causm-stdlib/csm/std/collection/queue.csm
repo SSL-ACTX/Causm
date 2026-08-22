@@ -7,8 +7,15 @@
     routine Queue.new(peek capacity: i32) -> Queue taking _ {
         let cap = if (capacity > 0) { clone(capacity) } else { 16 }
         let raw = [0; cap]
-        struct { capacity = cap, data = raw, head = 0, len = 0, tail = 0 }
+        struct {
+            capacity = cap,
+            data = raw,
+            head = 0,
+            len = 0,
+            tail = 0
+        }
     }
+
     routine Queue.push(peek queue: Queue, peek item: i64) -> Queue taking _ {
         let mut cur_len = queue.len
         let mut cur_cap = queue.capacity
@@ -32,19 +39,45 @@
         data[cur_tail] = item
         let next_tail = (cur_tail + 1) % cur_cap
         let new_len = cur_len + 1
-        struct { capacity = cur_cap, data = data, head = cur_head, len = new_len, tail = next_tail }
+        struct {
+            capacity = cur_cap,
+            data = data,
+            head = cur_head,
+            len = new_len,
+            tail = next_tail
+        }
     }
+
     routine Queue.pop(peek queue: Queue) -> Queue taking _ {
         let cur_len = queue.len
         let cur_head = queue.head
-        let next_head = if (cur_len > 0) { (cur_head + 1) % queue.capacity } else { clone(cur_head) }
+        let next_head = if (cur_len > 0) {
+            (cur_head + 1) % queue.capacity
+        } else {
+            clone(cur_head)
+        }
         let new_len = if (cur_len > 0) { cur_len - 1 } else { 0 }
-        struct { capacity = queue.capacity, data = queue.data, head = next_head, len = new_len, tail = queue.tail }
+        struct {
+            capacity = queue.capacity,
+            data = queue.data,
+            head = next_head,
+            len = new_len,
+            tail = queue.tail
+        }
     }
+
     routine Queue.peek(peek queue: Queue) -> i64 taking _ => if (queue.len > 0) { queue.data[queue.head] } else { 0 }
-    routine Queue.try_peek(peek queue: Queue) -> Option taking _ => if (queue.len > 0) { Option::Some(queue.data[queue.head]) } else { Option::None }
+
+    routine Queue.try_peek(peek queue: Queue) -> Option taking _ => if (queue.len > 0) {
+        Option::Some(queue.data[queue.head])
+    } else {
+        Option::None
+    }
+
     routine Queue.is_empty(peek queue: Queue) -> bool taking _ => queue.len == 0
+
     routine Queue.len(peek queue: Queue) -> i32 taking _ => queue.len
+
     routine Queue.to_array(peek queue: Queue) -> array taking _ {
         let mut cur_len = queue.len
         let mut cur_cap = queue.capacity

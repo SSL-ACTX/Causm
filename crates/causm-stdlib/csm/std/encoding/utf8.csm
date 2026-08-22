@@ -1,6 +1,9 @@
 @0ms: {
     routine Utf8.encode(peek text: string) -> array taking _ => str_bytes(text)
+
     routine Utf8.decode(peek bytes: array) -> string taking _ => to_str(bytes)
+
     routine Utf8.encode_len(peek text: string) -> i32 taking _ => len(str_bytes(text))
+
     routine Utf8.byte_len(peek bytes: array) -> i32 taking _ => len(bytes)
 }

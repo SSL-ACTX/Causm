@@ -322,6 +322,12 @@ impl Vm {
                 BinaryOperator::Gt => Payload::Bool(l > r),
                 BinaryOperator::Le => Payload::Bool(l <= r),
                 BinaryOperator::Ge => Payload::Bool(l >= r),
+                BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => {
+                    return Err(TemporalError::TypeMismatch(
+                        "Logical operators && and || require boolean operands"
+                            .into(),
+                    ));
+                }
             },
             (l, r) if l.is_numeric() && r.is_numeric() => {
                 let lf = l.as_float().unwrap();
@@ -353,11 +359,19 @@ impl Vm {
                     BinaryOperator::Gt => Payload::Bool(lf > rf),
                     BinaryOperator::Le => Payload::Bool(lf <= rf),
                     BinaryOperator::Ge => Payload::Bool(lf >= rf),
+                    BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Logical operators && and || require boolean operands"
+                                .into(),
+                        ));
+                    }
                 }
             }
             (Payload::Bool(l), Payload::Bool(r)) => match op {
                 BinaryOperator::Eq => Payload::Bool(l == r),
                 BinaryOperator::Neq => Payload::Bool(l != r),
+                BinaryOperator::LogicalAnd => Payload::Bool(l && r),
+                BinaryOperator::LogicalOr => Payload::Bool(l || r),
                 _ => {
                     return Err(TemporalError::EvalError(
                         "Invalid boolean operator".into(),

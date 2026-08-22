@@ -8,6 +8,7 @@
         let raw = [0; cap]
         struct { capacity = cap, data = raw, len = 0 }
     }
+
     routine Buffer.with_data(peek initial_data: array) -> Buffer taking _ {
         let total_len = len(initial_data)
         let cap_len = clone(total_len)
@@ -19,6 +20,7 @@
         }
         struct { capacity = cap_len, data = raw, len = total_len }
     }
+
     routine Buffer.append(peek buf: Buffer, peek byte_val: i64) -> Buffer taking _ {
         let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
@@ -38,6 +40,7 @@
         let new_len = cur_len + 1
         struct { capacity = cur_cap, data = data, len = new_len }
     }
+
     routine Buffer.append_slice(peek buf: Buffer, peek slice_data: array, peek count: i32) -> Buffer taking _ {
         let mut cur_len = buf.len
         let mut cur_cap = buf.capacity
@@ -65,12 +68,16 @@
         let new_len = cur_len + count
         struct { capacity = cur_cap, data = data, len = new_len }
     }
+
     routine Buffer.as_slice(peek buf: Buffer) -> array taking _ {
         let slice_len = buf.len
         let data = buf.data
         data[0..slice_len]
     }
+
     routine Buffer.len(peek buf: Buffer) -> i32 taking _ => buf.len
+
     routine Buffer.is_empty(peek buf: Buffer) -> bool taking _ => buf.len == 0
+
     routine Buffer.clear(peek buf: Buffer) -> Buffer taking _ => struct { capacity = buf.capacity, data = buf.data, len = 0 }
 }

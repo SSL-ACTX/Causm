@@ -23,6 +23,7 @@
 
 @10ms: {
     merge [thief, banker] into main reconcile(account=first_wins)
+
     isolate result_check {
         require System.Log
         match entropy(account["balance"]) {

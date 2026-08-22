@@ -39,7 +39,10 @@
     print("\n-- 5. Pattern Matching & if let Destructuring on JSON Enums --")
     let data_node = parsed.get("data")
     let agent_id_val = data_node.get("agent_id")
-    let extracted_id = match agent_id_val { JsonValue::Number(id) => id, _ => -1 }
+    let extracted_id = match agent_id_val {
+        JsonValue::Number(id) => id,
+        _ => -1,
+    }
     print(f"Extracted Agent ID via match: {extracted_id}")
     debug(extracted_id)
     let mut verified_name = "unknown"
@@ -50,7 +53,11 @@
     print(f"Extracted Agent Name via if let: {verified_name}")
     debug(verified_name)
     print("\n-- 6. Modern Core Option Wrapper Usage --")
-    let agent_opt = if (data_node.has_key("agent_id")) { Option::Some(clone(extracted_id)) } else { Option::None }
+    let agent_opt = if (data_node.has_key("agent_id")) {
+        Option::Some(clone(extracted_id))
+    } else {
+        Option::None
+    }
     let is_present = agent_opt.is_some()
     let final_agent_id = agent_opt.unwrap_or(0)
     debug(is_present)

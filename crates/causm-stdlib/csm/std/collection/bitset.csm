@@ -7,20 +7,24 @@
         let raw = [0; num_bits]
         struct { bits = raw, len = num_bits }
     }
+
     routine BitSet.set(peek bs: BitSet, peek bit_index: i32) -> BitSet taking _ {
         let mut bits = bs.bits
         bits[bit_index] = 1
         struct { bits = bits, len = bs.len }
     }
+
     routine BitSet.clear(peek bs: BitSet, peek bit_index: i32) -> BitSet taking _ {
         let mut bits = bs.bits
         bits[bit_index] = 0
         struct { bits = bits, len = bs.len }
     }
+
     routine BitSet.get(peek bs: BitSet, peek bit_index: i32) -> bool taking _ {
         let bits = bs.bits
         bits[bit_index] != 0
     }
+
     routine BitSet.count(peek bs: BitSet) -> i32 taking _ {
         let mut total = 0
         let bits = bs.bits
@@ -31,5 +35,6 @@
         }
         total
     }
+
     routine BitSet.len(peek bs: BitSet) -> i32 taking _ => bs.len
 }

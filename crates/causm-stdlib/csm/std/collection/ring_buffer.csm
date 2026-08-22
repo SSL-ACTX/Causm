@@ -6,8 +6,15 @@
     routine RingBuffer.new(peek capacity: i32) -> RingBuffer taking _ {
         let cap = if (capacity > 0) { clone(capacity) } else { 16 }
         let raw = [0; cap]
-        struct { capacity = cap, data = raw, head = 0, size = 0, tail = 0 }
+        struct {
+            capacity = cap,
+            data = raw,
+            head = 0,
+            size = 0,
+            tail = 0
+        }
     }
+
     routine RingBuffer.push(peek rb: RingBuffer, peek value: i64) -> RingBuffer taking _ {
         let mut cap = rb.capacity
         let mut cur_tail = rb.tail
@@ -16,21 +23,47 @@
         let mut data = rb.data
         data[cur_tail] = value
         let next_tail = (cur_tail + 1) % cap
-        let next_head = if (cur_size == cap) { (cur_head + 1) % cap } else { clone(cur_head) }
+        let next_head = if (cur_size == cap) {
+            (cur_head + 1) % cap
+        } else {
+            clone(cur_head)
+        }
         let next_size = if (cur_size == cap) { clone(cap) } else { cur_size + 1 }
-        struct { capacity = cap, data = data, head = next_head, size = next_size, tail = next_tail }
+        struct {
+            capacity = cap,
+            data = data,
+            head = next_head,
+            size = next_size,
+            tail = next_tail
+        }
     }
+
     routine RingBuffer.pop(peek rb: RingBuffer) -> RingBuffer taking _ {
         let cur_size = rb.size
         let cur_head = rb.head
-        let next_head = if (cur_size > 0) { (cur_head + 1) % rb.capacity } else { clone(cur_head) }
+        let next_head = if (cur_size > 0) {
+            (cur_head + 1) % rb.capacity
+        } else {
+            clone(cur_head)
+        }
         let next_size = if (cur_size > 0) { cur_size - 1 } else { 0 }
-        struct { capacity = rb.capacity, data = rb.data, head = next_head, size = next_size, tail = rb.tail }
+        struct {
+            capacity = rb.capacity,
+            data = rb.data,
+            head = next_head,
+            size = next_size,
+            tail = rb.tail
+        }
     }
+
     routine RingBuffer.peek(peek rb: RingBuffer) -> i64 taking _ => if (rb.size > 0) { rb.data[rb.head] } else { 0 }
+
     routine RingBuffer.is_full(peek rb: RingBuffer) -> bool taking _ => rb.size == rb.capacity
+
     routine RingBuffer.is_empty(peek rb: RingBuffer) -> bool taking _ => rb.size == 0
+
     routine RingBuffer.len(peek rb: RingBuffer) -> i32 taking _ => rb.size
+
     routine RingBuffer.to_array(peek rb: RingBuffer) -> array taking _ {
         let mut cur_size = rb.size
         let mut cap = rb.capacity

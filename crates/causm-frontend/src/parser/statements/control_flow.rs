@@ -186,6 +186,11 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                     }
                 } else {
                     let mut body = Vec::new();
+                    if first.as_rule() == Rule::statement {
+                        if let Some(actual_stmt) = first.into_inner().next() {
+                            body.push(parse_statement(actual_stmt));
+                        }
+                    }
                     for stmt_pair in inner {
                         if stmt_pair.as_rule() == Rule::statement {
                             if let Some(actual_stmt) = stmt_pair.into_inner().next()

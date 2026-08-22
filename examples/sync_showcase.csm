@@ -1,17 +1,13 @@
 @0ms: {
     import "std/sync" as Sync
-
     print("=== Causm Multi-Timeline Synchronization Showcase ===")
-
     print("\n[Timeline @0ms: Initialization & Branch Splitting]")
     let shared_counter = Sync.Atomic.new_int(100)
     let global_mutex = Sync.Mutex.new()
     let bus = Sync.SyncChannel.new(4)
-
     print("Initial counter: " + Sync.Atomic.load_int(shared_counter))
     print("Initial mutex locked: " + Sync.Mutex.is_locked(global_mutex))
     print("Initial channel empty: " + Sync.SyncChannel.is_empty(bus))
-
     print("Splitting main into concurrent branches: [producer, consumer]")
     split main into [producer, consumer]
 }
@@ -21,14 +17,11 @@
         print("\n[@10ms: Producer Branch]")
         let lock_res = Sync.Mutex.try_lock(global_mutex, "producer")
         print("Producer lock acquired: " + lock_res.acquired)
-
         let add_res = Sync.Atomic.fetch_add(shared_counter, 50)
         print("Producer incremented counter: 100 -> " + Sync.Atomic.load_int(add_res.atomic))
-
         let send_res = Sync.SyncChannel.send(bus, 999)
         print("Producer sent payload 999, ok: " + send_res.ok)
     }
-
     @consumer: {
         print("\n[@10ms: Consumer Branch]")
         let lock_attempt = Sync.Mutex.try_lock(global_mutex, "consumer")
@@ -39,18 +32,13 @@
 @20ms: {
     print("\n[Timeline @20ms: Branch Merging & Final Synchronization]")
     merge [producer, consumer] into main
-
     let recv_res = Sync.SyncChannel.recv(send_res.chan)
     print("Consumer received payload from channel: " + recv_res.val)
     print("Payload transfer success: " + recv_res.ok)
-
     let final_unlocked = Sync.Mutex.unlock(lock_res.mutex)
     print("Global mutex released, is_locked: " + Sync.Mutex.is_locked(final_unlocked))
-
     let cas_res = Sync.Atomic.cas_int(add_res.atomic, 150, 500)
     print("Final CAS update (150 -> 500) success: " + cas_res.success)
     print("Final verified atomic counter: " + Sync.Atomic.load_int(cas_res.atomic))
-
     print("\n=== Causm Multi-Timeline Synchronization Showcase Complete ===")
 }
-

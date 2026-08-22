@@ -773,6 +773,8 @@ pub enum BinaryOperator {
     Gt,
     Le,
     Ge,
+    LogicalAnd,
+    LogicalOr,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -912,7 +914,31 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 extends: ex2,
                 methods: m2,
             },
-        ) => n1 == n2 && ex1 == ex2 && m1 == m2,
+        ) => {
+            if n1 != n2 || ex1 != ex2 || m1.len() != m2.len() {
+                return false;
+            }
+            for (meth1, meth2) in m1.iter().zip(m2.iter()) {
+                if meth1.name != meth2.name
+                    || meth1.params != meth2.params
+                    || meth1.return_type != meth2.return_type
+                    || meth1.taking_ms != meth2.taking_ms
+                    || meth1.state_constraint != meth2.state_constraint
+                {
+                    return false;
+                }
+                match (&meth1.default_body, &meth2.default_body) {
+                    (Some(b1), Some(b2)) => {
+                        if !ast_statements_eq(b1, b2) {
+                            return false;
+                        }
+                    }
+                    (None, None) => {}
+                    _ => return false,
+                }
+            }
+            true
+        }
         (
             Statement::Split {
                 parent: p1,
@@ -1340,6 +1366,38 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 value: v2,
             },
         ) => t1 == t2 && f1 == f2 && v1 == v2,
+        (
+            Statement::StateDecl {
+                target: t1,
+                var_type: ty1,
+                expr: e1,
+            },
+            Statement::StateDecl {
+                target: t2,
+                var_type: ty2,
+                expr: e2,
+            },
+        ) => t1 == t2 && ty1 == ty2 && e1 == e2,
+        (
+            Statement::PolicyStmt {
+                target: t1,
+                policy: p1,
+            },
+            Statement::PolicyStmt {
+                target: t2,
+                policy: p2,
+            },
+        ) => t1 == t2 && p1 == p2,
+        (
+            Statement::LoopOn {
+                target: t1,
+                body: b1,
+            },
+            Statement::LoopOn {
+                target: t2,
+                body: b2,
+            },
+        ) => t1 == t2 && ast_statements_eq(b1, b2),
         _ => false,
     }
 }

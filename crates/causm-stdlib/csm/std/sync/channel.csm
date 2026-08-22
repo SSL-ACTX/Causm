@@ -1,9 +1,18 @@
 @0ms: {
     from "std/sync/types" import SyncChannel, SendResult, RecvResult
+
     routine SyncChannel.new(peek capacity: int) -> SyncChannel taking _ {
         let storage = [0; capacity]
-        struct { capacity = capacity, closed = false, count = 0, data = storage, head = 0, tail = 0 }
+        struct {
+            capacity = capacity,
+            closed = false,
+            count = 0,
+            data = storage,
+            head = 0,
+            tail = 0
+        }
     }
+
     routine SyncChannel.send(consume ch: SyncChannel, peek val: int) -> SendResult taking _ {
         let can_send = !ch.closed && ch.count < ch.capacity
         let mut cur_head = ch.head
@@ -27,6 +36,7 @@
         }
         struct { chan = next_ch, ok = can_send }
     }
+
     routine SyncChannel.recv(consume ch: SyncChannel) -> RecvResult taking _ {
         let has_item = ch.count > 0
         let mut cur_head = ch.head
@@ -51,13 +61,18 @@
         }
         struct { chan = next_ch, ok = has_item, val = item }
     }
+
     routine SyncChannel.close(consume ch: SyncChannel) -> SyncChannel taking _ {
         let mut closed_ch = ch
         closed_ch.closed = true
         closed_ch
     }
+
     routine SyncChannel.is_closed(peek ch: SyncChannel) -> bool taking _ => ch.closed
+
     routine SyncChannel.len(peek ch: SyncChannel) -> int taking _ => ch.count
+
     routine SyncChannel.is_full(peek ch: SyncChannel) -> bool taking _ => ch.count >= ch.capacity
+
     routine SyncChannel.is_empty(peek ch: SyncChannel) -> bool taking _ => ch.count == 0
 }

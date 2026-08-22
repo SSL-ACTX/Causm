@@ -71,6 +71,7 @@ fn fold_binary_op(
             causm_core::BinaryOperator::Gt => Some(SsaConstant::Bool(l > r)),
             causm_core::BinaryOperator::Le => Some(SsaConstant::Bool(l <= r)),
             causm_core::BinaryOperator::Ge => Some(SsaConstant::Bool(l >= r)),
+            _ => None,
         },
         (SsaConstant::Float(l), SsaConstant::Float(r)) => {
             let lf = f64::from_bits(*l);
@@ -100,6 +101,12 @@ fn fold_binary_op(
         (SsaConstant::Bool(l), SsaConstant::Bool(r)) => match op {
             causm_core::BinaryOperator::Eq => Some(SsaConstant::Bool(l == r)),
             causm_core::BinaryOperator::Neq => Some(SsaConstant::Bool(l != r)),
+            causm_core::BinaryOperator::LogicalAnd => {
+                Some(SsaConstant::Bool(*l && *r))
+            }
+            causm_core::BinaryOperator::LogicalOr => {
+                Some(SsaConstant::Bool(*l || *r))
+            }
             _ => None,
         },
         (SsaConstant::String(l), SsaConstant::String(r)) => match op {

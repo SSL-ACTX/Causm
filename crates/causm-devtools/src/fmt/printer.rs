@@ -1,9 +1,11 @@
 use super::rules::FormatConfig;
 use causm_core::{
-    BinaryOperator, Expression, MergeResolution, ParamDecl, ParamMode, Program,
-    SpannedStatement, Statement, TypeName, UnaryOperator,
+    BinaryOperator, Expression, FStringPart, LifetimeAnnotation, MergeResolution,
+    ParamDecl, ParamMode, Pattern, Program, SpannedStatement, Statement,
+    SyscallTarget, TypeName, TypeParam, UnaryOperator,
 };
 
+/// Formats a full Causm AST Program according to the provided `FormatConfig`.
 pub fn format_program(program: &Program, config: &FormatConfig) -> String {
     let mut out = String::new();
     for (i, tb) in program.timelines.iter().enumerate() {
@@ -18,42 +20,72 @@ pub fn format_program(program: &Program, config: &FormatConfig) -> String {
         };
         let directives = if tb.no_z3 { " @no_z3" } else { "" };
         out.push_str(&format!("{}{}: {{\n", header, directives));
+        let mut prev_was_def = false;
         for stmt in &tb.statements {
-            format_spanned_statement(&mut out, stmt, config.indent_spaces, 1);
+            let is_def = matches!(
+                stmt.stmt,
+                Statement::RoutineDef { .. }
+                    | Statement::TypeDecl { .. }
+                    | Statement::InterfaceDecl { .. }
+                    | Statement::EnumDecl { .. }
+                    | Statement::DecayHandler { .. }
+                    | Statement::Isolate { .. }
+                    | Statement::ForeignBlock { .. }
+            );
+            if prev_was_def || (is_def && !out.ends_with("{\n")) {
+                out.push('\n');
+            }
+            format_spanned_statement(&mut out, stmt, config, 1);
+            prev_was_def = is_def;
         }
         out.push_str("}\n");
     }
     out
 }
 
+fn indent_str(config: &FormatConfig, depth: usize) -> String {
+    " ".repeat(config.indent_spaces * depth)
+}
+
 fn format_spanned_statement(
     out: &mut String,
     stmt: &SpannedStatement,
-    indent_step: usize,
+    config: &FormatConfig,
     depth: usize,
 ) {
-    let indent = " ".repeat(indent_step * depth);
+    let indent = indent_str(config, depth);
     match &stmt.stmt {
         Statement::Assignment {
             target,
             mutable,
             var_type,
+            lifetime,
             expr,
-            ..
         } => {
             let mut_str = if *mutable { "mut " } else { "" };
+            let lt_str = match lifetime {
+                Some(LifetimeAnnotation::Valid) => "@valid ",
+                Some(LifetimeAnnotation::Decayed(ms)) => {
+                    &format!("@decayed({}ms) ", ms)
+                }
+                Some(LifetimeAnnotation::DecayRate(ms)) => {
+                    &format!("@decay_rate({}ms) ", ms)
+                }
+                None => "",
+            };
             let type_str = if let Some(t) = var_type {
                 format!(": {}", format_type(t))
             } else {
                 String::new()
             };
             out.push_str(&format!(
-                "{}let {}{}{} = {}\n",
+                "{}let {}{}{}{} = {}\n",
                 indent,
                 mut_str,
+                lt_str,
                 target,
                 type_str,
-                format_expr(expr)
+                format_expr(expr, config, depth)
             ));
         }
         Statement::DestructureAssignment {
@@ -78,7 +110,7 @@ fn format_spanned_statement(
                 indent,
                 mut_str,
                 fields_str,
-                format_expr(expr)
+                format_expr(expr, config, depth)
             ));
         }
         Statement::Using {
@@ -90,10 +122,10 @@ fn format_spanned_statement(
                 "{}using {} = {} {{\n",
                 indent,
                 binding,
-                format_expr(resource)
+                format_expr(resource, config, depth)
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -134,7 +166,7 @@ fn format_spanned_statement(
                         ret_str,
                         contract_str,
                         state_str,
-                        format_expr(expr)
+                        format_expr(expr, config, depth)
                     ));
                     return;
                 }
@@ -150,7 +182,7 @@ fn format_spanned_statement(
                     indent, name, params_str, ret_str, contract_str, state_str
                 ));
                 for s in body {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
+                    format_spanned_statement(out, s, config, depth + 1);
                 }
                 out.push_str(&format!("{}}}\n", indent));
             }
@@ -161,7 +193,7 @@ fn format_spanned_statement(
             fields,
             decay_after_ms,
             auto_drop,
-            ..
+            scoped_branch,
         } => {
             let ext_str = if let Some(parent) = extends {
                 format!("{} + ", parent)
@@ -181,20 +213,35 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
+            let scoped_str = if let Some(sb) = scoped_branch {
+                format!(" scoped(@{})", sb)
+            } else {
+                String::new()
+            };
             out.push_str(&format!(
-                "{}type {} = {}struct{}{} {{\n",
-                indent, name, ext_str, decay_str, drop_str
+                "{}type {} = {}struct{}{}{} {{\n",
+                indent, name, ext_str, decay_str, drop_str, scoped_str
             ));
             let mut sorted_fields: Vec<_> = fields.iter().collect();
             sorted_fields.sort_by_key(|(fname, _)| fname.as_str());
+            let inner_indent = indent_str(config, depth + 1);
             let field_entries: Vec<_> = sorted_fields
                 .iter()
                 .map(|(fname, fdef)| {
+                    let const_prefix = if fdef.is_const { "const " } else { "" };
+                    let default_suffix =
+                        if let Some(ref def_val) = fdef.default_value {
+                            format!(" = {}", format_expr(def_val, config, depth + 1))
+                        } else {
+                            String::new()
+                        };
                     format!(
-                        "{}{}: {}",
-                        " ".repeat(indent_step * (depth + 1)),
+                        "{}{}{}: {}{}",
+                        inner_indent,
+                        const_prefix,
                         fname,
-                        format_type(&fdef.typ)
+                        format_type(&fdef.typ),
+                        default_suffix
                     )
                 })
                 .collect();
@@ -215,6 +262,7 @@ fn format_spanned_statement(
                 String::new()
             };
             out.push_str(&format!("{}interface {}{} {{\n", indent, name, ext_str));
+            let inner_indent = indent_str(config, depth + 1);
             for m in methods {
                 let params_str = m
                     .params
@@ -232,31 +280,34 @@ fn format_spanned_statement(
                 } else {
                     String::new()
                 };
+                let state_str = if let Some((ref v, ref s)) = m.state_constraint {
+                    format!(" where {}.state == {}", v, s)
+                } else {
+                    String::new()
+                };
                 if let Some(ref b) = m.default_body {
                     out.push_str(&format!(
                         "{}routine {}({}){}{}{} {{\n",
-                        " ".repeat(indent_step * (depth + 1)),
+                        inner_indent,
                         m.name,
                         params_str,
                         ret_str,
                         taking_str,
-                        ""
+                        state_str
                     ));
                     for s in b {
-                        format_spanned_statement(out, s, indent_step, depth + 2);
+                        format_spanned_statement(out, s, config, depth + 2);
                     }
-                    out.push_str(&format!(
-                        "{}}}\n",
-                        " ".repeat(indent_step * (depth + 1))
-                    ));
+                    out.push_str(&format!("{}}}\n", inner_indent));
                 } else {
                     out.push_str(&format!(
-                        "{}routine {}({}){}{}\n",
-                        " ".repeat(indent_step * (depth + 1)),
+                        "{}routine {}({}){}{}{}\n",
+                        inner_indent,
                         m.name,
                         params_str,
                         ret_str,
-                        taking_str
+                        taking_str,
+                        state_str
                     ));
                 }
             }
@@ -276,7 +327,7 @@ fn format_spanned_statement(
                 then_branch,
                 else_branch.as_deref(),
                 reconcile.as_ref(),
-                indent_step,
+                config,
                 depth,
             );
         }
@@ -288,7 +339,7 @@ fn format_spanned_statement(
             };
             out.push_str(&format!("{}loop{} {{\n", indent, taking_str));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -308,11 +359,11 @@ fn format_spanned_statement(
                 "{}while {}({}){} {{\n",
                 indent,
                 valid_str,
-                format_expr(condition),
+                format_expr(condition, config, depth),
                 taking_str
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -345,7 +396,7 @@ fn format_spanned_statement(
                 indent, item_name, mode_str, source, pacing_str, max_str
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -363,11 +414,11 @@ fn format_spanned_statement(
                 "{}for {} in {} step {} {{\n",
                 indent,
                 item_name,
-                format_expr(source),
+                format_expr(source, config, depth),
                 step_str
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -385,15 +436,26 @@ fn format_spanned_statement(
             out.push_str(&format!("{}yield {}\n", indent, name));
         }
         Statement::Print(args) => {
-            let formatted =
-                args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
+            let formatted = args
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
             out.push_str(&format!("{}print({})\n", indent, formatted));
         }
         Statement::Debug(expr) => {
-            out.push_str(&format!("{}debug({})\n", indent, format_expr(expr)));
+            out.push_str(&format!(
+                "{}debug({})\n",
+                indent,
+                format_expr(expr, config, depth)
+            ));
         }
         Statement::Expression(expr) => {
-            out.push_str(&format!("{}{}\n", indent, format_expr(expr)));
+            out.push_str(&format!(
+                "{}{}\n",
+                indent,
+                format_expr(expr, config, depth)
+            ));
         }
         Statement::Split { parent, branches } => {
             out.push_str(&format!(
@@ -408,7 +470,7 @@ fn format_spanned_statement(
             target,
             resolutions,
         } => {
-            let res_str = format_merge_resolution(resolutions);
+            let res_str = format_merge_resolution(resolutions, config, depth);
             out.push_str(&format!(
                 "{}merge [{}] into {}{}\n",
                 indent,
@@ -426,12 +488,19 @@ fn format_spanned_statement(
         Statement::Commit(body) => {
             out.push_str(&format!("{}commit {{\n", indent));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
         Statement::Collapse => {
             out.push_str(&format!("{}collapse\n", indent));
+        }
+        Statement::SpeculationMode(mode) => {
+            let mode_str = match mode {
+                causm_core::SpeculationCommitMode::Full => "full",
+                causm_core::SpeculationCommitMode::Selective => "selective",
+            };
+            out.push_str(&format!("{}speculation_mode({})\n", indent, mode_str));
         }
         Statement::Speculate {
             max_ms,
@@ -445,12 +514,12 @@ fn format_spanned_statement(
             };
             out.push_str(&format!("{}speculate{} {{\n", indent, taking_str));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             if let Some(fb) = fallback {
                 out.push_str(&format!("{}}} fallback {{\n", indent));
                 for s in fb {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
+                    format_spanned_statement(out, s, config, depth + 1);
                 }
             }
             out.push_str(&format!("{}}}\n", indent));
@@ -464,28 +533,25 @@ fn format_spanned_statement(
         } => {
             let rec_str = reconcile
                 .as_ref()
-                .map(format_merge_resolution)
+                .map(|r| format_merge_resolution(r, config, depth))
                 .unwrap_or_default();
             out.push_str(&format!(
                 "{}lease {} = {} taking {}ms {{\n",
                 indent, binding, source, duration_ms
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
         }
         Statement::EnumDecl { name, variants } => {
             out.push_str(&format!("{}enum {} {{\n", indent, name));
+            let inner_indent = indent_str(config, depth + 1);
             let v_strs: Vec<_> = variants
                 .iter()
                 .map(|v| {
                     if v.payload_types.is_empty() {
-                        format!(
-                            "{}{}",
-                            " ".repeat(indent_step * (depth + 1)),
-                            v.name
-                        )
+                        format!("{}{}", inner_indent, v.name)
                     } else {
                         let t_strs = v
                             .payload_types
@@ -493,12 +559,7 @@ fn format_spanned_statement(
                             .map(format_type)
                             .collect::<Vec<_>>()
                             .join(", ");
-                        format!(
-                            "{}{}({})",
-                            " ".repeat(indent_step * (depth + 1)),
-                            v.name,
-                            t_strs
-                        )
+                        format!("{}{}({})", inner_indent, v.name, t_strs)
                     }
                 })
                 .collect();
@@ -524,14 +585,14 @@ fn format_spanned_statement(
             };
             let rec_str = reconcile
                 .as_ref()
-                .map(format_merge_resolution)
+                .map(|r| format_merge_resolution(r, config, depth))
                 .unwrap_or_default();
             out.push_str(&format!(
                 "{}split_map {} {} {} {{\n",
                 indent, item_name, mode_str, source
             ));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
         }
@@ -544,45 +605,33 @@ fn format_spanned_statement(
         }
         Statement::Isolate(iso) => {
             let name_str = iso.name.as_deref().unwrap_or("");
-            out.push_str(&format!("{}isolate {} {{\n", indent, name_str));
+            let name_display = if name_str.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", name_str)
+            };
+            out.push_str(&format!("{}isolate{} {{\n", indent, name_display));
+            let inner_indent = indent_str(config, depth + 1);
             if let Some(cpu) = iso.manifest.cpu_budget_ms {
-                out.push_str(&format!(
-                    "{}enable cpu({}ms)\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    cpu
-                ));
+                out.push_str(&format!("{}enable cpu({}ms)\n", inner_indent, cpu));
             }
             if let Some(mem) = iso.manifest.memory_budget_bytes {
                 out.push_str(&format!(
                     "{}enable memory({}bytes)\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    mem
+                    inner_indent, mem
                 ));
             }
             if let Some(sl) = iso.manifest.slice_ms {
-                out.push_str(&format!(
-                    "{}slice {}ms\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    sl
-                ));
+                out.push_str(&format!("{}slice {}ms\n", inner_indent, sl));
             }
             let mut budgets: Vec<_> = iso.manifest.resource_budgets.iter().collect();
             budgets.sort_by_key(|(res, _)| res.as_str());
             for (res, amt) in budgets {
-                out.push_str(&format!(
-                    "{}enable {}({})\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    res,
-                    amt
-                ));
+                out.push_str(&format!("{}enable {}({})\n", inner_indent, res, amt));
             }
             for cap in &iso.manifest.capabilities {
                 if cap.parameters.is_empty() {
-                    out.push_str(&format!(
-                        "{}require {}\n",
-                        " ".repeat(indent_step * (depth + 1)),
-                        cap.path
-                    ));
+                    out.push_str(&format!("{}require {}\n", inner_indent, cap.path));
                 } else {
                     let mut sorted_params: Vec<_> = cap.parameters.iter().collect();
                     sorted_params.sort_by_key(|(k, _)| k.as_str());
@@ -593,14 +642,12 @@ fn format_spanned_statement(
                         .join(", ");
                     out.push_str(&format!(
                         "{}require {}({})\n",
-                        " ".repeat(indent_step * (depth + 1)),
-                        cap.path,
-                        p_strs
+                        inner_indent, cap.path, p_strs
                     ));
                 }
             }
             for s in &iso.body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -614,14 +661,15 @@ fn format_spanned_statement(
             out.push_str(&format!(
                 "{}match entropy({}) {{\n",
                 indent,
-                format_expr(target)
+                format_expr(target, config, depth)
             ));
+            let inner_indent = indent_str(config, depth + 1);
             if let Some((pat, guard, body)) = valid_branch {
                 let g_str = guard
                     .as_ref()
-                    .map(|g| format!(" if {}", format_expr(g)))
+                    .map(|g| format!(" if {}", format_expr(g, config, depth + 1)))
                     .unwrap_or_default();
-                let pat_str = format_decayed_pattern(pat);
+                let pat_str = format_decayed_pattern(pat, config, depth + 1);
                 let pat_display = if pat_str.is_empty() {
                     String::new()
                 } else {
@@ -629,24 +677,19 @@ fn format_spanned_statement(
                 };
                 out.push_str(&format!(
                     "{}Valid{}{}: {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    pat_display,
-                    g_str
+                    inner_indent, pat_display, g_str
                 ));
                 for s in body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             if let Some((pat, guard, body)) = decayed_branch {
                 let g_str = guard
                     .as_ref()
-                    .map(|g| format!(" if {}", format_expr(g)))
+                    .map(|g| format!(" if {}", format_expr(g, config, depth + 1)))
                     .unwrap_or_default();
-                let pat_str = format_decayed_pattern(pat);
+                let pat_str = format_decayed_pattern(pat, config, depth + 1);
                 let pat_display = if pat_str.is_empty() {
                     String::new()
                 } else {
@@ -654,24 +697,19 @@ fn format_spanned_statement(
                 };
                 out.push_str(&format!(
                     "{}Decayed{}{}: {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    pat_display,
-                    g_str
+                    inner_indent, pat_display, g_str
                 ));
                 for s in body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             if let Some((pat, guard, body)) = pending_branch {
                 let g_str = guard
                     .as_ref()
-                    .map(|g| format!(" if {}", format_expr(g)))
+                    .map(|g| format!(" if {}", format_expr(g, config, depth + 1)))
                     .unwrap_or_default();
-                let pat_str = format_decayed_pattern(pat);
+                let pat_str = format_decayed_pattern(pat, config, depth + 1);
                 let pat_display = if pat_str.is_empty() {
                     String::new()
                 } else {
@@ -679,59 +717,49 @@ fn format_spanned_statement(
                 };
                 out.push_str(&format!(
                     "{}Pending{}{}: {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    pat_display,
-                    g_str
+                    inner_indent, pat_display, g_str
                 ));
                 for s in body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             if let Some((guard, body)) = consumed_branch {
                 let g_str = guard
                     .as_ref()
-                    .map(|g| format!(" if {}", format_expr(g)))
+                    .map(|g| format!(" if {}", format_expr(g, config, depth + 1)))
                     .unwrap_or_default();
-                out.push_str(&format!(
-                    "{}Consumed{}: {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    g_str
-                ));
+                out.push_str(&format!("{}Consumed{}: {{\n", inner_indent, g_str));
                 for s in body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             out.push_str(&format!("{}}}\n", indent));
         }
         Statement::Match { target, arms } => {
-            out.push_str(&format!("{}match {} {{\n", indent, format_expr(target)));
+            out.push_str(&format!(
+                "{}match {} {{\n",
+                indent,
+                format_expr(target, config, depth)
+            ));
+            let inner_indent = indent_str(config, depth + 1);
             for arm in arms {
                 let g_str = arm
                     .guard
                     .as_ref()
-                    .map(|g| format!(" if {}", format_expr(g)))
+                    .map(|g| format!(" if {}", format_expr(g, config, depth + 1)))
                     .unwrap_or_default();
                 out.push_str(&format!(
                     "{}{}{} => {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
-                    format_pattern(&arm.pattern),
+                    inner_indent,
+                    format_pattern(&arm.pattern, config, depth + 1),
                     g_str
                 ));
                 for s in &arm.body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -744,21 +772,21 @@ fn format_spanned_statement(
         } => {
             let rec_str = reconcile
                 .as_ref()
-                .map(format_merge_resolution)
+                .map(|r| format_merge_resolution(r, config, depth))
                 .unwrap_or_default();
             out.push_str(&format!(
                 "{}if let {} = {} {{\n",
                 indent,
-                format_pattern(pattern),
-                format_expr(expr)
+                format_pattern(pattern, config, depth),
+                format_expr(expr, config, depth)
             ));
             for s in then_branch {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             if let Some(eb) = else_branch {
                 out.push_str(&format!("{}}} else {{\n", indent));
                 for s in eb {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
+                    format_spanned_statement(out, s, config, depth + 1);
                 }
             }
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
@@ -772,7 +800,7 @@ fn format_spanned_statement(
             };
             out.push_str(&format!("{}{}: {{\n", indent, header));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -799,7 +827,7 @@ fn format_spanned_statement(
                     indent, op_str, limit_ms
                 ));
                 for s in fb {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
+                    format_spanned_statement(out, s, config, depth + 1);
                 }
                 out.push_str(&format!("{}}}\n", indent));
             } else {
@@ -810,8 +838,20 @@ fn format_spanned_statement(
             }
         }
         Statement::Capability(cap) => {
-            if let Some(msg) = cap.parameters.get("message") {
-                out.push_str(&format!("{}log(\"{}\")\n", indent, msg));
+            if cap.parameters.is_empty() {
+                out.push_str(&format!("{}require {}\n", indent, cap.path));
+            } else {
+                let mut sorted_params: Vec<_> = cap.parameters.iter().collect();
+                sorted_params.sort_by_key(|(k, _)| k.as_str());
+                let p_strs = sorted_params
+                    .iter()
+                    .map(|(k, v)| format!("{} = \"{}\"", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push_str(&format!(
+                    "{}require {}({})\n",
+                    indent, cap.path, p_strs
+                ));
             }
         }
         Statement::Select {
@@ -822,7 +862,7 @@ fn format_spanned_statement(
         } => {
             let rec_str = reconcile
                 .as_ref()
-                .map(format_merge_resolution)
+                .map(|r| format_merge_resolution(r, config, depth))
                 .unwrap_or_default();
             let taking_str = if *max_ms != u64::MAX {
                 format!(" (taking {}ms)", max_ms)
@@ -830,40 +870,32 @@ fn format_spanned_statement(
                 String::new()
             };
             out.push_str(&format!("{}select{} {{\n", indent, taking_str));
+            let inner_indent = indent_str(config, depth + 1);
             for case in cases {
                 out.push_str(&format!(
                     "{}case {} = {}: {{\n",
-                    " ".repeat(indent_step * (depth + 1)),
+                    inner_indent,
                     case.binding,
-                    format_expr(&case.source)
+                    format_expr(&case.source, config, depth + 1)
                 ));
                 for s in &case.body {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             if let Some(to) = timeout {
-                out.push_str(&format!(
-                    "{}timeout: {{\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}timeout: {{\n", inner_indent));
                 for s in to {
-                    format_spanned_statement(out, s, indent_step, depth + 2);
+                    format_spanned_statement(out, s, config, depth + 2);
                 }
-                out.push_str(&format!(
-                    "{}}}\n",
-                    " ".repeat(indent_step * (depth + 1))
-                ));
+                out.push_str(&format!("{}}}\n", inner_indent));
             }
             out.push_str(&format!("{}}}{}\n", indent, rec_str));
         }
         Statement::LoopTick { body } => {
             out.push_str(&format!("{}loop tick {{\n", indent));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -879,14 +911,14 @@ fn format_spanned_statement(
                 .join(" ");
             out.push_str(&format!("{}{}: {{\n", indent, dir_strs));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
         Statement::DecayHandler { type_name, body } => {
             out.push_str(&format!("{}decay_handler for {} {{\n", indent, type_name));
             for s in body {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -917,7 +949,7 @@ fn format_spanned_statement(
                 indent, lib_name, abi
             ));
             for s in routines {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             out.push_str(&format!("{}}}\n", indent));
         }
@@ -930,32 +962,89 @@ fn format_spanned_statement(
             value,
         } => {
             if field.is_empty() {
+                // Bare reassignment: `signal = expr` (no `let`) — field_update_stmt grammar
                 out.push_str(&format!(
                     "{}{} = {}\n",
                     indent,
-                    format_expr(target),
-                    format_expr(value)
+                    format_expr(target, config, depth),
+                    format_expr(value, config, depth)
                 ));
             } else {
                 out.push_str(&format!(
                     "{}{}.{} = {}\n",
                     indent,
-                    format_expr(target),
+                    format_expr(target, config, depth),
                     field,
-                    format_expr(value)
+                    format_expr(value, config, depth)
                 ));
             }
         }
-        other => {
-            eprintln!(
-                "\x1b[33mwarning:\x1b[0m Unhandled statement in formatter: {:?}",
-                other
-            );
+        Statement::StateDecl {
+            target,
+            var_type,
+            expr,
+        } => {
+            let type_str = if let Some(t) = var_type {
+                format!(": {}", format_type(t))
+            } else {
+                String::new()
+            };
+            out.push_str(&format!(
+                "{}state {}{} = {}\n",
+                indent,
+                target,
+                type_str,
+                format_expr(expr, config, depth)
+            ));
+        }
+        Statement::PolicyStmt { target, policy } => {
+            let target_str = match target {
+                causm_core::PolicyTarget::OnFull => "on_full",
+                causm_core::PolicyTarget::OnDeadlineBreach => "on_deadline_breach",
+                causm_core::PolicyTarget::OnOverflow => "on_overflow",
+            };
+            let policy_str = match policy {
+                causm_core::SaturationPolicy::EvictDecayed => "EvictDecayed",
+                causm_core::SaturationPolicy::RingBuffer => "RingBuffer",
+                causm_core::SaturationPolicy::Throttle => "Throttle",
+                causm_core::SaturationPolicy::FailFast => "FailFast",
+            };
+            out.push_str(&format!(
+                "{}policy {} = {}\n",
+                indent, target_str, policy_str
+            ));
+        }
+        Statement::LoopOn { target, body } => {
+            out.push_str(&format!(
+                "{}loop on {} {{\n",
+                indent,
+                format_expr(target, config, depth)
+            ));
+            for s in body {
+                format_spanned_statement(out, s, config, depth + 1);
+            }
+            out.push_str(&format!("{}}}\n", indent));
+        }
+        Statement::Entangle { variables } => {
+            out.push_str(&format!("{}entangle({})\n", indent, variables.join(", ")));
+        }
+        Statement::Send {
+            value_id,
+            target_branch,
+        } => {
+            out.push_str(&format!(
+                "{}send({}, @{})\n",
+                indent, value_id, target_branch
+            ));
         }
     }
 }
 
-fn format_decayed_pattern(pat: &causm_core::DecayedPattern) -> String {
+fn format_decayed_pattern(
+    pat: &causm_core::DecayedPattern,
+    config: &FormatConfig,
+    depth: usize,
+) -> String {
     match pat {
         causm_core::DecayedPattern::Binding(b) => b.clone(),
         causm_core::DecayedPattern::Fields(f) => {
@@ -966,7 +1055,7 @@ fn format_decayed_pattern(pat: &causm_core::DecayedPattern) -> String {
                 .map(|(k, v)| match v {
                     causm_core::PatternValue::State(s) => format!("{} = {}", k, s),
                     causm_core::PatternValue::Expr(e) => {
-                        format!("{} = {}", k, format_expr(e))
+                        format!("{} = {}", k, format_expr(e, config, depth))
                     }
                 })
                 .collect();
@@ -975,7 +1064,11 @@ fn format_decayed_pattern(pat: &causm_core::DecayedPattern) -> String {
     }
 }
 
-fn format_merge_resolution(res: &MergeResolution) -> String {
+fn format_merge_resolution(
+    res: &MergeResolution,
+    _config: &FormatConfig,
+    _depth: usize,
+) -> String {
     if res.auto {
         return " reconcile auto".to_string();
     }
@@ -995,7 +1088,34 @@ fn format_merge_resolution(res: &MergeResolution) -> String {
                         format!("priority({})", p)
                     }
                     causm_core::ResolutionStrategy::Custom(c) => c.clone(),
-                    _ => "first_wins".to_string(),
+                    causm_core::ResolutionStrategy::TopologyUnion {
+                        key_rules,
+                        default: _,
+                        on_invalid: _,
+                    } => {
+                        let mut sub_keys: Vec<_> = key_rules.iter().collect();
+                        sub_keys.sort_by_key(|(sk, _)| sk.as_str());
+                        let sub_entries = sub_keys
+                            .iter()
+                            .map(|(sk, _)| format!("{}=first_wins", sk))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!("topology_union {{ {} }}", sub_entries)
+                    }
+                    causm_core::ResolutionStrategy::TopologyIntersect {
+                        key_rules,
+                        default: _,
+                        on_invalid: _,
+                    } => {
+                        let mut sub_keys: Vec<_> = key_rules.iter().collect();
+                        sub_keys.sort_by_key(|(sk, _)| sk.as_str());
+                        let sub_entries = sub_keys
+                            .iter()
+                            .map(|(sk, _)| format!("{}=first_wins", sk))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!("topology_intersect {{ {} }}", sub_entries)
+                    }
                 };
                 format!("{}={}", k, strat_str)
             })
@@ -1026,22 +1146,36 @@ fn format_type(typ: &TypeName) -> String {
     match typ {
         TypeName::Builtin(b) => match b {
             causm_core::BuiltinType::Integer => "int".to_string(),
+            causm_core::BuiltinType::I8 => "i8".to_string(),
+            causm_core::BuiltinType::I16 => "i16".to_string(),
+            causm_core::BuiltinType::I32 => "i32".to_string(),
+            causm_core::BuiltinType::I64 => "i64".to_string(),
+            causm_core::BuiltinType::U8 => "u8".to_string(),
+            causm_core::BuiltinType::U16 => "u16".to_string(),
+            causm_core::BuiltinType::U32 => "u32".to_string(),
+            causm_core::BuiltinType::U64 => "u64".to_string(),
             causm_core::BuiltinType::Float => "float".to_string(),
+            causm_core::BuiltinType::F32 => "f32".to_string(),
+            causm_core::BuiltinType::F64 => "f64".to_string(),
             causm_core::BuiltinType::Bool => "bool".to_string(),
             causm_core::BuiltinType::String => "string".to_string(),
             causm_core::BuiltinType::Struct => "struct".to_string(),
             causm_core::BuiltinType::Topology => "topology".to_string(),
             causm_core::BuiltinType::Array => "array".to_string(),
-            other => format!("{:?}", other).to_lowercase(),
         },
         TypeName::Custom(c) => c.clone(),
         TypeName::Generic(name, params) => {
+            if (name == "array" || name == "Array") && params.len() == 1 {
+                if let causm_core::TypeParam::Type(ref t) = params[0] {
+                    return format!("[{}]", format_type(t));
+                }
+            }
             let params_str = params
                 .iter()
                 .map(|p| match p {
-                    causm_core::TypeParam::Type(t) => format_type(t),
-                    causm_core::TypeParam::Amount(a) => a.to_string(),
-                    causm_core::TypeParam::Duration(d) => format!("{}ms", d),
+                    TypeParam::Type(t) => format_type(t),
+                    TypeParam::Amount(a) => a.to_string(),
+                    TypeParam::Duration(d) => format!("{}ms", d),
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -1056,17 +1190,28 @@ fn format_type(typ: &TypeName) -> String {
     }
 }
 
-fn format_expr(expr: &Expression) -> String {
+fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String {
     match expr {
         Expression::Integer(i) => i.to_string(),
-        Expression::Float(bits) => f64::from_bits(*bits).to_string(),
+        Expression::Float(bits) => {
+            let f = f64::from_bits(*bits);
+            let s = f.to_string();
+            if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                format!("{}.0", s)
+            } else {
+                s
+            }
+        }
         Expression::Boolean(b) => b.to_string(),
         Expression::Literal(s) => format_string_literal(s),
         Expression::Identifier(id) => id.clone(),
         Expression::Null => "null".to_string(),
         Expression::Call { routine, args } => {
-            let args_str =
-                args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
+            let args_str = args
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
             format!("{}({})", routine, args_str)
         }
         Expression::MethodCall {
@@ -1075,17 +1220,25 @@ fn format_expr(expr: &Expression) -> String {
             args,
             ..
         } => {
-            let args_str =
-                args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
-            format!("{}.{}({})", format_expr(target), method, args_str)
+            let args_str = args
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "{}.{}({})",
+                format_expr(target, config, depth),
+                method,
+                args_str
+            )
         }
         Expression::FieldAccess { target, field } => {
-            format!("{}.{}", format_expr(target), field)
+            format!("{}.{}", format_expr(target, config, depth), field)
         }
         Expression::BinaryOp { left, op, right } => {
             let prec = op_precedence(op);
-            let left_str = format_sub_expr(left, prec, false);
-            let right_str = format_sub_expr(right, prec, true);
+            let left_str = format_sub_expr(left, prec, false, config, depth);
+            let right_str = format_sub_expr(right, prec, true, config, depth);
             let op_str = match op {
                 BinaryOperator::Add => "+",
                 BinaryOperator::Sub => "-",
@@ -1099,6 +1252,8 @@ fn format_expr(expr: &Expression) -> String {
                 BinaryOperator::Gt => ">",
                 BinaryOperator::Le => "<=",
                 BinaryOperator::Ge => ">=",
+                BinaryOperator::LogicalAnd => "&&",
+                BinaryOperator::LogicalOr => "||",
             };
             format!("{} {} {}", left_str, op_str, right_str)
         }
@@ -1107,7 +1262,7 @@ fn format_expr(expr: &Expression) -> String {
                 UnaryOperator::Neg => "-",
                 UnaryOperator::Not => "!",
             };
-            format!("{}{}", op_str, format_expr(expr))
+            format!("{}{}", op_str, format_expr(expr, config, depth))
         }
         Expression::StructLit(type_opt, fields) => {
             let type_str = if let Some(t) = type_opt.borrow().as_ref() {
@@ -1115,29 +1270,60 @@ fn format_expr(expr: &Expression) -> String {
             } else {
                 String::new()
             };
-            let mut sorted_fields: Vec<_> = fields.iter().collect();
-            sorted_fields.sort_by_key(|(k, _)| k.as_str());
-            let mut f_strs = Vec::new();
-            for (k, v) in sorted_fields {
-                f_strs.push(format!("{} = {}", k, format_expr(v)));
+            if fields.is_empty() {
+                format!("{}struct {{}}", type_str)
+            } else if fields.len() <= 3 {
+                let mut sorted_fields: Vec<_> = fields.iter().collect();
+                sorted_fields.sort_by_key(|(k, _)| k.as_str());
+                let f_strs = sorted_fields
+                    .iter()
+                    .map(|(k, v)| {
+                        format!("{} = {}", k, format_expr(v, config, depth))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let inline = format!("{}struct {{ {} }}", type_str, f_strs);
+                if inline.len() <= 60 {
+                    inline
+                } else {
+                    format_multiline_struct(&type_str, sorted_fields, config, depth)
+                }
+            } else {
+                let mut sorted_fields: Vec<_> = fields.iter().collect();
+                sorted_fields.sort_by_key(|(k, _)| k.as_str());
+                format_multiline_struct(&type_str, sorted_fields, config, depth)
             }
-            format!("{}struct {{ {} }}", type_str, f_strs.join(", "))
         }
         Expression::CloneOp(id) => format!("clone({})", id),
-        Expression::StrBytes(expr) => format!("str_bytes({})", format_expr(expr)),
-        Expression::ToStr(expr) => format!("to_str({})", format_expr(expr)),
-        Expression::Len(expr) => format!("len({})", format_expr(expr)),
-        Expression::RefOp(inner) => format!("&{}", format_expr(inner)),
+        Expression::StrBytes(expr) => {
+            format!("str_bytes({})", format_expr(expr, config, depth))
+        }
+        Expression::ToStr(expr) => {
+            format!("to_str({})", format_expr(expr, config, depth))
+        }
+        Expression::Len(expr) => {
+            format!("len({})", format_expr(expr, config, depth))
+        }
+        Expression::RefOp(inner) => {
+            format!("&{}", format_expr(inner, config, depth))
+        }
+        Expression::TryUnwrap(inner) => {
+            format!("{}?", format_expr(inner, config, depth))
+        }
         Expression::ArrayLiteral(elements) => {
             let elems_str = elements
                 .iter()
-                .map(format_expr)
+                .map(|e| format_expr(e, config, depth))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("[{}]", elems_str)
         }
         Expression::ArrayRepeat { value, count } => {
-            format!("[{}; {}]", format_expr(value), format_expr(count))
+            format!(
+                "[{}; {}]",
+                format_expr(value, config, depth),
+                format_expr(count, config, depth)
+            )
         }
         Expression::ArraySlice {
             target,
@@ -1145,13 +1331,29 @@ fn format_expr(expr: &Expression) -> String {
             end,
             inclusive,
         } => {
-            let s_str = start.as_ref().map(|s| format_expr(s)).unwrap_or_default();
+            let s_str = start
+                .as_ref()
+                .map(|s| format_expr(s, config, depth))
+                .unwrap_or_default();
             let dot_str = if *inclusive { "..=" } else { ".." };
-            let e_str = end.as_ref().map(|e| format_expr(e)).unwrap_or_default();
-            format!("{}[{}{}{}]", format_expr(target), s_str, dot_str, e_str)
+            let e_str = end
+                .as_ref()
+                .map(|e| format_expr(e, config, depth))
+                .unwrap_or_default();
+            format!(
+                "{}[{}{}{}]",
+                format_expr(target, config, depth),
+                s_str,
+                dot_str,
+                e_str
+            )
         }
         Expression::IndexAccess { target, index } => {
-            format!("{}[{}]", format_expr(target), format_expr(index))
+            format!(
+                "{}[{}]",
+                format_expr(target, config, depth),
+                format_expr(index, config, depth)
+            )
         }
         Expression::ChannelReceive(chan) => format!("chan_recv({})", chan),
         Expression::TopologyLit(fields) => {
@@ -1159,15 +1361,23 @@ fn format_expr(expr: &Expression) -> String {
             sorted_fields.sort_by_key(|(k, _)| k.as_str());
             let mut f_strs = Vec::new();
             for (k, v) in sorted_fields {
-                f_strs.push(format!("{} = {}", k, format_expr(v)));
+                f_strs.push(format!("{} = {}", k, format_expr(v, config, depth)));
             }
             format!("topology {{ {} }}", f_strs.join(", "))
         }
         Expression::TypeCast { expr, target_type } => {
-            format!("{} as {}", format_expr(expr), format_type(target_type))
+            format!(
+                "{} as {}",
+                format_expr(expr, config, depth),
+                format_type(target_type)
+            )
         }
         Expression::TypeAssertion { target, cast_type } => {
-            format!("{}.({})", format_expr(target), format_type(cast_type))
+            format!(
+                "{}.({})",
+                format_expr(target, config, depth),
+                format_type(cast_type)
+            )
         }
         Expression::Syscall {
             target,
@@ -1179,11 +1389,14 @@ fn format_expr(expr: &Expression) -> String {
             } else {
                 String::new()
             };
-            let args_str =
-                args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
+            let args_str = args
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
             let target_str = match target {
-                causm_core::SyscallTarget::Number(n) => n.to_string(),
-                causm_core::SyscallTarget::Symbol(s) => format!("\"{}\"", s),
+                SyscallTarget::Number(n) => n.to_string(),
+                SyscallTarget::Symbol(s) => format!("\"{}\"", s),
             };
             format!(
                 "syscall({}{}){}",
@@ -1204,8 +1417,11 @@ fn format_expr(expr: &Expression) -> String {
             if args.is_empty() {
                 format!("{}::{}", enum_name, variant_name)
             } else {
-                let args_str =
-                    args.iter().map(format_expr).collect::<Vec<_>>().join(", ");
+                let args_str = args
+                    .iter()
+                    .map(|e| format_expr(e, config, depth))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("{}::{}({})", enum_name, variant_name, args_str)
             }
         }
@@ -1227,7 +1443,7 @@ fn format_expr(expr: &Expression) -> String {
             let mut s = "f\"".to_string();
             for part in parts {
                 match part {
-                    causm_core::FStringPart::Text(t) => {
+                    FStringPart::Text(t) => {
                         for c in t.chars() {
                             match c {
                                 '"' => s.push_str("\\\""),
@@ -1239,9 +1455,9 @@ fn format_expr(expr: &Expression) -> String {
                             }
                         }
                     }
-                    causm_core::FStringPart::Expr(e) => {
+                    FStringPart::Expr(e) => {
                         s.push('{');
-                        s.push_str(&format_expr(e));
+                        s.push_str(&format_expr(e, config, depth));
                         s.push('}');
                     }
                 }
@@ -1254,55 +1470,141 @@ fn format_expr(expr: &Expression) -> String {
             then_branch,
             else_branch,
         } => {
-            let else_str = match &**else_branch {
-                Expression::If { .. } => {
-                    format!("else {}", format_expr(else_branch))
+            let cond_str = format_expr(condition, config, depth);
+            let then_str = format_expr(then_branch, config, depth);
+            let else_str = format_expr(else_branch, config, depth);
+            let inline = format!(
+                "if ({}) {{ {} }} else {{ {} }}",
+                cond_str, then_str, else_str
+            );
+            if inline.len() <= 60 {
+                inline
+            } else {
+                let inner_indent = indent_str(config, depth + 1);
+                let outer_indent = indent_str(config, depth);
+                match &**else_branch {
+                    Expression::If { .. } => {
+                        format!(
+                            "if ({}) {{\n{}{}\n{}}} else {}",
+                            cond_str,
+                            inner_indent,
+                            then_str,
+                            outer_indent,
+                            format_expr(else_branch, config, depth)
+                        )
+                    }
+                    _ => {
+                        format!(
+                            "if ({}) {{\n{}{}\n{}}} else {{\n{}{}\n{}}}",
+                            cond_str,
+                            inner_indent,
+                            then_str,
+                            outer_indent,
+                            inner_indent,
+                            else_str,
+                            outer_indent
+                        )
+                    }
                 }
-                _ => format!("else {{ {} }}", format_expr(else_branch)),
-            };
-            format!(
-                "if ({}) {{ {} }} {}",
-                format_expr(condition),
-                format_expr(then_branch),
-                else_str
-            )
+            }
         }
         Expression::Match { target, arms } => {
-            let arm_strs: Vec<String> = arms
-                .iter()
-                .map(|a| {
-                    let g_str = a
-                        .guard
-                        .as_ref()
-                        .map(|g| format!(" if {}", format_expr(g)))
-                        .unwrap_or_default();
-                    format!(
-                        "{}{} => {}",
-                        format_pattern(&a.pattern),
-                        g_str,
-                        format_expr(&a.body)
-                    )
-                })
-                .collect();
-            format!(
-                "match {} {{ {} }}",
-                format_expr(target),
-                arm_strs.join(", ")
-            )
+            if arms.len() <= 1 {
+                let arm_strs: Vec<String> = arms
+                    .iter()
+                    .map(|a| {
+                        let g_str = a
+                            .guard
+                            .as_ref()
+                            .map(|g| {
+                                format!(" if {}", format_expr(g, config, depth))
+                            })
+                            .unwrap_or_default();
+                        format!(
+                            "{}{} => {}",
+                            format_pattern(&a.pattern, config, depth),
+                            g_str,
+                            format_expr(&a.body, config, depth)
+                        )
+                    })
+                    .collect();
+                format!(
+                    "match {} {{ {} }}",
+                    format_expr(target, config, depth),
+                    arm_strs.join(", ")
+                )
+            } else {
+                let inner_indent = indent_str(config, depth + 1);
+                let outer_indent = indent_str(config, depth);
+                let arm_lines: Vec<String> = arms
+                    .iter()
+                    .map(|a| {
+                        let g_str = a
+                            .guard
+                            .as_ref()
+                            .map(|g| {
+                                format!(" if {}", format_expr(g, config, depth + 1))
+                            })
+                            .unwrap_or_default();
+                        format!(
+                            "{}{}{} => {},",
+                            inner_indent,
+                            format_pattern(&a.pattern, config, depth + 1),
+                            g_str,
+                            format_expr(&a.body, config, depth + 1)
+                        )
+                    })
+                    .collect();
+                format!(
+                    "match {} {{\n{}\n{}}}",
+                    format_expr(target, config, depth),
+                    arm_lines.join("\n"),
+                    outer_indent
+                )
+            }
         }
-        other => {
-            eprintln!("\x1b[33mwarning:\x1b[0m Unhandled expression variant in formatter: {:?}", other);
-            "null".to_string()
+        Expression::ArenaIntrospect(kind) => {
+            let kind_str = match kind {
+                causm_core::ArenaIntrospect::Remaining => "remaining",
+                causm_core::ArenaIntrospect::UsedBytes => "used_bytes",
+                causm_core::ArenaIntrospect::Capacity => "capacity",
+            };
+            format!("arena.{}()", kind_str)
         }
     }
 }
 
-pub fn format_pattern(pat: &causm_core::Pattern) -> String {
+fn format_multiline_struct(
+    type_str: &str,
+    sorted_fields: Vec<(&String, &Expression)>,
+    config: &FormatConfig,
+    depth: usize,
+) -> String {
+    let inner_indent = indent_str(config, depth + 1);
+    let outer_indent = indent_str(config, depth);
+    let mut f_lines = Vec::new();
+    for (k, v) in sorted_fields {
+        f_lines.push(format!(
+            "{}{} = {}",
+            inner_indent,
+            k,
+            format_expr(v, config, depth + 1)
+        ));
+    }
+    format!(
+        "{}struct {{\n{}\n{}}}",
+        type_str,
+        f_lines.join(",\n"),
+        outer_indent
+    )
+}
+
+pub fn format_pattern(pat: &Pattern, config: &FormatConfig, depth: usize) -> String {
     match pat {
-        causm_core::Pattern::Wildcard => "_".to_string(),
-        causm_core::Pattern::Identifier(id) => id.clone(),
-        causm_core::Pattern::Literal(e) => format_expr(e),
-        causm_core::Pattern::EnumVariant {
+        Pattern::Wildcard => "_".to_string(),
+        Pattern::Identifier(id) => id.clone(),
+        Pattern::Literal(e) => format_expr(e, config, depth),
+        Pattern::EnumVariant {
             enum_name,
             variant_name,
             args,
@@ -1317,17 +1619,17 @@ pub fn format_pattern(pat: &causm_core::Pattern) -> String {
             } else {
                 let args_str = args
                     .iter()
-                    .map(format_pattern)
+                    .map(|p| format_pattern(p, config, depth))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", prefix, args_str)
             }
         }
-        causm_core::Pattern::TypeAssert {
+        Pattern::TypeAssert {
             binding,
             target_type,
         } => {
-            format!("{} as {:?}", binding, target_type)
+            format!("{} as {}", binding, format_type(target_type))
         }
     }
 }
@@ -1342,11 +1644,19 @@ fn op_precedence(op: &BinaryOperator) -> u8 {
         | BinaryOperator::Le
         | BinaryOperator::Ge => 30,
         BinaryOperator::Eq | BinaryOperator::Neq => 20,
+        BinaryOperator::LogicalAnd => 10,
+        BinaryOperator::LogicalOr => 5,
     }
 }
 
-fn format_sub_expr(expr: &Expression, parent_prec: u8, is_right: bool) -> String {
-    let s = format_expr(expr);
+fn format_sub_expr(
+    expr: &Expression,
+    parent_prec: u8,
+    is_right: bool,
+    config: &FormatConfig,
+    depth: usize,
+) -> String {
+    let s = format_expr(expr, config, depth);
     match expr {
         Expression::BinaryOp { op, .. } => {
             let prec = op_precedence(op);
@@ -1393,18 +1703,18 @@ fn format_if_statement(
     then_branch: &[SpannedStatement],
     else_branch: Option<&[SpannedStatement]>,
     reconcile: Option<&MergeResolution>,
-    indent_step: usize,
+    config: &FormatConfig,
     depth: usize,
 ) {
-    let indent = " ".repeat(indent_step * depth);
+    let indent = indent_str(config, depth);
     let if_head = if let Some(b) = binding {
-        format!("if let {} = {}", b, format_expr(condition))
+        format!("if let {} = {}", b, format_expr(condition, config, depth))
     } else {
-        format!("if ({})", format_expr(condition))
+        format!("if ({})", format_expr(condition, config, depth))
     };
     out.push_str(&format!("{}{} {{\n", indent, if_head));
     for s in then_branch {
-        format_spanned_statement(out, s, indent_step, depth + 1);
+        format_spanned_statement(out, s, config, depth + 1);
     }
     if let Some(eb) = else_branch {
         if eb.len() == 1 {
@@ -1418,20 +1728,24 @@ fn format_if_statement(
             {
                 out.push_str(&format!("{}}} else ", indent));
                 let next_head = if let Some(b) = next_binding {
-                    format!("if let {} = {}", b, format_expr(next_cond))
+                    format!(
+                        "if let {} = {}",
+                        b,
+                        format_expr(next_cond, config, depth)
+                    )
                 } else {
-                    format!("if ({})", format_expr(next_cond))
+                    format!("if ({})", format_expr(next_cond, config, depth))
                 };
                 out.push_str(&format!("{} {{\n", next_head));
                 for s in next_then {
-                    format_spanned_statement(out, s, indent_step, depth + 1);
+                    format_spanned_statement(out, s, config, depth + 1);
                 }
                 if let Some(n_eb) = next_else {
                     format_else_chain(
                         out,
                         n_eb,
                         next_rec.as_ref().or(reconcile),
-                        indent_step,
+                        config,
                         depth,
                     );
                     return;
@@ -1439,7 +1753,7 @@ fn format_if_statement(
                     let rec_str = next_rec
                         .as_ref()
                         .or(reconcile)
-                        .map(format_merge_resolution)
+                        .map(|r| format_merge_resolution(r, config, depth))
                         .unwrap_or_default();
                     out.push_str(&format!("{}}}{}\n", indent, rec_str));
                     return;
@@ -1448,10 +1762,12 @@ fn format_if_statement(
         }
         out.push_str(&format!("{}}} else {{\n", indent));
         for s in eb {
-            format_spanned_statement(out, s, indent_step, depth + 1);
+            format_spanned_statement(out, s, config, depth + 1);
         }
     }
-    let rec_str = reconcile.map(format_merge_resolution).unwrap_or_default();
+    let rec_str = reconcile
+        .map(|r| format_merge_resolution(r, config, depth))
+        .unwrap_or_default();
     out.push_str(&format!("{}}}{}\n", indent, rec_str));
 }
 
@@ -1459,10 +1775,10 @@ fn format_else_chain(
     out: &mut String,
     eb: &[SpannedStatement],
     reconcile: Option<&MergeResolution>,
-    indent_step: usize,
+    config: &FormatConfig,
     depth: usize,
 ) {
-    let indent = " ".repeat(indent_step * depth);
+    let indent = indent_str(config, depth);
     if eb.len() == 1 {
         if let Statement::If {
             binding: next_binding,
@@ -1474,20 +1790,20 @@ fn format_else_chain(
         {
             out.push_str(&format!("{}}} else ", indent));
             let next_head = if let Some(b) = next_binding {
-                format!("if let {} = {}", b, format_expr(next_cond))
+                format!("if let {} = {}", b, format_expr(next_cond, config, depth))
             } else {
-                format!("if ({})", format_expr(next_cond))
+                format!("if ({})", format_expr(next_cond, config, depth))
             };
             out.push_str(&format!("{} {{\n", next_head));
             for s in next_then {
-                format_spanned_statement(out, s, indent_step, depth + 1);
+                format_spanned_statement(out, s, config, depth + 1);
             }
             if let Some(n_eb) = next_else {
                 format_else_chain(
                     out,
                     n_eb,
                     next_rec.as_ref().or(reconcile),
-                    indent_step,
+                    config,
                     depth,
                 );
                 return;
@@ -1495,7 +1811,7 @@ fn format_else_chain(
                 let rec_str = next_rec
                     .as_ref()
                     .or(reconcile)
-                    .map(format_merge_resolution)
+                    .map(|r| format_merge_resolution(r, config, depth))
                     .unwrap_or_default();
                 out.push_str(&format!("{}}}{}\n", indent, rec_str));
                 return;
@@ -1504,8 +1820,353 @@ fn format_else_chain(
     }
     out.push_str(&format!("{}}} else {{\n", indent));
     for s in eb {
-        format_spanned_statement(out, s, indent_step, depth + 1);
+        format_spanned_statement(out, s, config, depth + 1);
     }
-    let rec_str = reconcile.map(format_merge_resolution).unwrap_or_default();
+    let rec_str = reconcile
+        .map(|r| format_merge_resolution(r, config, depth))
+        .unwrap_or_default();
     out.push_str(&format!("{}}}{}\n", indent, rec_str));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use causm_frontend::parser::parse_causm;
+
+    fn check_roundtrip(source: &str) {
+        let config = FormatConfig::default();
+        let program = parse_causm(source).expect("source should parse");
+        let formatted = format_program(&program, &config);
+        let reparsed =
+            parse_causm(&formatted).expect("formatted output should parse");
+        assert!(
+            causm_core::programs_ast_eq(&program, &reparsed),
+            "AST mismatch after formatting:\n--- Original ---\n{}\n--- Formatted ---\n{}",
+            source,
+            formatted
+        );
+    }
+
+    #[test]
+    fn test_fmt_basic_timeline_and_let() {
+        let code = "@0ms: {\n    let mut x: i64 = 42\n    let y = 10\n}\n";
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_nested_struct_and_expressions() {
+        let code = r#"@0ms: {
+    routine calc(peek a: i64, peek b: i64) -> i64 taking 5ms {
+        let s = struct { x = a + b, y = a * b }
+        s.x + s.y
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_match_and_if_let() {
+        let code = r#"@0ms: {
+    routine evaluate(peek opt: Option) -> i64 taking 2ms {
+        if let Option::Some(val) = opt {
+            val
+        } else {
+            0
+        }
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_entropy_match_and_lease() {
+        let code = r#"@0ms: {
+    lease handle = resource taking 10ms {
+        match entropy(handle) {
+            Valid(v): {
+                print(v)
+            }
+            Decayed: {
+                print(0)
+            }
+            Consumed: {
+                print(-1)
+            }
+        }
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_isolate_block_with_manifest() {
+        let code = r#"@0ms: {
+    isolate worker {
+        enable cpu(50ms)
+        enable memory(1024bytes)
+        slice 10ms
+        require net.http
+        let res = 1
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_type_and_enum_decls() {
+        let code = r#"@0ms: {
+    type Packet = struct decay_after 50ms {
+        data: array,
+        id: i64
+    }
+
+    enum Status {
+        Active,
+        Error(string)
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_foreign_block() {
+        let code = r#"@0ms: {
+    foreign "libm" abi("C") {
+        routine sin(peek x: float) -> float taking 1ms
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_advanced_loop_sc_roundtrip() {
+        let code = r#"@0ms: {
+    let counter: int = 0
+    let total: int = 0
+    while (counter < 5) taking 25ms {
+        let total = total + counter
+        let counter = counter + 1
+    }
+    debug(counter)
+    debug(total)
+    let buffer = "sensor_stream_payload"
+    let ticks = 0
+    while valid (buffer) taking 30ms {
+        let ticks = ticks + 1
+        if (ticks == 3) {
+            let extracted = buffer
+            debug(extracted)
+        } reconcile auto
+    }
+    debug(ticks)
+}
+
+@40ms: {
+    let readings = [15, 42, 88, 23, 99]
+    let sum = 0
+    let peak = 0
+    for val in readings step 10ms {
+        let sum = sum + val
+        if (val > peak) {
+            let peak = val
+        } reconcile auto
+    }
+    debug(sum)
+    debug(peak)
+    slice 20ms
+    let count = 0
+    let terminated = false
+    loop tick {
+        let count = count + 1
+        let terminated = true
+        break
+    }
+    debug(count)
+    debug(terminated)
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_causm_oop_showcase_roundtrip() {
+        let code = r#"@0ms: {
+    type Actor = struct {
+        id: int,
+        name: string
+    }
+
+    type Robot = Actor + struct decay_after 100ms {
+        model: string
+    }
+
+    type PlayableRobot = Robot + struct {
+        score: int
+    }
+
+    routine Actor.introduce(peek self) -> int taking 20ms {
+        let name = self.name
+        print("Hello, I am Actor: " + name)
+        let res = 0
+        yield res
+    }
+
+    routine Robot.status(peek self) -> int taking 20ms {
+        print("Robot status: active")
+        let res = 0
+        yield res
+    }
+
+    routine PlayableRobot.status(peek self) -> int taking 20ms {
+        let score = self.score
+        print("Playable Robot status: active, score=" + score)
+        let res = 0
+        yield res
+    }
+
+    interface Worker {
+        routine work(consume self) -> int taking 20ms
+    }
+
+    interface PlayableWorker = Worker + interface {
+        routine play(peek self) -> int taking 20ms {
+            let bonus = 100
+            yield bonus
+        }
+    }
+
+    routine PlayableRobot.work(consume self) -> int taking 20ms {
+        print("Robot is working...")
+        let res = 0
+        yield res
+    }
+
+    routine Robot.check_battery(peek self) -> int taking 20ms where self.state == Valid {
+        print("Battery OK")
+        let res = 0
+        yield res
+    }
+
+    let r: PlayableRobot = struct { id = 42, model = "Cyberdyne Model 101", name = "T-800", score = 999 }
+    r.introduce()
+    r.status()
+    r.check_battery()
+    let w: PlayableWorker = r
+    let bonus = w.play()
+    if let robot = w.(PlayableRobot) {
+        let model = &robot.model
+        print("Downcast successful! Model: " + model)
+        robot.work()
+    } else {
+        print("Downcast failed.")
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_entropic_oop_showcase_roundtrip() {
+        let code = r#"@0ms: {
+    type SecurityNode = struct decay_after 1000ms {
+        node_id: int,
+        status: string
+    }
+
+    type QuantumVault = SecurityNode + struct {
+        clearance_level: int,
+        vault_code: int
+    }
+
+    interface Encryptable {
+        routine encrypt_payload(peek self) -> int taking 15ms
+    }
+
+    interface AuditNode = Encryptable + interface {
+        routine audit(peek self) -> int taking 10ms {
+            print("Audit log recorded to immutable ledger.")
+            let ok = 1
+            yield ok
+        }
+    }
+
+    routine QuantumVault<int>.inspect_secure(peek self) -> int taking 20ms {
+        let code = self.vault_code
+        print("Quantum Vault leased securely. Decrypted Code: " + code)
+        yield code
+    }
+
+    routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
+        let level = self.clearance_level
+        print("Clearance Verified Level: " + level)
+        yield level
+    }
+
+    routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
+        let code = self.vault_code
+        print("Payload Encrypted with Quantum Entanglement.")
+        yield code
+    }
+
+    routine QuantumVault.purge(consume self) taking 15ms {
+        print("Quantum Vault state purged and memory reclaimed.")
+    }
+
+    let v: QuantumVault = struct { clearance_level = 9, node_id = 8192, status = "OPERATIONAL", vault_code = 987654 }
+    let code = v.inspect_secure()
+    let level = v.verify_clearance()
+    let node: AuditNode = v
+    let log_status = node.audit()
+    if let target_vault = node.(QuantumVault) {
+        let id = &target_vault.node_id
+        let status = &target_vault.status
+        print("Downcast successful! Node ID: " + id + " Status: " + status)
+        target_vault.purge()
+    } else {
+        print("Downcast failed.")
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
+
+    #[test]
+    fn test_fmt_isochronous_matrix_complex_roundtrip() {
+        let code = r#"@0ms: {
+    routine compute_ema(peek current: int, peek prev: int) -> int taking 20ms {
+        let weight = 2
+        let p1 = current * weight
+        let p2 = prev * 8
+        let sum = p1 + p2
+        let ema = sum / 10
+        yield ema
+    }
+
+    isolate dsp_pipeline {
+        enable memory(102400bytes)
+        slice 40ms
+        require System.Log
+        let mut s1 = 150
+        let mut s2 = 155
+        let mut signal = 0
+        loop tick {
+            signal = compute_ema(s2, s1)
+            break
+        }
+        loop tick {
+            let display = "Signal: " + signal
+            print(display)
+            break
+        }
+    }
+}
+"#;
+        check_roundtrip(code);
+    }
 }

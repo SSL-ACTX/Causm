@@ -108,7 +108,11 @@
                 let s_ping_str = Utf8.decode(ping_buf[0..s_recvd])
                 print(f"UDP Server received {s_recvd} bytes: {s_ping_str}")
                 let audit_stack = Collection.Stack.push(audit_stack, s_recvd)
-                let pong_msg = if (s_ping_str == "HEARTBEAT_PING") { "HEARTBEAT_PONG" } else { "HEARTBEAT_ERR" }
+                let pong_msg = if (s_ping_str == "HEARTBEAT_PING") {
+                    "HEARTBEAT_PONG"
+                } else {
+                    "HEARTBEAT_ERR"
+                }
                 let pong_bytes = Utf8.encode(pong_msg)
                 let pong_len = len(pong_bytes)
                 let s2c = udp_server.send_to_ip(pong_bytes, pong_len, "127.0.0.1", 19881)

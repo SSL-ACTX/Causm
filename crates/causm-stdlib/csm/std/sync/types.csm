@@ -2,13 +2,16 @@
     type AtomicInt = struct {
         val: int
     }
+
     type AtomicBool = struct {
         val: bool
     }
+
     type Mutex = struct {
         locked: bool,
         owner: string
     }
+
     type SyncChannel = struct {
         capacity: int,
         closed: bool,
@@ -17,26 +20,32 @@
         head: int,
         tail: int
     }
+
     type FetchAddResult = struct {
         atomic: AtomicInt,
         old: int
     }
+
     type CasIntResult = struct {
         atomic: AtomicInt,
         success: bool
     }
+
     type CasBoolResult = struct {
         atomic: AtomicBool,
         success: bool
     }
+
     type LockResult = struct {
         acquired: bool,
         mutex: Mutex
     }
+
     type SendResult = struct {
         chan: SyncChannel,
         ok: bool
     }
+
     type RecvResult = struct {
         chan: SyncChannel,
         ok: bool,

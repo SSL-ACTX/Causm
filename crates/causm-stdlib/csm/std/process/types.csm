@@ -4,29 +4,36 @@
         signaled: bool,
         success: bool
     }
+
     type ProcessPipe = struct {
         read_fd: i32,
         write_fd: i32
     }
+
     type PipeReader = struct decay_after 10000ms {
         fd: i32
     }
+
     type PipeWriter = struct decay_after 10000ms {
         fd: i32
     }
+
     type PipeEndpoints = struct {
         reader: PipeReader,
         writer: PipeWriter
     }
+
     type ChildProcess = struct decay_after 30000ms {
         is_running: bool,
         pid: i32
     }
+
     type ProcessInfo = struct {
         is_running: bool,
         pid: i32,
         ppid: i32
     }
+
     enum Signal {
         Hup,
         Int,

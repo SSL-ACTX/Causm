@@ -7,14 +7,17 @@
         Array(array),
         Object(array)
     }
+
     type JsonMember = struct {
         key: string,
         val: JsonValue
     }
+
     type ParseResult = struct {
         next_pos: i32,
         val: JsonValue
     }
+
     type ParseStrResult = struct {
         next_pos: i32,
         val: string
