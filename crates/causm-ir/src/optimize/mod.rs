@@ -761,6 +761,12 @@ fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
                 kind: *kind,
             }
         }
+        SsaInstruction::HasCapability { dest, capability } => {
+            Instruction::HasCapability {
+                dest: ssa_reg_to_reg(*dest),
+                capability: capability.clone(),
+            }
+        }
         SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
     }
 }

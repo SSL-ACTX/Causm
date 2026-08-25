@@ -557,6 +557,7 @@ impl EntropicAnalyzer {
         params: &[ParamDecl],
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
+        requires: &[Capability],
         state_constraint: &Option<(String, String)>,
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
@@ -621,10 +622,23 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: taking_ms.unwrap_or(0),
+            requires: requires.to_vec(),
             state_constraint: state_constraint.clone(),
         };
 
         let mut routine_analyzer = EntropicAnalyzer::new();
+        let mut cap_set = std::collections::HashMap::new();
+        for cap in requires {
+            let key = if let Some(id) = cap.parameters.get("id") {
+                format!("{}[id={}]", cap.path, id)
+            } else {
+                cap.path.clone()
+            };
+            cap_set.insert(key, cap.clone());
+        }
+        if !cap_set.is_empty() {
+            routine_analyzer.capability_stack.push(cap_set);
+        }
         routine_analyzer.routines = self.routines.clone();
         routine_analyzer
             .routines
@@ -740,6 +754,7 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: final_taking_ms,
+            requires: requires.to_vec(),
             state_constraint: state_constraint.clone(),
         };
 

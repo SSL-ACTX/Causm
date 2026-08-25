@@ -9,6 +9,7 @@ pub(crate) fn infer_expression_type(
     match expr {
         Expression::Null => Ok(Type::Unknown),
         Expression::Boolean(_) => Ok(Type::Bool),
+        Expression::HasCapability(_) => Ok(Type::Bool),
         Expression::Integer(_) => Ok(Type::Integer),
         Expression::ArenaIntrospect(_) => Ok(Type::Integer),
         Expression::Float(_) => Ok(Type::Float),

@@ -38,6 +38,19 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::ArenaIntrospect { dest, kind: *kind });
             dest
         }
+        Expression::HasCapability(cap) => {
+            let dest = ctx.alloc_reg();
+            let cap_str = if let Some(id) = cap.parameters.get("id") {
+                format!("{}[id={}]", cap.path, id)
+            } else {
+                cap.path.clone()
+            };
+            ctx.push(causm_ir::Instruction::HasCapability {
+                dest,
+                capability: cap_str,
+            });
+            dest
+        }
         Expression::Identifier(name) => ctx.get_reg(name),
         Expression::BinaryOp { left, op, right } => {
             let l = lower_expression(ctx, left);

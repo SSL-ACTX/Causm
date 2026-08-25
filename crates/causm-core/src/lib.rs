@@ -103,6 +103,8 @@ pub struct InterfaceMethod {
     pub params: Vec<ParamDecl>,
     pub return_type: Option<TypeName>,
     pub taking_ms: Option<u64>,
+    #[serde(default)]
+    pub requires: Vec<Capability>,
     #[serde(skip)]
     pub default_body: Option<Vec<SpannedStatement>>,
     pub state_constraint: Option<(String, String)>,
@@ -274,6 +276,7 @@ macro_rules! statements {
                 params: Vec<ParamDecl>,
                 return_type: Option<TypeName>,
                 taking_ms: Option<u64>,
+                requires: Vec<Capability>,
                 state_constraint: Option<(String, String)>,
                 body: Vec<SpannedStatement>
             },
@@ -559,6 +562,7 @@ macro_rules! expressions {
                 arms: Vec<MatchExprArm>
             },
             ArenaIntrospect(ArenaIntrospect),
+            HasCapability(Capability),
             Null
         }
     };
@@ -849,6 +853,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p1,
                 return_type: rt1,
                 taking_ms: t1,
+                requires: req1,
                 state_constraint: sc1,
                 body: bd1,
             },
@@ -857,6 +862,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p2,
                 return_type: rt2,
                 taking_ms: t2,
+                requires: req2,
                 state_constraint: sc2,
                 body: bd2,
             },
@@ -865,6 +871,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 && p1 == p2
                 && rt1 == rt2
                 && t1 == t2
+                && req1 == req2
                 && sc1 == sc2
                 && ast_statements_eq(bd1, bd2)
         }

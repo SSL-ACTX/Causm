@@ -481,6 +481,9 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::ArenaIntrospect { dest, kind } => {
                 write!(f, "{} = ArenaIntrospect({:?})", dest, kind)
             }
+            SsaInstruction::HasCapability { dest, capability } => {
+                write!(f, "{} = HasCapability(\"{}\")", dest, capability)
+            }
             SsaInstruction::Other(s) => {
                 write!(f, "{}", s)
             }

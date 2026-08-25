@@ -106,4 +106,19 @@ impl Vm {
         branch.consume_budget(cost)?;
         Ok(())
     }
+
+    pub(crate) fn HasCapability(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        capability: String,
+    ) -> Result<(), TemporalError> {
+        let has_cap = self.capability_handlers.contains_key(&capability);
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(Payload::Bool(has_cap)),
+        )?;
+        Ok(())
+    }
 }

@@ -226,6 +226,10 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 kind: causm_core::ArenaIntrospect
             },
+            HasCapability {
+                dest: $crate::Reg,
+                capability: String
+            },
             SpeculationMode {
                 mode: causm_core::SpeculationCommitMode
             },

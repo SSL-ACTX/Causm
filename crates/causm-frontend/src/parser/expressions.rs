@@ -395,6 +395,18 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             };
             Expression::ArenaIntrospect(kind)
         }
+        Rule::has_cap_expr => {
+            let inner_pair = pair.into_inner().next().unwrap();
+            let cap = if inner_pair.as_rule() == Rule::string_literal {
+                Capability {
+                    path: inner_pair.as_str().replace('"', ""),
+                    parameters: HashMap::new(),
+                }
+            } else {
+                super::statements::utils::parse_capability(inner_pair)
+            };
+            Expression::HasCapability(cap)
+        }
         Rule::to_str_expr => {
             let inner = pair.into_inner().next().unwrap();
             Expression::ToStr(Box::new(parse_expression(inner)))

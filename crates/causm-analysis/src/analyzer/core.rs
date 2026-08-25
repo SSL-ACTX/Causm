@@ -250,6 +250,7 @@ impl EntropicAnalyzer {
                         params,
                         return_type,
                         taking_ms,
+                        requires,
                         state_constraint,
                         ..
                     } => {
@@ -279,6 +280,7 @@ impl EntropicAnalyzer {
                                 .map(causm_core::types::Type::from_typename)
                                 .unwrap_or(causm_core::types::Type::Unknown),
                             taking_ms: taking_ms.unwrap_or(0),
+                            requires: requires.clone(),
                             state_constraint: state_constraint.clone(),
                         };
                         analyzer.routines.insert(name.clone(), r_info.clone());
@@ -998,6 +1000,7 @@ impl EntropicAnalyzer {
                         &params,
                         &im.return_type,
                         &im.taking_ms,
+                        &im.requires,
                         &im.state_constraint,
                         default_body,
                     )
@@ -1296,6 +1299,7 @@ impl EntropicAnalyzer {
                     "arena.capacity()".to_string()
                 }
             },
+            Expression::HasCapability(cap) => format!("has_capability({})", cap),
         }
     }
 

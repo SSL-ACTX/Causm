@@ -432,6 +432,10 @@ pub enum SsaInstruction {
         dest: SsaReg,
         kind: causm_core::ArenaIntrospect,
     },
+    HasCapability {
+        dest: SsaReg,
+        capability: String,
+    },
     Other(String),
 }
 

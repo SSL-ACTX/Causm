@@ -1371,6 +1371,17 @@ impl SsaTransformer {
                     kind: *kind,
                 }
             }
+            Instruction::HasCapability { dest, capability } => {
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::HasCapability {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    capability: capability.clone(),
+                }
+            }
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }

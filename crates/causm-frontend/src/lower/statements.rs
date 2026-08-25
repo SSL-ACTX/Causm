@@ -21,6 +21,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             params,
             return_type,
             taking_ms,
+            requires: _,
             state_constraint,
             body,
         } => {
@@ -113,6 +114,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         params: params.clone(),
                         return_type: return_type.clone(),
                         taking_ms: None,
+                        requires: Vec::new(),
                         state_constraint: state_constraint.clone(),
                         body: body.clone(),
                     }

@@ -151,5 +151,6 @@ pub struct RoutineInfo {
     pub params: Vec<(causm_core::ParamMode, String, Type)>,
     pub return_type: Type,
     pub taking_ms: u64,
+    pub requires: Vec<causm_core::Capability>,
     pub state_constraint: Option<(String, String)>,
 }

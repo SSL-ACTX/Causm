@@ -44,6 +44,20 @@ pub(crate) fn analyze_expression(
                 {
                     let info =
                         analyzer.routines.get(&static_routine_name).unwrap().clone();
+                    if !analyzer.capability_stack.is_empty() {
+                        for req in &info.requires {
+                            let cap_key = if let Some(id) = req.parameters.get("id") {
+                                format!("{}[id={}]", req.path, id)
+                            } else {
+                                req.path.clone()
+                            };
+                            if !analyzer.is_capability_allowed(&cap_key) {
+                                return Err(analyzer.annotate(
+                                    SemanticErrorKind::MissingCapability(req.path.clone()),
+                                ));
+                            }
+                        }
+                    }
                     if args.len() != info.params.len() {
                         return Err(analyzer.annotate(
                             SemanticErrorKind::ArgumentCountMismatch(format!(
@@ -311,6 +325,21 @@ pub(crate) fn analyze_expression(
             })?;
             *resolved_routine.borrow_mut() = Some(resolved_name);
 
+            if !analyzer.capability_stack.is_empty() {
+                for req in &info.requires {
+                    let cap_key = if let Some(id) = req.parameters.get("id") {
+                        format!("{}[id={}]", req.path, id)
+                    } else {
+                        req.path.clone()
+                    };
+                    if !analyzer.is_capability_allowed(&cap_key) {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::MissingCapability(req.path.clone()),
+                        ));
+                    }
+                }
+            }
+
             if let Some((ref param_name, ref expected_state)) = info.state_constraint
             {
                 if param_name == "self" {
@@ -460,6 +489,21 @@ pub(crate) fn analyze_expression(
                     routine
                 )))
             })?;
+
+            if !analyzer.capability_stack.is_empty() {
+                for req in &info.requires {
+                    let cap_key = if let Some(id) = req.parameters.get("id") {
+                        format!("{}[id={}]", req.path, id)
+                    } else {
+                        req.path.clone()
+                    };
+                    if !analyzer.is_capability_allowed(&cap_key) {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::MissingCapability(req.path.clone()),
+                        ));
+                    }
+                }
+            }
 
             if args.len() != info.params.len() {
                 return Err(analyzer.annotate(
@@ -770,7 +814,7 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
-        Expression::ArenaIntrospect(_) => Ok(()),
+        Expression::ArenaIntrospect(_) | Expression::HasCapability(_) => Ok(()),
     }
 }
 
@@ -906,6 +950,7 @@ pub(crate) fn analyze_expression_nonconsuming(
         | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArenaIntrospect(_)
+        | Expression::HasCapability(_)
         | Expression::Null => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
             analyze_expression_nonconsuming(analyzer, left)?;

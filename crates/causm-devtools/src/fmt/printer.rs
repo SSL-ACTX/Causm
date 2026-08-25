@@ -134,6 +134,7 @@ fn format_spanned_statement(
             params,
             return_type,
             taking_ms,
+            requires,
             state_constraint,
             body,
         } => {
@@ -156,16 +157,27 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
+            let requires_str = if requires.is_empty() {
+                String::new()
+            } else {
+                let caps = requires
+                    .iter()
+                    .map(|c| c.path.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" requires {}", caps)
+            };
             if body.len() == 1 {
                 if let Statement::Expression(ref expr) = body[0].stmt {
                     out.push_str(&format!(
-                        "{}routine {}({}){}{}{} => {}\n",
+                        "{}routine {}({}){}{}{}{} => {}\n",
                         indent,
                         name,
                         params_str,
                         ret_str,
                         contract_str,
                         state_str,
+                        requires_str,
                         format_expr(expr, config, depth)
                     ));
                     return;
@@ -173,13 +185,13 @@ fn format_spanned_statement(
             }
             if body.is_empty() {
                 out.push_str(&format!(
-                    "{}routine {}({}){}{}{}\n",
-                    indent, name, params_str, ret_str, contract_str, state_str
+                    "{}routine {}({}){}{}{}{}\n",
+                    indent, name, params_str, ret_str, contract_str, state_str, requires_str
                 ));
             } else {
                 out.push_str(&format!(
-                    "{}routine {}({}){}{}{} {{\n",
-                    indent, name, params_str, ret_str, contract_str, state_str
+                    "{}routine {}({}){}{}{}{}  {{\n",
+                    indent, name, params_str, ret_str, contract_str, state_str, requires_str
                 ));
                 for s in body {
                     format_spanned_statement(out, s, config, depth + 1);
@@ -1570,6 +1582,9 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
                 causm_core::ArenaIntrospect::Capacity => "capacity",
             };
             format!("arena.{}()", kind_str)
+        }
+        Expression::HasCapability(cap) => {
+            format!("has_capability({})", cap)
         }
     }
 }
