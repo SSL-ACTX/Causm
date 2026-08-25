@@ -164,7 +164,18 @@ pub fn parse_manifest(pair: Pair<Rule>) -> Manifest {
 }
 
 pub fn parse_capability(pair: Pair<Rule>) -> Capability {
-    let mut inner = pair.into_inner();
+    let target_pair = if pair.as_rule() == Rule::capability_decl {
+        pair
+    } else if let Some(inner) = pair
+        .clone()
+        .into_inner()
+        .find(|p| p.as_rule() == Rule::capability_decl)
+    {
+        inner
+    } else {
+        pair
+    };
+    let mut inner = target_pair.into_inner();
     let path = inner
         .next()
         .map(|p| p.as_str().to_string())
@@ -180,6 +191,16 @@ pub fn parse_capability(pair: Pair<Rule>) -> Capability {
         }
     }
     Capability { path, parameters }
+}
+
+pub fn parse_requires_clause(pair: Pair<Rule>) -> Vec<Capability> {
+    let mut caps = Vec::new();
+    for item in pair.into_inner() {
+        if item.as_rule() == Rule::capability_decl {
+            caps.push(parse_capability(item));
+        }
+    }
+    caps
 }
 
 pub fn parse_resolution_strategy(pair: Pair<Rule>) -> ResolutionStrategy {

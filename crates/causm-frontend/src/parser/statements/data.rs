@@ -479,13 +479,11 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 let mut taking_ms = None;
                 let mut default_body = None;
                 let mut state_constraint = None;
-                let mut requires = Vec::new();
+                let mut required_capabilities = Vec::new();
                 for opt in m_inner {
                     match opt.as_rule() {
                         Rule::requires_clause => {
-                            for spec in opt.into_inner().flat_map(|l| l.into_inner()) {
-                                requires.push(super::utils::parse_capability(spec));
-                            }
+                            required_capabilities.extend(super::utils::parse_requires_clause(opt));
                         }
                         Rule::method_receiver => {
                             let decl = opt.into_inner();
@@ -604,9 +602,9 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     params,
                     return_type,
                     taking_ms,
-                    requires,
                     default_body,
                     state_constraint,
+                    required_capabilities,
                 }
             };
 

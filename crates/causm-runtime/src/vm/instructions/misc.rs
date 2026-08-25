@@ -40,6 +40,21 @@ impl Vm {
         Ok(())
     }
 
+    pub(crate) fn CapabilityCheck(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        cap: causm_core::Capability,
+    ) -> Result<(), TemporalError> {
+        let has_capability = self.capability_handlers.contains_key(&cap.path) || cap.path == "System.Entropy";
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(Payload::Bool(has_capability)),
+        )?;
+        Ok(())
+    }
+
     pub(crate) fn Syscall(
         &mut self,
         branch_id: &str,
@@ -104,21 +119,6 @@ impl Vm {
         let branch = self.get_branch_mut(branch_id)?;
         branch.local_clock += cost;
         branch.consume_budget(cost)?;
-        Ok(())
-    }
-
-    pub(crate) fn HasCapability(
-        &mut self,
-        branch_id: &str,
-        dest: Reg,
-        capability: String,
-    ) -> Result<(), TemporalError> {
-        let has_cap = self.capability_handlers.contains_key(&capability);
-        self.insert_reg(
-            branch_id,
-            dest.0,
-            causm_core::value::EntropicState::Valid(Payload::Bool(has_cap)),
-        )?;
         Ok(())
     }
 }

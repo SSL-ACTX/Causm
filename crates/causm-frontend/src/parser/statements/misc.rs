@@ -79,9 +79,12 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                     let mut params = Vec::new();
                     let mut return_type = None;
                     let mut taking_ms = None;
-                    let mut requires = Vec::new();
+                    let mut required_capabilities = Vec::new();
                     for p in r_inner {
                         match p.as_rule() {
+                            Rule::requires_clause => {
+                                required_capabilities.extend(super::utils::parse_requires_clause(p));
+                            }
                             Rule::param_decl | Rule::param_decl_list => {
                                 let pairs: Vec<_> =
                                     if p.as_rule() == Rule::param_decl {
@@ -125,11 +128,6 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                                     });
                                 }
                             }
-                            Rule::requires_clause => {
-                                for spec in p.into_inner().flat_map(|l| l.into_inner()) {
-                                    requires.push(super::utils::parse_capability(spec));
-                                }
-                            }
                             Rule::return_annotation => {
                                 if let Some(t_pair) = p.into_inner().next() {
                                     return_type =
@@ -148,10 +146,10 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             _ => {}
                         }
                     }
-                    if requires.is_empty() {
-                        requires.push(Capability {
+                    if required_capabilities.is_empty() {
+                        required_capabilities.push(causm_core::Capability {
                             path: "System.FFI".to_string(),
-                            parameters: HashMap::new(),
+                            parameters: std::collections::HashMap::new(),
                         });
                     }
                     routines.push(SpannedStatement {
@@ -160,8 +158,8 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             params,
                             return_type,
                             taking_ms,
-                            requires,
                             state_constraint: None,
+                            required_capabilities,
                             body: Vec::new(),
                         },
                         span: full_span.clone(),

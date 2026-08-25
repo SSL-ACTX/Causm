@@ -52,6 +52,8 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::ConditionalSelect { dest, .. }
             | SsaInstruction::Defer { dest, .. }
             | SsaInstruction::Syscall { dest, .. }
+            | SsaInstruction::ArenaIntrospect { dest, .. }
+            | SsaInstruction::CapabilityCheck { dest, .. }
             | SsaInstruction::Lease {
                 target_reg: dest, ..
             } => Some(*dest),

@@ -158,9 +158,21 @@ impl Vm {
         }
 
         let mut arg_values = Vec::new();
-        for reg in &args {
-            let val = self.peek_reg(branch_id, reg.0)?;
-            arg_values.push(val);
+        let mut arg_metas = Vec::new();
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            for reg in &args {
+                let val = branch.arena.peek(reg.0).ok_or(TemporalError::MemoryFault(
+                    causm_core::value::MemoryError::AlreadyConsumed,
+                ))?;
+                let meta = branch
+                    .arena
+                    .metadata
+                    .get(reg.0 as usize)
+                    .and_then(|m| m.clone());
+                arg_values.push(val);
+                arg_metas.push(meta);
+            }
         }
 
         // Check if this routine is a dynamic foreign FFI binding
@@ -235,21 +247,38 @@ impl Vm {
 
         for (i, (mode, _name, _)) in params.iter().enumerate() {
             let val = arg_values[i].clone();
+            let meta = arg_metas.get(i).and_then(|m| m.clone());
             match mode {
                 causm_core::ParamMode::Consume
                 | causm_core::ParamMode::Clone
                 | causm_core::ParamMode::Peek
                 | causm_core::ParamMode::Lease => {
-                    child.arena.insert(
-                        i as u32,
-                        causm_core::value::EntropicState::Valid(val),
-                    )?;
+                    if let Some(m) = meta {
+                        child.arena.insert_with_metadata(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                            m,
+                        )?;
+                    } else {
+                        child.arena.insert(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                        )?;
+                    }
                 }
                 causm_core::ParamMode::Decay => {
-                    child.arena.insert(
-                        i as u32,
-                        causm_core::value::EntropicState::Valid(val),
-                    )?;
+                    if let Some(m) = meta {
+                        child.arena.insert_with_metadata(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                            m,
+                        )?;
+                    } else {
+                        child.arena.insert(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                        )?;
+                    }
                 }
             }
         }

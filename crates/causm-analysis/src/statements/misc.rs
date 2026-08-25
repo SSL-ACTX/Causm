@@ -27,6 +27,13 @@ impl EntropicAnalyzer {
         _abi: &str,
         routines: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
+        if !self.capability_stack.is_empty()
+            && !self.is_capability_allowed("System.FFI")
+        {
+            return Err(self.annotate(SemanticErrorKind::MissingCapability(
+                "System.FFI".to_string(),
+            )));
+        }
         if lib_name.starts_with('/')
             && !lib_name.starts_with("/lib")
             && !lib_name.starts_with("/usr/lib")

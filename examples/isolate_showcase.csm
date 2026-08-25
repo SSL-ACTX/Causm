@@ -1,0 +1,40 @@
+routine path_join(dir: string, file: string) -> string taking _ => dir + "/" + file
+
+routine host_write(path: string, payload: string) require System.FFI require System.Log -> bool taking _ {
+    print("Host write to: " + path + " -> " + payload)
+    let ok = true
+    yield ok
+}
+
+routine persist_telemetry(path: string, data: string) require System.Log -> bool taking _ {
+    if capability(System.FFI) {
+        let res = host_write(path, data)
+        yield res
+    } else {
+        print("Sandbox fallback: buffered payload for " + path + " -> " + data)
+        let ok = true
+        yield ok
+    }
+}
+
+@0ms: {
+    isolate sandbox_worker {
+        enable cpu(500ms)
+        enable memory(65536bytes)
+        require System.Log
+        slice 10ms
+
+        let target_path = path_join("/var/log", "worker.dat")
+        let payload = "isolate_event_ok"
+
+        let has_ffi = capability(System.FFI)
+        let has_log = capability(System.Log)
+
+        print("Capability System.FFI active: " + has_ffi)
+        print("Capability System.Log active: " + has_log)
+
+        let status = persist_telemetry(target_path, payload)
+        print("Telemetry persist status: " + status)
+    }
+}
+

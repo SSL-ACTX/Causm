@@ -226,9 +226,9 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 kind: causm_core::ArenaIntrospect
             },
-            HasCapability {
+            CapabilityCheck {
                 dest: $crate::Reg,
-                capability: String
+                capability: causm_core::Capability
             },
             SpeculationMode {
                 mode: causm_core::SpeculationCommitMode

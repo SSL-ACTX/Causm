@@ -125,7 +125,7 @@ pub fn estimate_expression_cost(
         | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArenaIntrospect(_)
-        | Expression::HasCapability(_)
+        | Expression::CapabilityCheck(_)
         | Expression::Null
         | Expression::Deferred { .. } => 1,
         Expression::TypeAssertion { target, .. }

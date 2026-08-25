@@ -38,16 +38,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::ArenaIntrospect { dest, kind: *kind });
             dest
         }
-        Expression::HasCapability(cap) => {
+        Expression::CapabilityCheck(capability) => {
             let dest = ctx.alloc_reg();
-            let cap_str = if let Some(id) = cap.parameters.get("id") {
-                format!("{}[id={}]", cap.path, id)
-            } else {
-                cap.path.clone()
-            };
-            ctx.push(causm_ir::Instruction::HasCapability {
+            ctx.push(causm_ir::Instruction::CapabilityCheck {
                 dest,
-                capability: cap_str,
+                capability: capability.clone(),
             });
             dest
         }

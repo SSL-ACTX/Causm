@@ -4,7 +4,10 @@ bak/
 
 .env
 
+.causm_cache/
+
 __pycache__/
 node_modules/
 *.vsix
 *.exe
+*.csa

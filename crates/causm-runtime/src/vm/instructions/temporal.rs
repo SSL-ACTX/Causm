@@ -390,20 +390,48 @@ impl Vm {
             branch.local_clock + duration_ms
         };
 
+        let metadata = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .metadata
+                .get(source_reg.0 as usize)
+                .and_then(|m| m.clone())
+        };
+
         // Clone the original state to the target register (the lease view)
         let lease_view = source_state.clone();
-        self.insert_reg(branch_id, target_reg.0, lease_view)?;
+        if let Some(ref meta) = metadata {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .insert_with_metadata(target_reg.0, lease_view, meta.clone())?;
+        } else {
+            self.insert_reg(branch_id, target_reg.0, lease_view)?;
+        }
 
-        // Transition source to Leased state
+        // Transition source to Leased state while preserving its metadata
         let original = Box::new(source_state);
-        self.insert_reg(
-            branch_id,
-            source_reg.0,
-            causm_core::value::EntropicState::Leased {
-                original,
-                expiration_ms,
-            },
-        )?;
+        if let Some(meta) = metadata {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.arena.insert_with_metadata(
+                source_reg.0,
+                causm_core::value::EntropicState::Leased {
+                    original,
+                    expiration_ms,
+                },
+                meta,
+            )?;
+        } else {
+            self.insert_reg(
+                branch_id,
+                source_reg.0,
+                causm_core::value::EntropicState::Leased {
+                    original,
+                    expiration_ms,
+                },
+            )?;
+        }
 
         Ok(())
     }
@@ -417,6 +445,15 @@ impl Vm {
         let current_clock = {
             let branch = self.get_branch_mut(branch_id)?;
             branch.local_clock
+        };
+
+        let metadata = {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch
+                .arena
+                .metadata
+                .get(source_reg.0 as usize)
+                .and_then(|m| m.clone())
         };
 
         let (original, expiration_ms) = {
@@ -451,8 +488,13 @@ impl Vm {
             branch.consume_budget(padding)?;
         }
 
-        // Restore original state
-        self.insert_reg(branch_id, source_reg.0, original)?;
+        // Restore original state and preserve metadata
+        if let Some(meta) = metadata {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.arena.insert_with_metadata(source_reg.0, original, meta)?;
+        } else {
+            self.insert_reg(branch_id, source_reg.0, original)?;
+        }
 
         Ok(())
     }

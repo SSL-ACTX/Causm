@@ -123,8 +123,8 @@ fn expand_spanned_statements(
                                 params,
                                 return_type,
                                 taking_ms,
-                                requires,
                                 state_constraint,
+                                required_capabilities,
                                 body,
                             } => {
                                 if !name.starts_with(&format!("{}.", ns)) {
@@ -135,9 +135,9 @@ fn expand_spanned_statements(
                                             params: params.clone(),
                                             return_type: return_type.clone(),
                                             taking_ms: *taking_ms,
-                                            requires: requires.clone(),
                                             state_constraint: state_constraint
                                                 .clone(),
+                                            required_capabilities: required_capabilities.clone(),
                                             body: body.clone(),
                                         },
                                         span: s.span.clone(),
@@ -157,8 +157,8 @@ fn expand_spanned_statements(
                                             params,
                                             return_type,
                                             taking_ms,
-                                            requires,
                                             state_constraint,
+                                            required_capabilities,
                                             body,
                                         } = &r_spanned.stmt
                                         {
@@ -175,9 +175,10 @@ fn expand_spanned_statements(
                                                     params: params.clone(),
                                                     return_type: return_type.clone(),
                                                     taking_ms: *taking_ms,
-                                                    requires: requires.clone(),
                                                     state_constraint:
                                                         state_constraint.clone(),
+                                                    required_capabilities:
+                                                        required_capabilities.clone(),
                                                     body: body.clone(),
                                                 },
                                                 span: r_spanned.span.clone(),
@@ -294,8 +295,8 @@ fn expand_spanned_statements(
                                     params,
                                     return_type,
                                     taking_ms,
-                                    requires,
                                     state_constraint,
+                                    required_capabilities,
                                     body,
                                 } if name == sym_name => {
                                     let target_name =
@@ -306,9 +307,9 @@ fn expand_spanned_statements(
                                             params: params.clone(),
                                             return_type: return_type.clone(),
                                             taking_ms: *taking_ms,
-                                            requires: requires.clone(),
                                             state_constraint: state_constraint
                                                 .clone(),
+                                            required_capabilities: required_capabilities.clone(),
                                             body: body.clone(),
                                         },
                                         span: s.span.clone(),

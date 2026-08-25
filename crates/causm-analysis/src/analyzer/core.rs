@@ -159,6 +159,7 @@ impl EntropicAnalyzer {
                     return_type: ret,
                     taking_ms: 1,
                     state_constraint: None,
+                    required_capabilities: Vec::new(),
                 },
             );
         }
@@ -212,6 +213,7 @@ impl EntropicAnalyzer {
                     return_type: ret,
                     taking_ms: 1,
                     state_constraint: None,
+                    required_capabilities: Vec::new(),
                 },
             );
         }
@@ -250,8 +252,8 @@ impl EntropicAnalyzer {
                         params,
                         return_type,
                         taking_ms,
-                        requires,
                         state_constraint,
+                        required_capabilities,
                         ..
                     } => {
                         let preliminary_params = params
@@ -280,8 +282,8 @@ impl EntropicAnalyzer {
                                 .map(causm_core::types::Type::from_typename)
                                 .unwrap_or(causm_core::types::Type::Unknown),
                             taking_ms: taking_ms.unwrap_or(0),
-                            requires: requires.clone(),
                             state_constraint: state_constraint.clone(),
+                            required_capabilities: required_capabilities.clone(),
                         };
                         analyzer.routines.insert(name.clone(), r_info.clone());
                         let base_name = if let Some(angle_idx) = name.find('<') {
@@ -1000,8 +1002,8 @@ impl EntropicAnalyzer {
                         &params,
                         &im.return_type,
                         &im.taking_ms,
-                        &im.requires,
                         &im.state_constraint,
+                        &im.required_capabilities,
                         default_body,
                     )
                     .is_err()
@@ -1299,7 +1301,9 @@ impl EntropicAnalyzer {
                     "arena.capacity()".to_string()
                 }
             },
-            Expression::HasCapability(cap) => format!("has_capability({})", cap),
+            Expression::CapabilityCheck(cap) => {
+                format!("capability({})", cap.path)
+            }
         }
     }
 

@@ -91,17 +91,12 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
             let mut params = Vec::new();
             let mut return_type = None;
             let mut taking_ms: Option<u64> = None;
-            let mut requires = Vec::new();
             let mut state_constraint = None;
+            let mut required_capabilities = Vec::new();
             let mut body = Vec::new();
 
             for current in inner {
                 match current.as_rule() {
-                    Rule::requires_clause => {
-                        for spec in current.into_inner().flat_map(|l| l.into_inner()) {
-                            requires.push(parse_capability(spec));
-                        }
-                    }
                     Rule::method_receiver => {
                         let decl = current.into_inner();
                         let mut mode = ParamMode::Peek;
@@ -184,6 +179,10 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             }
                         }
                     }
+                    Rule::requires_clause => {
+                        required_capabilities
+                            .extend(parse_requires_clause(current));
+                    }
                     Rule::state_constraint => {
                         let mut sc_inner = current.into_inner();
                         let var_name = sc_inner.next().unwrap().as_str().to_string();
@@ -216,8 +215,8 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 params,
                 return_type,
                 taking_ms,
-                requires,
                 state_constraint,
+                required_capabilities,
                 body,
             }
         }

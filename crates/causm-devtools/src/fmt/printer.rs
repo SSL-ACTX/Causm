@@ -134,8 +134,8 @@ fn format_spanned_statement(
             params,
             return_type,
             taking_ms,
-            requires,
             state_constraint,
+            required_capabilities,
             body,
         } => {
             let params_str = params
@@ -148,6 +148,29 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
+            let req_str = if !required_capabilities.is_empty() {
+                let caps = required_capabilities
+                    .iter()
+                    .map(|c| {
+                        if c.parameters.is_empty() {
+                            c.path.clone()
+                        } else {
+                            let mut sorted_params: Vec<_> = c.parameters.iter().collect();
+                            sorted_params.sort_by_key(|(k, _)| k.as_str());
+                            let p_strs = sorted_params
+                                .iter()
+                                .map(|(k, v)| format!("{}=\"{}\"", k, v))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("{}[{}]", c.path, p_strs)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" require {}", caps)
+            } else {
+                String::new()
+            };
             let contract_str = match taking_ms {
                 Some(ms) => format!(" taking {}ms", ms),
                 None => " taking _".to_string(),
@@ -157,16 +180,6 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
-            let requires_str = if requires.is_empty() {
-                String::new()
-            } else {
-                let caps = requires
-                    .iter()
-                    .map(|c| c.path.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(" requires {}", caps)
-            };
             if body.len() == 1 {
                 if let Statement::Expression(ref expr) = body[0].stmt {
                     out.push_str(&format!(
@@ -175,9 +188,9 @@ fn format_spanned_statement(
                         name,
                         params_str,
                         ret_str,
+                        req_str,
                         contract_str,
                         state_str,
-                        requires_str,
                         format_expr(expr, config, depth)
                     ));
                     return;
@@ -186,12 +199,12 @@ fn format_spanned_statement(
             if body.is_empty() {
                 out.push_str(&format!(
                     "{}routine {}({}){}{}{}{}\n",
-                    indent, name, params_str, ret_str, contract_str, state_str, requires_str
+                    indent, name, params_str, ret_str, req_str, contract_str, state_str
                 ));
             } else {
                 out.push_str(&format!(
-                    "{}routine {}({}){}{}{}{}  {{\n",
-                    indent, name, params_str, ret_str, contract_str, state_str, requires_str
+                    "{}routine {}({}){}{}{}{} {{\n",
+                    indent, name, params_str, ret_str, req_str, contract_str, state_str
                 ));
                 for s in body {
                     format_spanned_statement(out, s, config, depth + 1);
@@ -287,6 +300,30 @@ fn format_spanned_statement(
                 } else {
                     String::new()
                 };
+                let req_str = if !m.required_capabilities.is_empty() {
+                    let caps = m
+                        .required_capabilities
+                        .iter()
+                        .map(|c| {
+                            if c.parameters.is_empty() {
+                                c.path.clone()
+                            } else {
+                                let mut sorted_params: Vec<_> = c.parameters.iter().collect();
+                                sorted_params.sort_by_key(|(k, _)| k.as_str());
+                                let p_strs = sorted_params
+                                    .iter()
+                                    .map(|(k, v)| format!("{}=\"{}\"", k, v))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                format!("{}[{}]", c.path, p_strs)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(" require {}", caps)
+                } else {
+                    String::new()
+                };
                 let taking_str = if let Some(t) = m.taking_ms {
                     format!(" taking {}ms", t)
                 } else {
@@ -299,11 +336,12 @@ fn format_spanned_statement(
                 };
                 if let Some(ref b) = m.default_body {
                     out.push_str(&format!(
-                        "{}routine {}({}){}{}{} {{\n",
+                        "{}routine {}({}){}{}{}{} {{\n",
                         inner_indent,
                         m.name,
                         params_str,
                         ret_str,
+                        req_str,
                         taking_str,
                         state_str
                     ));
@@ -313,11 +351,12 @@ fn format_spanned_statement(
                     out.push_str(&format!("{}}}\n", inner_indent));
                 } else {
                     out.push_str(&format!(
-                        "{}routine {}({}){}{}{}\n",
+                        "{}routine {}({}){}{}{}{}\n",
                         inner_indent,
                         m.name,
                         params_str,
                         ret_str,
+                        req_str,
                         taking_str,
                         state_str
                     ));
@@ -1583,8 +1622,19 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
             };
             format!("arena.{}()", kind_str)
         }
-        Expression::HasCapability(cap) => {
-            format!("has_capability({})", cap)
+        Expression::CapabilityCheck(cap) => {
+            if cap.parameters.is_empty() {
+                format!("capability({})", cap.path)
+            } else {
+                let mut sorted_params: Vec<_> = cap.parameters.iter().collect();
+                sorted_params.sort_by_key(|(k, _)| k.as_str());
+                let p_strs = sorted_params
+                    .iter()
+                    .map(|(k, v)| format!("{}=\"{}\"", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("capability({}[{}])", cap.path, p_strs)
+            }
         }
     }
 }

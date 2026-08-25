@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use crate::expression::analyze_expression;
 use causm_core::*;
@@ -61,9 +63,23 @@ impl EntropicAnalyzer {
                 .insert(binding_name.clone(), branch.accumulated_cost);
         }
 
+        // If the condition is `capability(X)`, the true branch runs only when X is
+        // active — push it so nested call-site checks see X as granted.
+        let cap_pushed = if let Expression::CapabilityCheck(cap) = condition {
+            let mut cap_map = HashMap::new();
+            cap_map.insert(cap.path.clone(), cap.clone());
+            self.capability_stack.push(cap_map);
+            true
+        } else {
+            false
+        };
         for inner_stmt in then_branch {
             self.analyze_statement(inner_stmt)?;
         }
+        if cap_pushed {
+            self.capability_stack.pop();
+        }
+
 
         let mut then_end_state = self
             .branch_contexts
@@ -557,8 +573,8 @@ impl EntropicAnalyzer {
         params: &[ParamDecl],
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
-        requires: &[Capability],
         state_constraint: &Option<(String, String)>,
+        required_capabilities: &[Capability],
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         if self.analyzed_routines.contains(name) {
@@ -622,23 +638,11 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: taking_ms.unwrap_or(0),
-            requires: requires.to_vec(),
             state_constraint: state_constraint.clone(),
+            required_capabilities: required_capabilities.to_vec(),
         };
 
         let mut routine_analyzer = EntropicAnalyzer::new();
-        let mut cap_set = std::collections::HashMap::new();
-        for cap in requires {
-            let key = if let Some(id) = cap.parameters.get("id") {
-                format!("{}[id={}]", cap.path, id)
-            } else {
-                cap.path.clone()
-            };
-            cap_set.insert(key, cap.clone());
-        }
-        if !cap_set.is_empty() {
-            routine_analyzer.capability_stack.push(cap_set);
-        }
         routine_analyzer.routines = self.routines.clone();
         routine_analyzer
             .routines
@@ -651,6 +655,19 @@ impl EntropicAnalyzer {
         routine_analyzer.type_decls = self.type_decls.clone();
         routine_analyzer.interfaces = self.interfaces.clone();
         routine_analyzer.current_routine = Some(name.clone());
+        routine_analyzer.capability_stack = self.capability_stack.clone();
+        if !required_capabilities.is_empty() {
+            let mut cap_map = HashMap::new();
+            for cap in required_capabilities {
+                let key = if let Some(id) = cap.parameters.get("id") {
+                    format!("{}[id={}]", cap.path, id)
+                } else {
+                    cap.path.clone()
+                };
+                cap_map.insert(key, cap.clone());
+            }
+            routine_analyzer.capability_stack.push(cap_map);
+        }
         if let Some(main_state) = self.branch_contexts.get("main") {
             let routine_main =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();
@@ -754,8 +771,8 @@ impl EntropicAnalyzer {
                 .map(causm_core::types::Type::from_typename)
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: final_taking_ms,
-            requires: requires.to_vec(),
             state_constraint: state_constraint.clone(),
+            required_capabilities: required_capabilities.to_vec(),
         };
 
         self.routines.insert(name.clone(), routine_info.clone());

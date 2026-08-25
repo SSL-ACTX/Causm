@@ -1327,3 +1327,112 @@ fn test_syntax_string_escape_sequences() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_capability_routine_requirement_allowed() -> anyhow::Result<()> {
+    let source = r#"
+    routine log_message(msg: string) require System.Log taking 5ms -> () {
+        print(msg)
+    }
+
+    @0ms: {
+        isolate demo {
+            require System.Log
+            log_message("Hello from secured routine")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0], "Hello from secured routine");
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_requirement_missing_rejected() -> anyhow::Result<()> {
+    let source = r#"
+    routine log_message(msg: string) require System.Log taking 5ms -> () {
+        print(msg)
+    }
+
+    @0ms: {
+        isolate demo {
+            require System.Entropy
+            log_message("Unauthorized call")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert!(
+        err.to_string().contains("Missing capability")
+            || err.to_string().contains("System.Log"),
+        "Unexpected error: {:?}",
+        err
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_runtime_introspection_check() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let has_log = capability(System.Log)
+        let has_net = capability(Net.Http)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(|_| Ok(Payload::Null)),
+    );
+    vm.execute_program(&ir)?;
+
+    let has_log_reg = ir.symbols.get("has_log").unwrap().0;
+    let has_net_reg = ir.symbols.get("has_net").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(has_log_reg),
+        Some(Payload::Bool(true))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(has_net_reg),
+        Some(Payload::Bool(false))
+    );
+
+    Ok(())
+}
+

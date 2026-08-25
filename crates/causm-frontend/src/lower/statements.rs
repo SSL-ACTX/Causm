@@ -21,8 +21,8 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             params,
             return_type,
             taking_ms,
-            requires: _,
             state_constraint,
+            required_capabilities,
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
@@ -114,8 +114,8 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         params: params.clone(),
                         return_type: return_type.clone(),
                         taking_ms: None,
-                        requires: Vec::new(),
                         state_constraint: state_constraint.clone(),
+                        required_capabilities: required_capabilities.clone(),
                         body: body.clone(),
                     }
                     .estimate_cost(|b| {

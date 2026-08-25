@@ -103,11 +103,11 @@ pub struct InterfaceMethod {
     pub params: Vec<ParamDecl>,
     pub return_type: Option<TypeName>,
     pub taking_ms: Option<u64>,
-    #[serde(default)]
-    pub requires: Vec<Capability>,
     #[serde(skip)]
     pub default_body: Option<Vec<SpannedStatement>>,
     pub state_constraint: Option<(String, String)>,
+    #[serde(default)]
+    pub required_capabilities: Vec<Capability>,
 }
 
 #[macro_export]
@@ -276,8 +276,8 @@ macro_rules! statements {
                 params: Vec<ParamDecl>,
                 return_type: Option<TypeName>,
                 taking_ms: Option<u64>,
-                requires: Vec<Capability>,
                 state_constraint: Option<(String, String)>,
+                required_capabilities: Vec<Capability>,
                 body: Vec<SpannedStatement>
             },
             Return(Option<String>),
@@ -562,7 +562,7 @@ macro_rules! expressions {
                 arms: Vec<MatchExprArm>
             },
             ArenaIntrospect(ArenaIntrospect),
-            HasCapability(Capability),
+            CapabilityCheck(Capability),
             Null
         }
     };
@@ -853,8 +853,8 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p1,
                 return_type: rt1,
                 taking_ms: t1,
-                requires: req1,
                 state_constraint: sc1,
+                required_capabilities: rc1,
                 body: bd1,
             },
             Statement::RoutineDef {
@@ -862,8 +862,8 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p2,
                 return_type: rt2,
                 taking_ms: t2,
-                requires: req2,
                 state_constraint: sc2,
+                required_capabilities: rc2,
                 body: bd2,
             },
         ) => {
@@ -871,8 +871,8 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 && p1 == p2
                 && rt1 == rt2
                 && t1 == t2
-                && req1 == req2
                 && sc1 == sc2
+                && rc1 == rc2
                 && ast_statements_eq(bd1, bd2)
         }
         (
@@ -931,6 +931,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                     || meth1.return_type != meth2.return_type
                     || meth1.taking_ms != meth2.taking_ms
                     || meth1.state_constraint != meth2.state_constraint
+                    || meth1.required_capabilities != meth2.required_capabilities
                 {
                     return false;
                 }
