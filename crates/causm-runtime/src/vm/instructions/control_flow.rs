@@ -162,9 +162,10 @@ impl Vm {
         {
             let branch = self.get_branch_mut(branch_id)?;
             for reg in &args {
-                let val = branch.arena.peek(reg.0).ok_or(TemporalError::MemoryFault(
-                    causm_core::value::MemoryError::AlreadyConsumed,
-                ))?;
+                let val =
+                    branch.arena.peek(reg.0).ok_or(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::AlreadyConsumed,
+                    ))?;
                 let meta = branch
                     .arena
                     .metadata

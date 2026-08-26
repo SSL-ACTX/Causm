@@ -403,9 +403,11 @@ impl Vm {
         let lease_view = source_state.clone();
         if let Some(ref meta) = metadata {
             let branch = self.get_branch_mut(branch_id)?;
-            branch
-                .arena
-                .insert_with_metadata(target_reg.0, lease_view, meta.clone())?;
+            branch.arena.insert_with_metadata(
+                target_reg.0,
+                lease_view,
+                meta.clone(),
+            )?;
         } else {
             self.insert_reg(branch_id, target_reg.0, lease_view)?;
         }
@@ -491,7 +493,9 @@ impl Vm {
         // Restore original state and preserve metadata
         if let Some(meta) = metadata {
             let branch = self.get_branch_mut(branch_id)?;
-            branch.arena.insert_with_metadata(source_reg.0, original, meta)?;
+            branch
+                .arena
+                .insert_with_metadata(source_reg.0, original, meta)?;
         } else {
             self.insert_reg(branch_id, source_reg.0, original)?;
         }

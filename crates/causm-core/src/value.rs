@@ -119,9 +119,20 @@ impl std::fmt::Display for Payload {
                 write!(f, "topology {{ {} }}", pairs.join(", "))
             }
             Payload::Array(elems) => {
-                let strings: Vec<String> =
-                    elems.iter().map(|e| format!("{}", e)).collect();
-                write!(f, "[{}]", strings.join(", "))
+                if elems.len() > 8 {
+                    if let Some(first) = elems.first() {
+                        if elems.iter().all(|e| e == first) {
+                            return write!(f, "[{}; {}]", first, elems.len());
+                        }
+                    }
+                    let head: Vec<String> =
+                        elems.iter().take(8).map(|e| format!("{}", e)).collect();
+                    write!(f, "[{}, ... ({} items)]", head.join(", "), elems.len())
+                } else {
+                    let strings: Vec<String> =
+                        elems.iter().map(|e| format!("{}", e)).collect();
+                    write!(f, "[{}]", strings.join(", "))
+                }
             }
             Payload::Null => write!(f, "null"),
         }

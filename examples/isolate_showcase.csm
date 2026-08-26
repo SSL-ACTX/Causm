@@ -1,3 +1,5 @@
+import "std/collection" as Collection
+
 routine path_join(dir: string, file: string) -> string taking _ => dir + "/" + file
 
 routine host_write(path: string, payload: string) require System.FFI require System.Log -> bool taking _ {
@@ -24,8 +26,9 @@ routine persist_telemetry(path: string, data: string) require System.Log -> bool
         require System.Log
         slice 10ms
 
-        let target_path = path_join("/var/log", "worker.dat")
+        let target_path = path_join::<string>("/var/log", "worker.dat")
         let payload = "isolate_event_ok"
+        let mut telemetry_buffer = Collection.Buffer<u8>::new(1024)
 
         let has_ffi = capability(System.FFI)
         let has_log = capability(System.Log)

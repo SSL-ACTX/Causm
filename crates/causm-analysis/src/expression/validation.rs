@@ -803,6 +803,13 @@ pub(crate) fn analyze_expression(
             Ok(())
         }
         Expression::ArenaIntrospect(_) | Expression::CapabilityCheck(_) => Ok(()),
+        Expression::Turbofish { expr, .. } => analyze_expression(analyzer, expr),
+        Expression::GenericStaticCall { args, .. } => {
+            for arg in args {
+                analyze_expression(analyzer, arg)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -1002,6 +1009,15 @@ pub(crate) fn analyze_expression_nonconsuming(
                 }
                 analyze_expression_nonconsuming(analyzer, &arm.body)?;
                 analyzer.branch_contexts = previous;
+            }
+            Ok(())
+        }
+        Expression::Turbofish { expr, .. } => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
+        Expression::GenericStaticCall { args, .. } => {
+            for arg in args {
+                analyze_expression_nonconsuming(analyzer, arg)?;
             }
             Ok(())
         }

@@ -137,7 +137,8 @@ fn expand_spanned_statements(
                                             taking_ms: *taking_ms,
                                             state_constraint: state_constraint
                                                 .clone(),
-                                            required_capabilities: required_capabilities.clone(),
+                                            required_capabilities:
+                                                required_capabilities.clone(),
                                             body: body.clone(),
                                         },
                                         span: s.span.clone(),
@@ -149,45 +150,48 @@ fn expand_spanned_statements(
                                 abi,
                                 routines,
                             } => {
-                                let qualified_routines = routines
-                                    .iter()
-                                    .map(|r_spanned| {
-                                        if let Statement::RoutineDef {
-                                            name,
-                                            params,
-                                            return_type,
-                                            taking_ms,
-                                            state_constraint,
-                                            required_capabilities,
-                                            body,
-                                        } = &r_spanned.stmt
-                                        {
-                                            let qualified_name = if !name
-                                                .starts_with(&format!("{}.", ns))
+                                let qualified_routines =
+                                    routines
+                                        .iter()
+                                        .map(|r_spanned| {
+                                            if let Statement::RoutineDef {
+                                                name,
+                                                params,
+                                                return_type,
+                                                taking_ms,
+                                                state_constraint,
+                                                required_capabilities,
+                                                body,
+                                            } = &r_spanned.stmt
                                             {
-                                                format!("{}.{}", ns, name)
+                                                let qualified_name = if !name
+                                                    .starts_with(&format!("{}.", ns))
+                                                {
+                                                    format!("{}.{}", ns, name)
+                                                } else {
+                                                    name.clone()
+                                                };
+                                                SpannedStatement {
+                                                    stmt: Statement::RoutineDef {
+                                                        name: qualified_name,
+                                                        params: params.clone(),
+                                                        return_type: return_type
+                                                            .clone(),
+                                                        taking_ms: *taking_ms,
+                                                        state_constraint:
+                                                            state_constraint.clone(),
+                                                        required_capabilities:
+                                                            required_capabilities
+                                                                .clone(),
+                                                        body: body.clone(),
+                                                    },
+                                                    span: r_spanned.span.clone(),
+                                                }
                                             } else {
-                                                name.clone()
-                                            };
-                                            SpannedStatement {
-                                                stmt: Statement::RoutineDef {
-                                                    name: qualified_name,
-                                                    params: params.clone(),
-                                                    return_type: return_type.clone(),
-                                                    taking_ms: *taking_ms,
-                                                    state_constraint:
-                                                        state_constraint.clone(),
-                                                    required_capabilities:
-                                                        required_capabilities.clone(),
-                                                    body: body.clone(),
-                                                },
-                                                span: r_spanned.span.clone(),
+                                                r_spanned.clone()
                                             }
-                                        } else {
-                                            r_spanned.clone()
-                                        }
-                                    })
-                                    .collect();
+                                        })
+                                        .collect();
                                 result.push(SpannedStatement {
                                     stmt: Statement::ForeignBlock {
                                         lib_name: lib_name.clone(),
@@ -309,7 +313,8 @@ fn expand_spanned_statements(
                                             taking_ms: *taking_ms,
                                             state_constraint: state_constraint
                                                 .clone(),
-                                            required_capabilities: required_capabilities.clone(),
+                                            required_capabilities:
+                                                required_capabilities.clone(),
                                             body: body.clone(),
                                         },
                                         span: s.span.clone(),

@@ -1304,6 +1304,12 @@ impl EntropicAnalyzer {
             Expression::CapabilityCheck(cap) => {
                 format!("capability({})", cap.path)
             }
+            Expression::Turbofish { expr, .. } => self.expr_snippet(expr),
+            Expression::GenericStaticCall {
+                type_name, method, ..
+            } => {
+                format!("{}::{}()", type_name, method)
+            }
         }
     }
 

@@ -372,6 +372,16 @@ pub(crate) fn infer_expression_type(
                 Ok(Type::Unknown)
             }
         }
+        Expression::Turbofish { expr, .. } => infer_expression_type(analyzer, expr),
+        Expression::GenericStaticCall {
+            type_name, method, ..
+        } => {
+            let qualified = format!("{}.{}", type_name, method);
+            if let Some(info) = analyzer.routines.get(&qualified) {
+                return Ok(info.return_type.clone());
+            }
+            Ok(Type::Unknown)
+        }
     }
 }
 

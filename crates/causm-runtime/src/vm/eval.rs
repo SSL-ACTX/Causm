@@ -245,6 +245,17 @@ impl Vm {
         op: &BinaryOperator,
     ) -> Result<Payload, TemporalError> {
         let result = match (left_value, right_value) {
+            // Null equality: any type compared against Null — always succeeds.
+            (Payload::Null, Payload::Null) if op == &BinaryOperator::Eq => {
+                Payload::Bool(true)
+            }
+            (Payload::Null, Payload::Null) if op == &BinaryOperator::Neq => {
+                Payload::Bool(false)
+            }
+            (_, Payload::Null) if op == &BinaryOperator::Eq => Payload::Bool(false),
+            (_, Payload::Null) if op == &BinaryOperator::Neq => Payload::Bool(true),
+            (Payload::Null, _) if op == &BinaryOperator::Eq => Payload::Bool(false),
+            (Payload::Null, _) if op == &BinaryOperator::Neq => Payload::Bool(true),
             (Payload::Array(l_elems), Payload::Array(r_elems)) => {
                 if l_elems.len() != r_elems.len() {
                     return Err(TemporalError::EvalError(format!(

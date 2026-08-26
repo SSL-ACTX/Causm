@@ -1415,10 +1415,8 @@ fn test_capability_runtime_introspection_check() -> anyhow::Result<()> {
 
     let ir = causm_frontend::lower::lower_program(&program);
     let mut vm = Vm::new();
-    vm.capability_handlers.insert(
-        "System.Log".to_string(),
-        Box::new(|_| Ok(Payload::Null)),
-    );
+    vm.capability_handlers
+        .insert("System.Log".to_string(), Box::new(|_| Ok(Payload::Null)));
     vm.execute_program(&ir)?;
 
     let has_log_reg = ir.symbols.get("has_log").unwrap().0;
@@ -1433,6 +1431,165 @@ fn test_capability_runtime_introspection_check() -> anyhow::Result<()> {
         Some(Payload::Bool(false))
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_syntax_generic_turbofish_call() -> anyhow::Result<()> {
+    let source = r#"
+    routine identity(val: int) -> int taking _ => val
+
+    @0ms: {
+        let x = identity::<int>(42)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(x_reg),
+        Some(Payload::Integer(42))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_generic_static_call() -> anyhow::Result<()> {
+    let source = r#"
+    routine Buffer.new(capacity: int) -> int taking _ => capacity
+
+    @0ms: {
+        let cap = Buffer<u8>::new(1024)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let cap_reg = ir.symbols.get("cap").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(cap_reg),
+        Some(Payload::Integer(1024))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_chaining_monadic_try_operator() -> anyhow::Result<()> {
+    let source = r#"
+    routine get_val(flag: bool) -> int taking _ {
+        if flag {
+            let res = 99
+            yield res
+        } else {
+            let n = null
+            yield n
+        } reconcile auto
+    }
+
+    routine add_one(x: int) -> int taking _ => x + 1
+
+    routine chain_success() -> int taking _ {
+        let v = get_val(true)?
+        let res = add_one(v)
+        yield res
+    }
+
+    routine chain_short_circuit() -> int taking _ {
+        let v = get_val(false)?
+        let res = add_one(v)
+        yield res
+    }
+
+    @0ms: {
+        let success_val = chain_success()
+        let short_circuit_val = chain_short_circuit()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let succ_reg = ir.symbols.get("success_val").unwrap().0;
+    let sc_reg = ir.symbols.get("short_circuit_val").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(succ_reg),
+        Some(Payload::Integer(100))
+    );
+    assert_eq!(vm.root_timeline.arena.peek(sc_reg), Some(Payload::Null));
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_with_bracketed_syntax() -> anyhow::Result<()> {
+    let source = r#"
+    routine logged_fetch(url: string) -> string with [System.NetworkFetch, System.Log] {
+        yield url
+    }
+
+    @0ms: {
+        isolate secure_zone {
+            require System.NetworkFetch
+            require System.Log
+            let data = logged_fetch("https://causm.org")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.register_capability("System.NetworkFetch", |_| Ok(Payload::Null));
+    vm.register_capability("System.Log", |_| Ok(Payload::Null));
+    vm.execute_program(&ir)?;
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_requires_bracketed_missing_cap_error() -> anyhow::Result<()> {
+    let source = r#"
+    routine dangerous_op() -> bool requires [System.IO, System.NetworkFetch] {
+        yield true
+    }
+
+    @0ms: {
+        isolate sandbox {
+            require System.IO
+            let ok = dangerous_op()
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    let err_str = res.unwrap_err().to_string();
+    assert!(err_str.contains("Missing capability") || err_str.contains("System.NetworkFetch"));
     Ok(())
 }
 

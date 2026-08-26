@@ -46,7 +46,8 @@ impl Vm {
         dest: Reg,
         cap: causm_core::Capability,
     ) -> Result<(), TemporalError> {
-        let has_capability = self.capability_handlers.contains_key(&cap.path) || cap.path == "System.Entropy";
+        let has_capability = self.capability_handlers.contains_key(&cap.path)
+            || cap.path == "System.Entropy";
         self.insert_reg(
             branch_id,
             dest.0,

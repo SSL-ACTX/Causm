@@ -180,8 +180,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                         }
                     }
                     Rule::requires_clause => {
-                        required_capabilities
-                            .extend(parse_requires_clause(current));
+                        required_capabilities.extend(parse_requires_clause(current));
                     }
                     Rule::state_constraint => {
                         let mut sc_inner = current.into_inner();

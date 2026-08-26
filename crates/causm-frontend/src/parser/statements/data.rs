@@ -483,7 +483,8 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 for opt in m_inner {
                     match opt.as_rule() {
                         Rule::requires_clause => {
-                            required_capabilities.extend(super::utils::parse_requires_clause(opt));
+                            required_capabilities
+                                .extend(super::utils::parse_requires_clause(opt));
                         }
                         Rule::method_receiver => {
                             let decl = opt.into_inner();

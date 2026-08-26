@@ -551,6 +551,16 @@ macro_rules! expressions {
                 args: Vec<Expression>
             },
             TryUnwrap(Box<Expression>),
+            Turbofish {
+                expr: Box<Expression>,
+                type_args: Vec<TypeParam>
+            },
+            GenericStaticCall {
+                type_name: String,
+                type_args: Vec<TypeParam>,
+                method: String,
+                args: Vec<Expression>
+            },
             FString(Vec<FStringPart>),
             If {
                 condition: Box<Expression>,

@@ -115,6 +115,9 @@ impl Vm {
         dest: Reg,
         src: Reg,
     ) -> Result<(), TemporalError> {
+        if src == dest {
+            return Ok(());
+        }
         let state = self.peek_state(branch_id, src.0)?;
         let metadata = {
             let branch = self.get_branch_mut(branch_id)?;

@@ -80,7 +80,6 @@ impl EntropicAnalyzer {
             self.capability_stack.pop();
         }
 
-
         let mut then_end_state = self
             .branch_contexts
             .get(&self.current_branch)

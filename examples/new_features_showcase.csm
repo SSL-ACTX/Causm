@@ -10,6 +10,7 @@
             Offline
         }
         let node_id = 101
+        let typed_channel_capacity = Channel<u8>::new(128)
         let accum = 0
         let auth_session = "token_x89"
         let telemetry_stream = 200

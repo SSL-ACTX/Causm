@@ -246,7 +246,8 @@ fn causm_lease_scoping_isolation() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_entropy_lease_preserves_metadata_for_interface_dynamic_dispatch() -> anyhow::Result<()> {
+fn test_entropy_lease_preserves_metadata_for_interface_dynamic_dispatch(
+) -> anyhow::Result<()> {
     let source = r#"
     interface Worker {
         routine compute(peek self, x: int) -> int taking 6ms
@@ -284,4 +285,3 @@ fn test_entropy_lease_preserves_metadata_for_interface_dynamic_dispatch() -> any
 
     Ok(())
 }
-

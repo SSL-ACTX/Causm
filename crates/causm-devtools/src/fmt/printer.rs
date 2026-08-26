@@ -155,7 +155,8 @@ fn format_spanned_statement(
                         if c.parameters.is_empty() {
                             c.path.clone()
                         } else {
-                            let mut sorted_params: Vec<_> = c.parameters.iter().collect();
+                            let mut sorted_params: Vec<_> =
+                                c.parameters.iter().collect();
                             sorted_params.sort_by_key(|(k, _)| k.as_str());
                             let p_strs = sorted_params
                                 .iter()
@@ -199,12 +200,24 @@ fn format_spanned_statement(
             if body.is_empty() {
                 out.push_str(&format!(
                     "{}routine {}({}){}{}{}{}\n",
-                    indent, name, params_str, ret_str, req_str, contract_str, state_str
+                    indent,
+                    name,
+                    params_str,
+                    ret_str,
+                    req_str,
+                    contract_str,
+                    state_str
                 ));
             } else {
                 out.push_str(&format!(
                     "{}routine {}({}){}{}{}{} {{\n",
-                    indent, name, params_str, ret_str, req_str, contract_str, state_str
+                    indent,
+                    name,
+                    params_str,
+                    ret_str,
+                    req_str,
+                    contract_str,
+                    state_str
                 ));
                 for s in body {
                     format_spanned_statement(out, s, config, depth + 1);
@@ -308,7 +321,8 @@ fn format_spanned_statement(
                             if c.parameters.is_empty() {
                                 c.path.clone()
                             } else {
-                                let mut sorted_params: Vec<_> = c.parameters.iter().collect();
+                                let mut sorted_params: Vec<_> =
+                                    c.parameters.iter().collect();
                                 sorted_params.sort_by_key(|(k, _)| k.as_str());
                                 let p_strs = sorted_params
                                     .iter()
@@ -1635,6 +1649,48 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
                     .join(", ");
                 format!("capability({}[{}])", cap.path, p_strs)
             }
+        }
+        Expression::Turbofish { expr, type_args } => {
+            let t_strs: Vec<String> = type_args
+                .iter()
+                .map(|t| match t {
+                    TypeParam::Type(tn) => format_type(tn),
+                    TypeParam::Amount(a) => a.to_string(),
+                    TypeParam::Duration(d) => format!("{}ms", d),
+                })
+                .collect();
+            format!(
+                "{}::<{}>",
+                format_expr(expr, config, depth),
+                t_strs.join(", ")
+            )
+        }
+        Expression::GenericStaticCall {
+            type_name,
+            type_args,
+            method,
+            args,
+        } => {
+            let t_strs: Vec<String> = type_args
+                .iter()
+                .map(|t| match t {
+                    TypeParam::Type(tn) => format_type(tn),
+                    TypeParam::Amount(a) => a.to_string(),
+                    TypeParam::Duration(d) => format!("{}ms", d),
+                })
+                .collect();
+            let args_str = args
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "{}<{}>::{}({})",
+                type_name,
+                t_strs.join(", "),
+                method,
+                args_str
+            )
         }
     }
 }

@@ -441,6 +441,47 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let src = lower_expression(ctx, expr);
             let dest = ctx.alloc_reg();
             ctx.push(causm_ir::Instruction::Move { dest, src });
+            let is_null_reg = ctx.alloc_reg();
+            let null_val_reg = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::LoadNull { dest: null_val_reg });
+            ctx.push(causm_ir::Instruction::BinaryOp {
+                dest: is_null_reg,
+                op: causm_core::BinaryOperator::Eq,
+                left: src,
+                right: null_val_reg,
+            });
+            let jump_idx = ctx.instructions.len();
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: is_null_reg,
+                target: 0,
+            });
+            ctx.push(causm_ir::Instruction::Return {
+                src: Some(null_val_reg),
+            });
+            let resume_target = ctx.instructions.len();
+            if let Some(causm_ir::Instruction::JumpIfNot { target, .. }) =
+                ctx.instructions.get_mut(jump_idx)
+            {
+                *target = resume_target;
+            }
+            dest
+        }
+        Expression::Turbofish { expr, .. } => lower_expression(ctx, expr),
+        Expression::GenericStaticCall {
+            type_name,
+            method,
+            args,
+            ..
+        } => {
+            let routine = format!("{}.{}", type_name, method);
+            let lowered_args: Vec<_> =
+                args.iter().map(|a| lower_expression(ctx, a)).collect();
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::Call {
+                dest,
+                routine,
+                args: lowered_args,
+            });
             dest
         }
         Expression::RefOp(expr) => lower_expression(ctx, expr),

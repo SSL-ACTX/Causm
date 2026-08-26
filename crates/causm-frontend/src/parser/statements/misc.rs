@@ -83,7 +83,8 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                     for p in r_inner {
                         match p.as_rule() {
                             Rule::requires_clause => {
-                                required_capabilities.extend(super::utils::parse_requires_clause(p));
+                                required_capabilities
+                                    .extend(super::utils::parse_requires_clause(p));
                             }
                             Rule::param_decl | Rule::param_decl_list => {
                                 let pairs: Vec<_> =

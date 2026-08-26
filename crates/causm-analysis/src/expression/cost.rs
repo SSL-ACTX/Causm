@@ -177,5 +177,14 @@ pub fn estimate_expression_cost(
                 .unwrap_or(0);
             1 + estimate_expression_cost(analyzer, target) + max_arm_cost
         }
+        Expression::Turbofish { expr, .. } => {
+            estimate_expression_cost(analyzer, expr)
+        }
+        Expression::GenericStaticCall { args, .. } => {
+            1 + args
+                .iter()
+                .map(|a| estimate_expression_cost(analyzer, a))
+                .sum::<u64>()
+        }
     }
 }

@@ -145,19 +145,35 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                             .next()
                             .map(|p| p.as_str().to_string())
                             .unwrap_or_default();
+                        let mut type_args = Vec::new();
+                        let mut next = call_inner.next();
+                        if let Some(ref p) = next {
+                            if p.as_rule() == Rule::type_param_list {
+                                type_args = crate::parser::statements::utils::parse_type_param_list(p.clone());
+                                next = call_inner.next();
+                            }
+                        }
                         let mut args = Vec::new();
-                        if let Some(arg_list_pair) = call_inner.next() {
+                        if let Some(arg_list_pair) = next {
                             for arg in arg_list_pair.into_inner() {
                                 args.push(parse_expression(arg));
                             }
                         }
-                        expr = Expression::MethodCall {
+                        let method_call = Expression::MethodCall {
                             target: Box::new(expr),
                             method,
                             args,
                             resolved_routine: std::cell::RefCell::new(None),
                             resolved_budget: std::cell::RefCell::new(None),
                         };
+                        if type_args.is_empty() {
+                            expr = method_call;
+                        } else {
+                            expr = Expression::Turbofish {
+                                expr: Box::new(method_call),
+                                type_args,
+                            };
+                        }
                     }
                     Rule::type_assertion_tail => {
                         let type_name_pair =
@@ -254,14 +270,56 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 deadline_ms,
             }
         }
+        Rule::generic_static_call_expr => {
+            let mut inner = pair.into_inner();
+            let mut type_parts = Vec::new();
+            let mut type_args = Vec::new();
+            while let Some(p) = inner.next() {
+                if p.as_rule() == Rule::type_param_list {
+                    type_args =
+                        crate::parser::statements::utils::parse_type_param_list(p);
+                    break;
+                } else {
+                    type_parts.push(p.as_str().to_string());
+                }
+            }
+            let type_name = type_parts.join(".");
+            let method = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let mut args = Vec::new();
+            if let Some(expr_list) = inner.next() {
+                for e in expr_list.into_inner() {
+                    args.push(parse_expression(e));
+                }
+            }
+            Expression::GenericStaticCall {
+                type_name,
+                type_args,
+                method,
+                args,
+            }
+        }
         Rule::call_expr | Rule::direct_call_expr => {
             let mut inner = pair.into_inner();
             let routine = inner
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
+            let mut type_args = Vec::new();
+            let mut next = inner.next();
+            if let Some(ref p) = next {
+                if p.as_rule() == Rule::type_param_list {
+                    type_args =
+                        crate::parser::statements::utils::parse_type_param_list(
+                            p.clone(),
+                        );
+                    next = inner.next();
+                }
+            }
             let mut args = Vec::new();
-            if let Some(expr_list) = inner.next() {
+            if let Some(expr_list) = next {
                 for e in expr_list.into_inner() {
                     args.push(parse_expression(e));
                 }
@@ -275,7 +333,15 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     return Expression::ChannelReceive(name.clone());
                 }
             }
-            Expression::Call { routine, args }
+            let call = Expression::Call { routine, args };
+            if type_args.is_empty() {
+                call
+            } else {
+                Expression::Turbofish {
+                    expr: Box::new(call),
+                    type_args,
+                }
+            }
         }
         Rule::byte_string => parse_byte_string(pair.as_str()),
         Rule::hex_byte_string => parse_hex_byte_string(pair.as_str()),
