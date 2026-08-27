@@ -239,6 +239,17 @@ impl EntropicAnalyzer {
                             auto_drop,
                             scoped_branch,
                         );
+                        if let Some(dot_idx) = name.rfind('.') {
+                            let bare_name = &name[dot_idx + 1..];
+                            let _ = analyzer.TypeDecl(
+                                bare_name,
+                                extends,
+                                fields,
+                                decay_after_ms,
+                                auto_drop,
+                                scoped_branch,
+                            );
+                        }
                     }
                     Statement::InterfaceDecl {
                         name,
@@ -642,9 +653,10 @@ impl EntropicAnalyzer {
             .and_then(|state| state.types.get(name).cloned())
     }
 
-    pub(crate) fn set_custom_type(&mut self, name: &str, ctype: Type) {
-        let state = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-        state.custom_types.insert(name.to_string(), ctype);
+    pub(crate) fn set_custom_type(&mut self, name: &str, typ: Type) {
+        for state in self.branch_contexts.values_mut() {
+            state.custom_types.insert(name.to_string(), typ.clone());
+        }
     }
 
     pub(crate) fn get_custom_type(&self, name: &str) -> Option<Type> {
@@ -657,27 +669,32 @@ impl EntropicAnalyzer {
         match typ {
             Type::Custom(name) => {
                 let base_name = name.split('<').next().unwrap_or(name).trim();
+                let bare_base = if let Some(dot) = base_name.rfind('.') {
+                    &base_name[dot + 1..]
+                } else {
+                    base_name
+                };
+                if let Some(fields_map) = self
+                    .type_decls
+                    .get(base_name)
+                    .or_else(|| self.type_decls.get(bare_base))
+                    .or_else(|| self.type_decls.get(name))
+                {
+                    let schema: std::collections::HashMap<String, Type> = fields_map
+                        .iter()
+                        .filter(|(_, fd)| !fd.is_const)
+                        .map(|(k, fd)| (k.clone(), Type::from_typename(&fd.typ)))
+                        .collect();
+                    return Type::Struct(causm_core::types::StructType {
+                        fields: schema,
+                        decay_after_ms: None,
+                        auto_drop: None,
+                        scoped_branch: None,
+                    });
+                }
                 self.get_custom_type(base_name)
+                    .or_else(|| self.get_custom_type(bare_base))
                     .or_else(|| self.get_custom_type(name))
-                    .or_else(|| {
-                        // Fall back: reconstruct struct from type_decls for imported types
-                        self.type_decls.get(base_name).map(|fields_map| {
-                            let schema: std::collections::HashMap<String, Type> =
-                                fields_map
-                                    .iter()
-                                    .filter(|(_, fd)| !fd.is_const)
-                                    .map(|(k, fd)| {
-                                        (k.clone(), Type::from_typename(&fd.typ))
-                                    })
-                                    .collect();
-                            Type::Struct(causm_core::types::StructType {
-                                fields: schema,
-                                decay_after_ms: None,
-                                auto_drop: None,
-                                scoped_branch: None,
-                            })
-                        })
-                    })
                     .unwrap_or_else(|| Type::Custom(name.clone()))
             }
             Type::Struct(s) => {

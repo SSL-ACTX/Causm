@@ -49,14 +49,15 @@ impl Vm {
         let has_capability = {
             let branch = self.get_branch_mut(branch_id)?;
             if !branch.manifest_stack.is_empty() {
-                branch
-                    .manifest_stack
-                    .iter()
-                    .any(|m| m.capabilities.iter().any(|c| c.path == cap.path))
+                branch.manifest_stack.iter().any(|m| {
+                    m.capabilities.iter().any(|c| {
+                        c.path == cap.path && (c.path != "System.FFI" || cfg!(unix))
+                    })
+                })
             } else {
                 self.capability_handlers.contains_key(&cap.path)
                     || cap.path == "System.Entropy"
-                    || cap.path == "System.FFI"
+                    || (cap.path == "System.FFI" && cfg!(unix))
             }
         };
         self.insert_reg(

@@ -1655,6 +1655,7 @@ fn test_tiered_stdlib_imports_in_zero_cap_isolate() -> anyhow::Result<()> {
     from "std/fs" import open_readonly, file_exists
     from "std/process" import pid, parent_pid
     from "std/net" import create_socket
+    from "std/env" import current_pid, current_dir
 
     @0ms: {
         isolate unprivileged {
@@ -1668,6 +1669,8 @@ fn test_tiered_stdlib_imports_in_zero_cap_isolate() -> anyhow::Result<()> {
             let p = pid()
             let pp = parent_pid()
             let sock = create_socket()
+            let env_p = current_pid()
+            let env_d = current_dir()
         }
     }
     "#;
@@ -1684,11 +1687,33 @@ fn test_tiered_stdlib_imports_in_zero_cap_isolate() -> anyhow::Result<()> {
     let exists_reg = ir.symbols.get("exists").unwrap().0;
     let p_reg = ir.symbols.get("p").unwrap().0;
     let sock_reg = ir.symbols.get("sock").unwrap().0;
+    let env_p_reg = ir.symbols.get("env_p").unwrap().0;
+    let env_d_reg = ir.symbols.get("env_d").unwrap().0;
 
-    assert_eq!(vm.root_timeline.arena.peek(u_reg), Some(Payload::Integer(0)));
-    assert_eq!(vm.root_timeline.arena.peek(exists_reg), Some(Payload::Bool(false)));
-    assert_eq!(vm.root_timeline.arena.peek(p_reg), Some(Payload::Integer(1)));
-    assert_eq!(vm.root_timeline.arena.peek(sock_reg), Some(Payload::Integer(-1)));
+    assert_eq!(
+        vm.root_timeline.arena.peek(u_reg),
+        Some(Payload::Integer(0))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(exists_reg),
+        Some(Payload::Bool(false))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(p_reg),
+        Some(Payload::Integer(1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(sock_reg),
+        Some(Payload::Integer(-1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(env_p_reg),
+        Some(Payload::Integer(1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(env_d_reg),
+        Some(Payload::String("/".to_string()))
+    );
 
     Ok(())
 }

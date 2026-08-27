@@ -577,13 +577,7 @@ impl EntropicAnalyzer {
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         if self.analyzed_routines.contains(name) {
-            if body.is_empty() {
-                return Ok(());
-            }
-            return Err(self.annotate(SemanticErrorKind::EntropyMismatch(format!(
-                "duplicate routine {}",
-                name
-            ))));
+            return Ok(());
         }
         self.analyzed_routines.insert(name.clone());
 

@@ -235,7 +235,10 @@ impl Vm {
             }
         }
 
-        let caller_manifest_stack = self.get_branch(branch_id).map(|b| b.manifest_stack.clone()).unwrap_or_default();
+        let caller_manifest_stack = self
+            .get_branch(branch_id)
+            .map(|b| b.manifest_stack.clone())
+            .unwrap_or_default();
         let call_idx = self.next_call_id;
         self.next_call_id += 1;
         let child_id =

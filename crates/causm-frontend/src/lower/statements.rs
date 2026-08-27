@@ -61,21 +61,40 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     {
                         if binding.is_none() && else_branch.is_some() {
                             let else_branch_stmts = else_branch.as_ref().unwrap();
-                            let then_has_expr = then_branch.last().map(|st| matches!(st.stmt, Statement::Expression(_))).unwrap_or(false);
-                            let else_has_expr = else_branch_stmts.last().map(|st| matches!(st.stmt, Statement::Expression(_))).unwrap_or(false);
+                            let then_has_expr = then_branch
+                                .last()
+                                .map(|st| {
+                                    matches!(st.stmt, Statement::Expression(_))
+                                })
+                                .unwrap_or(false);
+                            let else_has_expr = else_branch_stmts
+                                .last()
+                                .map(|st| {
+                                    matches!(st.stmt, Statement::Expression(_))
+                                })
+                                .unwrap_or(false);
 
                             if then_has_expr && else_has_expr {
-                                let cond_reg = lower_expression(&mut sub_ctx, condition);
+                                let cond_reg =
+                                    lower_expression(&mut sub_ctx, condition);
                                 let ret_reg = sub_ctx.alloc_reg();
 
                                 let jump_to_else_idx = sub_ctx.instructions.len();
-                                sub_ctx.push(Instruction::JumpIfNot { cond: cond_reg, target: 0 });
+                                sub_ctx.push(Instruction::JumpIfNot {
+                                    cond: cond_reg,
+                                    target: 0,
+                                });
 
                                 for (ti, ts) in then_branch.iter().enumerate() {
                                     if ti == then_branch.len() - 1 {
-                                        if let Statement::Expression(ref e) = ts.stmt {
-                                            let res = lower_expression(&mut sub_ctx, e);
-                                            sub_ctx.push(Instruction::Move { dest: ret_reg, src: res });
+                                        if let Statement::Expression(ref e) = ts.stmt
+                                        {
+                                            let res =
+                                                lower_expression(&mut sub_ctx, e);
+                                            sub_ctx.push(Instruction::Move {
+                                                dest: ret_reg,
+                                                src: res,
+                                            });
                                         }
                                     } else {
                                         lower_spanned(&mut sub_ctx, ts);
@@ -86,15 +105,25 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                                 sub_ctx.push(Instruction::Jump { target: 0 });
 
                                 let else_start_idx = sub_ctx.instructions.len();
-                                if let Instruction::JumpIfNot { ref mut target, .. } = sub_ctx.instructions[jump_to_else_idx] {
+                                if let Instruction::JumpIfNot {
+                                    ref mut target,
+                                    ..
+                                } = sub_ctx.instructions[jump_to_else_idx]
+                                {
                                     *target = else_start_idx;
                                 }
 
-                                for (ei, es) in else_branch_stmts.iter().enumerate() {
+                                for (ei, es) in else_branch_stmts.iter().enumerate()
+                                {
                                     if ei == else_branch_stmts.len() - 1 {
-                                        if let Statement::Expression(ref e) = es.stmt {
-                                            let res = lower_expression(&mut sub_ctx, e);
-                                            sub_ctx.push(Instruction::Move { dest: ret_reg, src: res });
+                                        if let Statement::Expression(ref e) = es.stmt
+                                        {
+                                            let res =
+                                                lower_expression(&mut sub_ctx, e);
+                                            sub_ctx.push(Instruction::Move {
+                                                dest: ret_reg,
+                                                src: res,
+                                            });
                                         }
                                     } else {
                                         lower_spanned(&mut sub_ctx, es);
@@ -102,11 +131,15 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                                 }
 
                                 let end_idx = sub_ctx.instructions.len();
-                                if let Instruction::Jump { ref mut target, .. } = sub_ctx.instructions[jump_to_end_idx] {
+                                if let Instruction::Jump { ref mut target, .. } =
+                                    sub_ctx.instructions[jump_to_end_idx]
+                                {
                                     *target = end_idx;
                                 }
 
-                                sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                                sub_ctx.push(Instruction::Return {
+                                    src: Some(ret_reg),
+                                });
                                 continue;
                             }
                         }

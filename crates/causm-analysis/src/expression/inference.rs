@@ -272,6 +272,19 @@ pub(crate) fn infer_expression_type(
                         )))
                     })
                 }
+                Type::Custom(custom_name) => {
+                    let base_name =
+                        custom_name.split('<').next().unwrap_or(&custom_name).trim();
+                    if let Some(fields_map) = analyzer.type_decls.get(base_name) {
+                        if let Some(fd) = fields_map.get(field) {
+                            return Ok(Type::from_typename(&fd.typ));
+                        }
+                    }
+                    Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(format!(
+                        "field '{}' not found on type '{}'",
+                        field, custom_name
+                    ))))
+                }
                 _ => Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                     "field access on non-struct/topology".into(),
                 ))),

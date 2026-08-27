@@ -4,6 +4,7 @@
         enable memory(65536bytes)
         require System.Log
         require System.NetworkFetch
+        from "std/sync" import SyncChannel as Channel
         enum NodeStatus {
             Active(int),
             Degraded(string),

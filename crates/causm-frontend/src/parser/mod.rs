@@ -278,11 +278,12 @@ fn expand_spanned_statements(
                 };
 
                 let mut item_stmts = Vec::new();
+                let mut sub_loaded_files = HashSet::new();
                 for imp_tl in imported_prog.timelines {
                     let expanded = expand_spanned_statements(
                         imp_tl.statements,
                         sub_base_dir.as_deref(),
-                        loaded_files,
+                        &mut sub_loaded_files,
                     )?;
                     item_stmts.extend(flatten_container_statements(expanded));
                 }
@@ -302,12 +303,27 @@ fn expand_spanned_statements(
                                     state_constraint,
                                     required_capabilities,
                                     body,
-                                } if name == sym_name => {
-                                    let target_name =
-                                        sym_alias.as_ref().unwrap_or(name);
+                                } if name == sym_name
+                                    || name
+                                        .starts_with(&format!("{}.", sym_name)) =>
+                                {
+                                    let target_name = if let Some(alias) = sym_alias
+                                    {
+                                        if name == sym_name {
+                                            alias.clone()
+                                        } else {
+                                            format!(
+                                                "{}.{}",
+                                                alias,
+                                                &name[sym_name.len() + 1..]
+                                            )
+                                        }
+                                    } else {
+                                        name.clone()
+                                    };
                                     result.push(SpannedStatement {
                                         stmt: Statement::RoutineDef {
-                                            name: target_name.clone(),
+                                            name: target_name,
                                             params: params.clone(),
                                             return_type: return_type.clone(),
                                             taking_ms: *taking_ms,
@@ -328,48 +344,58 @@ fn expand_spanned_statements(
                                     auto_drop,
                                     scoped_branch,
                                 } if name == sym_name => {
-                                    let target_name =
-                                        sym_alias.as_ref().unwrap_or(name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::TypeDecl {
-                                            name: target_name.clone(),
-                                            extends: extends.clone(),
-                                            fields: fields.clone(),
-                                            decay_after_ms: *decay_after_ms,
-                                            auto_drop: auto_drop.clone(),
-                                            scoped_branch: scoped_branch.clone(),
-                                        },
-                                        span: s.span.clone(),
-                                    });
+                                    result.push(s.clone());
+                                    if let Some(alias) = sym_alias {
+                                        if alias != name {
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::TypeDecl {
+                                                    name: alias.clone(),
+                                                    extends: extends.clone(),
+                                                    fields: fields.clone(),
+                                                    decay_after_ms: *decay_after_ms,
+                                                    auto_drop: auto_drop.clone(),
+                                                    scoped_branch: scoped_branch
+                                                        .clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                    }
                                 }
                                 Statement::EnumDecl { name, variants }
                                     if name == sym_name =>
                                 {
-                                    let target_name =
-                                        sym_alias.as_ref().unwrap_or(name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::EnumDecl {
-                                            name: target_name.clone(),
-                                            variants: variants.clone(),
-                                        },
-                                        span: s.span.clone(),
-                                    });
+                                    result.push(s.clone());
+                                    if let Some(alias) = sym_alias {
+                                        if alias != name {
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::EnumDecl {
+                                                    name: alias.clone(),
+                                                    variants: variants.clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                    }
                                 }
                                 Statement::InterfaceDecl {
                                     name,
                                     extends,
                                     methods,
                                 } if name == sym_name => {
-                                    let target_name =
-                                        sym_alias.as_ref().unwrap_or(name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::InterfaceDecl {
-                                            name: target_name.clone(),
-                                            extends: extends.clone(),
-                                            methods: methods.clone(),
-                                        },
-                                        span: s.span.clone(),
-                                    });
+                                    result.push(s.clone());
+                                    if let Some(alias) = sym_alias {
+                                        if alias != name {
+                                            result.push(SpannedStatement {
+                                                stmt: Statement::InterfaceDecl {
+                                                    name: alias.clone(),
+                                                    extends: extends.clone(),
+                                                    methods: methods.clone(),
+                                                },
+                                                span: s.span.clone(),
+                                            });
+                                        }
+                                    }
                                 }
                                 Statement::ForeignBlock { .. } => {
                                     result.push(s.clone());
