@@ -125,7 +125,7 @@ pacing_opt = { "pacing" ~ duration_limit }
 
 debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
-if_stmt = { "if" ~ "("? ~ expression ~ ")"? ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
+if_stmt = { "if" ~ "("? ~ expression ~ ")"? ~ statement_block ~ ("else" ~ (if_stmt | statement_block))? ~ reconcile_clause? }
 loop_stmt = { "loop" ~ "on" ~ expression ~ statement_block | "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
 while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
 step_spec = { duration_wildcard | duration_literal }

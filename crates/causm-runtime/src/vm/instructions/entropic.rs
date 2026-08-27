@@ -24,21 +24,33 @@ impl Vm {
         if let Ok(causm_core::value::Payload::Struct(fields)) =
             self.peek_reg(branch_id, target.0)
         {
+            let is_virtual = match fields.get("is_virtual") {
+                Some(causm_core::value::EntropicState::Valid(
+                    causm_core::value::Payload::Bool(b),
+                )) => *b,
+                _ => false,
+            };
             if let Some(causm_core::value::EntropicState::Valid(ref field_val)) =
                 fields.get(&spec.field_name)
             {
                 matched = true;
-                if let Ok(sym_ptr) = self
-                    .foreign_manager
-                    .get_or_load_symbol(&spec.lib_name, &spec.routine_name)
-                {
-                    unsafe {
-                        let mut args = [field_val.clone()];
-                        let _ = crate::vm::ffi::invoke_foreign_symbol(
-                            sym_ptr,
-                            &mut args,
-                            &causm_core::types::Type::I32,
-                        );
+                let is_negative_fd = match field_val {
+                    causm_core::value::Payload::Integer(i) => *i < 0,
+                    _ => false,
+                };
+                if !is_virtual && !is_negative_fd {
+                    if let Ok(sym_ptr) = self
+                        .foreign_manager
+                        .get_or_load_symbol(&spec.lib_name, &spec.routine_name)
+                    {
+                        unsafe {
+                            let mut args = [field_val.clone()];
+                            let _ = crate::vm::ffi::invoke_foreign_symbol(
+                                sym_ptr,
+                                &mut args,
+                                &causm_core::types::Type::I32,
+                            );
+                        }
                     }
                 }
             }

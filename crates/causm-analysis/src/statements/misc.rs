@@ -29,6 +29,7 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         if !self.capability_stack.is_empty()
             && !self.is_capability_allowed("System.FFI")
+            && !self.is_capability_allowed("System.WASI")
         {
             return Err(self.annotate(SemanticErrorKind::MissingCapability(
                 "System.FFI".to_string(),

@@ -147,12 +147,6 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             _ => {}
                         }
                     }
-                    if required_capabilities.is_empty() {
-                        required_capabilities.push(causm_core::Capability {
-                            path: "System.FFI".to_string(),
-                            parameters: std::collections::HashMap::new(),
-                        });
-                    }
                     routines.push(SpannedStatement {
                         stmt: Statement::RoutineDef {
                             name,

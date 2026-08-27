@@ -2,6 +2,7 @@
     type File = struct decay_after 5000ms auto_drop("libc.so.6", "close", fd) {
         fd: i32,
         is_open: bool,
+        is_virtual: bool,
         path: string
     }
 

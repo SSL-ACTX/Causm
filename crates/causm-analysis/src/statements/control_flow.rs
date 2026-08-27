@@ -648,7 +648,6 @@ impl EntropicAnalyzer {
         routine_analyzer.type_decls = self.type_decls.clone();
         routine_analyzer.interfaces = self.interfaces.clone();
         routine_analyzer.current_routine = Some(name.clone());
-        routine_analyzer.capability_stack = self.capability_stack.clone();
         if !required_capabilities.is_empty() {
             let mut cap_map = HashMap::new();
             for cap in required_capabilities {

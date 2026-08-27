@@ -477,19 +477,64 @@ pub(crate) fn analyze_expression(
                 )))
             })?;
 
-            for cap in &info.required_capabilities {
-                let key = if let Some(id) = cap.parameters.get("id") {
-                    format!("{}[id={}]", cap.path, id)
-                } else {
-                    cap.path.clone()
-                };
-                if !analyzer.capability_stack.is_empty()
-                    && !analyzer.is_capability_allowed(&cap.path)
-                    && !analyzer.is_capability_allowed(&key)
-                {
-                    return Err(analyzer.annotate(
-                        SemanticErrorKind::MissingCapability(cap.path.clone()),
-                    ));
+            if !info.required_capabilities.is_empty()
+                && !analyzer.capability_stack.is_empty()
+            {
+                let all_satisfied = info.required_capabilities.iter().all(|cap| {
+                    let key = if let Some(id) = cap.parameters.get("id") {
+                        format!("{}[id={}]", cap.path, id)
+                    } else {
+                        cap.path.clone()
+                    };
+                    analyzer.is_capability_allowed(&cap.path)
+                        || analyzer.is_capability_allowed(&key)
+                });
+                if !all_satisfied {
+                    // If not all are satisfied, check if this is an alternative declaration (e.g. FFI or WASI)
+                    let is_foreign_or_alt = info
+                        .required_capabilities
+                        .iter()
+                        .any(|c| c.path == "System.FFI" || c.path == "System.WASI");
+                    if is_foreign_or_alt {
+                        let any_allowed =
+                            info.required_capabilities.iter().any(|cap| {
+                                let key = if let Some(id) = cap.parameters.get("id")
+                                {
+                                    format!("{}[id={}]", cap.path, id)
+                                } else {
+                                    cap.path.clone()
+                                };
+                                analyzer.is_capability_allowed(&cap.path)
+                                    || analyzer.is_capability_allowed(&key)
+                            });
+                        if !any_allowed {
+                            return Err(analyzer.annotate(
+                                SemanticErrorKind::MissingCapability(
+                                    info.required_capabilities[0].path.clone(),
+                                ),
+                            ));
+                        }
+                    } else {
+                        let missing = info
+                            .required_capabilities
+                            .iter()
+                            .find(|cap| {
+                                let key = if let Some(id) = cap.parameters.get("id")
+                                {
+                                    format!("{}[id={}]", cap.path, id)
+                                } else {
+                                    cap.path.clone()
+                                };
+                                !analyzer.is_capability_allowed(&cap.path)
+                                    && !analyzer.is_capability_allowed(&key)
+                            })
+                            .unwrap();
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::MissingCapability(
+                                missing.path.clone(),
+                            ),
+                        ));
+                    }
                 }
             }
 

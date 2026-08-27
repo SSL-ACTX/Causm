@@ -58,6 +58,9 @@ impl Vm {
                 self.capability_handlers.contains_key(&cap.path)
                     || cap.path == "System.Entropy"
                     || (cap.path == "System.FFI" && cfg!(unix))
+                    || (cap.path == "System.WASI" && cfg!(target_arch = "wasm32"))
+                    || cap.path == "System.VirtualFS"
+                    || cap.path == "System.VirtualNet"
             }
         };
         self.insert_reg(
