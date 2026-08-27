@@ -3,12 +3,22 @@
     from "std/time/ffi" import *
 
     routine now() -> Instant taking _ {
-        let mut ts = struct { tv_nsec = 0, tv_sec = 0 }
-        let _code = clock_gettime(1, ts)
-        struct { nanos = ts.tv_nsec, secs = ts.tv_sec }
+        if capability(System.FFI) {
+            let mut ts = struct { tv_nsec = 0, tv_sec = 0 }
+            let _code = clock_gettime(1, ts)
+            struct { nanos = ts.tv_nsec, secs = ts.tv_sec }
+        } else {
+            struct { nanos = 0, secs = 0 }
+        } reconcile auto
     }
 
-    routine unix_timestamp() -> i64 taking _ => time(0)
+    routine unix_timestamp() -> i64 taking _ {
+        if capability(System.FFI) {
+            time(0)
+        } else {
+            0
+        } reconcile auto
+    }
 
     routine elapsed_ms(peek start: Instant) -> i64 taking _ {
         let current = now()
@@ -31,11 +41,15 @@
     routine from_secs(peek secs: i64) -> Duration taking _ => struct { nanos_total = secs * 1000000000 }
 
     routine sleep_ms(peek ms: i64) -> i32 taking _ {
-        let req = struct {
-            tv_nsec = (ms % 1000) * 1000000,
-            tv_sec = ms / 1000
-        }
-        let rem = struct { tv_nsec = 0, tv_sec = 0 }
-        nanosleep(req, rem)
+        if capability(System.FFI) {
+            let req = struct {
+                tv_nsec = (ms % 1000) * 1000000,
+                tv_sec = ms / 1000
+            }
+            let rem = struct { tv_nsec = 0, tv_sec = 0 }
+            nanosleep(req, rem)
+        } else {
+            0
+        } reconcile auto
     }
 }

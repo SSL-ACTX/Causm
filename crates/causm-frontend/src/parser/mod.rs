@@ -371,6 +371,9 @@ fn expand_spanned_statements(
                                         span: s.span.clone(),
                                     });
                                 }
+                                Statement::ForeignBlock { .. } => {
+                                    result.push(s.clone());
+                                }
                                 _ => {}
                             }
                         }

@@ -46,8 +46,19 @@ impl Vm {
         dest: Reg,
         cap: causm_core::Capability,
     ) -> Result<(), TemporalError> {
-        let has_capability = self.capability_handlers.contains_key(&cap.path)
-            || cap.path == "System.Entropy";
+        let has_capability = {
+            let branch = self.get_branch_mut(branch_id)?;
+            if !branch.manifest_stack.is_empty() {
+                branch
+                    .manifest_stack
+                    .iter()
+                    .any(|m| m.capabilities.iter().any(|c| c.path == cap.path))
+            } else {
+                self.capability_handlers.contains_key(&cap.path)
+                    || cap.path == "System.Entropy"
+                    || cap.path == "System.FFI"
+            }
+        };
         self.insert_reg(
             branch_id,
             dest.0,

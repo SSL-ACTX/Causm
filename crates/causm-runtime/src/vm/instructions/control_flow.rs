@@ -235,6 +235,7 @@ impl Vm {
             }
         }
 
+        let caller_manifest_stack = self.get_branch(branch_id).map(|b| b.manifest_stack.clone()).unwrap_or_default();
         let call_idx = self.next_call_id;
         self.next_call_id += 1;
         let child_id =
@@ -245,6 +246,7 @@ impl Vm {
             self.global_clock,
         );
         child.instructions = routine_def.instructions.clone();
+        child.manifest_stack = caller_manifest_stack;
 
         for (i, (mode, _name, _)) in params.iter().enumerate() {
             let val = arg_values[i].clone();
@@ -346,7 +348,13 @@ impl Vm {
 
         let result = child_branch
             .return_value
-            .or_else(|| child_branch.arena.peek(0))
+            .or_else(|| {
+                if params.is_empty() {
+                    child_branch.arena.peek(0)
+                } else {
+                    None
+                }
+            })
             .unwrap_or(causm_core::value::Payload::String("void".to_string()));
 
         self.insert_reg(

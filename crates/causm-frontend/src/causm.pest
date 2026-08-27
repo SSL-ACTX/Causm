@@ -43,6 +43,7 @@ statement = {
     | loop_stmt
     | while_stmt
     | for_step_stmt
+    | return_stmt
     | yield_stmt
     | type_decl
     | enum_decl
@@ -200,7 +201,8 @@ await_expr = { "await" ~ "(" ~ expression ~ ")" }
 
 defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ duration_limit }
 
-yield_stmt = { "yield" ~ identifier }
+return_stmt = { "return" ~ expression? }
+yield_stmt = { "yield" ~ expression? }
 
 expression = { pipeline_expr }
 pipeline_expr = { logical_or_expr ~ ("|>" ~ logical_or_expr)* }

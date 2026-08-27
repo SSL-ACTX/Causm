@@ -50,6 +50,66 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         let ret_reg = lower_expression(&mut sub_ctx, expr);
                         sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
                         continue;
+                    } else if let Statement::If {
+                        ref binding,
+                        ref condition,
+                        ref then_branch,
+                        ref else_branch,
+                        reconcile: _,
+                        ..
+                    } = s.stmt
+                    {
+                        if binding.is_none() && else_branch.is_some() {
+                            let else_branch_stmts = else_branch.as_ref().unwrap();
+                            let then_has_expr = then_branch.last().map(|st| matches!(st.stmt, Statement::Expression(_))).unwrap_or(false);
+                            let else_has_expr = else_branch_stmts.last().map(|st| matches!(st.stmt, Statement::Expression(_))).unwrap_or(false);
+
+                            if then_has_expr && else_has_expr {
+                                let cond_reg = lower_expression(&mut sub_ctx, condition);
+                                let ret_reg = sub_ctx.alloc_reg();
+
+                                let jump_to_else_idx = sub_ctx.instructions.len();
+                                sub_ctx.push(Instruction::JumpIfNot { cond: cond_reg, target: 0 });
+
+                                for (ti, ts) in then_branch.iter().enumerate() {
+                                    if ti == then_branch.len() - 1 {
+                                        if let Statement::Expression(ref e) = ts.stmt {
+                                            let res = lower_expression(&mut sub_ctx, e);
+                                            sub_ctx.push(Instruction::Move { dest: ret_reg, src: res });
+                                        }
+                                    } else {
+                                        lower_spanned(&mut sub_ctx, ts);
+                                    }
+                                }
+
+                                let jump_to_end_idx = sub_ctx.instructions.len();
+                                sub_ctx.push(Instruction::Jump { target: 0 });
+
+                                let else_start_idx = sub_ctx.instructions.len();
+                                if let Instruction::JumpIfNot { ref mut target, .. } = sub_ctx.instructions[jump_to_else_idx] {
+                                    *target = else_start_idx;
+                                }
+
+                                for (ei, es) in else_branch_stmts.iter().enumerate() {
+                                    if ei == else_branch_stmts.len() - 1 {
+                                        if let Statement::Expression(ref e) = es.stmt {
+                                            let res = lower_expression(&mut sub_ctx, e);
+                                            sub_ctx.push(Instruction::Move { dest: ret_reg, src: res });
+                                        }
+                                    } else {
+                                        lower_spanned(&mut sub_ctx, es);
+                                    }
+                                }
+
+                                let end_idx = sub_ctx.instructions.len();
+                                if let Instruction::Jump { ref mut target, .. } = sub_ctx.instructions[jump_to_end_idx] {
+                                    *target = end_idx;
+                                }
+
+                                sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                                continue;
+                            }
+                        }
                     } else if let Statement::Match {
                         ref target,
                         ref arms,
@@ -148,10 +208,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.routines.insert(base_name, routine);
             }
         }
-        Statement::Yield(name) => {
-            let src = ctx.get_reg(name);
-            ctx.push(Instruction::Move { dest: Reg(0), src });
-            ctx.push(Instruction::Return { src: Some(Reg(0)) });
+        Statement::Yield(expr_opt) | Statement::Return(expr_opt) => {
+            if let Some(expr) = expr_opt {
+                let src = lower_expression(ctx, expr);
+                ctx.push(Instruction::Return { src: Some(src) });
+            } else {
+                ctx.push(Instruction::Return { src: None });
+            }
         }
         Statement::Speculate {
             max_ms,

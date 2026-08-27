@@ -1570,7 +1570,8 @@ fn test_capability_routine_with_bracketed_syntax() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_capability_routine_requires_bracketed_missing_cap_error() -> anyhow::Result<()> {
+fn test_capability_routine_requires_bracketed_missing_cap_error(
+) -> anyhow::Result<()> {
     let source = r#"
     routine dangerous_op() -> bool requires [System.IO, System.NetworkFetch] {
         yield true
@@ -1589,7 +1590,105 @@ fn test_capability_routine_requires_bracketed_missing_cap_error() -> anyhow::Res
     let res = analyzer.analyze_program(&program);
     assert!(res.is_err());
     let err_str = res.unwrap_err().to_string();
-    assert!(err_str.contains("Missing capability") || err_str.contains("System.NetworkFetch"));
+    assert!(
+        err_str.contains("Missing capability")
+            || err_str.contains("System.NetworkFetch")
+    );
     Ok(())
 }
 
+#[test]
+fn test_pure_path_utilities_in_zero_cap_isolate() -> anyhow::Result<()> {
+    let source = r#"
+    from "std/path" import join, path_basename, path_dirname, extension
+
+    @0ms: {
+        isolate pure_sandbox {
+            enable memory(64KB)
+            enable cpu(100ms)
+
+            let p = join("/var/log", "app.log")
+            let b = path_basename(p)
+            let d = path_dirname(p)
+            let ext = extension(p)
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let p_reg = ir.symbols.get("p").unwrap().0;
+    let b_reg = ir.symbols.get("b").unwrap().0;
+    let d_reg = ir.symbols.get("d").unwrap().0;
+    let ext_reg = ir.symbols.get("ext").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(p_reg),
+        Some(Payload::String("/var/log/app.log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(b_reg),
+        Some(Payload::String("app.log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(d_reg),
+        Some(Payload::String("/var/log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(ext_reg),
+        Some(Payload::String(".log".to_string()))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_tiered_stdlib_imports_in_zero_cap_isolate() -> anyhow::Result<()> {
+    let source = r#"
+    from "std/time" import now, unix_timestamp
+    from "std/fs" import open_readonly, file_exists
+    from "std/process" import pid, parent_pid
+    from "std/net" import create_socket
+
+    @0ms: {
+        isolate unprivileged {
+            enable memory(64KB)
+            enable cpu(100ms)
+
+            let t = now()
+            let u = unix_timestamp()
+            let f = open_readonly("/etc/passwd")
+            let exists = file_exists("/etc/passwd")
+            let p = pid()
+            let pp = parent_pid()
+            let sock = create_socket()
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let u_reg = ir.symbols.get("u").unwrap().0;
+    let exists_reg = ir.symbols.get("exists").unwrap().0;
+    let p_reg = ir.symbols.get("p").unwrap().0;
+    let sock_reg = ir.symbols.get("sock").unwrap().0;
+
+    assert_eq!(vm.root_timeline.arena.peek(u_reg), Some(Payload::Integer(0)));
+    assert_eq!(vm.root_timeline.arena.peek(exists_reg), Some(Payload::Bool(false)));
+    assert_eq!(vm.root_timeline.arena.peek(p_reg), Some(Payload::Integer(1)));
+    assert_eq!(vm.root_timeline.arena.peek(sock_reg), Some(Payload::Integer(-1)));
+
+    Ok(())
+}

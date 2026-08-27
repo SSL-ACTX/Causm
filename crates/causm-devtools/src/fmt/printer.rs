@@ -492,13 +492,25 @@ fn format_spanned_statement(
         }
         Statement::Return(val) => {
             if let Some(v) = val {
-                out.push_str(&format!("{}return {}\n", indent, v));
+                out.push_str(&format!(
+                    "{}return {}\n",
+                    indent,
+                    format_expr(v, config, depth)
+                ));
             } else {
                 out.push_str(&format!("{}return\n", indent));
             }
         }
-        Statement::Yield(name) => {
-            out.push_str(&format!("{}yield {}\n", indent, name));
+        Statement::Yield(val) => {
+            if let Some(v) = val {
+                out.push_str(&format!(
+                    "{}yield {}\n",
+                    indent,
+                    format_expr(v, config, depth)
+                ));
+            } else {
+                out.push_str(&format!("{}yield\n", indent));
+            }
         }
         Statement::Print(args) => {
             let formatted = args

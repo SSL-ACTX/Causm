@@ -12,6 +12,7 @@ type RawHandle = *mut libc::c_void;
 type RawHandle = *mut std::ffi::c_void;
 
 pub struct ForeignLibraryManager {
+    #[cfg_attr(not(unix), allow(dead_code))]
     handles: Mutex<HashMap<String, usize>>,
 }
 
@@ -105,7 +106,7 @@ impl ForeignLibraryManager {
 ///
 /// `sym_ptr` must be a valid, callable C function pointer matching the native ABI.
 pub unsafe fn invoke_foreign_symbol(
-    sym_ptr: *mut libc::c_void,
+    sym_ptr: *mut std::ffi::c_void,
     args: &mut [Payload],
     return_type: &Type,
 ) -> Result<Payload, TemporalError> {
@@ -364,7 +365,7 @@ pub unsafe fn invoke_foreign_symbol(
                 Ok(Payload::Null)
             } else {
                 let c_str =
-                    unsafe { CStr::from_ptr(result_raw as *const libc::c_char) };
+                    unsafe { CStr::from_ptr(result_raw as *const std::ffi::c_char) };
                 let rust_str = c_str.to_string_lossy().to_string();
                 Ok(Payload::String(rust_str))
             }

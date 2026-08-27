@@ -1,15 +1,84 @@
 @0ms: {
-    foreign "libc.so.6" abi("C") {
-        routine basename(peek path: string) -> string taking 1ms
-        routine dirname(peek path: string) -> string taking 1ms
-        routine strrchr(peek s: string, peek c: i32) -> string taking 1ms
+    routine join(peek dir: string, peek file: string) -> string taking _ {
+        if len(dir) == 0 {
+            return file
+        } else if len(file) == 0 {
+            return dir
+        } else if char_at(dir, len(dir) - 1) == 47 {
+            return dir + file
+        } else {
+            return dir + "/" + file
+        }
     }
 
-    routine join(peek dir: string, peek file: string) -> string taking _ => dir + "/" + file
+    routine path_basename(peek path: string) -> string taking _ {
+        let n = len(path)
+        if n == 0 {
+            return ""
+        } else {
+            let mut last_slash = -1
+            let mut i = 0
+            while (i < n) 1ms {
+                if char_at(path, i) == 47 {
+                    last_slash = i
+                }
+                i = i + 1
+            }
+            if last_slash < 0 {
+                return path
+            } else if last_slash == n - 1 {
+                return ""
+            } else {
+                return str_slice(path, last_slash + 1, n)
+            }
+        }
+    }
 
-    routine path_basename(peek path: string) -> string taking _ => basename(path)
+    routine path_dirname(peek path: string) -> string taking _ {
+        let n = len(path)
+        if n == 0 {
+            return "."
+        } else {
+            let mut last_slash = -1
+            let mut i = 0
+            while (i < n) 1ms {
+                if char_at(path, i) == 47 {
+                    last_slash = i
+                }
+                i = i + 1
+            }
+            if last_slash < 0 {
+                return "."
+            } else if last_slash == 0 {
+                return "/"
+            } else {
+                return str_slice(path, 0, last_slash)
+            }
+        }
+    }
 
-    routine path_dirname(peek path: string) -> string taking _ => dirname(path)
-
-    routine extension(peek path: string) -> string taking _ => strrchr(path, 46)
+    routine extension(peek path: string) -> string taking _ {
+        let n = len(path)
+        if n == 0 {
+            return ""
+        } else {
+            let mut last_dot = -1
+            let mut last_slash = -1
+            let mut i = 0
+            while (i < n) 1ms {
+                let ch = char_at(path, i)
+                if ch == 46 {
+                    last_dot = i
+                } else if ch == 47 {
+                    last_slash = i
+                }
+                i = i + 1
+            }
+            if last_dot > last_slash && last_dot >= 0 {
+                return str_slice(path, last_dot, n)
+            } else {
+                return ""
+            }
+        }
+    }
 }

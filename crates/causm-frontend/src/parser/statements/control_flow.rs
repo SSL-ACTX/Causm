@@ -496,12 +496,12 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::yield_stmt => {
-            let item = pair
-                .into_inner()
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            Statement::Yield(item)
+            let expr = pair.into_inner().next().map(parse_expression);
+            Statement::Yield(expr)
+        }
+        Rule::return_stmt => {
+            let expr = pair.into_inner().next().map(parse_expression);
+            Statement::Return(expr)
         }
         Rule::break_stmt => Statement::Break,
         Rule::using_stmt => {

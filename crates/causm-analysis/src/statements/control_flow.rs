@@ -783,10 +783,10 @@ impl EntropicAnalyzer {
 
     pub(crate) fn Return(
         &mut self,
-        src: &Option<String>,
+        src: &Option<Expression>,
     ) -> Result<(), SemanticError> {
-        if let Some(name) = src {
-            self.check_available(name)?;
+        if let Some(expr) = src {
+            crate::expression::analyze_expression(self, expr)?;
         }
         Ok(())
     }
@@ -913,8 +913,14 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Yield(&mut self, name: &str) -> Result<(), SemanticError> {
-        self.mark_consumed(name)
+    pub(crate) fn Yield(
+        &mut self,
+        expr_opt: &Option<Expression>,
+    ) -> Result<(), SemanticError> {
+        if let Some(expr) = expr_opt {
+            crate::expression::analyze_expression(self, expr)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn Commit(

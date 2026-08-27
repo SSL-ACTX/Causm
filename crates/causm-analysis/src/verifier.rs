@@ -205,10 +205,16 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.consume_variable(binding, path_condition, spanned.span.end);
                 Ok(body_clock)
             }
-            Statement::Yield(value_id) => {
-                self.check_available(value_id, path_condition)?;
-                self.check_not_leased(value_id, path_condition)?;
-                self.consume_variable(value_id, path_condition, spanned.span.start);
+            Statement::Yield(expr_opt) => {
+                if let Some(Expression::Identifier(value_id)) = expr_opt {
+                    self.check_available(value_id, path_condition)?;
+                    self.check_not_leased(value_id, path_condition)?;
+                    self.consume_variable(
+                        value_id,
+                        path_condition,
+                        spanned.span.start,
+                    );
+                }
 
                 let new_horizon = self
                     .solver

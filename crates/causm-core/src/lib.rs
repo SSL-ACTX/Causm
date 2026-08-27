@@ -268,7 +268,7 @@ macro_rules! statements {
                 body: Vec<SpannedStatement>,
                 reconcile: Option<MergeResolution>
             },
-            Yield(String),
+            Yield(Option<Expression>),
             Print(Vec<Expression>),
             Debug(Expression),
             RoutineDef {
@@ -280,7 +280,7 @@ macro_rules! statements {
                 required_capabilities: Vec<Capability>,
                 body: Vec<SpannedStatement>
             },
-            Return(Option<String>),
+            Return(Option<Expression>),
             Entangle {
                 variables: Vec<String>
             },
