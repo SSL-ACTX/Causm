@@ -410,20 +410,18 @@ fn format_spanned_statement(
         }
         Statement::While {
             condition,
-            is_valid_check,
+            is_valid_check: _,
             max_ms,
             body,
         } => {
-            let valid_str = if *is_valid_check { "valid " } else { "" };
             let taking_str = if *max_ms != u64::MAX {
                 format!(" taking {}ms", max_ms)
             } else {
                 " taking _".to_string()
             };
             out.push_str(&format!(
-                "{}while {}({}){} {{\n",
+                "{}while ({}){} {{\n",
                 indent,
-                valid_str,
                 format_expr(condition, config, depth),
                 taking_str
             ));
@@ -993,7 +991,7 @@ fn format_spanned_statement(
             out.push_str(&format!("{}}}\n", indent));
         }
         Statement::DecayHandler { type_name, body } => {
-            out.push_str(&format!("{}decay_handler for {} {{\n", indent, type_name));
+            out.push_str(&format!("{}on_decay({}) {{\n", indent, type_name));
             for s in body {
                 format_spanned_statement(out, s, config, depth + 1);
             }
@@ -2090,7 +2088,7 @@ mod tests {
     debug(total)
     let buffer = "sensor_stream_payload"
     let ticks = 0
-    while valid (buffer) taking 30ms {
+    while (buffer) taking 30ms {
         let ticks = ticks + 1
         if (ticks == 3) {
             let extracted = buffer

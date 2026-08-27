@@ -22,7 +22,6 @@ statement = {
     | split_stmt
     | routine_stmt
     | merge_stmt
-    | split_map_stmt
     | for_stmt
     | lease_stmt
     | print_stmt
@@ -32,7 +31,6 @@ statement = {
     | commit_stmt
     | speculate_stmt
     | collapse_stmt
-    | speculation_mode_stmt
     | select_stmt
     | match_entropy_stmt
     | match_stmt
@@ -77,7 +75,7 @@ expression_stmt = { expression }
 
 entangle_stmt = { "entangle" ~ "(" ~ identifier_list ~ ")" }
 
-decay_handler_stmt = { ("decay_handler" ~ "for" | "on_decay" ~ "(") ~ identifier ~ ")"? ~ "{" ~ statement* ~ "}" }
+decay_handler_stmt = { "on_decay" ~ "(" ~ identifier ~ ")" ~ "{" ~ statement* ~ "}" }
 
 assert_time_stmt = { "assert_time" ~ "(" ~ "elapsed" ~ relop ~ amount ~ "ms" ~ ")" ~ ("else" ~ statement_block)? }
 
@@ -87,8 +85,6 @@ print_arg_list = { expression ~ ("," ~ expression)* }
 speculate_stmt = { "speculate" ~ duration_limit ~ "{" ~ statement* ~ "}" ~ fallback_stmt? }
 fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
-speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
-speculation_mode_value = { "selective" | "full" }
 pub_keyword = @{ "pub" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 pub_opt = { pub_keyword? }
 concise_body = { "=>" ~ expression }
@@ -119,7 +115,6 @@ break_stmt = { "break" }
 
 for_stmt = { "for" ~ identifier ~ param_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
 lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block ~ reconcile_clause? }
-split_map_stmt = { "split_map" ~ identifier ~ param_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
 pacing_opt = { "pacing" ~ duration_limit }
 
@@ -127,7 +122,7 @@ debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
 if_stmt = { "if" ~ "("? ~ expression ~ ")"? ~ statement_block ~ ("else" ~ (if_stmt | statement_block))? ~ reconcile_clause? }
 loop_stmt = { "loop" ~ "on" ~ expression ~ statement_block | "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
-while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
+while_stmt = { "while" ~ "("? ~ expression ~ ")"? ~ duration_limit ~ "{" ~ statement* ~ "}" }
 step_spec = { duration_wildcard | duration_literal }
 for_step_stmt = { "for" ~ identifier ~ "in" ~ range_expr ~ "step" ~ step_spec ~ "{" ~ statement* ~ "}" }
 range_expr = { (duration_literal | expression) ~ ".." ~ (duration_literal | expression) | expression }
@@ -243,12 +238,11 @@ generic_static_call_expr = { (identifier ~ ".")* ~ identifier ~ "<" ~ type_param
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
 arena_introspect_kind = { "remaining" | "used_bytes" | "capacity" }
 arena_expr = { "arena" ~ "." ~ arena_introspect_kind ~ "(" ~ ")" }
-base_expr = { null | if_expr | generic_static_call_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | capability_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
+base_expr = { null | if_expr | generic_static_call_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | capability_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
 slice_range = { expression? ~ ".." ~ "="? ~ expression? }
 bool_literal = { "true" | "false" }
-call_expr = { "call" ~ method_name ~ "(" ~ expression_list? ~ ")" }
 direct_call_expr = { identifier ~ ("::<" ~ type_param_list ~ ">")? ~ "(" ~ expression_list? ~ ")" }
 expression_list = { expression ~ ("," ~ expression)* }
 

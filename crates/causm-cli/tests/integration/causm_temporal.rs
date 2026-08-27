@@ -108,7 +108,7 @@ fn causm_temporal_routine_call_contract_and_entropy() -> anyhow::Result<()> {
         let amt = transaction_details.amount
         yield amt
       }
-      let result = call process_payment(token, tx)
+      let result = process_payment(token, tx)
     }
     "#;
 
@@ -304,7 +304,7 @@ fn causm_temporal_promises_example_integration() -> anyhow::Result<()> {
     require System.Log
     match entropy(ds) {
       Valid(v1): {
-        let w1_out = call process_data(v1)
+        let w1_out = process_data(v1)
         print(v1)
         require System.Log(message=w1_out)
         yield w1_out
@@ -328,7 +328,7 @@ fn causm_temporal_promises_example_integration() -> anyhow::Result<()> {
     require System.Log
     match entropy(ds) {
       Valid(v2): {
-        let w2_out = call process_data(v2)
+        let w2_out = process_data(v2)
         print(v2)
         require System.Log(message=w2_out)
         yield w2_out
@@ -1017,14 +1017,14 @@ fn test_stdlib_fs_module_parsing_and_execution() -> anyhow::Result<()> {
                 let file_path = "__FILE_PATH__"
                 let renamed_path = "__RENAMED_PATH__"
 
-                let my_file = call create_file(clone(file_path))
-                let written = call write_all(my_file, "Hello from Pure Causm Stdlib\n", 30)
-                let exists_before = call file_exists(clone(file_path))
+                let my_file = create_file(clone(file_path))
+                let written = write_all(my_file, "Hello from Pure Causm Stdlib\n", 30)
+                let exists_before = file_exists(clone(file_path))
 
-                let renamed = call rename_file(clone(file_path), clone(renamed_path))
-                let exists_after = call file_exists(clone(renamed_path))
+                let renamed = rename_file(clone(file_path), clone(renamed_path))
+                let exists_after = file_exists(clone(renamed_path))
 
-                let cleaned = call remove_file(clone(renamed_path))
+                let cleaned = remove_file(clone(renamed_path))
             }
         }
         "#
@@ -1075,14 +1075,14 @@ fn test_stdlib_fs_read_and_size_helpers() -> anyhow::Result<()> {
             from "std/fs" import *
 
             let file_path = "__FILE_PATH__"
-            let f = call create_file(clone(file_path))
-            let wr = call write_all(f, "CAUSM_STAT_READ_TEST", 20)
-            let fl = call flush_file(f)
+            let f = create_file(clone(file_path))
+            let wr = write_all(f, "CAUSM_STAT_READ_TEST", 20)
+            let fl = flush_file(f)
 
-            let sz = call file_size(clone(file_path))
-            let read_path = call read_to_string(clone(file_path))
+            let sz = file_size(clone(file_path))
+            let read_path = read_to_string(clone(file_path))
 
-            let rm = call remove_file(clone(file_path))
+            let rm = remove_file(clone(file_path))
         }
     }
     "#
@@ -1120,10 +1120,10 @@ fn test_stdlib_path_module() -> anyhow::Result<()> {
 
             from "std/path" import *
 
-            let full = call join("/home/user", "config.toml")
-            let base = call path_basename(clone(full))
-            let dir = call path_dirname(clone(full))
-            let ext = call extension(clone(full))
+            let full = join("/home/user", "config.toml")
+            let base = path_basename(clone(full))
+            let dir = path_dirname(clone(full))
+            let ext = extension(clone(full))
         }
     }
     "#;
@@ -1245,5 +1245,84 @@ fn test_continuous_loop_on_event_syntax_and_lowering() -> anyhow::Result<()> {
         vm.root_timeline.arena.peek(active_reg),
         Some(causm_core::value::Payload::Bool(true))
     );
+    Ok(())
+}
+
+#[test]
+fn test_arena_saturation_policy_ring_buffer_and_evict_decayed() -> anyhow::Result<()>
+{
+    let source = r#"
+    @0ms: {
+        state base_metric: int = 500
+        policy on_full = RingBuffer
+
+        let item1 = 10
+        let item2 = 20
+        let rem = arena.remaining()
+        let used = arena.used_bytes()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let base_reg = ir.symbols.get("base_metric").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(base_reg),
+        Some(causm_core::value::Payload::Integer(500))
+    );
+
+    let item2_reg = ir.symbols.get("item2").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(item2_reg),
+        Some(causm_core::value::Payload::Integer(20))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_arena_saturation_policy_fail_fast_and_throttle() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        policy on_overflow = FailFast
+        policy on_deadline_breach = Throttle
+
+        let safe_data = 777
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let safe_reg = ir.symbols.get("safe_data").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(safe_reg),
+        Some(causm_core::value::Payload::Integer(777))
+    );
+
+    assert_eq!(
+        vm.root_timeline
+            .saturation_policies
+            .get(&causm_core::PolicyTarget::OnOverflow),
+        Some(&causm_core::SaturationPolicy::FailFast)
+    );
+    assert_eq!(
+        vm.root_timeline
+            .saturation_policies
+            .get(&causm_core::PolicyTarget::OnDeadlineBreach),
+        Some(&causm_core::SaturationPolicy::Throttle)
+    );
+
     Ok(())
 }

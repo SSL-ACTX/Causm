@@ -195,7 +195,7 @@ fn test_stdlib_auto_drop_resource_lifecycle() -> anyhow::Result<()> {
             let done = true
         }
         let listener = Net.TcpListener.bind(19899)
-        call consume_listener(listener)
+        consume_listener(listener)
     }
     "#;
 

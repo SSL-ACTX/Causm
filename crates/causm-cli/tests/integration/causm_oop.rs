@@ -218,7 +218,7 @@ fn causm_oop_constructor_call() -> anyhow::Result<()> {
             yield p
         }
 
-        let p: Player = call Player.new(42)
+        let p: Player = Player.new(42)
         let _p = p
     }
     "#;

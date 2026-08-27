@@ -74,7 +74,6 @@ fn causm_acausal_speculate_runs_fallback_on_collapse() -> anyhow::Result<()> {
 fn causm_acausal_speculate_commit_scoped_variables() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-      speculation_mode(full)
       speculate (max 3ms) {
         let secret = "hidden"
         commit {
@@ -92,6 +91,7 @@ fn causm_acausal_speculate_commit_scoped_variables() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
+    vm.set_speculative_commit_mode(causm_core::SpeculationCommitMode::Full);
     vm.execute_program(&ir)?;
 
     let out_reg = ir.symbols.get("out").expect("out register not found").0;
@@ -119,7 +119,6 @@ fn causm_acausal_speculate_commit_scoped_variables() -> anyhow::Result<()> {
 fn causm_acausal_speculate_selective_commit_mode() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-      speculation_mode(selective)
       speculate (max 3ms) {
         let secret = "hidden"
         // NO COMMIT
@@ -136,6 +135,7 @@ fn causm_acausal_speculate_selective_commit_mode() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
+    vm.set_speculative_commit_mode(causm_core::SpeculationCommitMode::Selective);
     vm.execute_program(&ir)?;
 
     let secret_reg = ir

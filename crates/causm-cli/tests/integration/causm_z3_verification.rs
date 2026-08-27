@@ -238,8 +238,8 @@ fn test_z3_routine_call_propagation() -> anyhow::Result<()> {
             
             isolate boss {
                 enable cpu(10ms)
-                let _ = call fast()
-                let _ = call fast()
+                let _ = fast()
+                let _ = fast()
                 let z = 1 // 5 + 5 + 1 = 11ms, exceeds 10ms budget
             }
         }

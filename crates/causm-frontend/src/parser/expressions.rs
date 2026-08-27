@@ -301,7 +301,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 args,
             }
         }
-        Rule::call_expr | Rule::direct_call_expr => {
+        Rule::direct_call_expr => {
             let mut inner = pair.into_inner();
             let routine = inner
                 .next()

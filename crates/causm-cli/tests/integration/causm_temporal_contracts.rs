@@ -176,7 +176,7 @@ mod tests {
 
   let x = 10
   let y = 20
-  let res = call compute_sum(x, y)
+  let res = compute_sum(x, y)
 }
 "#;
         let program = parser::parse_causm(code)?;
@@ -313,7 +313,7 @@ foreign "libc.so.6" abi("C") {
 
 @main: {
     let mut buf = [0, 0, 0, 0]
-    let res = call memset(buf, 65, 4)
+    let res = memset(buf, 65, 4)
     let b0 = buf[0]
     let b3 = buf[3]
 }

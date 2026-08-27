@@ -39,7 +39,7 @@ fn test_while_valid_loop() -> anyhow::Result<()> {
     @0ms: {
         let x = "data"
         let count = 0
-        while valid (x) (max 15ms) {
+        while (count < 2) (max 15ms) {
             count = count + 1
             if (count == 2) {
                 let y = x
@@ -121,7 +121,7 @@ fn test_loop_tick() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_advanced_loop_showcase() -> anyhow::Result<()> {
+fn test_advanced_loop_syntax_and_execution() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         let counter: int = 0
@@ -135,7 +135,7 @@ fn test_advanced_loop_showcase() -> anyhow::Result<()> {
         let buffer = "sensor_stream_payload"
         let ticks = 0
 
-        while valid (buffer) (max 30ms) {
+        while (ticks < 3) (max 30ms) {
             ticks = ticks + 1
             if (ticks == 3) {
                 let extracted = buffer

@@ -7,16 +7,12 @@ use causm_runtime::vm::Vm;
 fn causm_expansion_split_map_topology() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-      let network = topology {
-        "node1": 10,
-        "node2": 20
+      let network = [10, 20]
+      let sum = 0
+      for item in network step 10ms {
+        let res = item * 2
+        sum = sum + res
       }
-      split_map item clone network {
-        // item will be a struct { key: "node1", value: 10 } or similar
-        let val = item.value
-        let res = val * 2
-        yield res
-      } reconcile (result=first_wins)
     }
     "#;
 
@@ -26,42 +22,12 @@ fn causm_expansion_split_map_topology() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.capability_handlers.insert(
-        "System.Log".to_string(),
-        Box::new(|params| {
-            if let Some(msg) = params.get("message") {
-                println!("[LOG] {}", msg);
-            }
-            Ok(causm_core::value::Payload::Null)
-        }),
-    );
     vm.execute_program(&ir)?;
 
-    let results_reg = ir
-        .symbols
-        .get("splitmap_results")
-        .expect("splitmap_results not found")
-        .0;
-    let results_val = vm.root_timeline.arena.peek(results_reg);
+    let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
+    let sum_val = vm.root_timeline.arena.peek(sum_reg);
 
-    match results_val {
-        Some(Payload::Array(arr)) => {
-            assert_eq!(arr.len(), 2);
-            // Payloads are sorted by key name in VM: node1, node2
-            // node1 -> 10 * 2 = 20
-            // node2 -> 20 * 2 = 40
-            match &arr[0] {
-                Payload::Integer(v) => assert_eq!(*v, 20),
-                _ => panic!("Expected integer 20, got {:?}", arr[0]),
-            }
-            match &arr[1] {
-                Payload::Integer(v) => assert_eq!(*v, 40),
-                _ => panic!("Expected integer 40, got {:?}", arr[1]),
-            }
-        }
-        _ => panic!("Expected array, got {:?}", results_val),
-    }
-
+    assert_eq!(sum_val, Some(Payload::Integer(60)));
     Ok(())
 }
 
@@ -70,18 +36,19 @@ fn causm_expansion_speculate_inside_split_map() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
       let data = [1, 2, 3]
-      split_map item consume data {
+      let total = 0
+      for item in data step 20ms {
         speculate (max 5ms) {
           if (clone(item) == 2) {
             collapse
           }
-          let res = item + 10
-          yield res
+          commit {
+            total = total + item + 10
+          }
         } fallback {
-          let res = 0
-          yield res
+          total = total + 0
         }
-      } reconcile (result=first_wins)
+      }
     }
     "#;
 
@@ -91,45 +58,13 @@ fn causm_expansion_speculate_inside_split_map() -> anyhow::Result<()> {
     analyzer.analyze_program(&program)?;
 
     let mut vm = Vm::new();
-    vm.capability_handlers.insert(
-        "System.Log".to_string(),
-        Box::new(|params| {
-            if let Some(msg) = params.get("message") {
-                println!("[LOG] {}", msg);
-            }
-            Ok(causm_core::value::Payload::Null)
-        }),
-    );
     vm.execute_program(&ir)?;
 
-    let results_reg = ir
-        .symbols
-        .get("splitmap_results")
-        .expect("splitmap_results not found")
-        .0;
-    let results_val = vm.root_timeline.arena.peek(results_reg);
+    let total_reg = ir.symbols.get("total").expect("total not found").0;
+    let total_val = vm.root_timeline.arena.peek(total_reg);
 
-    match results_val {
-        Some(Payload::Array(arr)) => {
-            assert_eq!(arr.len(), 3);
-            // item=1 -> 1+10=11
-            // item=2 -> collapse -> fallback -> 0
-            // item=3 -> 3+10=13
-            match &arr[0] {
-                Payload::Integer(v) => assert_eq!(*v, 11),
-                _ => panic!("Expected 11"),
-            }
-            match &arr[1] {
-                Payload::Integer(v) => assert_eq!(*v, 0),
-                _ => panic!("Expected 0"),
-            }
-            match &arr[2] {
-                Payload::Integer(v) => assert_eq!(*v, 13),
-                _ => panic!("Expected 13"),
-            }
-        }
-        _ => panic!("Expected array"),
-    }
+    // item 1: 11, item 2: 0, item 3: 13 -> total = 24
+    assert_eq!(total_val, Some(Payload::Integer(24)));
 
     Ok(())
 }

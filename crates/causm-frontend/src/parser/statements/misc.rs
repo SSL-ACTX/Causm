@@ -189,18 +189,6 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                 symbols,
             }
         }
-        Rule::speculation_mode_stmt => {
-            let mode_str = pair
-                .into_inner()
-                .next()
-                .map(|p| p.as_str())
-                .unwrap_or("selective");
-            let mode = match mode_str {
-                "full" => SpeculationCommitMode::Full,
-                _ => SpeculationCommitMode::Selective,
-            };
-            Statement::SpeculationMode(mode)
-        }
         Rule::print_stmt => {
             // print_stmt → print_arg_list → expression*
             let arg_list = pair.into_inner().next().unwrap();

@@ -216,8 +216,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::while_stmt => {
-            let is_valid_check =
-                pair.as_str().trim_start().starts_with("while valid");
             let mut inner = pair.into_inner();
             let condition = parse_expression(inner.next().unwrap());
             let max_ms = parse_duration_limit(inner.next().unwrap());
@@ -231,7 +229,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
             Statement::While {
                 condition,
-                is_valid_check,
+                is_valid_check: false,
                 max_ms,
                 body,
             }
@@ -459,49 +457,6 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 max_ms,
                 cases,
                 timeout,
-                reconcile,
-            }
-        }
-        Rule::split_map_stmt => {
-            let mut inner = pair.into_inner();
-            let item_name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let mode = inner.next().map(|p| p.as_str()).unwrap_or("consume");
-            let source = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let mode_enum = match mode {
-                "consume" => ParamMode::Consume,
-                "clone" => ParamMode::Clone,
-                "decay" => ParamMode::Decay,
-                _ => ParamMode::Peek,
-            };
-
-            let mut body = Vec::new();
-            let mut reconcile = None;
-
-            for next in inner {
-                match next.as_rule() {
-                    Rule::statement => {
-                        if let Some(actual_stmt) = next.into_inner().next() {
-                            body.push(parse_statement(actual_stmt));
-                        }
-                    }
-                    Rule::reconcile_clause => {
-                        reconcile = Some(parse_reconcile_clause(next));
-                    }
-                    _ => {}
-                }
-            }
-
-            Statement::SplitMap {
-                item_name,
-                mode: mode_enum,
-                source,
-                body,
                 reconcile,
             }
         }

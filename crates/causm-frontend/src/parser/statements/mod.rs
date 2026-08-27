@@ -48,7 +48,6 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::split_stmt
         | Rule::merge_stmt
         | Rule::select_stmt
-        | Rule::split_map_stmt
         | Rule::return_stmt
         | Rule::yield_stmt
         | Rule::break_stmt => control_flow::parse_control_flow_stmt(pair),
@@ -68,7 +67,6 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         Rule::commit_stmt
         | Rule::speculate_stmt
         | Rule::collapse_stmt
-        | Rule::speculation_mode_stmt
         | Rule::import_stmt
         | Rule::from_import_stmt
         | Rule::foreign_block_stmt

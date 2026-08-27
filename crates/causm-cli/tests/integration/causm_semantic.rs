@@ -226,7 +226,7 @@ fn causm_semantic_routine_param_return_types() -> anyhow::Result<()> {
         let sum = a + b
         yield sum
       }
-      let result:int = call add(10, 20)
+      let result:int = add(10, 20)
     }
     "#;
 
@@ -307,7 +307,7 @@ fn causm_semantic_routine_taking_inferred() -> anyhow::Result<()> {
         let q = p
       }
       let s = "ok"
-      let r = call f(s)
+      let r = f(s)
     }
     "#;
 
@@ -365,7 +365,7 @@ fn causm_semantic_routine_consume_non_identifier_fails_analyzer(
       routine fn(consume token) taking 5ms {
         yield token
       }
-      let result = call fn("not_var", "x")
+      let result = fn("not_var", "x")
     }
     "#;
 
@@ -385,8 +385,8 @@ fn causm_semantic_routine_yield_array_struct_return() -> anyhow::Result<()> {
         yield a
         yield s
       }
-      let result1 = call make_res()
-      let result2 = call make_res()
+      let result1 = make_res()
+      let result2 = make_res()
     }
     "#;
 
@@ -892,10 +892,11 @@ fn causm_semantic_merge_priority_resolves_to_priority_branch() -> anyhow::Result
 fn causm_semantic_split_map_collects_yields() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-      let data = [1,2,3]
-      split_map item consume data {
-        yield item
-      } reconcile (result=first_wins)
+      let data = [1, 2, 3]
+      let sum = 0
+      for item in data step 10ms {
+        sum = sum + item
+      }
     }
     "#;
 
@@ -907,13 +908,9 @@ fn causm_semantic_split_map_collects_yields() -> anyhow::Result<()> {
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
-    let out_reg = ir
-        .symbols
-        .get("splitmap_results")
-        .expect("splitmap_results not found")
-        .0;
-    let out = vm.root_timeline.arena.peek(out_reg);
-    assert!(out.is_some());
+    let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
+    let sum = vm.root_timeline.arena.peek(sum_reg);
+    assert_eq!(sum, Some(Payload::Integer(6)));
     Ok(())
 }
 
@@ -1101,7 +1098,7 @@ fn causm_semantic_temporal_decay_and_decay_handler() -> anyhow::Result<()> {
     @0ms: {
         type Account = struct decay_after 2ms { id: string, balance: int }
         let cleanup_executed = false
-        decay_handler for Account {
+        on_decay(Account) {
             cleanup_executed = true
         }
         let act: Account = struct { id = "123", balance = 1000 }

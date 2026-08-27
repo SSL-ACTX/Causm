@@ -204,7 +204,44 @@ impl Vm {
         state: EntropicState,
     ) -> Result<(), TemporalError> {
         let branch = self.get_branch_mut(branch_id)?;
-        branch.arena.insert(reg, state)?;
+        if let Err(e) = branch.arena.insert(reg, state.clone()) {
+            match e {
+                MemoryError::OutOfMemory(_, _) => {
+                    // Check if a saturation policy is configured for OnFull or OnOverflow
+                    let policy = branch
+                        .saturation_policies
+                        .get(&causm_core::PolicyTarget::OnFull)
+                        .or_else(|| {
+                            branch
+                                .saturation_policies
+                                .get(&causm_core::PolicyTarget::OnOverflow)
+                        })
+                        .copied();
+
+                    match policy {
+                        Some(causm_core::SaturationPolicy::EvictDecayed) => {
+                            branch.arena.evict_decayed();
+                            branch.arena.insert(reg, state)?;
+                        }
+                        Some(causm_core::SaturationPolicy::RingBuffer) => {
+                            // Reset transient partition to base watermark and insert
+                            branch.arena.reset_to_base_watermark();
+                            branch.arena.insert(reg, state)?;
+                        }
+                        Some(causm_core::SaturationPolicy::FailFast) | None => {
+                            return Err(TemporalError::MemoryFault(e));
+                        }
+                        Some(causm_core::SaturationPolicy::Throttle) => {
+                            // Add temporal latency penalty and try inserting
+                            branch.local_clock += 10;
+                            branch.arena.evict_decayed();
+                            branch.arena.insert(reg, state)?;
+                        }
+                    }
+                }
+                other => return Err(TemporalError::MemoryFault(other)),
+            }
+        }
         Ok(())
     }
 
