@@ -97,7 +97,7 @@ method_receiver = { param_mode? ~ "self" ~ type_annotation? ~ ("for" ~ amount ~ 
 method_name = { identifier ~ ("<" ~ type_param_list ~ ">")? ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode? ~ identifier ~ type_annotation? }
-param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" }
+param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" | "&" }
 return_annotation = { "->" ~ type_name }
 
 select_stmt = { "select" ~ duration_limit ~ "{" ~ select_case* ~ timeout_clause? ~ "}" ~ reconcile_clause? }

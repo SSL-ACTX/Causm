@@ -62,7 +62,10 @@ pub(crate) fn analyze_expression(
                             (&expected_type, &arg_type),
                             (
                                 Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                                Type::Array(_) | Type::Struct(_) | Type::Custom(_)
+                                Type::Array(_)
+                                    | Type::Struct(_)
+                                    | Type::Custom(_)
+                                    | Type::String
                             )
                         );
                         if !is_ffi_ptr_pass
@@ -557,7 +560,10 @@ pub(crate) fn analyze_expression(
                     (&expected_type, &arg_type),
                     (
                         Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
+                        Type::Array(_)
+                            | Type::Struct(_)
+                            | Type::Custom(_)
+                            | Type::String
                     )
                 );
                 if !is_ffi_ptr_pass

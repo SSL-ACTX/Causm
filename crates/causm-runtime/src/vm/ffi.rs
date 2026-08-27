@@ -124,7 +124,6 @@ static WASM_SOCKETS: std::sync::Mutex<Option<HashMap<i32, std::net::TcpStream>>>
 #[derive(Clone, Default)]
 struct VirtualFileNode {
     data: Vec<u8>,
-    is_dir: bool,
 }
 
 #[cfg(not(unix))]
@@ -132,7 +131,6 @@ struct VirtualFileNode {
 struct VirtualFileHandle {
     path: String,
     cursor: usize,
-    flags: i32,
 }
 
 #[cfg(not(unix))]
@@ -144,7 +142,33 @@ static VIRTUAL_HANDLES: std::sync::Mutex<Option<HashMap<i32, VirtualFileHandle>>
     std::sync::Mutex::new(None);
 
 #[cfg(not(unix))]
-extern "C" fn wasm_vfs_open(path_ptr: *const std::ffi::c_char, flags: i32, _mode: i32) -> i32 {
+pub fn vfs_total_bytes() -> usize {
+    let fs_guard = VIRTUAL_FS.lock().unwrap();
+    if let Some(fs) = fs_guard.as_ref() {
+        fs.values().map(|node| node.data.len()).sum()
+    } else {
+        0
+    }
+}
+
+#[cfg(not(unix))]
+pub fn vfs_reset() {
+    let mut fs_guard = VIRTUAL_FS.lock().unwrap();
+    if let Some(fs) = fs_guard.as_mut() {
+        fs.clear();
+    }
+    let mut handles_guard = VIRTUAL_HANDLES.lock().unwrap();
+    if let Some(handles) = handles_guard.as_mut() {
+        handles.clear();
+    }
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_vfs_open(
+    path_ptr: *const std::ffi::c_char,
+    flags: i32,
+    _mode: i32,
+) -> i32 {
     if path_ptr.is_null() {
         return -1;
     }
@@ -158,9 +182,13 @@ extern "C" fn wasm_vfs_open(path_ptr: *const std::ffi::c_char, flags: i32, _mode
     let fs = fs_guard.get_or_insert_with(HashMap::new);
 
     // If writing/creating and not exists, create entry
-    let is_write = (flags & 512 != 0) || (flags & 1 != 0) || (flags & 2 != 0) || (flags & 577 != 0) || (flags & 1089 != 0);
+    let is_write = (flags & 512 != 0)
+        || (flags & 1 != 0)
+        || (flags & 2 != 0)
+        || (flags & 577 != 0)
+        || (flags & 1089 != 0);
     if is_write && !fs.contains_key(&path) {
-        fs.insert(path.clone(), VirtualFileNode { data: Vec::new(), is_dir: false });
+        fs.insert(path.clone(), VirtualFileNode { data: Vec::new() });
     }
 
     if !fs.contains_key(&path) && !is_write {
@@ -176,11 +204,13 @@ extern "C" fn wasm_vfs_open(path_ptr: *const std::ffi::c_char, flags: i32, _mode
         0
     };
 
-    handles.insert(fd, VirtualFileHandle {
-        path,
-        cursor: initial_cursor,
-        flags,
-    });
+    handles.insert(
+        fd,
+        VirtualFileHandle {
+            path,
+            cursor: initial_cursor,
+        },
+    );
     fd
 }
 
@@ -201,7 +231,11 @@ extern "C" fn wasm_vfs_read(fd: i32, buf: *mut u8, count: usize) -> isize {
                     let avail = node.data.len() - h.cursor;
                     let to_read = std::cmp::min(avail, count);
                     unsafe {
-                        std::ptr::copy_nonoverlapping(node.data.as_ptr().add(h.cursor), buf, to_read);
+                        std::ptr::copy_nonoverlapping(
+                            node.data.as_ptr().add(h.cursor),
+                            buf,
+                            to_read,
+                        );
                     }
                     h.cursor += to_read;
                     return to_read as isize;
@@ -223,7 +257,9 @@ extern "C" fn wasm_vfs_write(fd: i32, buf: *const u8, count: usize) -> isize {
         if let Some(h) = handles.get_mut(&fd) {
             let mut fs_guard = VIRTUAL_FS.lock().unwrap();
             let fs = fs_guard.get_or_insert_with(HashMap::new);
-            let node = fs.entry(h.path.clone()).or_insert_with(|| VirtualFileNode { data: Vec::new(), is_dir: false });
+            let node = fs
+                .entry(h.path.clone())
+                .or_insert_with(|| VirtualFileNode { data: Vec::new() });
             let slice = unsafe { std::slice::from_raw_parts(buf, count) };
             if h.cursor + count > node.data.len() {
                 node.data.resize(h.cursor + count, 0);
@@ -246,7 +282,7 @@ extern "C" fn wasm_vfs_lseek(fd: i32, offset: i64, whence: i32) -> i64 {
             if let Some(fs) = fs_guard.as_ref() {
                 if let Some(node) = fs.get(&h.path) {
                     let new_cursor = match whence {
-                        0 => offset as usize, // SEEK_SET
+                        0 => offset as usize,                            // SEEK_SET
                         1 => (h.cursor as i64 + offset).max(0) as usize, // SEEK_CUR
                         2 => (node.data.len() as i64 + offset).max(0) as usize, // SEEK_END
                         _ => h.cursor,
@@ -306,7 +342,10 @@ extern "C" fn wasm_vfs_access(path_ptr: *const std::ffi::c_char, _mode: i32) -> 
 }
 
 #[cfg(not(unix))]
-extern "C" fn wasm_vfs_rename(old_ptr: *const std::ffi::c_char, new_ptr: *const std::ffi::c_char) -> i32 {
+extern "C" fn wasm_vfs_rename(
+    old_ptr: *const std::ffi::c_char,
+    new_ptr: *const std::ffi::c_char,
+) -> i32 {
     if old_ptr.is_null() || new_ptr.is_null() {
         return -1;
     }
@@ -339,7 +378,7 @@ extern "C" fn wasm_vfs_mkdir(path_ptr: *const std::ffi::c_char, _mode: i32) -> i
     };
     let mut fs_guard = VIRTUAL_FS.lock().unwrap();
     let fs = fs_guard.get_or_insert_with(HashMap::new);
-    fs.insert(path, VirtualFileNode { data: Vec::new(), is_dir: true });
+    fs.insert(path, VirtualFileNode { data: Vec::new() });
     0
 }
 
@@ -607,45 +646,76 @@ pub unsafe fn invoke_foreign_symbol(
                 Payload::String(s) => CString::new(s.as_str()).ok(),
                 _ => None,
             });
-            let path_ptr = path_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
-            let flags = args.get(1).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(0);
-            let mode = args.get(2).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(0);
-            return Ok(Payload::Integer(wasm_vfs_open(path_ptr, flags, mode) as i64));
+            let path_ptr = path_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
+            let flags = args
+                .get(1)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let mode = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            return Ok(
+                Payload::Integer(wasm_vfs_open(path_ptr, flags, mode) as i64),
+            );
         } else if sym_ptr == (wasm_vfs_write as RawHandle) {
-            let fd = args.get(0).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(-1);
-            let write_bytes: Vec<u8> = if let Some(Payload::String(s)) = args.get(1) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let write_bytes: Vec<u8> = if let Some(Payload::String(s)) = args.get(1)
+            {
                 s.as_bytes().to_vec()
             } else if let Some(Payload::Array(elements)) = args.get(1) {
-                elements.iter().map(|el| match el {
-                    Payload::Integer(v) => *v as u8,
-                    _ => 0,
-                }).collect()
+                elements
+                    .iter()
+                    .map(|el| match el {
+                        Payload::Integer(v) => *v as u8,
+                        _ => 0,
+                    })
+                    .collect()
             } else {
                 Vec::new()
             };
-            let count = args.get(2).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as usize),
-                _ => None,
-            }).unwrap_or(write_bytes.len());
-            return Ok(Payload::Integer(wasm_vfs_write(fd, write_bytes.as_ptr(), count) as i64));
+            let count = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as usize),
+                    _ => None,
+                })
+                .unwrap_or(write_bytes.len());
+            return Ok(Payload::Integer(wasm_vfs_write(
+                fd,
+                write_bytes.as_ptr(),
+                count,
+            ) as i64));
         } else if sym_ptr == (wasm_vfs_read as RawHandle) {
-            let fd = args.get(0).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(-1);
-            let count = args.get(2).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as usize),
-                _ => None,
-            }).unwrap_or(512);
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let count = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as usize),
+                    _ => None,
+                })
+                .unwrap_or(512);
             let mut read_buf = vec![0u8; count];
             let res = wasm_vfs_read(fd, read_buf.as_mut_ptr(), count);
             if res > 0 {
@@ -662,42 +732,63 @@ pub unsafe fn invoke_foreign_symbol(
             }
             return Ok(Payload::Integer(res as i64));
         } else if sym_ptr == (wasm_vfs_lseek as RawHandle) {
-            let fd = args.get(0).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(-1);
-            let offset = args.get(1).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
-            let whence = args.get(2).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(0);
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let offset = args
+                .get(1)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let whence = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
             return Ok(Payload::Integer(wasm_vfs_lseek(fd, offset, whence)));
         } else if sym_ptr == (wasm_vfs_close as RawHandle) {
-            let fd = args.get(0).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(-1);
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
             return Ok(Payload::Integer(wasm_vfs_close(fd) as i64));
         } else if sym_ptr == (wasm_vfs_unlink as RawHandle) {
             let path_cs = args.get(0).and_then(|p| match p {
                 Payload::String(s) => CString::new(s.as_str()).ok(),
                 _ => None,
             });
-            let ptr = path_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
+            let ptr = path_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
             return Ok(Payload::Integer(wasm_vfs_unlink(ptr) as i64));
         } else if sym_ptr == (wasm_vfs_access as RawHandle) {
             let path_cs = args.get(0).and_then(|p| match p {
                 Payload::String(s) => CString::new(s.as_str()).ok(),
                 _ => None,
             });
-            let ptr = path_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
-            let mode = args.get(1).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(0);
+            let ptr = path_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
+            let mode = args
+                .get(1)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
             return Ok(Payload::Integer(wasm_vfs_access(ptr, mode) as i64));
         } else if sym_ptr == (wasm_vfs_rename as RawHandle) {
             let old_cs = args.get(0).and_then(|p| match p {
@@ -708,19 +799,31 @@ pub unsafe fn invoke_foreign_symbol(
                 Payload::String(s) => CString::new(s.as_str()).ok(),
                 _ => None,
             });
-            let old_ptr = old_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
-            let new_ptr = new_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
+            let old_ptr = old_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
+            let new_ptr = new_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
             return Ok(Payload::Integer(wasm_vfs_rename(old_ptr, new_ptr) as i64));
         } else if sym_ptr == (wasm_vfs_mkdir as RawHandle) {
             let path_cs = args.get(0).and_then(|p| match p {
                 Payload::String(s) => CString::new(s.as_str()).ok(),
                 _ => None,
             });
-            let ptr = path_cs.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
-            let mode = args.get(1).and_then(|p| match p {
-                Payload::Integer(i) => Some(*i as i32),
-                _ => None,
-            }).unwrap_or(0);
+            let ptr = path_cs
+                .as_ref()
+                .map(|cs| cs.as_ptr())
+                .unwrap_or(std::ptr::null());
+            let mode = args
+                .get(1)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
             return Ok(Payload::Integer(wasm_vfs_mkdir(ptr, mode) as i64));
         } else if sym_ptr == (wasm_close as RawHandle) {
             let fd = args

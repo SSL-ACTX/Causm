@@ -23,5 +23,6 @@ pub mod causm_sync;
 pub mod causm_syntax_ergonomics;
 pub mod causm_temporal;
 pub mod causm_temporal_contracts;
+pub mod causm_vfs;
 pub mod causm_z3_routine_test;
 pub mod causm_z3_verification;

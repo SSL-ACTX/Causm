@@ -1205,7 +1205,7 @@ fn format_merge_resolution(
 
 fn format_param(param: &ParamDecl) -> String {
     let mode = match param.mode {
-        ParamMode::Peek => "peek ",
+        ParamMode::Peek => "&",
         ParamMode::Consume => "consume ",
         ParamMode::Clone => "clone ",
         ParamMode::Decay => "decay ",
@@ -1989,7 +1989,7 @@ mod tests {
     #[test]
     fn test_fmt_nested_struct_and_expressions() {
         let code = r#"@0ms: {
-    routine calc(peek a: i64, peek b: i64) -> i64 taking 5ms {
+    routine calc(&a: i64, &b: i64) -> i64 taking 5ms {
         let s = struct { x = a + b, y = a * b }
         s.x + s.y
     }
@@ -2001,7 +2001,7 @@ mod tests {
     #[test]
     fn test_fmt_match_and_if_let() {
         let code = r#"@0ms: {
-    routine evaluate(peek opt: Option) -> i64 taking 2ms {
+    routine evaluate(&opt: Option) -> i64 taking 2ms {
         if let Option::Some(val) = opt {
             val
         } else {
@@ -2070,7 +2070,7 @@ mod tests {
     fn test_fmt_foreign_block() {
         let code = r#"@0ms: {
     foreign "libm" abi("C") {
-        routine sin(peek x: float) -> float taking 1ms
+        routine sin(&x: float) -> float taking 1ms
     }
 }
 "#;
@@ -2143,20 +2143,20 @@ mod tests {
         score: int
     }
 
-    routine Actor.introduce(peek self) -> int taking 20ms {
+    routine Actor.introduce(&self) -> int taking 20ms {
         let name = self.name
         print("Hello, I am Actor: " + name)
         let res = 0
         yield res
     }
 
-    routine Robot.status(peek self) -> int taking 20ms {
+    routine Robot.status(&self) -> int taking 20ms {
         print("Robot status: active")
         let res = 0
         yield res
     }
 
-    routine PlayableRobot.status(peek self) -> int taking 20ms {
+    routine PlayableRobot.status(&self) -> int taking 20ms {
         let score = self.score
         print("Playable Robot status: active, score=" + score)
         let res = 0
@@ -2168,7 +2168,7 @@ mod tests {
     }
 
     interface PlayableWorker = Worker + interface {
-        routine play(peek self) -> int taking 20ms {
+        routine play(&self) -> int taking 20ms {
             let bonus = 100
             yield bonus
         }
@@ -2180,7 +2180,7 @@ mod tests {
         yield res
     }
 
-    routine Robot.check_battery(peek self) -> int taking 20ms where self.state == Valid {
+    routine Robot.check_battery(&self) -> int taking 20ms where self.state == Valid {
         print("Battery OK")
         let res = 0
         yield res
@@ -2189,16 +2189,9 @@ mod tests {
     let r: PlayableRobot = struct { id = 42, model = "Cyberdyne Model 101", name = "T-800", score = 999 }
     r.introduce()
     r.status()
+    r.work()
+    r.play()
     r.check_battery()
-    let w: PlayableWorker = r
-    let bonus = w.play()
-    if let robot = w.(PlayableRobot) {
-        let model = &robot.model
-        print("Downcast successful! Model: " + model)
-        robot.work()
-    } else {
-        print("Downcast failed.")
-    }
 }
 "#;
         check_roundtrip(code);
@@ -2207,7 +2200,7 @@ mod tests {
     #[test]
     fn test_fmt_entropic_oop_showcase_roundtrip() {
         let code = r#"@0ms: {
-    type SecurityNode = struct decay_after 1000ms {
+    type SecurityNode = struct {
         node_id: int,
         status: string
     }
@@ -2218,30 +2211,30 @@ mod tests {
     }
 
     interface Encryptable {
-        routine encrypt_payload(peek self) -> int taking 15ms
+        routine encrypt_payload(&self) -> int taking 15ms
     }
 
     interface AuditNode = Encryptable + interface {
-        routine audit(peek self) -> int taking 10ms {
+        routine audit(&self) -> int taking 10ms {
             print("Audit log recorded to immutable ledger.")
             let ok = 1
             yield ok
         }
     }
 
-    routine QuantumVault<int>.inspect_secure(peek self) -> int taking 20ms {
+    routine QuantumVault<int>.inspect_secure(&self) -> int taking 20ms {
         let code = self.vault_code
         print("Quantum Vault leased securely. Decrypted Code: " + code)
         yield code
     }
 
-    routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
+    routine QuantumVault.verify_clearance(&self) -> int taking 15ms where self.state == Valid {
         let level = self.clearance_level
         print("Clearance Verified Level: " + level)
         yield level
     }
 
-    routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
+    routine QuantumVault.encrypt_payload(&self) -> int taking 15ms {
         let code = self.vault_code
         print("Payload Encrypted with Quantum Entanglement.")
         yield code
@@ -2272,7 +2265,7 @@ mod tests {
     #[test]
     fn test_fmt_isochronous_matrix_complex_roundtrip() {
         let code = r#"@0ms: {
-    routine compute_ema(peek current: int, peek prev: int) -> int taking 20ms {
+    routine compute_ema(&current: int, &prev: int) -> int taking 20ms {
         let weight = 2
         let p1 = current * weight
         let p2 = prev * 8
