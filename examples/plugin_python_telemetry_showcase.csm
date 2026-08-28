@@ -1,0 +1,16 @@
+@0ms: {
+    // Routine following correct telemetry naming convention
+    routine telemetry_heartbeat_stream() taking 10ms {
+        let status = "ok"
+    }
+
+    // Routine violating telemetry naming policy
+    routine calculate_orbit_trajectory() taking 50ms {
+        let speed = 7800
+    }
+
+    // Routine violating WCET budget annotation policy (missing taking)
+    routine log_system_alert() {
+        let alert = "low_voltage"
+    }
+}

@@ -61,34 +61,33 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::while_stmt
         | Rule::for_stmt
         | Rule::for_step_stmt
-        | Rule::speculate_stmt
-        | Rule::collapse_stmt
+        | Rule::split_stmt
+        | Rule::merge_stmt
         | Rule::select_stmt
-        | Rule::match_entropy_stmt
-        | Rule::slice_stmt
+        | Rule::return_stmt
+        | Rule::yield_stmt
         | Rule::break_stmt => control_flow::parse_control_flow_stmt(target_pair),
 
         // Temporal
-        Rule::split_stmt | Rule::merge_stmt => {
-            temporal::parse_temporal_stmt(target_pair)
-        }
+        Rule::assert_time_stmt
+        | Rule::slice_stmt
+        | Rule::await_stmt
+        | Rule::lease_stmt => temporal::parse_temporal_stmt(target_pair),
 
         // Entropic
-        Rule::lease_stmt | Rule::entangle_stmt => {
+        Rule::match_entropy_stmt | Rule::entangle_stmt => {
             entropic::parse_entropic_stmt(target_pair)
         }
 
         // Misc
-        Rule::print_stmt
-        | Rule::debug_stmt
-        | Rule::return_stmt
-        | Rule::yield_stmt
-        | Rule::await_stmt
-        | Rule::assert_time_stmt
+        Rule::commit_stmt
+        | Rule::speculate_stmt
+        | Rule::collapse_stmt
         | Rule::import_stmt
         | Rule::from_import_stmt
         | Rule::foreign_block_stmt
-        | Rule::commit_stmt => misc::parse_misc_stmt(target_pair),
+        | Rule::print_stmt
+        | Rule::debug_stmt => misc::parse_misc_stmt(target_pair),
 
         Rule::expression_stmt => {
             let inner_expr = target_pair.into_inner().next().unwrap();

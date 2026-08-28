@@ -149,10 +149,154 @@ impl PluginError {
     }
 }
 
+/// Fluent builder for constructing `PluginDiagnostic` instances.
+pub struct DiagnosticBuilder {
+    diag: PluginDiagnostic,
+}
+
+impl DiagnosticBuilder {
+    pub fn new(level: DiagnosticLevel, message: impl Into<String>) -> Self {
+        Self {
+            diag: PluginDiagnostic {
+                level,
+                message: message.into(),
+                span: None,
+            },
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(DiagnosticLevel::Error, message)
+    }
+
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self::new(DiagnosticLevel::Warning, message)
+    }
+
+    pub fn note(message: impl Into<String>) -> Self {
+        Self::new(DiagnosticLevel::Note, message)
+    }
+
+    pub fn with_span(mut self, span: &causm_core::Span) -> Self {
+        self.diag.span = Some(span.clone());
+        self
+    }
+
+    pub fn build(self) -> PluginDiagnostic {
+        self.diag
+    }
+}
+
+/// Read-only AST Visitor trait with default traversal logic.
+pub trait AstVisitor {
+    fn visit_program(&mut self, program: &causm_core::Program, ctx: &PluginContext) {
+        for tb in &program.timelines {
+            self.visit_timeline(tb, ctx);
+        }
+    }
+
+    fn visit_timeline(
+        &mut self,
+        tb: &causm_core::TimelineBlock,
+        ctx: &PluginContext,
+    ) {
+        for stmt in &tb.statements {
+            self.visit_spanned_statement(stmt, ctx);
+        }
+    }
+
+    fn visit_spanned_statement(
+        &mut self,
+        stmt: &causm_core::SpannedStatement,
+        ctx: &PluginContext,
+    ) {
+        self.visit_statement(&stmt.stmt, &stmt.span, &stmt.attributes, ctx);
+    }
+
+    fn visit_statement(
+        &mut self,
+        stmt: &causm_core::Statement,
+        span: &causm_core::Span,
+        attrs: &[causm_core::Attribute],
+        ctx: &PluginContext,
+    ) {
+        match stmt {
+            causm_core::Statement::Isolate(isolate) => {
+                self.visit_isolate(isolate, span, attrs, ctx);
+            }
+            causm_core::Statement::RoutineDef {
+                name,
+                params,
+                return_type,
+                taking_ms,
+                state_constraint,
+                required_capabilities,
+                body,
+            } => {
+                self.visit_routine(
+                    name,
+                    params,
+                    return_type.as_ref(),
+                    *taking_ms,
+                    state_constraint.as_ref(),
+                    required_capabilities,
+                    body,
+                    span,
+                    attrs,
+                    ctx,
+                );
+            }
+            causm_core::Statement::Expression(expr) => {
+                self.visit_expression(expr, span, ctx);
+            }
+            _ => {}
+        }
+    }
+
+    fn visit_isolate(
+        &mut self,
+        isolate: &causm_core::IsolateBlock,
+        _span: &causm_core::Span,
+        _attrs: &[causm_core::Attribute],
+        ctx: &PluginContext,
+    ) {
+        for inner in &isolate.body {
+            self.visit_spanned_statement(inner, ctx);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn visit_routine(
+        &mut self,
+        _name: &str,
+        _params: &[causm_core::ParamDecl],
+        _return_type: Option<&causm_core::TypeName>,
+        _taking_ms: Option<u64>,
+        _state_constraint: Option<&(String, String)>,
+        _required_capabilities: &[causm_core::Capability],
+        body: &[causm_core::SpannedStatement],
+        _span: &causm_core::Span,
+        _attrs: &[causm_core::Attribute],
+        ctx: &PluginContext,
+    ) {
+        for stmt in body {
+            self.visit_spanned_statement(stmt, ctx);
+        }
+    }
+
+    fn visit_expression(
+        &mut self,
+        _expr: &causm_core::Expression,
+        _span: &causm_core::Span,
+        _ctx: &PluginContext,
+    ) {
+    }
+}
+
 pub mod prelude {
     pub use super::core::*;
     pub use super::{
-        causm_plugin, DiagnosticLevel, PluginContext, PluginDiagnostic, PluginError,
-        PluginRequest, PluginResponse, PluginStatus,
+        causm_plugin, AstVisitor, DiagnosticBuilder, DiagnosticLevel, PluginContext,
+        PluginDiagnostic, PluginError, PluginRequest, PluginResponse, PluginStatus,
     };
 }

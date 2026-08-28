@@ -100,15 +100,15 @@ pub fn process_ast(
                         // Audit Foreign C/Rust blocks inside seccomp isolate
                         if let Statement::ForeignBlock { lib_name, .. } = &inner.stmt
                         {
-                            diagnostics.push(PluginDiagnostic {
-                                level: DiagnosticLevel::Error,
-                                message: format!(
+                            diagnostics.push(
+                                DiagnosticBuilder::error(format!(
                                     "Foreign FFI library '{}' is forbidden inside @seccomp sandbox isolate '{}'",
                                     lib_name,
                                     isolate.name.as_deref().unwrap_or("anonymous")
-                                ),
-                                span: Some(inner.span.clone()),
-                            });
+                                ))
+                                .with_span(&inner.span)
+                                .build(),
+                            );
                         }
 
                         // Audit all child expressions
@@ -119,31 +119,31 @@ pub fn process_ast(
                                     let syscall_name = match target {
                                         SyscallTarget::Symbol(s) => s.as_str(),
                                         SyscallTarget::Number(n) => {
-                                            diagnostics.push(PluginDiagnostic {
-                                                level: DiagnosticLevel::Warning,
-                                                message: format!(
+                                            diagnostics.push(
+                                                DiagnosticBuilder::warning(format!(
                                                     "Raw numeric syscall {} on arch '{}' should be specified symbolically as 'sys_{}' for portability",
                                                     n,
                                                     target_arch,
                                                     resolve_syscall_name(*n, target_arch).trim_start_matches("sys_")
-                                                ),
-                                                span: Some(inner.span.clone()),
-                                            });
+                                                ))
+                                                .with_span(&inner.span)
+                                                .build(),
+                                            );
                                             resolve_syscall_name(*n, target_arch)
                                         }
                                     };
 
                                     if !local_allowed.is_empty() && !local_allowed.contains(syscall_name) {
-                                        diagnostics.push(PluginDiagnostic {
-                                            level: DiagnosticLevel::Error,
-                                            message: format!(
+                                        diagnostics.push(
+                                            DiagnosticBuilder::error(format!(
                                                 "Syscall '{}' violates @seccomp whitelist [{}] on target arch '{}'!",
                                                 syscall_name,
                                                 local_allowed.iter().cloned().collect::<Vec<_>>().join(", "),
                                                 target_arch
-                                            ),
-                                            span: Some(inner.span.clone()),
-                                        });
+                                            ))
+                                            .with_span(&inner.span)
+                                            .build(),
+                                        );
                                     }
                                 }
 
@@ -154,14 +154,14 @@ pub fn process_ast(
                                         || routine.starts_with("System.Mem.raw_write")
                                         || routine.starts_with("System.Net.bind_raw_socket") =>
                                 {
-                                    diagnostics.push(PluginDiagnostic {
-                                        level: DiagnosticLevel::Error,
-                                        message: format!(
+                                    diagnostics.push(
+                                        DiagnosticBuilder::error(format!(
                                             "Dangerous security routine '{}' is blocked by @seccomp sandbox!",
                                             routine
-                                        ),
-                                        span: Some(inner.span.clone()),
-                                    });
+                                        ))
+                                        .with_span(&inner.span)
+                                        .build(),
+                                    );
                                 }
 
                                 _ => {}

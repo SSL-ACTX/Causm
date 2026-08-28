@@ -8,3 +8,9 @@ path = "../target/wasm32-unknown-unknown/debug/seccomp_guard.wasm"
 [plugins.seccomp_guard.options]
 allow = "sys_read,sys_write,sys_exit"
 strict_mode = true
+
+[plugins.python_linter]
+command = "python3 plugins/python_telemetry_linter.py"
+
+[plugins.python_linter.options]
+strict_naming = "true"
