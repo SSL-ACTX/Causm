@@ -205,6 +205,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             Statement::EnumDecl { name, variants }
         }
         Rule::type_decl => {
+            let is_distinct = pair.as_str().contains("distinct");
             let mut inner = pair.into_inner().peekable();
             let mut name_pair = inner.next().unwrap();
             if name_pair.as_rule() == Rule::pub_opt {
@@ -215,6 +216,32 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             if let Some(p) = inner.peek() {
                 if p.as_rule() == Rule::generic_param_list {
                     inner.next(); // Consume generic_param_list
+                }
+            }
+
+            // Check if this is a distinct newtype declaration: type UserId = distinct int
+            if is_distinct {
+                if let Some(p) = inner.peek() {
+                    if p.as_rule() == Rule::type_name {
+                        let underlying_type = parse_type_name(inner.next().unwrap());
+                        let mut fields = HashMap::new();
+                        fields.insert(
+                            "value".to_string(),
+                            TypeFieldDef {
+                                typ: underlying_type,
+                                is_const: false,
+                                default_value: None,
+                            },
+                        );
+                        return Statement::TypeDecl {
+                            name,
+                            extends: None,
+                            fields,
+                            decay_after_ms: None,
+                            auto_drop: None,
+                            scoped_branch: None,
+                        };
+                    }
                 }
             }
 

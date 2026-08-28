@@ -50,8 +50,30 @@ impl EntropicAnalyzer {
             }
             if let Expression::StructLit(ref type_name, _) = expr {
                 if type_name.borrow().is_none() {
-                    if let TypeName::Custom(ref name) = explicit_type_name {
-                        *type_name.borrow_mut() = Some(name.clone());
+                    match explicit_type_name {
+                        TypeName::Custom(ref name) => {
+                            *type_name.borrow_mut() = Some(name.clone());
+                        }
+                        TypeName::Generic(ref name, ref params) => {
+                            let params_str = params
+                                .iter()
+                                .map(|p| match p {
+                                    causm_core::TypeParam::Type(t) => {
+                                        format!("{:?}", t)
+                                    }
+                                    causm_core::TypeParam::Amount(a) => {
+                                        a.to_string()
+                                    }
+                                    causm_core::TypeParam::Duration(d) => {
+                                        format!("{}ms", d)
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            *type_name.borrow_mut() =
+                                Some(format!("{}<{}>", name, params_str));
+                        }
+                        _ => {}
                     }
                 }
             }

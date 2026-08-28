@@ -768,6 +768,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         } => {
             let src = lower_expression(ctx, expr);
             let dest = ctx.get_reg(target);
+            ctx.symbols.insert(target.clone(), dest);
             ctx.push(Instruction::Move { dest, src });
             if let Some(causm_core::LifetimeAnnotation::Decayed(ms)) = lifetime {
                 ctx.push(Instruction::Lease {
@@ -788,15 +789,6 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         ctx.push(Instruction::ConsumeFieldDynamic {
                             target: target_reg,
                             index: index_reg,
-                        });
-                    }
-                }
-                Expression::FieldAccess { target, field } => {
-                    if let Expression::Identifier(name) = &**target {
-                        let target_reg = ctx.get_reg(name);
-                        ctx.push(Instruction::ConsumeField {
-                            src: target_reg,
-                            field: field.clone(),
                         });
                     }
                 }
@@ -1499,7 +1491,12 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             if let Some(ref spec) = auto_drop {
                 ctx.auto_drop_specs.insert(name.clone(), spec.clone());
             }
-            ctx.type_decls.insert(name.clone(), resolved_fields);
+            let base_name =
+                name.split('<').next().unwrap_or(name).trim().to_string();
+            ctx.type_decls.insert(name.clone(), resolved_fields.clone());
+            if base_name != *name {
+                ctx.type_decls.insert(base_name, resolved_fields);
+            }
         }
         Statement::InterfaceDecl {
             name,

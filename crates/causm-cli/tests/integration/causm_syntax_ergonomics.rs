@@ -849,3 +849,186 @@ fn test_syntax_compiler_attribute_derive_enum() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_distinct_newtype_declaration() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type UserId = distinct int
+        type OrderId = distinct int
+
+        let uid: UserId = struct { value = 101 }
+        let oid: OrderId = struct { value = 5005 }
+
+        let u_val = uid.value
+        let o_val = oid.value
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let u_reg = ir.symbols.get("u_val").expect("u_val symbol").0;
+    let o_reg = ir.symbols.get("o_val").expect("o_val symbol").0;
+    assert_eq!(vm.peek_reg("main", u_reg)?, Payload::Integer(101));
+    assert_eq!(vm.peek_reg("main", o_reg)?, Payload::Integer(5005));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_distinct_newtype_type_mismatch_rejection() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type UserId = distinct int
+        type OrderId = distinct int
+
+        let uid: UserId = struct { value = 100 }
+        let oid: OrderId = uid
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(
+        res.is_err(),
+        "Distinct types must not be implicitly assignable"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_struct_declaration() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Buffer<const N: int> = struct {
+            capacity: int = N,
+            length: int = 0
+        }
+
+        let buf: Buffer<64> = struct {}
+        let cap = buf.capacity
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let cap_reg = ir.symbols.get("cap").expect("cap symbol").0;
+    assert_eq!(vm.peek_reg("main", cap_reg)?, Payload::Integer(64));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_multiple_instantiations() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type FixedRing<const SIZE: int> = struct {
+            limit: int = SIZE,
+            head: int = 0
+        }
+
+        let r1: FixedRing<16> = struct {}
+        let r2: FixedRing<1024> = struct {}
+
+        let lim1 = r1.limit
+        let lim2 = r2.limit
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let l1_reg = ir.symbols.get("lim1").expect("lim1 symbol").0;
+    let l2_reg = ir.symbols.get("lim2").expect("lim2 symbol").0;
+    assert_eq!(vm.peek_reg("main", l1_reg)?, Payload::Integer(16));
+    assert_eq!(vm.peek_reg("main", l2_reg)?, Payload::Integer(1024));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_distinct_newtype_methods_and_type_boundaries() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Nanoseconds = distinct int
+        type Microseconds = distinct int
+
+        routine Nanoseconds.to_micros(peek self) -> int (taking 5ms) {
+            let v = self.value
+            yield v / 1000
+        }
+
+        let raw_ns: Nanoseconds = struct { value = 5000000 }
+        let converted_us = raw_ns.to_micros()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_reg = ir
+        .symbols
+        .get("converted_us")
+        .expect("converted_us symbol")
+        .0;
+    assert_eq!(vm.peek_reg("main", res_reg)?, Payload::Integer(5000));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_deep_nested_matrix_stress() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Packet<const HEADER_LEN: int> = struct {
+            hdr_size: int = HEADER_LEN,
+            payload_size: int = 512,
+            total_size: int = HEADER_LEN + 512
+        }
+
+        let p1: Packet<32> = struct {}
+        let p2: Packet<128> = struct {}
+
+        let t1 = p1.total_size
+        let t2 = p2.total_size
+        let sum_total = t1 + t2
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let sum_reg = ir.symbols.get("sum_total").expect("sum_total symbol").0;
+    assert_eq!(vm.peek_reg("main", sum_reg)?, Payload::Integer(544 + 640));
+
+    Ok(())
+}

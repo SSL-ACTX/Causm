@@ -298,9 +298,12 @@ type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 auto_drop_opt = { "auto_drop" ~ "(" ~ string_literal ~ "," ~ string_literal ~ "," ~ identifier ~ ")" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
-generic_param = { identifier ~ (":" ~ identifier)? }
+generic_param = { "const"? ~ identifier ~ (":" ~ identifier)? }
 generic_param_list = { "<" ~ generic_param ~ ("," ~ generic_param)* ~ ">" }
-type_decl = { pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? }
+type_decl = {
+    pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ "distinct" ~ type_name
+    | pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt?
+}
 assoc_type_decl = { "type" ~ identifier ~ (":" ~ identifier)? }
 interface_item = { assoc_type_decl | interface_method }
 interface_decl = { pub_opt ~ "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }

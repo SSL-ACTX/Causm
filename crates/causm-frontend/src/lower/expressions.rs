@@ -227,7 +227,12 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         Expression::FieldAccess { target, field } => {
             let mut const_expr = None;
             if let Expression::Identifier(ref name) = &**target {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
+                let type_name_opt =
+                    ctx.symbols.get(name).and_then(|r| ctx.reg_types.get(&r.0));
+                let lookup_name = type_name_opt
+                    .map(|s| s.split('<').next().unwrap_or(s).trim())
+                    .unwrap_or(name.as_str());
+                if let Some(fields_map) = ctx.type_decls.get(lookup_name) {
                     if let Some(field_def) = fields_map.get(field) {
                         if field_def.is_const {
                             if let Some(ref val_expr) = field_def.default_value {
@@ -271,19 +276,48 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let type_name_opt = type_name.borrow().clone();
             let mut defaults_to_lower = Vec::new();
             if let Some(ref name) = type_name_opt {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
+                let base_name = name.split('<').next().unwrap_or(name).trim();
+                let const_arg: Option<i64> = if let Some(start) = name.find('<') {
+                    if let Some(end) = name.rfind('>') {
+                        name[start + 1..end].trim().parse::<i64>().ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                fn subst_const(e: &Expression, const_val: i64) -> Expression {
+                    match e {
+                        Expression::Identifier(_) => Expression::Integer(const_val),
+                        Expression::BinaryOp { left, op, right } => {
+                            Expression::BinaryOp {
+                                left: Box::new(subst_const(left, const_val)),
+                                op: *op,
+                                right: Box::new(subst_const(right, const_val)),
+                            }
+                        }
+                        Expression::UnaryOp { op, expr } => Expression::UnaryOp {
+                            op: *op,
+                            expr: Box::new(subst_const(expr, const_val)),
+                        },
+                        _ => e.clone(),
+                    }
+                }
+
+                if let Some(fields_map) = ctx.type_decls.get(base_name) {
                     let mut sorted_fields_map: Vec<(&String, &TypeFieldDef)> =
                         fields_map.iter().collect();
                     sorted_fields_map.sort_by_key(|(name, _)| *name);
                     for (field_name, field_def) in sorted_fields_map {
-                        if !field_def.is_const
-                            && !field_regs.contains_key(field_name)
-                        {
+                        if !field_regs.contains_key(field_name) {
                             if let Some(ref default_expr) = field_def.default_value {
-                                defaults_to_lower.push((
-                                    field_name.clone(),
-                                    default_expr.clone(),
-                                ));
+                                let expr = if let Some(val) = const_arg {
+                                    subst_const(default_expr, val)
+                                } else {
+                                    default_expr.clone()
+                                };
+                                defaults_to_lower.push((field_name.clone(), expr));
                             }
                         }
                     }
@@ -684,13 +718,7 @@ pub(crate) fn lower_pattern_test(
                     tuple: target_reg,
                     index: idx,
                 });
-                lower_pattern_test(
-                    ctx,
-                    elem_reg,
-                    subpat,
-                    fail_jumps,
-                    bound_symbols,
-                );
+                lower_pattern_test(ctx, elem_reg, subpat, fail_jumps, bound_symbols);
             }
         }
         Pattern::Literal(lit_expr) => {

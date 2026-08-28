@@ -243,10 +243,7 @@ fn test_pattern_matching_nested_tuple_and_enum() -> anyhow::Result<()> {
 
     let desc_reg = ir.symbols.get("description").unwrap().0;
     let desc_payload = vm.root_timeline.arena.peek(desc_reg).unwrap();
-    assert_eq!(
-        desc_payload,
-        Payload::String("moving to 5,12".to_string())
-    );
+    assert_eq!(desc_payload, Payload::String("moving to 5,12".to_string()));
 
     Ok(())
 }

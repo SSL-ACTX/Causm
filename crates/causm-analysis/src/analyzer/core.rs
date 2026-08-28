@@ -804,6 +804,30 @@ impl EntropicAnalyzer {
                 return true;
             }
         }
+        if let (Type::Custom(exp_name), Type::Custom(act_name)) = (expected, actual)
+        {
+            if exp_name == act_name || exp_name == "any" || act_name == "any" {
+                return true;
+            }
+            if exp_name.contains('<')
+                && act_name.contains('<')
+                && exp_name.split('<').next().unwrap_or(exp_name).trim()
+                    == act_name.split('<').next().unwrap_or(act_name).trim()
+            {
+                return true;
+            }
+            if let Some(parent) = self.struct_extends.get(act_name) {
+                if parent == exp_name {
+                    return true;
+                }
+            }
+            if self.interfaces.contains_key(exp_name.as_str()) {
+                return self
+                    .implements_interface(act_name.as_str(), exp_name.as_str());
+            }
+            return false;
+        }
+
         if let Type::Custom(name) = expected {
             if let Type::Struct(act_struct) = actual {
                 if self.custom_struct_compatible(name, act_struct) {
@@ -920,10 +944,14 @@ impl EntropicAnalyzer {
                 if exp_name == act_name
                     || exp_name == "any"
                     || act_name == "any"
-                    || exp_name.split('<').next().unwrap_or(exp_name).trim()
-                        == act_name.split('<').next().unwrap_or(act_name).trim()
                     || act_name.starts_with(&format!("{}::", exp_name))
                     || exp_name.starts_with(&format!("{}::", act_name))
+                {
+                    true
+                } else if exp_name.contains('<')
+                    && act_name.contains('<')
+                    && exp_name.split('<').next().unwrap_or(exp_name).trim()
+                        == act_name.split('<').next().unwrap_or(act_name).trim()
                 {
                     true
                 } else if self.interfaces.contains_key(exp_name.as_str()) {
