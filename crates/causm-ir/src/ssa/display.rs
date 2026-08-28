@@ -484,6 +484,14 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::CapabilityCheck { dest, capability } => {
                 write!(f, "{} = CapabilityCheck({:?})", dest, capability.path)
             }
+            SsaInstruction::TupleLit { dest, elems } => {
+                let parts: Vec<String> =
+                    elems.iter().map(|r| format!("{}", r)).collect();
+                write!(f, "{} = TupleLit({})", dest, parts.join(", "))
+            }
+            SsaInstruction::TupleAccess { dest, tuple, index } => {
+                write!(f, "{} = TupleAccess({}, {})", dest, tuple, index)
+            }
             SsaInstruction::Other(s) => {
                 write!(f, "{}", s)
             }

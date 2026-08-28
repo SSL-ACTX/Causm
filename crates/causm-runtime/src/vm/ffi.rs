@@ -962,6 +962,12 @@ pub unsafe fn invoke_foreign_symbol(
                         .to_string(),
                 ));
             }
+            Payload::Tuple(_) => {
+                return Err(TemporalError::EvalError(
+                    "Passing tuple types directly to raw C FFI is unsupported"
+                        .to_string(),
+                ));
+            }
         }
     }
 

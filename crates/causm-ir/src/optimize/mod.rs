@@ -554,7 +554,9 @@ ssa_to_flat_match!(
     FreezeBaseWatermark,
     ResetBaseWatermark,
     ArenaIntrospect { dest, kind },
-    CapabilityCheck { dest, capability }
+    CapabilityCheck { dest, capability },
+    TupleLit { dest, elems },
+    TupleAccess { dest, tuple, index }
 );
 
 pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {

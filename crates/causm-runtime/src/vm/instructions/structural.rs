@@ -346,6 +346,50 @@ impl Vm {
         )
     }
 
+    pub(crate) fn TupleLit(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        elems: Vec<Reg>,
+    ) -> Result<(), TemporalError> {
+        let mut values = Vec::new();
+        for reg in elems {
+            let val = self.peek_reg(branch_id, reg.0)?;
+            values.push(val);
+        }
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            EntropicState::Valid(Payload::Tuple(values)),
+        )
+    }
+
+    pub(crate) fn TupleAccess(
+        &mut self,
+        branch_id: &str,
+        dest: Reg,
+        tuple: Reg,
+        index: usize,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, tuple.0)?;
+        match val {
+            Payload::Tuple(elems) => {
+                let elem = elems.get(index).cloned().ok_or_else(|| {
+                    TemporalError::TypeMismatch(format!(
+                        "Tuple index {} out of bounds (len {})",
+                        index,
+                        elems.len()
+                    ))
+                })?;
+                self.insert_reg(branch_id, dest.0, EntropicState::Valid(elem))
+            }
+            other => Err(TemporalError::TypeMismatch(format!(
+                "TupleAccess: expected Tuple, got {:?}",
+                other
+            ))),
+        }
+    }
+
     pub(crate) fn ArrayRepeat(
         &mut self,
         branch_id: &str,

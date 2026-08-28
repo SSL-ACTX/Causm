@@ -47,6 +47,16 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             dest
         }
         Expression::Identifier(name) => ctx.get_reg(name),
+        Expression::Tuple(elems) => {
+            let elem_regs: Vec<causm_ir::Reg> =
+                elems.iter().map(|e| lower_expression(ctx, e)).collect();
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::TupleLit {
+                dest,
+                elems: elem_regs,
+            });
+            dest
+        }
         Expression::BinaryOp { left, op, right } => {
             let l = lower_expression(ctx, left);
             let r = lower_expression(ctx, right);

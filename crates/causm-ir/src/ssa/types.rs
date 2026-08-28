@@ -295,6 +295,15 @@ pub enum SsaInstruction {
         dest: SsaReg,
         elements: Vec<SsaReg>,
     },
+    TupleLit {
+        dest: SsaReg,
+        elems: Vec<SsaReg>,
+    },
+    TupleAccess {
+        dest: SsaReg,
+        tuple: SsaReg,
+        index: usize,
+    },
     ArrayRepeat {
         dest: SsaReg,
         value: SsaReg,

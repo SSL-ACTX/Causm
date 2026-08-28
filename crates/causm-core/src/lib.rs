@@ -573,6 +573,7 @@ macro_rules! expressions {
             },
             ArenaIntrospect(ArenaIntrospect),
             CapabilityCheck(Capability),
+            Tuple(Vec<Expression>),
             Null
         }
     };
@@ -682,6 +683,11 @@ impl Expression {
             }
             Expression::TypeAssertion { target, .. } => f(target),
             Expression::TypeCast { expr, .. } => f(expr),
+            Expression::Tuple(elems) => {
+                for el in elems {
+                    f(el);
+                }
+            }
             _ => {}
         }
     }

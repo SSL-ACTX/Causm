@@ -636,3 +636,93 @@ fn test_syntax_null_coalescing_operator() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_tuple_literal_creation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let t = (10, 20, 30)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let t_reg = ir.symbols.get("t").expect("t symbol").0;
+    let t_val = vm.peek_reg("main", t_reg)?;
+    if let Payload::Tuple(elems) = t_val {
+        assert_eq!(elems.len(), 3);
+        assert_eq!(elems[0], Payload::Integer(10));
+        assert_eq!(elems[1], Payload::Integer(20));
+        assert_eq!(elems[2], Payload::Integer(30));
+    } else {
+        panic!("Expected Tuple payload, got {:?}", t_val);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_tuple_pair_literal() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let pair = (42, true)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let pair_reg = ir.symbols.get("pair").expect("pair symbol").0;
+    let pair_val = vm.peek_reg("main", pair_reg)?;
+    if let Payload::Tuple(elems) = pair_val {
+        assert_eq!(elems.len(), 2);
+        assert_eq!(elems[0], Payload::Integer(42));
+        assert_eq!(elems[1], Payload::Bool(true));
+    } else {
+        panic!("Expected Tuple payload, got {:?}", pair_val);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_tuple_nested_expression_elements() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 5
+        let y = 3
+        let t = (x + y, x * y)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let t_reg = ir.symbols.get("t").expect("t symbol").0;
+    let t_val = vm.peek_reg("main", t_reg)?;
+    if let Payload::Tuple(elems) = t_val {
+        assert_eq!(elems.len(), 2);
+        assert_eq!(elems[0], Payload::Integer(8)); // 5 + 3
+        assert_eq!(elems[1], Payload::Integer(15)); // 5 * 3
+    } else {
+        panic!("Expected Tuple payload, got {:?}", t_val);
+    }
+
+    Ok(())
+}

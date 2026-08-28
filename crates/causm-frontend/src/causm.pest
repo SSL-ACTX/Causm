@@ -243,7 +243,8 @@ generic_static_call_expr = { (identifier ~ ".")* ~ identifier ~ "<" ~ type_param
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
 arena_introspect_kind = { "remaining" | "used_bytes" | "capacity" }
 arena_expr = { "arena" ~ "." ~ arena_introspect_kind ~ "(" ~ ")" }
-base_expr = { null | if_expr | generic_static_call_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | capability_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
+base_expr = { null | if_expr | generic_static_call_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | capability_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | tuple_lit | "(" ~ expression ~ ")" }
+tuple_lit = { "(" ~ expression ~ "," ~ (expression ~ ",")* ~ expression? ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
 slice_range = { expression? ~ ".." ~ "="? ~ expression? }

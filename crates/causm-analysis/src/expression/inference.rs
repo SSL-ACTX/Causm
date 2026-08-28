@@ -417,6 +417,13 @@ pub(crate) fn infer_expression_type(
             }
             Ok(Type::Unknown)
         }
+        Expression::Tuple(elems) => {
+            let types: Result<Vec<Type>, _> = elems
+                .iter()
+                .map(|e| infer_expression_type(analyzer, e))
+                .collect();
+            Ok(Type::Tuple(types?))
+        }
     }
 }
 

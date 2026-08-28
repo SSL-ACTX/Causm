@@ -1709,6 +1709,13 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
                 args_str
             )
         }
+        Expression::Tuple(elems) => {
+            let parts: Vec<String> = elems
+                .iter()
+                .map(|e| format_expr(e, config, depth))
+                .collect();
+            format!("({})", parts.join(", "))
+        }
     }
 }
 

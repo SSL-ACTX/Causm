@@ -1334,6 +1334,11 @@ impl EntropicAnalyzer {
             } => {
                 format!("{}::{}()", type_name, method)
             }
+            Expression::Tuple(elems) => {
+                let parts: Vec<String> =
+                    elems.iter().map(|e| self.expr_snippet(e)).collect();
+                format!("({})", parts.join(", "))
+            }
         }
     }
 

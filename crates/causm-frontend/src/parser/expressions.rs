@@ -667,6 +667,11 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             }
         }
         Rule::null => Expression::Null,
+        Rule::tuple_lit => {
+            let elems: Vec<Expression> =
+                pair.into_inner().map(parse_expression).collect();
+            Expression::Tuple(elems)
+        }
         _ => Expression::Literal(pair.as_str().to_string()),
     }
 }

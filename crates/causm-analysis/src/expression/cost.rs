@@ -186,5 +186,11 @@ pub fn estimate_expression_cost(
                 .map(|a| estimate_expression_cost(analyzer, a))
                 .sum::<u64>()
         }
+        Expression::Tuple(elems) => {
+            1 + elems
+                .iter()
+                .map(|e| estimate_expression_cost(analyzer, e))
+                .sum::<u64>()
+        }
     }
 }

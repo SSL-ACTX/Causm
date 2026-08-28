@@ -54,6 +54,7 @@ pub enum Type {
     },
     Promise(Box<Type>),
     Custom(String),
+    Tuple(Vec<Type>),
     Unknown,
 }
 

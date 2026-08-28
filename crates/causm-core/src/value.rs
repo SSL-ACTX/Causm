@@ -69,6 +69,7 @@ pub enum Payload {
     Struct(HashMap<String, EntropicState>),
     Topology(HashMap<String, EntropicState>),
     Array(Vec<Payload>),
+    Tuple(Vec<Payload>),
     Null,
 }
 
@@ -133,6 +134,11 @@ impl std::fmt::Display for Payload {
                         elems.iter().map(|e| format!("{}", e)).collect();
                     write!(f, "[{}]", strings.join(", "))
                 }
+            }
+            Payload::Tuple(elems) => {
+                let strings: Vec<String> =
+                    elems.iter().map(|e| format!("{}", e)).collect();
+                write!(f, "({})", strings.join(", "))
             }
             Payload::Null => write!(f, "null"),
         }
@@ -205,6 +211,10 @@ impl Payload {
                 fields_weight + 64 // Higher overhead for topologies
             }
             Payload::Array(elems) => {
+                let total: u64 = elems.iter().map(|p| p.weight()).sum();
+                total + 24 // Vec overhead
+            }
+            Payload::Tuple(elems) => {
                 let total: u64 = elems.iter().map(|p| p.weight()).sum();
                 total + 24 // Vec overhead
             }

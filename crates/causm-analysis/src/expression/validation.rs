@@ -729,6 +729,12 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
+        Expression::Tuple(elems) => {
+            for elem in elems {
+                analyze_expression(analyzer, elem)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -937,6 +943,12 @@ pub(crate) fn analyze_expression_nonconsuming(
         Expression::GenericStaticCall { args, .. } => {
             for arg in args {
                 analyze_expression_nonconsuming(analyzer, arg)?;
+            }
+            Ok(())
+        }
+        Expression::Tuple(elems) => {
+            for elem in elems {
+                analyze_expression_nonconsuming(analyzer, elem)?;
             }
             Ok(())
         }

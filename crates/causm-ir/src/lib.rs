@@ -78,6 +78,15 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 src: $crate::Reg
             },
+            TupleLit {
+                dest: $crate::Reg,
+                elems: Vec<$crate::Reg>
+            },
+            TupleAccess {
+                dest: $crate::Reg,
+                tuple: $crate::Reg,
+                index: usize
+            },
 
             // Entropic Operations
             Consume {
