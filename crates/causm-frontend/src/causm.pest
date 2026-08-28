@@ -5,18 +5,18 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "#" ~ (!"\n" ~ ANY)* }
 program = { SOI ~ (timeline_block | statement)* ~ EOI }
 
 timeline_block = { ("@every" ~ duration_literal | "@" ~ time_coord) ~ timeline_directive* ~ ":" ~ statement_block }
-timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") }
+timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") ~ !(ASCII_ALPHANUMERIC | "_") }
 directive_stmt = { timeline_directive+ ~ ":" ~ statement_block }
 
 time_coord     = { relative_time | absolute_time | branch_name }
 absolute_time  = @{ ASCII_DIGIT+ ~ "ms" }
 relative_time  = @{ "+" ~ ASCII_DIGIT+ ~ "ms" }
-branch_name    = { identifier }
+branch_name    = @{ !(("no_z3" | "chaos" | "deterministic") ~ !(ASCII_ALPHANUMERIC | "_")) ~ identifier }
 
 statement_block = { "{" ~ statement* ~ "}" | statement }
 
-attribute = { "@" ~ attribute_name ~ ("(" ~ attribute_args? ~ ")")? }
-attribute_name = { "derive" | "must_use" | "inline" | "test" | "doc" | "repr" }
+attribute = { "@" ~ !("every" | "no_z3" | "chaos" | "deterministic" | ASCII_DIGIT | "+" | identifier ~ ":") ~ attribute_name ~ ("(" ~ attribute_args? ~ ")")? }
+attribute_name = { "derive" | "must_use" | "inline" | "test" | "doc" | "repr" | identifier }
 attribute_args = { attribute_arg ~ ("," ~ attribute_arg)* ~ ","? }
 attribute_arg = { string_literal | identifier }
 

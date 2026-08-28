@@ -161,12 +161,12 @@ if let <binding> = <expression>.(<type_name>) <statement_block> [else <statement
 - `reconcile` rules define the resolution mechanism for variables consumed within a single path. The `auto` keyword automatically merges decayed states and enforces type consistency.
 - `if let` attempts to downcast an interface variable to a concrete type `type_name`. If successful, the `then` block executes with `binding` bound as the concrete type.
 
-### Scoped Inspection (`inspect`)
-Provides read-only access to struct fields without triggering entropic decay.
+### Non-Consuming Borrow (`&` / `peek`)
+Provides read-only access to struct fields without triggering entropic decay:
 
-**Syntax:**
 ```causm
-inspect <binding> = <expression> <statement_block>
+let ref_reading = &sensor_pack
+let active_level = ref_reading.level
 ```
 
 ### Speculative Execution (`speculate`)
@@ -397,5 +397,56 @@ The Causm devtools suite (`crates/causm-devtools`) provides built-in tools for f
   - `causm tune <file> --routine <name>` (`-r`): Pinpoints an individual routine for recalibration.
   - `causm tune <file> --dry-run`: Previews suggested temporal contract changes without modifying files.
 
+---
 
+## 13. Compiler Attributes & Annotations (`@`)
 
+Causm supports fine-grained compile-time attributes attached to statements, types, and isolates.
+
+**Syntax:**
+```causm
+@<attribute_name>[(<arg1>, <arg2>, ...)]
+<statement>
+```
+
+**Standard & Extensible Attributes:**
+- `@derive(Clone, Debug, PartialEq)`: Derives trait implementations for struct and enum declarations.
+- `@must_use("Reason message")`: Emits compile-time diagnostics if a returned value is discarded.
+- `@inline`: Directs IR lowering to inline the targeted routine definition.
+- `@test`: Marks routine definitions as executable integration test targets.
+- `@seccomp("sys_read", "sys_write", "sys_exit")`: Custom plugin attribute restricting permitted kernel syscalls within an `isolate` sandbox block.
+
+---
+
+## 14. Compiler Plugins & WebAssembly SDK (`causm-plugin-sdk`)
+
+Causm provides a high-performance, hermetic plugin architecture enabling custom AST transformations, static linters, and verification passes via WebAssembly (WASMI 2.0) or Stdio IPC.
+
+### Project Manifest Configuration (`causm.toml`)
+Plugins are discovered declaratively from `causm.toml` in project workspaces:
+
+```toml
+[package]
+name = "my_system"
+version = "0.1.0"
+
+[plugins.seccomp_guard]
+path = "plugins/seccomp_guard.wasm"
+
+[plugins.seccomp_guard.options]
+allow = "sys_read,sys_write,sys_exit"
+strict = true
+```
+
+### Developing WASM Plugins with `causm-plugin-sdk`
+Plugins compile to `wasm32-unknown-unknown` utilizing the `#[causm_plugin]` macro:
+
+```rust
+use causm_plugin_sdk::prelude::*;
+
+#[causm_plugin(name = "custom_linter", version = "0.1.0")]
+pub fn process_ast(program: Program, ctx: &PluginContext) -> Result<Program, PluginError> {
+    // Inspect or mutate AST program nodes
+    Ok(program)
+}
+```

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub mod types;
 pub mod value;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Program {
     pub timelines: Vec<TimelineBlock>,
 }
@@ -16,7 +16,7 @@ pub struct Span {
     pub end: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpannedStatement {
     pub stmt: Statement,
     pub span: Span,
@@ -45,7 +45,7 @@ impl SpannedStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimelineBlock {
     pub time: TimeCoordinate,
     pub no_z3: bool,
@@ -159,7 +159,6 @@ pub struct InterfaceMethod {
     pub params: Vec<ParamDecl>,
     pub return_type: Option<TypeName>,
     pub taking_ms: Option<u64>,
-    #[serde(skip)]
     pub default_body: Option<Vec<SpannedStatement>>,
     pub state_constraint: Option<(String, String)>,
     #[serde(default)]
@@ -382,7 +381,7 @@ macro_rules! statements {
 
 macro_rules! define_statement_enum {
     ($($name:ident $({ $($field:ident: $type:ty),* })? $(( $($tuple_type:ty),* ))?),*) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         #[allow(clippy::large_enum_variant)]
         pub enum Statement {
             $($name $({ $($field: $type),* })? $(( $($tuple_type),* ))?),*
@@ -643,7 +642,7 @@ macro_rules! expressions {
 
 macro_rules! define_expression_enum {
     ($($name:ident $({ $($field:ident: $type:ty),* })? $(( $($tuple_type:ty),* ))?),*) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Expression {
             $($name $({ $($field: $type),* })? $(( $($tuple_type),* ))?),*
         }
@@ -773,11 +772,8 @@ impl Statement {
             Statement::IfLet { expr, .. } => f(expr),
             Statement::While { condition, .. } => f(condition),
             Statement::ForStep { source, .. } => f(source),
-            Statement::Yield(expr_opt) => {
-                if let Some(e) = expr_opt {
-                    f(e);
-                }
-            }
+            Statement::Yield(Some(e)) => f(e),
+            Statement::Yield(None) => {}
             Statement::MatchEntropy {
                 target,
                 valid_branch,
@@ -882,7 +878,7 @@ impl Statement {
 }
 
 /// A segment within an f-string literal.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FStringPart {
     /// A literal text chunk between `{…}` interpolations.
     Text(String),
@@ -894,7 +890,6 @@ pub enum FStringPart {
 pub struct IsolateBlock {
     pub name: Option<String>,
     pub manifest: Manifest,
-    #[serde(skip)]
     pub body: Vec<SpannedStatement>,
 }
 
@@ -918,7 +913,6 @@ pub struct Capability {
 pub struct MergeResolution {
     pub rules: std::collections::HashMap<String, ResolutionStrategy>,
     pub auto: bool,
-    #[serde(skip)]
     pub fallback: Option<Vec<SpannedStatement>>,
     pub taking_ms: Option<u64>,
 }
@@ -949,7 +943,7 @@ pub enum ResolutionStrategy {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelectCase {
     pub binding: String,
     pub source: Expression,
@@ -969,7 +963,7 @@ pub struct EnumVariantDef {
     pub payload_types: Vec<TypeName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Pattern {
     Wildcard,
     Identifier(String),
@@ -986,21 +980,21 @@ pub enum Pattern {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub guard: Option<Expression>,
     pub body: Vec<SpannedStatement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchExprArm {
     pub pattern: Pattern,
     pub guard: Option<Expression>,
     pub body: Expression,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypeFieldDef {
     pub typ: TypeName,
     pub is_const: bool,
@@ -1091,13 +1085,13 @@ pub enum BinaryOperator {
     NullCoalesce,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PatternValue {
     State(String),
     Expr(Expression),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DecayedPattern {
     Binding(String),
     Fields(std::collections::HashMap<String, PatternValue>),
@@ -1734,4 +1728,175 @@ pub fn programs_ast_eq(a: &Program, b: &Program) -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_ast_serialization_bincode_roundtrip_basic() {
+        let program = Program {
+            timelines: vec![TimelineBlock {
+                time: TimeCoordinate::Global(0),
+                no_z3: false,
+                entropy_mode: Some(EntropyMode::Deterministic),
+                statements: vec![
+                    SpannedStatement::new(
+                        Statement::Assignment {
+                            target: "x".to_string(),
+                            mutable: false,
+                            var_type: Some(TypeName::Builtin(BuiltinType::Integer)),
+                            lifetime: Some(LifetimeAnnotation::Valid),
+                            expr: Expression::Integer(42),
+                        },
+                        Span { start: 0, end: 12 },
+                    ),
+                    SpannedStatement::new(
+                        Statement::Return(Some(Expression::Identifier(
+                            "x".to_string(),
+                        ))),
+                        Span { start: 13, end: 21 },
+                    ),
+                ],
+            }],
+        };
+
+        let encoded = bincode::serialize(&program)
+            .expect("bincode serialization should succeed");
+        let decoded: Program = bincode::deserialize(&encoded)
+            .expect("bincode deserialization should succeed");
+        assert_eq!(program, decoded);
+    }
+
+    #[test]
+    fn test_ast_serialization_json_roundtrip_basic() {
+        let program = Program {
+            timelines: vec![TimelineBlock {
+                time: TimeCoordinate::Relative(50),
+                no_z3: true,
+                entropy_mode: Some(EntropyMode::Chaos),
+                statements: vec![SpannedStatement::with_attributes(
+                    Statement::RoutineDef {
+                        name: "compute".to_string(),
+                        params: vec![ParamDecl {
+                            mode: ParamMode::Consume,
+                            name: "val".to_string(),
+                            typ: Some(TypeName::Builtin(BuiltinType::I32)),
+                        }],
+                        return_type: Some(TypeName::Builtin(BuiltinType::I32)),
+                        taking_ms: Some(10),
+                        state_constraint: None,
+                        required_capabilities: vec![],
+                        body: vec![SpannedStatement::new(
+                            Statement::Return(Some(Expression::BinaryOp {
+                                left: Box::new(Expression::Identifier(
+                                    "val".to_string(),
+                                )),
+                                op: BinaryOperator::Add,
+                                right: Box::new(Expression::Integer(1)),
+                            })),
+                            Span { start: 10, end: 25 },
+                        )],
+                    },
+                    Span { start: 0, end: 30 },
+                    vec![Attribute {
+                        kind: AttributeKind::Inline,
+                        span: Span { start: 0, end: 7 },
+                    }],
+                )],
+            }],
+        };
+
+        let json_str = serde_json::to_string(&program)
+            .expect("json serialization should succeed");
+        let decoded: Program = serde_json::from_str(&json_str)
+            .expect("json deserialization should succeed");
+        assert_eq!(program, decoded);
+    }
+
+    #[test]
+    fn test_ast_serialization_complex_structures() {
+        let mut fields = HashMap::new();
+        fields.insert(
+            "speed".to_string(),
+            TypeFieldDef {
+                typ: TypeName::Builtin(BuiltinType::Float),
+                is_const: false,
+                default_value: Some(Expression::Float(0)),
+            },
+        );
+
+        let isolate_stmt = Statement::Isolate(IsolateBlock {
+            name: Some("sandbox_worker".to_string()),
+            manifest: Manifest {
+                cpu_budget_ms: Some(500),
+                slice_ms: Some(10),
+                memory_budget_bytes: Some(65536),
+                resource_budgets: HashMap::new(),
+                capabilities: vec![Capability {
+                    path: "System.Log".to_string(),
+                    parameters: HashMap::new(),
+                }],
+                mode: Some(EntropyMode::Deterministic),
+            },
+            body: vec![
+                SpannedStatement::new(
+                    Statement::TypeDecl {
+                        name: "Velocity".to_string(),
+                        extends: None,
+                        fields,
+                        decay_after_ms: Some(100),
+                        auto_drop: None,
+                        scoped_branch: None,
+                    },
+                    Span { start: 10, end: 50 },
+                ),
+                SpannedStatement::new(
+                    Statement::MatchEntropy {
+                        target: Expression::Identifier("state_var".to_string()),
+                        valid_branch: Some((
+                            DecayedPattern::Binding("val".to_string()),
+                            None,
+                            vec![SpannedStatement::new(
+                                Statement::Print(vec![Expression::Identifier(
+                                    "val".to_string(),
+                                )]),
+                                Span { start: 55, end: 70 },
+                            )],
+                        )),
+                        decayed_branch: None,
+                        pending_branch: None,
+                        consumed_branch: None,
+                    },
+                    Span { start: 52, end: 80 },
+                ),
+            ],
+        });
+
+        let program = Program {
+            timelines: vec![TimelineBlock {
+                time: TimeCoordinate::Global(100),
+                no_z3: false,
+                entropy_mode: None,
+                statements: vec![SpannedStatement::new(
+                    isolate_stmt,
+                    Span { start: 0, end: 100 },
+                )],
+            }],
+        };
+
+        let bincode_data =
+            bincode::serialize(&program).expect("bincode serialize complex AST");
+        let bincode_decoded: Program = bincode::deserialize(&bincode_data)
+            .expect("bincode deserialize complex AST");
+        assert_eq!(program, bincode_decoded);
+
+        let json_data =
+            serde_json::to_string(&program).expect("json serialize complex AST");
+        let json_decoded: Program =
+            serde_json::from_str(&json_data).expect("json deserialize complex AST");
+        assert_eq!(program, json_decoded);
+    }
 }

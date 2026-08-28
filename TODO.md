@@ -254,3 +254,18 @@ Potential pass order:
 ### 4. Integration Tests & Benchmarks
 - [x] Add dedicated integration tests verifying `.csa` archive ingestion parity, bytecode routine storage, disk persistence, checksum invalidation, and empirical benchmark speedups.
 
+---
+
+## Compiler Plugins & WebAssembly Developer SDK
+
+### 1. AST Serialization & IPC Protocol
+- [x] Implement complete, lossless `Serialize` / `Deserialize` roundtrips for all AST structs and enums in `causm-core`.
+- [x] Implement `StdioPluginDriver` and JSON streaming IPC protocol in `causm-plugins`.
+
+### 2. WASMI 2.0 WebAssembly Host Engine
+- [x] Implement `WasmPluginDriver` in `causm-plugins` using `wasmi` 2.0 with linear memory ABI dispatch.
+- [x] Support declarative plugin configuration via `causm.toml` and CLI `--plugin` options.
+
+### 3. Developer SDK (`causm-plugin-sdk`)
+- [x] Implement `#[causm_plugin]` procedural macro and SDK runtime handling ABI exports, `PluginContext`, and `PluginError` diagnostics.
+- [x] Add standalone `@seccomp` Linux syscall guard plugin project in `plugins/seccomp_guard` and showcase test suite in `examples/`.

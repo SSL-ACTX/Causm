@@ -184,10 +184,76 @@ let bonus = w.play() // Dynamic dispatch (resolves to default implementation)
 Interface variables can be downcasted back to concrete structs using guarded `if let` blocks:
 ```causm
 if let robot = w.(Robot) {
-    inspect r_temp = robot {
-        let model = r_temp.model
-        print("Model: " + model)
-    }
+    let r_temp = &robot
+    let model = r_temp.model
+    print("Model: " + model)
     robot.work()
 }
 ```
+
+---
+
+## 8. Enums & Algebraic Data Types (ADTs)
+
+Enums allow defining sum types with typed variant payloads and generic parameters.
+
+```causm
+enum Option<T> {
+    None,
+    Some(T),
+}
+
+enum Packet<T> {
+    Empty,
+    Data(T, int),
+    Error(string),
+}
+```
+
+Variants can be constructed via `Enum::Variant(...)` and unpacked via pattern matching:
+```causm
+let opt: Option<int> = Option::Some(42)
+
+match opt {
+    Option::Some(val) => print(f"Value: {val}"),
+    Option::None => print("No value present"),
+}
+```
+
+---
+
+## 9. Distinct Newtypes
+
+The `type Name = distinct BaseType` declaration creates a nominal type boundary around an existing primitive or compound type, preventing accidental assignment while enabling specialized methods:
+
+```causm
+type Port = distinct int
+type Meter = distinct float
+
+routine Port.is_privileged(peek self) -> bool taking 1ms {
+    let p = self as int
+    yield p < 1024
+}
+
+let web_port: Port = 80 as Port
+let priv = web_port.is_privileged()
+```
+
+---
+
+## 10. Const Generic Parameters
+
+Structs and interfaces can be parameterized over compile-time constant scalar values:
+
+```causm
+type Buffer<const N: int> = struct {
+    data: [int; N],
+    len: int = N,
+}
+
+let buf = Buffer::<64> {
+    data = [0; 64],
+    len = 64,
+}
+```
+

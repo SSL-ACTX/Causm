@@ -12,5 +12,9 @@ causm-runtime = { path = "../causm-runtime" }
 causm-ir = { path = "../causm-ir" }
 causm-stdlib = { path = "../causm-stdlib" }
 causm-devtools = { path = "../causm-devtools" }
+causm-plugins = { path = "../causm-plugins" }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
+
+[dev-dependencies]
+causm-plugin-sdk = { path = "../causm-plugin-sdk" }

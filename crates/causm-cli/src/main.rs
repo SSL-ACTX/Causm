@@ -54,6 +54,10 @@ struct Cli {
     /// Print detailed entropic state reconciliation diffs when timeline branches merge
     #[arg(long)]
     explain_merge: bool,
+
+    /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+    #[arg(long = "plugin", value_name = "SPEC")]
+    plugins: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -91,6 +95,10 @@ enum Commands {
         /// Print detailed entropic state reconciliation diffs when timeline branches merge
         #[arg(long)]
         explain_merge: bool,
+
+        /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+        #[arg(long = "plugin", value_name = "SPEC")]
+        plugins: Vec<String>,
     },
 
     /// Perform semantic & entropic analysis without execution
@@ -106,6 +114,10 @@ enum Commands {
         /// Bypass Z3 formal verification
         #[arg(long)]
         no_z3: bool,
+
+        /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+        #[arg(long = "plugin", value_name = "SPEC")]
+        plugins: Vec<String>,
     },
 
     /// Print compiler intermediate representations
@@ -243,6 +255,7 @@ struct RunConfig {
     no_z3: bool,
     chaos: bool,
     explain_merge: bool,
+    plugins: Vec<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -258,6 +271,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            plugins,
         }) => RunConfig {
             files,
             check_only: false,
@@ -268,11 +282,13 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            plugins,
         },
         Some(Commands::Check {
             files,
             verbose,
             no_z3,
+            plugins,
         }) => RunConfig {
             files,
             check_only: true,
@@ -283,6 +299,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos: false,
             explain_merge: false,
+            plugins,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
             files,
@@ -294,6 +311,7 @@ fn main() -> anyhow::Result<()> {
             no_z3: false,
             chaos: false,
             explain_merge: false,
+            plugins: Vec::new(),
         },
         Some(Commands::Tune {
             files,
@@ -542,6 +560,7 @@ fn main() -> anyhow::Result<()> {
                 no_z3: cli.no_z3,
                 chaos: cli.chaos,
                 explain_merge: cli.explain_merge,
+                plugins: cli.plugins,
             }
         }
     };
@@ -562,8 +581,10 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
-        let program = match parser::parse_causm_with_imports(&source, path.parent())
-        {
+        let mut program = match parser::parse_causm_with_imports(
+            &source,
+            path.parent(),
+        ) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!(
@@ -576,6 +597,65 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
         };
+
+        let mut plugin_engine = causm_plugins::PluginEngine::new();
+
+        // Auto-discover causm.toml in parent tree if present
+        let mut curr_dir = path.parent();
+        while let Some(dir) = curr_dir {
+            let manifest_candidate = dir.join("causm.toml");
+            if manifest_candidate.exists() {
+                let _ = plugin_engine.load_from_causm_toml(&manifest_candidate);
+                break;
+            }
+            curr_dir = dir.parent();
+        }
+
+        // Register explicit CLI --plugin specs
+        for plugin_spec in &config.plugins {
+            if let Err(err) = plugin_engine.register_from_spec(plugin_spec) {
+                eprintln!(
+                    "\x1b[1;31merror: failed to load plugin '{}':\x1b[0m {}",
+                    plugin_spec, err
+                );
+                had_error = true;
+                break;
+            }
+        }
+        if had_error {
+            continue;
+        }
+
+        match plugin_engine.run_ast_pipeline(&path.display().to_string(), program) {
+            Ok((transformed_ast, diagnostics)) => {
+                program = transformed_ast;
+                for diag in diagnostics {
+                    let level_str = match diag.level {
+                        causm_plugins::DiagnosticLevel::Error => {
+                            "\x1b[1;31mplugin error:\x1b[0m"
+                        }
+                        causm_plugins::DiagnosticLevel::Warning => {
+                            "\x1b[1;33mplugin warning:\x1b[0m"
+                        }
+                        causm_plugins::DiagnosticLevel::Note => {
+                            "\x1b[1;36mplugin note:\x1b[0m"
+                        }
+                    };
+                    eprintln!("{} {}", level_str, diag.message);
+                    if matches!(diag.level, causm_plugins::DiagnosticLevel::Error) {
+                        had_error = true;
+                    }
+                }
+                if had_error {
+                    continue;
+                }
+            }
+            Err(err) => {
+                eprintln!("\x1b[1;31mplugin execution error:\x1b[0m {:#}", err);
+                had_error = true;
+                continue;
+            }
+        }
 
         if config.emit == Some(DumpFormat::Ast) {
             println!(

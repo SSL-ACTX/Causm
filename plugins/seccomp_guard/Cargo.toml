@@ -1,0 +1,12 @@
+[package]
+name = "seccomp_guard"
+version = "0.0.1"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+causm-plugin-sdk = { path = "../../crates/causm-plugin-sdk" }
+causm-core = { path = "../../crates/causm-core" }

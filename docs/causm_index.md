@@ -53,7 +53,7 @@ Historical design documents and the standard RFC process.
 - **[Profile-Guided Tuning & DevTools](./proposals/causm_prop_profile_guided_tuning_and_devtools.md)**: Inferred (`taking _`) and empirical (`taking ?`) temporal contracts, `causm-devtools` profiling/tuning suite, and continuous contract synthesis.
 - **[Self-Hosted std/time Module](./proposals/causm_prop_std_time.md)**: High-resolution monotonic timestamps (`Instant`, `Duration`), wall-clock epoch time, and precision sleeping.
 - **[Self-Hosted std/net Module](./proposals/causm_prop_std_net.md)**: POSIX socket networking, `SocketAddr`, `TcpStream`, `TcpListener`, and socket descriptor management.
-
+- **[Compiler Plugins & WASM SDK Proposal](./proposals/causm_prop_compiler_plugins_and_wasm_sdk.md)**: WebAssembly (wasmi 2.0) and Stdio IPC compiler plugin architecture, `causm.toml` declarative discovery, and `causm-plugin-sdk`.
 
 ---
 *This index is maintained as the authoritative source for Causm documentation.*

@@ -1,0 +1,10 @@
+[package]
+name = "autonomous_flight_system"
+version = "0.1.0"
+
+[plugins.seccomp_guard]
+path = "../target/wasm32-unknown-unknown/debug/seccomp_guard.wasm"
+
+[plugins.seccomp_guard.options]
+allow = "sys_read,sys_write,sys_exit"
+strict_mode = true
