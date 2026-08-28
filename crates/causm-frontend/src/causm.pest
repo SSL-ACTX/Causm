@@ -16,7 +16,9 @@ branch_name    = { identifier }
 statement_block = { "{" ~ statement* ~ "}" | statement }
 
 statement = {
-    directive_stmt
+    macro_def_stmt
+    | macro_call_stmt
+    | directive_stmt
     | isolate_stmt
     | using_stmt
     | split_stmt
@@ -70,6 +72,20 @@ from_import_stmt = { "from" ~ string_literal ~ "import" ~ import_symbol_list }
 import_symbol_list = { wildcard_symbol | import_symbol ~ ("," ~ import_symbol)* ~ ","? }
 wildcard_symbol = { "*" }
 import_symbol = { identifier ~ ("as" ~ identifier)? }
+
+// Macro definition: macro name!( $p1:kind, $p2:kind => { body } )
+macro_def_stmt = { "macro" ~ identifier ~ "!" ~ "(" ~ macro_param_list ~ "=>" ~ macro_body ~ ")" }
+macro_param_list = { macro_param ~ ("," ~ macro_param)* }
+macro_param = { "$" ~ identifier ~ ":" ~ macro_param_kind }
+macro_param_kind = { "ident" | "expr" | "type" | "literal" }
+// body is captured as raw braced text for later re-parsing
+macro_body = { "{" ~ macro_body_content ~ "}" }
+macro_body_content = @{ (!"}" ~ ANY)* }
+
+// Macro invocation: name!(arg1, arg2, ...)
+macro_call_stmt = { identifier ~ "!" ~ "(" ~ macro_call_args? ~ ")" }
+macro_call_args = { macro_call_arg ~ ("," ~ macro_call_arg)* ~ ","? }
+macro_call_arg = @{ (!"," ~ !")" ~ ANY)+ }
 
 expression_stmt = { expression }
 

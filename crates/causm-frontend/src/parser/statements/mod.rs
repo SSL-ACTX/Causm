@@ -79,6 +79,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
                 inner_expr,
             ))
         }
+        Rule::macro_def_stmt => misc::parse_macro_def(pair),
+        Rule::macro_call_stmt => misc::parse_macro_call(pair),
         _ => {
             Statement::Expression(crate::parser::expressions::parse_expression(pair))
         }

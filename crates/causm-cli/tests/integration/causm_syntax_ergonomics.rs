@@ -726,3 +726,59 @@ fn test_syntax_tuple_nested_expression_elements() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_declarative_macro_definition_and_expansion() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        macro add_assign!( $var:ident, $val:expr => {
+            $var = $var + $val
+        } )
+
+        let mut a = 10
+        add_assign!(a, 5)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(15));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_declarative_macro_multiple_expansions() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        macro set_double!( $dest:ident, $src:expr => {
+            let $dest = $src * 2
+        } )
+
+        set_double!(x, 21)
+        set_double!(y, 100)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").expect("x symbol").0;
+    let y_reg = ir.symbols.get("y").expect("y symbol").0;
+    assert_eq!(vm.peek_reg("main", x_reg)?, Payload::Integer(42));
+    assert_eq!(vm.peek_reg("main", y_reg)?, Payload::Integer(200));
+
+    Ok(())
+}

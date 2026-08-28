@@ -21,6 +21,15 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn MacroDef(
+        &mut self,
+        _name: &str,
+        _params: &[MacroParam],
+        _body_template: &str,
+    ) -> Result<(), SemanticError> {
+        Ok(())
+    }
+
     pub(crate) fn ForeignBlock(
         &mut self,
         lib_name: &str,

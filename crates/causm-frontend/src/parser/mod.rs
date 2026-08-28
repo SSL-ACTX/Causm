@@ -67,7 +67,9 @@ pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
         );
     }
 
-    Ok(Program { timelines })
+    let mut prog = Program { timelines };
+    crate::macro_expand::expand_program(&mut prog);
+    Ok(prog)
 }
 
 fn expand_spanned_statements(
@@ -444,6 +446,7 @@ pub fn parse_causm_with_imports(
             expand_spanned_statements(original_stmts, base_dir, &mut loaded_files)?;
     }
 
+    crate::macro_expand::expand_program(&mut program);
     Ok(program)
 }
 

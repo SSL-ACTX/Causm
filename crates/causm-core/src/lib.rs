@@ -89,6 +89,22 @@ pub enum SyscallTarget {
     Symbol(String),
 }
 
+/// The fragment specifier for a macro capture: $name:kind
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MacroParamKind {
+    Ident,
+    Expr,
+    Type,
+    Literal,
+}
+
+/// One named capture slot in a declarative macro pattern.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MacroParam {
+    pub name: String,
+    pub kind: MacroParamKind,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParamDecl {
@@ -314,6 +330,11 @@ macro_rules! statements {
             LoopOn {
                 target: Expression,
                 body: Vec<SpannedStatement>
+            },
+            MacroDef {
+                name: String,
+                params: Vec<MacroParam>,
+                body_template: String
             }
         }
     };
@@ -465,6 +486,7 @@ impl Statement {
             | Statement::Import { .. }
             | Statement::FromImport { .. }
             | Statement::ForeignBlock { .. }
+            | Statement::MacroDef { .. }
             | Statement::Return(_) => 0,
         };
         base.saturating_add(extra)

@@ -207,3 +207,73 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
         _ => unreachable!(),
     }
 }
+
+/// Parse `macro name!( $p1:kind, $p2:kind => { body } )` into `Statement::MacroDef`.
+pub fn parse_macro_def(pair: Pair<Rule>) -> Statement {
+    let mut inner = pair.into_inner();
+    let name = inner.next().expect("macro name").as_str().to_string();
+
+    let mut params: Vec<MacroParam> = Vec::new();
+    for child in inner.by_ref() {
+        match child.as_rule() {
+            Rule::macro_param_list => {
+                for param_pair in child.into_inner() {
+                    if param_pair.as_rule() == Rule::macro_param {
+                        let mut pi = param_pair.into_inner();
+                        let pname = pi.next().unwrap().as_str().to_string();
+                        let kind_str =
+                            pi.next().map(|p| p.as_str()).unwrap_or("expr");
+                        let kind = match kind_str {
+                            "ident" => MacroParamKind::Ident,
+                            "type" => MacroParamKind::Type,
+                            "literal" => MacroParamKind::Literal,
+                            _ => MacroParamKind::Expr,
+                        };
+                        params.push(MacroParam { name: pname, kind });
+                    }
+                }
+            }
+            Rule::macro_body => {
+                // body_template is the raw content inside the braces
+                let body_template = child
+                    .into_inner()
+                    .next()
+                    .map(|p| p.as_str().to_string())
+                    .unwrap_or_default();
+                return Statement::MacroDef {
+                    name,
+                    params,
+                    body_template,
+                };
+            }
+            _ => {}
+        }
+    }
+    Statement::MacroDef {
+        name,
+        params,
+        body_template: String::new(),
+    }
+}
+
+/// Parse `name!(arg1, arg2)` into `Statement::Expression(MacroCall)`.
+/// The actual expansion happens in the macro_expand pass — here we emit a
+/// sentinel `Expression::Call` with name `__macro_call__name` so the expander
+/// can detect and replace it. The raw arg strings go in as `Expression::Literal`.
+pub fn parse_macro_call(pair: Pair<Rule>) -> Statement {
+    let mut inner = pair.into_inner();
+    let name = inner.next().expect("macro call name").as_str().to_string();
+    let mut args: Vec<Expression> = Vec::new();
+    if let Some(arg_list) = inner.next() {
+        for arg_pair in arg_list.into_inner() {
+            if arg_pair.as_rule() == Rule::macro_call_arg {
+                args.push(Expression::Literal(arg_pair.as_str().trim().to_string()));
+            }
+        }
+    }
+    // Encode as a synthetic Call node; the macro_expand pass replaces these
+    Statement::Expression(Expression::Call {
+        routine: format!("__macro_call__{}", name),
+        args,
+    })
+}

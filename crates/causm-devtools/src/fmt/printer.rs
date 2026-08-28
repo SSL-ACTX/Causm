@@ -1112,6 +1112,31 @@ fn format_spanned_statement(
                 indent, value_id, target_branch
             ));
         }
+        Statement::MacroDef {
+            name,
+            params,
+            body_template,
+        } => {
+            let p_strs: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    let k_str = match p.kind {
+                        causm_core::MacroParamKind::Ident => "ident",
+                        causm_core::MacroParamKind::Type => "type",
+                        causm_core::MacroParamKind::Literal => "literal",
+                        causm_core::MacroParamKind::Expr => "expr",
+                    };
+                    format!("${}:{}", p.name, k_str)
+                })
+                .collect();
+            out.push_str(&format!(
+                "{}macro {}!({} => {{ {} }})\n",
+                indent,
+                name,
+                p_strs.join(", "),
+                body_template.trim()
+            ));
+        }
     }
 }
 
