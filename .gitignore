@@ -11,3 +11,4 @@ node_modules/
 *.vsix
 *.exe
 *.csa
+*.swt_env

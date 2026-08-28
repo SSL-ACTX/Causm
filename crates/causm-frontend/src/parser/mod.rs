@@ -46,9 +46,7 @@ pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
                     timelines.push(statements::parse_timeline_block(pair));
                 }
                 Rule::statement => {
-                    if let Some(s) = pair.into_inner().next() {
-                        standalone_stmts.push(statements::parse_statement(s));
-                    }
+                    standalone_stmts.push(statements::parse_statement(pair));
                 }
                 _ => {}
             }
@@ -412,9 +410,10 @@ fn expand_spanned_statements(
             Statement::Isolate(mut iso) => {
                 iso.body =
                     expand_spanned_statements(iso.body, base_dir, loaded_files)?;
-                result.push(SpannedStatement::new(
+                result.push(SpannedStatement::with_attributes(
                     Statement::Isolate(iso),
-                    spanned.span,
+                    spanned.span.clone(),
+                    spanned.attributes,
                 ));
             }
             Statement::RelativisticBlock { time, body } => {

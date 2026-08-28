@@ -6,6 +6,16 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+version = "0.1.0-alpha.1"
+edition = "2021"
+authors = [
+    "Seuriin (SSL-ACTX) <seuriin@gmail.com>",
+    "Iris-Seravelle (Iris's GPG) <iris.seravelle@gmail.com>",
+]
+license = "AGPL-3.0-only"
+repository = "https://github.com/SSL-ACTX/Causm"
+
 [profile.release]
 opt-level = 3
 lto = true

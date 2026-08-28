@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use causm_analysis::analyzer::EntropicAnalyzer;
 use causm_core::*;
 use causm_frontend::parser;
@@ -71,7 +73,6 @@ fn seccomp_guard_plugin(
 }
 
 #[test]
-#[cfg(target_os = "linux")]
 fn test_plugin_seccomp_guard_showcase_permitted() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
@@ -88,13 +89,15 @@ fn test_plugin_seccomp_guard_showcase_permitted() -> anyhow::Result<()> {
 
     // Register seccomp guard in-process
     let req = PluginRequest::new("telemetry.csm", program.clone());
-    let resp = match seccomp_guard_plugin(
-        req.ast.clone(),
-        &PluginContext {
-            file_path: req.file_path,
-            options: req.options,
-        },
-    ) {
+    let ctx = PluginContext {
+        protocol_version: req.protocol_version.clone(),
+        compiler_version: req.compiler_version.clone(),
+        target_arch: req.target_arch.clone(),
+        target_os: req.target_os.clone(),
+        file_path: req.file_path.clone(),
+        options: req.options.clone(),
+    };
+    let resp = match seccomp_guard_plugin(req.ast.clone(), &ctx) {
         Ok(ast) => PluginResponse::success(Some(ast), vec![]),
         Err(PluginError::Diagnostics(d)) => {
             PluginResponse::error("Seccomp violation", d)
@@ -119,7 +122,6 @@ fn test_plugin_seccomp_guard_showcase_permitted() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
 fn test_plugin_seccomp_guard_showcase_rejected() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
@@ -132,13 +134,15 @@ fn test_plugin_seccomp_guard_showcase_rejected() -> anyhow::Result<()> {
 
     let program = parser::parse_causm(source)?;
     let req = PluginRequest::new("telemetry_bad.csm", program);
-    let resp = match seccomp_guard_plugin(
-        req.ast.clone(),
-        &PluginContext {
-            file_path: req.file_path,
-            options: req.options,
-        },
-    ) {
+    let ctx = PluginContext {
+        protocol_version: req.protocol_version.clone(),
+        compiler_version: req.compiler_version.clone(),
+        target_arch: req.target_arch.clone(),
+        target_os: req.target_os.clone(),
+        file_path: req.file_path.clone(),
+        options: req.options.clone(),
+    };
+    let resp = match seccomp_guard_plugin(req.ast.clone(), &ctx) {
         Ok(ast) => PluginResponse::success(Some(ast), vec![]),
         Err(PluginError::Diagnostics(d)) => {
             PluginResponse::error("Seccomp violation", d)

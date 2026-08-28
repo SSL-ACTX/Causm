@@ -29,6 +29,8 @@ pub enum PluginStatus {
 pub struct PluginRequest {
     pub protocol_version: String,
     pub compiler_version: String,
+    pub target_arch: String,
+    pub target_os: String,
     pub file_path: String,
     pub ast: Program,
     pub options: HashMap<String, String>,
@@ -46,10 +48,22 @@ impl PluginRequest {
         Self {
             protocol_version: CURRENT_PROTOCOL_VERSION.to_string(),
             compiler_version: CURRENT_COMPILER_VERSION.to_string(),
+            target_arch: std::env::consts::ARCH.to_string(),
+            target_os: std::env::consts::OS.to_string(),
             file_path: file_path.into(),
             ast,
             options: HashMap::new(),
         }
+    }
+
+    pub fn with_target(
+        mut self,
+        target_arch: impl Into<String>,
+        target_os: impl Into<String>,
+    ) -> Self {
+        self.target_arch = target_arch.into();
+        self.target_os = target_os.into();
+        self
     }
 
     pub fn with_options(mut self, options: HashMap<String, String>) -> Self {

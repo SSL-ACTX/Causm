@@ -36,6 +36,10 @@ pub mod abi {
         let response = match req {
             Ok(request) => {
                 let ctx = PluginContext {
+                    protocol_version: request.protocol_version,
+                    compiler_version: request.compiler_version,
+                    target_arch: request.target_arch,
+                    target_os: request.target_os,
                     file_path: request.file_path,
                     options: request.options,
                 };
@@ -75,6 +79,10 @@ pub mod abi {
 }
 
 pub struct PluginContext {
+    pub protocol_version: String,
+    pub compiler_version: String,
+    pub target_arch: String,
+    pub target_os: String,
     pub file_path: String,
     pub options: std::collections::HashMap<String, String>,
 }
@@ -87,6 +95,14 @@ impl PluginContext {
     pub fn get_option_bool(&self, key: &str) -> Option<bool> {
         self.options.get(key).and_then(|v| v.parse::<bool>().ok())
     }
+
+    pub fn is_target_linux(&self) -> bool {
+        self.target_os == "linux"
+    }
+
+    pub fn is_target_arch(&self, arch: &str) -> bool {
+        self.target_arch == arch
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -98,6 +114,28 @@ pub enum PluginError {
 }
 
 impl PluginError {
+    pub fn error(
+        message: impl Into<String>,
+        span: Option<causm_core::Span>,
+    ) -> Self {
+        PluginError::Diagnostics(vec![PluginDiagnostic {
+            level: DiagnosticLevel::Error,
+            message: message.into(),
+            span,
+        }])
+    }
+
+    pub fn warning(
+        message: impl Into<String>,
+        span: Option<causm_core::Span>,
+    ) -> Self {
+        PluginError::Diagnostics(vec![PluginDiagnostic {
+            level: DiagnosticLevel::Warning,
+            message: message.into(),
+            span,
+        }])
+    }
+
     pub fn diagnostic(
         level: DiagnosticLevel,
         message: impl Into<String>,
