@@ -3,6 +3,137 @@ use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::types::Type;
 use causm_core::*;
 
+pub(crate) fn check_required_capabilities(
+    analyzer: &EntropicAnalyzer,
+    required: &[Capability],
+) -> Result<(), SemanticError> {
+    if required.is_empty() || analyzer.capability_stack.is_empty() {
+        return Ok(());
+    }
+
+    let all_satisfied = required.iter().all(|cap| {
+        let key = if let Some(id) = cap.parameters.get("id") {
+            format!("{}[id={}]", cap.path, id)
+        } else {
+            cap.path.clone()
+        };
+        analyzer.is_capability_allowed(&cap.path)
+            || analyzer.is_capability_allowed(&key)
+    });
+
+    if !all_satisfied {
+        let is_foreign_or_alt = required
+            .iter()
+            .any(|c| c.path == "System.FFI" || c.path == "System.WASI");
+        if is_foreign_or_alt {
+            let any_allowed = required.iter().any(|cap| {
+                let key = if let Some(id) = cap.parameters.get("id") {
+                    format!("{}[id={}]", cap.path, id)
+                } else {
+                    cap.path.clone()
+                };
+                analyzer.is_capability_allowed(&cap.path)
+                    || analyzer.is_capability_allowed(&key)
+            });
+            if !any_allowed {
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::MissingCapability(required[0].path.clone()),
+                ));
+            }
+        } else {
+            let missing = required
+                .iter()
+                .find(|cap| {
+                    let key = if let Some(id) = cap.parameters.get("id") {
+                        format!("{}[id={}]", cap.path, id)
+                    } else {
+                        cap.path.clone()
+                    };
+                    !analyzer.is_capability_allowed(&cap.path)
+                        && !analyzer.is_capability_allowed(&key)
+                })
+                .unwrap();
+            return Err(analyzer.annotate(SemanticErrorKind::MissingCapability(
+                missing.path.clone(),
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_call_arguments(
+    analyzer: &mut EntropicAnalyzer,
+    call_name: &str,
+    params: &[(ParamMode, String, Type)],
+    args: &[Expression],
+) -> Result<(), SemanticError> {
+    if args.len() != params.len() {
+        return Err(analyzer.annotate(SemanticErrorKind::ArgumentCountMismatch(
+            format!(
+                "{} expects {} args, got {}",
+                call_name,
+                params.len(),
+                args.len()
+            ),
+        )));
+    }
+
+    for (arg_expr, (mode, _param_name, expected_type)) in
+        args.iter().zip(params.iter())
+    {
+        let arg_type = infer_expression_type(analyzer, arg_expr)?;
+        let is_ffi_ptr_pass = matches!(
+            (expected_type, &arg_type),
+            (
+                Type::I64 | Type::I32 | Type::U64 | Type::Integer,
+                Type::Array(_) | Type::Struct(_) | Type::Custom(_) | Type::String
+            )
+        );
+
+        if !is_ffi_ptr_pass && !analyzer.types_compatible(expected_type, &arg_type) {
+            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                format!(
+                    "{} arg type mismatch: expected {:?}, got {:?}",
+                    call_name, expected_type, arg_type
+                ),
+            )));
+        }
+
+        if let Expression::StructLit(ref type_name, _) = arg_expr {
+            if type_name.borrow().is_none() {
+                if let Type::Custom(ref name) = expected_type {
+                    *type_name.borrow_mut() = Some(name.clone());
+                }
+            }
+        }
+
+        analyze_expression_nonconsuming(analyzer, arg_expr)?;
+
+        match mode {
+            ParamMode::Consume | ParamMode::Decay => {
+                if let Expression::Identifier(name) = arg_expr {
+                    analyzer.mark_consumed(name)?;
+                }
+            }
+            ParamMode::Clone => {
+                if let Expression::Identifier(name) = arg_expr {
+                    let state = analyzer
+                        .branch_contexts
+                        .get(&analyzer.current_branch)
+                        .unwrap();
+                    if state.consumed.contains(name) {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::UseAfterConsume(name.clone()),
+                        ));
+                    }
+                }
+            }
+            ParamMode::Peek | ParamMode::Lease => {}
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn analyze_expression(
     analyzer: &mut EntropicAnalyzer,
     expr: &Expression,
@@ -44,75 +175,12 @@ pub(crate) fn analyze_expression(
                 {
                     let info =
                         analyzer.routines.get(&static_routine_name).unwrap().clone();
-                    if args.len() != info.params.len() {
-                        return Err(analyzer.annotate(
-                            SemanticErrorKind::ArgumentCountMismatch(format!(
-                                "routine {} expects {} args, got {}",
-                                static_routine_name,
-                                info.params.len(),
-                                args.len()
-                            )),
-                        ));
-                    }
-                    for (arg_expr, (mode, _param_name, expected_type)) in
-                        args.iter().zip(info.params.iter())
-                    {
-                        let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                        let is_ffi_ptr_pass = matches!(
-                            (&expected_type, &arg_type),
-                            (
-                                Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                                Type::Array(_)
-                                    | Type::Struct(_)
-                                    | Type::Custom(_)
-                                    | Type::String
-                            )
-                        );
-                        if !is_ffi_ptr_pass
-                            && !analyzer.types_compatible(expected_type, &arg_type)
-                        {
-                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                                format!(
-                                    "routine {} arg type mismatch: expected {:?}, got {:?}",
-                                    static_routine_name, expected_type, arg_type
-                                ),
-                            )));
-                        }
-
-                        if let Expression::StructLit(ref type_name, _) = arg_expr {
-                            if type_name.borrow().is_none() {
-                                if let Type::Custom(ref name) = expected_type {
-                                    *type_name.borrow_mut() = Some(name.clone());
-                                }
-                            }
-                        }
-
-                        analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                        match mode {
-                            ParamMode::Consume => {
-                                if let Expression::Identifier(name) = arg_expr {
-                                    analyzer.mark_consumed(name)?;
-                                }
-                            }
-                            ParamMode::Clone => {
-                                if let Expression::Identifier(name) = arg_expr {
-                                    let state = analyzer
-                                        .branch_contexts
-                                        .get(&analyzer.current_branch)
-                                        .unwrap();
-                                    if state.consumed.contains(name) {
-                                        return Err(analyzer.annotate(
-                                            SemanticErrorKind::UseAfterConsume(
-                                                name.clone(),
-                                            ),
-                                        ));
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    validate_call_arguments(
+                        analyzer,
+                        &static_routine_name,
+                        &info.params,
+                        args,
+                    )?;
                     *resolved_routine.borrow_mut() =
                         Some(format!("<static>{}", static_routine_name));
                     let cost = info.taking_ms;
@@ -314,21 +382,7 @@ pub(crate) fn analyze_expression(
             })?;
             *resolved_routine.borrow_mut() = Some(resolved_name);
 
-            for cap in &info.required_capabilities {
-                let key = if let Some(id) = cap.parameters.get("id") {
-                    format!("{}[id={}]", cap.path, id)
-                } else {
-                    cap.path.clone()
-                };
-                if !analyzer.capability_stack.is_empty()
-                    && !analyzer.is_capability_allowed(&cap.path)
-                    && !analyzer.is_capability_allowed(&key)
-                {
-                    return Err(analyzer.annotate(
-                        SemanticErrorKind::MissingCapability(cap.path.clone()),
-                    ));
-                }
-            }
+            check_required_capabilities(analyzer, &info.required_capabilities)?;
 
             if let Some((ref param_name, ref expected_state)) = info.state_constraint
             {
@@ -414,61 +468,7 @@ pub(crate) fn analyze_expression(
                 _ => {}
             }
 
-            for (arg_expr, (mode, _param_name, expected_type)) in
-                args.iter().zip(info.params.iter().skip(1))
-            {
-                let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                let is_ffi_ptr_pass = matches!(
-                    (&expected_type, &arg_type),
-                    (
-                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
-                    )
-                );
-
-                if !is_ffi_ptr_pass
-                    && !analyzer.types_compatible(expected_type, &arg_type)
-                {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        format!(
-                            "method {} arg type mismatch: expected {:?}, got {:?}",
-                            method, expected_type, arg_type
-                        ),
-                    )));
-                }
-
-                if let Expression::StructLit(ref type_name, _) = arg_expr {
-                    if type_name.borrow().is_none() {
-                        if let Type::Custom(ref name) = expected_type {
-                            *type_name.borrow_mut() = Some(name.clone());
-                        }
-                    }
-                }
-
-                analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                match mode {
-                    ParamMode::Consume => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Clone => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            let state = analyzer
-                                .branch_contexts
-                                .get(&analyzer.current_branch)
-                                .unwrap();
-                            if state.consumed.contains(name) {
-                                return Err(analyzer.annotate(
-                                    SemanticErrorKind::UseAfterConsume(name.clone()),
-                                ));
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            validate_call_arguments(analyzer, method, &info.params[1..], args)?;
 
             Ok(())
         }
@@ -480,140 +480,8 @@ pub(crate) fn analyze_expression(
                 )))
             })?;
 
-            if !info.required_capabilities.is_empty()
-                && !analyzer.capability_stack.is_empty()
-            {
-                let all_satisfied = info.required_capabilities.iter().all(|cap| {
-                    let key = if let Some(id) = cap.parameters.get("id") {
-                        format!("{}[id={}]", cap.path, id)
-                    } else {
-                        cap.path.clone()
-                    };
-                    analyzer.is_capability_allowed(&cap.path)
-                        || analyzer.is_capability_allowed(&key)
-                });
-                if !all_satisfied {
-                    // If not all are satisfied, check if this is an alternative declaration (e.g. FFI or WASI)
-                    let is_foreign_or_alt = info
-                        .required_capabilities
-                        .iter()
-                        .any(|c| c.path == "System.FFI" || c.path == "System.WASI");
-                    if is_foreign_or_alt {
-                        let any_allowed =
-                            info.required_capabilities.iter().any(|cap| {
-                                let key = if let Some(id) = cap.parameters.get("id")
-                                {
-                                    format!("{}[id={}]", cap.path, id)
-                                } else {
-                                    cap.path.clone()
-                                };
-                                analyzer.is_capability_allowed(&cap.path)
-                                    || analyzer.is_capability_allowed(&key)
-                            });
-                        if !any_allowed {
-                            return Err(analyzer.annotate(
-                                SemanticErrorKind::MissingCapability(
-                                    info.required_capabilities[0].path.clone(),
-                                ),
-                            ));
-                        }
-                    } else {
-                        let missing = info
-                            .required_capabilities
-                            .iter()
-                            .find(|cap| {
-                                let key = if let Some(id) = cap.parameters.get("id")
-                                {
-                                    format!("{}[id={}]", cap.path, id)
-                                } else {
-                                    cap.path.clone()
-                                };
-                                !analyzer.is_capability_allowed(&cap.path)
-                                    && !analyzer.is_capability_allowed(&key)
-                            })
-                            .unwrap();
-                        return Err(analyzer.annotate(
-                            SemanticErrorKind::MissingCapability(
-                                missing.path.clone(),
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            if args.len() != info.params.len() {
-                return Err(analyzer.annotate(
-                    SemanticErrorKind::ArgumentCountMismatch(format!(
-                        "routine {} expects {} args, got {}",
-                        routine,
-                        info.params.len(),
-                        args.len()
-                    )),
-                ));
-            }
-
-            for (arg_expr, (mode, _param_name, expected_type)) in
-                args.iter().zip(info.params.iter())
-            {
-                let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                let is_ffi_ptr_pass = matches!(
-                    (&expected_type, &arg_type),
-                    (
-                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                        Type::Array(_)
-                            | Type::Struct(_)
-                            | Type::Custom(_)
-                            | Type::String
-                    )
-                );
-                if !is_ffi_ptr_pass
-                    && !analyzer.types_compatible(expected_type, &arg_type)
-                {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        format!(
-                            "routine {} arg type mismatch: expected {:?}, got {:?}",
-                            routine, expected_type, arg_type
-                        ),
-                    )));
-                }
-
-                if let Expression::StructLit(ref type_name, _) = arg_expr {
-                    if type_name.borrow().is_none() {
-                        if let Type::Custom(ref name) = expected_type {
-                            *type_name.borrow_mut() = Some(name.clone());
-                        }
-                    }
-                }
-
-                analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                match mode {
-                    ParamMode::Consume => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Clone => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            let state = analyzer
-                                .branch_contexts
-                                .get(&analyzer.current_branch)
-                                .unwrap();
-                            if state.consumed.contains(name) {
-                                return Err(analyzer.annotate(
-                                    SemanticErrorKind::UseAfterConsume(name.clone()),
-                                ));
-                            }
-                        }
-                    }
-                    ParamMode::Decay => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Peek | ParamMode::Lease => {}
-                }
-            }
+            check_required_capabilities(analyzer, &info.required_capabilities)?;
+            validate_call_arguments(analyzer, routine, &info.params, args)?;
             Ok(())
         }
         Expression::Identifier(name) => analyzer.mark_consumed(name),

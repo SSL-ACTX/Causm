@@ -410,6 +410,44 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    fn analyze_entropy_branch(
+        &mut self,
+        target: &Expression,
+        pattern: Option<&DecayedPattern>,
+        guard: &Option<Expression>,
+        branch_body: &[SpannedStatement],
+        original_state: &crate::analyzer::types::BranchState,
+    ) -> Result<crate::analyzer::types::BranchState, SemanticError> {
+        let saved_contexts = self.branch_contexts.clone();
+        self.branch_contexts
+            .insert(self.current_branch.clone(), original_state.clone());
+
+        if let Some(pat) = pattern {
+            self.apply_pattern(pat, target)?;
+            self.in_entropy_match = true;
+            let res =
+                crate::expression::analyze_expression_nonconsuming(self, target);
+            self.in_entropy_match = false;
+            res?;
+        }
+
+        if let Some(guard_expr) = guard {
+            crate::expression::analyze_expression(self, guard_expr)?;
+        }
+
+        for stmt in branch_body {
+            self.analyze_statement(stmt)?;
+        }
+
+        let branch_end_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+        self.branch_contexts = saved_contexts;
+        Ok(branch_end_state)
+    }
+
     pub(crate) fn MatchEntropy(
         &mut self,
         target: &Expression,
@@ -438,108 +476,43 @@ impl EntropicAnalyzer {
         let mut context_candidates = Vec::new();
 
         if let Some((pattern, guard, branch_body)) = valid_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((pattern, guard, branch_body)) = decayed_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((pattern, guard, branch_body)) = pending_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((guard, branch_body)) = consumed_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                None,
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if context_candidates.is_empty() {

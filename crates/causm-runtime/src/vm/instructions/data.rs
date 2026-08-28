@@ -120,20 +120,10 @@ impl Vm {
         }
         let state = self.peek_state(branch_id, src.0)?;
         let metadata = {
-            let branch = self.get_branch_mut(branch_id)?;
-            branch
-                .arena
-                .metadata
-                .get(src.0 as usize)
-                .and_then(|m| m.clone())
+            let branch = self.get_branch(branch_id)?;
+            branch.arena.get_metadata(src.0).cloned()
         };
-        let branch = self.get_branch_mut(branch_id)?;
-        if let Some(meta) = metadata {
-            branch.arena.insert_with_metadata(dest.0, state, meta)?;
-        } else {
-            branch.arena.insert(dest.0, state)?;
-        }
-        Ok(())
+        self.insert_reg_with_metadata(branch_id, dest.0, state, metadata)
     }
 
     pub(crate) fn BinaryOp(
