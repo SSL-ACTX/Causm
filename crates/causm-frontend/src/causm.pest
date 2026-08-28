@@ -202,30 +202,35 @@ yield_stmt = { "yield" ~ expression? }
 expression = { pipeline_expr }
 pipeline_expr = { logical_or_expr ~ ("|>" ~ logical_or_expr)* }
 logical_or_expr = { logical_and_expr ~ (logor ~ logical_and_expr)* }
+logor = { "||" | "??" }
 logical_and_expr = { relational_expr ~ (logand ~ relational_expr)* }
-logor = { "||" }
 logand = { "&&" }
 relational_expr = {
     additive_expr ~ (relop ~ additive_expr)*
 }
-relop = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
+relop = { "==" | "!=" | "<=" | ">=" | "<<" | ">>" | "<" | ">" }
 additive_expr = { multiplicative_expr ~ (addop ~ multiplicative_expr)* }
-addop = { "+" | "-" }
+addop = { "+" | "-" | bitor | "^" }
+bitor = @{ "|" ~ !"|" }
 multiplicative_expr = { power_expr ~ (mulop ~ power_expr)* }
-mulop = { "*" | "/" | "%" }
+mulop = { "*" | "/" | "%" | bitand }
+bitand = @{ "&" ~ !"&" }
 power_expr = { unary_expr ~ (powop ~ unary_expr)* }
-powop = { "^" }
-unary_expr = { neg_expr | not_expr | primary_expr }
+powop = { "**" }
+unary_expr = { bitwise_not_expr | neg_expr | not_expr | primary_expr }
+bitwise_not_expr = { "~" ~ unary_expr }
 neg_expr = { "-" ~ unary_expr }
 not_expr = { "!" ~ unary_expr }
 primary_expr = { base_expr ~ (try_tail | index_access | method_call_tail | type_assertion_tail | type_cast_tail | field_access_tail)* }
-try_tail = { "?" }
+try_tail = @{ "?" ~ !"?" }
 method_call_tail = { "." ~ identifier ~ ("::<" ~ type_param_list ~ ">")? ~ "(" ~ expression_list? ~ ")" }
 type_assertion_tail = { "." ~ "(" ~ type_name ~ ")" }
 as_keyword = @{ "as" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 type_cast_tail = { as_keyword ~ type_name }
 field_access_tail = { "." ~ identifier }
-field_update_stmt = { primary_expr ~ "=" ~ expression }
+compound_assign_op = { "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" }
+assignment_op = { compound_assign_op | "=" }
+field_update_stmt = { primary_expr ~ assignment_op ~ expression }
 null = @{ "null" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 time_unit = { "ns" | "us" | "ms" | "s" }
 duration_literal = @{ ASCII_DIGIT+ ~ time_unit }

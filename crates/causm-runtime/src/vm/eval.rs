@@ -258,6 +258,13 @@ impl Vm {
                     val
                 ))),
             },
+            causm_core::UnaryOperator::BitwiseNot => match val {
+                Payload::Integer(i) => Ok(Payload::Integer(!i)),
+                _ => Err(TemporalError::TypeMismatch(format!(
+                    "Cannot apply bitwise NOT (~) to non-integer {:?}",
+                    val
+                ))),
+            },
         }
     }
 
@@ -267,6 +274,13 @@ impl Vm {
         right_value: Payload,
         op: &BinaryOperator,
     ) -> Result<Payload, TemporalError> {
+        if *op == BinaryOperator::NullCoalesce {
+            return match left_value {
+                Payload::Null => Ok(right_value),
+                l => Ok(l),
+            };
+        }
+
         let result = match (left_value, right_value) {
             // Null equality: any type compared against Null — always succeeds.
             (Payload::Null, Payload::Null) if op == &BinaryOperator::Eq => {
@@ -350,6 +364,25 @@ impl Vm {
                         Payload::Integer(l.pow(r as u32))
                     }
                 }
+                BinaryOperator::BitwiseAnd => Payload::Integer(l & r),
+                BinaryOperator::BitwiseOr => Payload::Integer(l | r),
+                BinaryOperator::BitwiseXor => Payload::Integer(l ^ r),
+                BinaryOperator::Shl => {
+                    if r < 0 || r >= 64 {
+                        return Err(TemporalError::EvalError(
+                            "Shift operand out of bounds [0, 63]".into(),
+                        ));
+                    }
+                    Payload::Integer(l << (r as u32))
+                }
+                BinaryOperator::Shr => {
+                    if r < 0 || r >= 64 {
+                        return Err(TemporalError::EvalError(
+                            "Shift operand out of bounds [0, 63]".into(),
+                        ));
+                    }
+                    Payload::Integer(l >> (r as u32))
+                }
                 BinaryOperator::Eq => Payload::Bool(l == r),
                 BinaryOperator::Neq => Payload::Bool(l != r),
                 BinaryOperator::Lt => Payload::Bool(l < r),
@@ -362,6 +395,7 @@ impl Vm {
                             .into(),
                     ));
                 }
+                BinaryOperator::NullCoalesce => unreachable!(),
             },
             (l, r) if l.is_numeric() && r.is_numeric() => {
                 let lf = l.as_float().unwrap();
@@ -393,11 +427,11 @@ impl Vm {
                     BinaryOperator::Gt => Payload::Bool(lf > rf),
                     BinaryOperator::Le => Payload::Bool(lf <= rf),
                     BinaryOperator::Ge => Payload::Bool(lf >= rf),
-                    BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => {
-                        return Err(TemporalError::TypeMismatch(
-                            "Logical operators && and || require boolean operands"
-                                .into(),
-                        ));
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(format!(
+                            "Unsupported binary operator {:?} for float operands",
+                            op
+                        )));
                     }
                 }
             }
@@ -406,6 +440,9 @@ impl Vm {
                 BinaryOperator::Neq => Payload::Bool(l != r),
                 BinaryOperator::LogicalAnd => Payload::Bool(l && r),
                 BinaryOperator::LogicalOr => Payload::Bool(l || r),
+                BinaryOperator::BitwiseAnd => Payload::Bool(l & r),
+                BinaryOperator::BitwiseOr => Payload::Bool(l | r),
+                BinaryOperator::BitwiseXor => Payload::Bool(l ^ r),
                 _ => {
                     return Err(TemporalError::EvalError(
                         "Invalid boolean operator".into(),

@@ -995,6 +995,7 @@ pub enum ParamMode {
 pub enum UnaryOperator {
     Neg,
     Not,
+    BitwiseNot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1013,6 +1014,12 @@ pub enum BinaryOperator {
     Ge,
     LogicalAnd,
     LogicalOr,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    Shl,
+    Shr,
+    NullCoalesce,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -316,6 +316,26 @@ pub(crate) fn infer_expression_type(
                 | BinaryOperator::Ge
                 | BinaryOperator::LogicalAnd
                 | BinaryOperator::LogicalOr => Ok(Type::Bool),
+                BinaryOperator::BitwiseAnd
+                | BinaryOperator::BitwiseOr
+                | BinaryOperator::BitwiseXor
+                | BinaryOperator::Shl
+                | BinaryOperator::Shr => {
+                    if left_type == Type::Bool && right_type == Type::Bool {
+                        Ok(Type::Bool)
+                    } else {
+                        Ok(left_type)
+                    }
+                }
+                BinaryOperator::NullCoalesce => {
+                    if let Type::Optional(inner) = left_type {
+                        Ok(*inner)
+                    } else if left_type == Type::Unknown {
+                        Ok(right_type)
+                    } else {
+                        Ok(left_type)
+                    }
+                }
                 BinaryOperator::Add
                 | BinaryOperator::Sub
                 | BinaryOperator::Mul
@@ -336,7 +356,9 @@ pub(crate) fn infer_expression_type(
         }
         Expression::UnaryOp { op, expr } => match op {
             UnaryOperator::Not => Ok(Type::Bool),
-            UnaryOperator::Neg => infer_expression_type(analyzer, expr),
+            UnaryOperator::Neg | UnaryOperator::BitwiseNot => {
+                infer_expression_type(analyzer, expr)
+            }
         },
         Expression::TypeAssertion { cast_type, .. } => {
             Ok(Type::from_typename(cast_type))

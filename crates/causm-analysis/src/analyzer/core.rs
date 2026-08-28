@@ -1244,6 +1244,12 @@ impl EntropicAnalyzer {
                     BinaryOperator::Ge => ">=",
                     BinaryOperator::LogicalAnd => "&&",
                     BinaryOperator::LogicalOr => "||",
+                    BinaryOperator::BitwiseAnd => "&",
+                    BinaryOperator::BitwiseOr => "|",
+                    BinaryOperator::BitwiseXor => "^",
+                    BinaryOperator::Shl => "<<",
+                    BinaryOperator::Shr => ">>",
+                    BinaryOperator::NullCoalesce => "??",
                 };
                 format!(
                     "({} {} {})",
@@ -1256,6 +1262,7 @@ impl EntropicAnalyzer {
                 let op_str = match op {
                     causm_core::UnaryOperator::Neg => "-",
                     causm_core::UnaryOperator::Not => "!",
+                    causm_core::UnaryOperator::BitwiseNot => "~",
                 };
                 format!("{}{}", op_str, self.expr_snippet(expr))
             }

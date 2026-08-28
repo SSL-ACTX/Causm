@@ -65,6 +65,23 @@ fn fold_binary_op(
                     None
                 }
             }
+            causm_core::BinaryOperator::BitwiseAnd => Some(SsaConstant::Int(l & r)),
+            causm_core::BinaryOperator::BitwiseOr => Some(SsaConstant::Int(l | r)),
+            causm_core::BinaryOperator::BitwiseXor => Some(SsaConstant::Int(l ^ r)),
+            causm_core::BinaryOperator::Shl => {
+                if *r >= 0 && *r < 64 {
+                    Some(SsaConstant::Int(l << (*r as u32)))
+                } else {
+                    None
+                }
+            }
+            causm_core::BinaryOperator::Shr => {
+                if *r >= 0 && *r < 64 {
+                    Some(SsaConstant::Int(l >> (*r as u32)))
+                } else {
+                    None
+                }
+            }
             causm_core::BinaryOperator::Eq => Some(SsaConstant::Bool(l == r)),
             causm_core::BinaryOperator::Neq => Some(SsaConstant::Bool(l != r)),
             causm_core::BinaryOperator::Lt => Some(SsaConstant::Bool(l < r)),
@@ -101,11 +118,16 @@ fn fold_binary_op(
         (SsaConstant::Bool(l), SsaConstant::Bool(r)) => match op {
             causm_core::BinaryOperator::Eq => Some(SsaConstant::Bool(l == r)),
             causm_core::BinaryOperator::Neq => Some(SsaConstant::Bool(l != r)),
-            causm_core::BinaryOperator::LogicalAnd => {
+            causm_core::BinaryOperator::LogicalAnd
+            | causm_core::BinaryOperator::BitwiseAnd => {
                 Some(SsaConstant::Bool(*l && *r))
             }
-            causm_core::BinaryOperator::LogicalOr => {
+            causm_core::BinaryOperator::LogicalOr
+            | causm_core::BinaryOperator::BitwiseOr => {
                 Some(SsaConstant::Bool(*l || *r))
+            }
+            causm_core::BinaryOperator::BitwiseXor => {
+                Some(SsaConstant::Bool(*l ^ *r))
             }
             _ => None,
         },
@@ -130,6 +152,7 @@ fn fold_unary_op(
             causm_core::UnaryOperator::Neg => {
                 Some(SsaConstant::Int(v.wrapping_neg()))
             }
+            causm_core::UnaryOperator::BitwiseNot => Some(SsaConstant::Int(!v)),
             _ => None,
         },
         SsaConstant::Bool(v) => match op {

@@ -1329,6 +1329,12 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
                 BinaryOperator::Ge => ">=",
                 BinaryOperator::LogicalAnd => "&&",
                 BinaryOperator::LogicalOr => "||",
+                BinaryOperator::BitwiseAnd => "&",
+                BinaryOperator::BitwiseOr => "|",
+                BinaryOperator::BitwiseXor => "^",
+                BinaryOperator::Shl => "<<",
+                BinaryOperator::Shr => ">>",
+                BinaryOperator::NullCoalesce => "??",
             };
             format!("{} {} {}", left_str, op_str, right_str)
         }
@@ -1336,6 +1342,7 @@ fn format_expr(expr: &Expression, config: &FormatConfig, depth: usize) -> String
             let op_str = match op {
                 UnaryOperator::Neg => "-",
                 UnaryOperator::Not => "!",
+                UnaryOperator::BitwiseNot => "~",
             };
             format!("{}{}", op_str, format_expr(expr, config, depth))
         }
@@ -1767,16 +1774,21 @@ pub fn format_pattern(pat: &Pattern, config: &FormatConfig, depth: usize) -> Str
 
 fn op_precedence(op: &BinaryOperator) -> u8 {
     match op {
-        BinaryOperator::Pow => 60,
-        BinaryOperator::Mul | BinaryOperator::Div | BinaryOperator::Rem => 50,
-        BinaryOperator::Add | BinaryOperator::Sub => 40,
+        BinaryOperator::NullCoalesce => 3,
+        BinaryOperator::LogicalOr => 5,
+        BinaryOperator::LogicalAnd => 10,
+        BinaryOperator::BitwiseOr => 12,
+        BinaryOperator::BitwiseXor => 14,
+        BinaryOperator::BitwiseAnd => 16,
+        BinaryOperator::Eq | BinaryOperator::Neq => 20,
         BinaryOperator::Lt
         | BinaryOperator::Gt
         | BinaryOperator::Le
         | BinaryOperator::Ge => 30,
-        BinaryOperator::Eq | BinaryOperator::Neq => 20,
-        BinaryOperator::LogicalAnd => 10,
-        BinaryOperator::LogicalOr => 5,
+        BinaryOperator::Shl | BinaryOperator::Shr => 35,
+        BinaryOperator::Add | BinaryOperator::Sub => 40,
+        BinaryOperator::Mul | BinaryOperator::Div | BinaryOperator::Rem => 50,
+        BinaryOperator::Pow => 60,
     }
 }
 

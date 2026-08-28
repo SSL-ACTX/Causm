@@ -567,7 +567,8 @@ impl Arena {
         match state {
             EntropicState::Valid(Payload::Struct(mut fields)) => {
                 if !fields.contains_key(field) {
-                    self.registers[idx] = EntropicState::Valid(Payload::Struct(fields));
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Struct(fields));
                     return Err(MemoryError::KeyNotFound(field.to_string()));
                 }
                 let field_state = fields.remove(field).unwrap();
@@ -583,7 +584,8 @@ impl Arena {
             }
             EntropicState::Valid(Payload::Topology(mut fields)) => {
                 if !fields.contains_key(field) {
-                    self.registers[idx] = EntropicState::Valid(Payload::Topology(fields));
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Topology(fields));
                     return Err(MemoryError::KeyNotFound(field.to_string()));
                 }
                 let field_state = fields.remove(field).unwrap();

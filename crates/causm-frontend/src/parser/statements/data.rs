@@ -333,7 +333,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
         Rule::field_update_stmt => {
             let mut inner = pair.clone().into_inner();
             let target_pair = inner.next().unwrap();
-            let value_pair = inner.next().unwrap();
+            let second_pair = inner.next().unwrap();
+            let (op_str, value_pair) =
+                if second_pair.as_rule() == Rule::assignment_op {
+                    (second_pair.as_str(), inner.next().unwrap())
+                } else {
+                    ("=", second_pair)
+                };
 
             // Descend through expression wrapper rules to find the actual inner rule.
             // Grammar: expression -> relational_expr -> ... -> primary_expr -> base_expr -> match_entropy_expr
@@ -427,7 +433,29 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
 
             let target_expr = parse_expression(target_pair);
-            let value = parse_expression(value_pair);
+            let mut value = parse_expression(value_pair);
+
+            if op_str != "=" {
+                let bin_op = match op_str {
+                    "+=" => BinaryOperator::Add,
+                    "-=" => BinaryOperator::Sub,
+                    "*=" => BinaryOperator::Mul,
+                    "/=" => BinaryOperator::Div,
+                    "%=" => BinaryOperator::Rem,
+                    "&=" => BinaryOperator::BitwiseAnd,
+                    "|=" => BinaryOperator::BitwiseOr,
+                    "^=" => BinaryOperator::BitwiseXor,
+                    "<<=" => BinaryOperator::Shl,
+                    ">>=" => BinaryOperator::Shr,
+                    _ => BinaryOperator::Add,
+                };
+                value = Expression::BinaryOp {
+                    left: Box::new(target_expr.clone()),
+                    op: bin_op,
+                    right: Box::new(value),
+                };
+            }
+
             if let Expression::FieldAccess { target, field } = target_expr {
                 Statement::FieldUpdate {
                     target: *target,

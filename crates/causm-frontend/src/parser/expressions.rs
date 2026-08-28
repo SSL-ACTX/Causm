@@ -55,14 +55,20 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut left = first.unwrap();
             while let Some(op_pair) = inner.next() {
                 let op = match op_pair.as_str() {
+                    "??" => causm_core::BinaryOperator::NullCoalesce,
                     "||" => causm_core::BinaryOperator::LogicalOr,
                     "&&" => causm_core::BinaryOperator::LogicalAnd,
+                    "|" => causm_core::BinaryOperator::BitwiseOr,
+                    "^" => causm_core::BinaryOperator::BitwiseXor,
+                    "&" => causm_core::BinaryOperator::BitwiseAnd,
+                    "<<" => causm_core::BinaryOperator::Shl,
+                    ">>" => causm_core::BinaryOperator::Shr,
                     "+" => causm_core::BinaryOperator::Add,
                     "-" => causm_core::BinaryOperator::Sub,
                     "*" => causm_core::BinaryOperator::Mul,
                     "/" => causm_core::BinaryOperator::Div,
                     "%" => causm_core::BinaryOperator::Rem,
-                    "^" => causm_core::BinaryOperator::Pow,
+                    "**" => causm_core::BinaryOperator::Pow,
                     "==" => causm_core::BinaryOperator::Eq,
                     "!=" => causm_core::BinaryOperator::Neq,
                     "<" => causm_core::BinaryOperator::Lt,
@@ -83,6 +89,13 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             left
         }
         Rule::unary_expr => parse_expression(pair.into_inner().next().unwrap()),
+        Rule::bitwise_not_expr => {
+            let expr = parse_expression(pair.into_inner().next().unwrap());
+            Expression::UnaryOp {
+                op: causm_core::UnaryOperator::BitwiseNot,
+                expr: Box::new(expr),
+            }
+        }
         Rule::neg_expr => {
             let expr = parse_expression(pair.into_inner().next().unwrap());
             Expression::UnaryOp {

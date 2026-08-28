@@ -503,3 +503,136 @@ fn test_syntax_collection_and_string_primitives_execution() -> anyhow::Result<()
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_compound_assignment_operators() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut x = 10
+        x += 5
+        x -= 3
+        x *= 4
+        x /= 2
+        x %= 7
+        let mut b = 1
+        b <<= 3
+        b >>= 1
+        b |= 0x04
+        b &= 0x06
+        b ^= 0x02
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").expect("x symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+
+    // x calculation:
+    // 10 + 5 = 15
+    // 15 - 3 = 12
+    // 12 * 4 = 48
+    // 48 / 2 = 24
+    // 24 % 7 = 3
+    assert_eq!(vm.peek_reg("main", x_reg)?, Payload::Integer(3));
+
+    // b calculation:
+    // 1 << 3 = 8
+    // 8 >> 1 = 4
+    // 4 | 4 = 4
+    // 4 & 6 = 4
+    // 4 ^ 2 = 6
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(6));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_bitwise_operators_and_shift() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let a = 0x0F & 0x07
+        let b = 0x08 | 0x02
+        let c = 0x0F ^ 0x03
+        let d = 1 << 4
+        let e = 64 >> 2
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+    let c_reg = ir.symbols.get("c").expect("c symbol").0;
+    let d_reg = ir.symbols.get("d").expect("d symbol").0;
+    let e_reg = ir.symbols.get("e").expect("e symbol").0;
+
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(0x07));
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(0x0A));
+    assert_eq!(vm.peek_reg("main", c_reg)?, Payload::Integer(0x0C));
+    assert_eq!(vm.peek_reg("main", d_reg)?, Payload::Integer(16));
+    assert_eq!(vm.peek_reg("main", e_reg)?, Payload::Integer(16));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_bitwise_not_operator() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let raw = 0
+        let inv = ~raw
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let inv_reg = ir.symbols.get("inv").expect("inv symbol").0;
+    assert_eq!(vm.peek_reg("main", inv_reg)?, Payload::Integer(-1));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_null_coalescing_operator() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let a = null ?? 8080
+        let b = 42 ?? 8080
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(8080));
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(42));
+
+    Ok(())
+}
