@@ -157,17 +157,27 @@ impl Type {
         }
     }
 
-    #[allow(unused)]
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Type::Integer | Type::Float)
+        self.is_integer() || self.is_float()
     }
 
     pub fn is_integer(&self) -> bool {
-        matches!(self, Type::Integer)
+        matches!(
+            self,
+            Type::Integer
+                | Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64
+        )
     }
 
     pub fn is_float(&self) -> bool {
-        matches!(self, Type::Float)
+        matches!(self, Type::Float | Type::F32 | Type::F64)
     }
 
     #[allow(unused)]

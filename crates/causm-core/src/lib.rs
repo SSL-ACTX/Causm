@@ -589,6 +589,230 @@ macro_rules! define_expression_enum {
 
 expressions!(define_expression_enum);
 
+impl Expression {
+    pub fn for_each_child_expr<'a>(&'a self, f: &mut impl FnMut(&'a Expression)) {
+        match self {
+            Expression::FieldAccess { target, .. } => f(target),
+            Expression::MethodCall { target, args, .. } => {
+                f(target);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Expression::Call { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                f(left);
+                f(right);
+            }
+            Expression::UnaryOp { expr, .. } => f(expr),
+            Expression::IndexAccess { target, index } => {
+                f(target);
+                f(index);
+            }
+            Expression::ArraySlice {
+                target, start, end, ..
+            } => {
+                f(target);
+                if let Some(s) = start {
+                    f(s);
+                }
+                if let Some(e) = end {
+                    f(e);
+                }
+            }
+            Expression::ArrayLiteral(elements) => {
+                for el in elements {
+                    f(el);
+                }
+            }
+            Expression::ArrayRepeat { value, count } => {
+                f(value);
+                f(count);
+            }
+            Expression::StructLit(_, fields) | Expression::TopologyLit(fields) => {
+                for expr in fields.values() {
+                    f(expr);
+                }
+            }
+            Expression::Syscall { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Expression::EnumVariant { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Expression::TryUnwrap(expr) => f(expr),
+            Expression::Turbofish { expr, .. } => f(expr),
+            Expression::GenericStaticCall { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Expression::FString(parts) => {
+                for part in parts {
+                    if let FStringPart::Expr(expr) = part {
+                        f(expr);
+                    }
+                }
+            }
+            Expression::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                f(condition);
+                f(then_branch);
+                f(else_branch);
+            }
+            Expression::Match { target, arms } => {
+                f(target);
+                for arm in arms {
+                    if let Some(ref guard) = arm.guard {
+                        f(guard);
+                    }
+                    f(&arm.body);
+                }
+            }
+            Expression::TypeAssertion { target, .. } => f(target),
+            Expression::TypeCast { expr, .. } => f(expr),
+            _ => {}
+        }
+    }
+}
+
+impl Statement {
+    pub fn for_each_child_expr<'a>(&'a self, f: &mut impl FnMut(&'a Expression)) {
+        match self {
+            Statement::Assignment { expr, .. } => f(expr),
+            Statement::DestructureAssignment { expr, .. } => f(expr),
+            Statement::Using { resource, .. } => f(resource),
+            Statement::Expression(expr) => f(expr),
+            Statement::Debug(expr) => f(expr),
+            Statement::Print(args) => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            Statement::FieldUpdate { value, .. } => f(value),
+            Statement::If { condition, .. } => f(condition),
+            Statement::IfLet { expr, .. } => f(expr),
+            Statement::While { condition, .. } => f(condition),
+            Statement::ForStep { source, .. } => f(source),
+            Statement::Yield(expr_opt) => {
+                if let Some(e) = expr_opt {
+                    f(e);
+                }
+            }
+            Statement::MatchEntropy {
+                target,
+                valid_branch,
+                decayed_branch,
+                pending_branch,
+                consumed_branch,
+            } => {
+                f(target);
+                if let Some((_, Some(ref g), _)) = valid_branch {
+                    f(g);
+                }
+                if let Some((_, Some(ref g), _)) = decayed_branch {
+                    f(g);
+                }
+                if let Some((_, Some(ref g), _)) = pending_branch {
+                    f(g);
+                }
+                if let Some((Some(ref g), _)) = consumed_branch {
+                    f(g);
+                }
+            }
+            Statement::Match { target, arms } => {
+                f(target);
+                for arm in arms {
+                    if let Some(ref g) = arm.guard {
+                        f(g);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn for_each_child_block<'a>(
+        &'a self,
+        f: &mut impl FnMut(&'a [SpannedStatement]),
+    ) {
+        match self {
+            Statement::Using { body, .. }
+            | Statement::DecayHandler { body, .. }
+            | Statement::RelativisticBlock { body, .. }
+            | Statement::DirectiveBlock { body, .. } => f(body),
+            Statement::Isolate(block) => f(&block.body),
+            Statement::Commit(stmts) => f(stmts),
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                f(then_branch);
+                if let Some(else_b) = else_branch {
+                    f(else_b);
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::ForStep { body, .. }
+            | Statement::SplitMap { body, .. } => f(body),
+            Statement::Speculate { body, fallback, .. } => {
+                f(body);
+                if let Some(fb) = fallback {
+                    f(fb);
+                }
+            }
+            Statement::Select { cases, timeout, .. } => {
+                for c in cases {
+                    f(&c.body);
+                }
+                if let Some(to) = timeout {
+                    f(to);
+                }
+            }
+            Statement::MatchEntropy {
+                valid_branch,
+                decayed_branch,
+                pending_branch,
+                consumed_branch,
+                ..
+            } => {
+                if let Some((_, _, ref b)) = valid_branch {
+                    f(b);
+                }
+                if let Some((_, _, ref b)) = decayed_branch {
+                    f(b);
+                }
+                if let Some((_, _, ref b)) = pending_branch {
+                    f(b);
+                }
+                if let Some((_, ref b)) = consumed_branch {
+                    f(b);
+                }
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    f(&arm.body);
+                }
+            }
+            Statement::RoutineDef { body, .. } => f(body),
+            _ => {}
+        }
+    }
+}
+
 /// A segment within an f-string literal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FStringPart {

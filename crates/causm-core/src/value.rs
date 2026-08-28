@@ -464,6 +464,7 @@ impl Arena {
                     .saturating_sub(old_weight)
                     .saturating_add(new_weight);
                 self.registers[idx] = new_state;
+                self.metadata[idx] = None;
                 Ok(payload)
             }
             EntropicState::Decayed(_) => Err(MemoryError::StructurallyDecayed),
@@ -499,6 +500,7 @@ impl Arena {
             .used
             .saturating_sub(old_weight)
             .saturating_add(new_weight);
+        self.metadata[idx] = None;
         Ok(state)
     }
 
@@ -563,17 +565,45 @@ impl Arena {
         let old_parent_weight = state.weight();
 
         match state {
-            EntropicState::Valid(Payload::Struct(mut fields))
-            | EntropicState::Valid(Payload::Topology(mut fields))
-            | EntropicState::Decayed(mut fields) => {
-                let field_state = fields
-                    .remove(field)
-                    .ok_or(MemoryError::KeyNotFound(field.to_string()))?;
-
-                // Mark specifically this field as consumed
+            EntropicState::Valid(Payload::Struct(mut fields)) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] = EntropicState::Valid(Payload::Struct(fields));
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
                 fields.insert(field.to_string(), EntropicState::Consumed);
-
-                // Re-insert the parent as Decayed
+                let new_state = EntropicState::Decayed(fields);
+                let new_parent_weight = new_state.weight();
+                self.used = self
+                    .used
+                    .saturating_sub(old_parent_weight)
+                    .saturating_add(new_parent_weight);
+                self.registers[idx] = new_state;
+                Ok(field_state)
+            }
+            EntropicState::Valid(Payload::Topology(mut fields)) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] = EntropicState::Valid(Payload::Topology(fields));
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
+                fields.insert(field.to_string(), EntropicState::Consumed);
+                let new_state = EntropicState::Decayed(fields);
+                let new_parent_weight = new_state.weight();
+                self.used = self
+                    .used
+                    .saturating_sub(old_parent_weight)
+                    .saturating_add(new_parent_weight);
+                self.registers[idx] = new_state;
+                Ok(field_state)
+            }
+            EntropicState::Decayed(mut fields) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] = EntropicState::Decayed(fields);
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
+                fields.insert(field.to_string(), EntropicState::Consumed);
                 let new_state = EntropicState::Decayed(fields);
                 let new_parent_weight = new_state.weight();
                 self.used = self
@@ -584,7 +614,6 @@ impl Arena {
                 Ok(field_state)
             }
             _ => {
-                // Re-insert non-struct state
                 self.registers[idx] = state;
                 Err(MemoryError::NotAStruct)
             }
@@ -631,6 +660,7 @@ impl Arena {
             .saturating_sub(old_weight)
             .saturating_add(new_weight);
         self.registers[idx] = new_state;
+        self.metadata[idx] = None;
         Ok(())
     }
 
