@@ -1806,6 +1806,14 @@ pub fn format_pattern(pat: &Pattern, config: &FormatConfig, depth: usize) -> Str
         Pattern::Wildcard => "_".to_string(),
         Pattern::Identifier(id) => id.clone(),
         Pattern::Literal(e) => format_expr(e, config, depth),
+        Pattern::Tuple(subpatterns) => {
+            let inner = subpatterns
+                .iter()
+                .map(|p| format_pattern(p, config, depth))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("({})", inner)
+        }
         Pattern::EnumVariant {
             enum_name,
             variant_name,

@@ -315,11 +315,13 @@ enum_variant = { identifier ~ ("(" ~ type_name_list ~ ")")? }
 type_name_list = { type_name ~ ("," ~ type_name)* }
 
 match_pattern = {
-    enum_pattern
+    tuple_pattern
+    | enum_pattern
     | literal_pattern
     | wildcard_pattern
     | ident_pattern
 }
+tuple_pattern = { "(" ~ pattern_arg_list? ~ ")" }
 enum_pattern = {
     (identifier ~ "::" ~ identifier ~ ("(" ~ pattern_arg_list? ~ ")")?)
     | (identifier ~ "(" ~ pattern_arg_list? ~ ")")

@@ -676,6 +676,23 @@ pub(crate) fn lower_pattern_test(
             let old = ctx.symbols.insert(name.clone(), target_reg);
             bound_symbols.push((name.clone(), old));
         }
+        Pattern::Tuple(subpatterns) => {
+            for (idx, subpat) in subpatterns.iter().enumerate() {
+                let elem_reg = ctx.alloc_reg();
+                ctx.push(causm_ir::Instruction::TupleAccess {
+                    dest: elem_reg,
+                    tuple: target_reg,
+                    index: idx,
+                });
+                lower_pattern_test(
+                    ctx,
+                    elem_reg,
+                    subpat,
+                    fail_jumps,
+                    bound_symbols,
+                );
+            }
+        }
         Pattern::Literal(lit_expr) => {
             let lit_reg = lower_expression(ctx, lit_expr);
             let cmp_reg = ctx.alloc_reg();

@@ -1417,6 +1417,11 @@ impl<'a, S: SolverBackend> FormalVerifier<'a, S> {
                 self.variable_validity.insert(name.clone(), is_valid);
                 self.variable_leased.insert(name.clone(), is_leased);
             }
+            causm_core::Pattern::Tuple(subpatterns) => {
+                for sub in subpatterns {
+                    self.bind_pattern_variables(sub);
+                }
+            }
             causm_core::Pattern::EnumVariant { args, .. } => {
                 for arg in args {
                     self.bind_pattern_variables(arg);

@@ -755,6 +755,16 @@ pub(crate) fn parse_hex_byte_string(raw: &str) -> Expression {
 pub fn parse_pattern(pair: Pair<Rule>) -> Pattern {
     match pair.as_rule() {
         Rule::match_pattern => parse_pattern(pair.into_inner().next().unwrap()),
+        Rule::tuple_pattern => {
+            let inner: Vec<_> = pair.into_inner().collect();
+            if inner.is_empty() {
+                Pattern::Tuple(Vec::new())
+            } else {
+                let args_pair = inner.into_iter().next().unwrap();
+                let args = args_pair.into_inner().map(parse_pattern).collect();
+                Pattern::Tuple(args)
+            }
+        }
         Rule::wildcard_pattern => Pattern::Wildcard,
         Rule::ident_pattern => Pattern::Identifier(pair.as_str().trim().to_string()),
         Rule::literal_pattern => {

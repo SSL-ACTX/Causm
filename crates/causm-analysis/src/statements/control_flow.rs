@@ -1069,6 +1069,11 @@ pub(crate) fn bind_pattern_variables(
                 .insert(name.clone(), branch.accumulated_cost);
         }
         Pattern::Literal(_) => {}
+        Pattern::Tuple(subpatterns) => {
+            for sub in subpatterns {
+                bind_pattern_variables(analyzer, sub);
+            }
+        }
         Pattern::EnumVariant { args, .. } => {
             for arg in args {
                 bind_pattern_variables(analyzer, arg);
@@ -1097,6 +1102,11 @@ pub(crate) fn collect_pattern_bound_names(pattern: &Pattern) -> Vec<String> {
     match pattern {
         Pattern::Wildcard | Pattern::Literal(_) => {}
         Pattern::Identifier(name) => vars.push(name.clone()),
+        Pattern::Tuple(subpatterns) => {
+            for sub in subpatterns {
+                vars.extend(collect_pattern_bound_names(sub));
+            }
+        }
         Pattern::EnumVariant { args, .. } => {
             for arg in args {
                 vars.extend(collect_pattern_bound_names(arg));

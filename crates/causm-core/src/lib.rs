@@ -974,6 +974,7 @@ pub enum Pattern {
     Wildcard,
     Identifier(String),
     Literal(Expression),
+    Tuple(Vec<Pattern>),
     EnumVariant {
         enum_name: Option<String>,
         variant_name: String,
