@@ -52,6 +52,8 @@ impl SsaInstructionProperties for SsaInstruction {
             | SsaInstruction::ConditionalSelect { dest, .. }
             | SsaInstruction::Defer { dest, .. }
             | SsaInstruction::Syscall { dest, .. }
+            | SsaInstruction::TupleLit { dest, .. }
+            | SsaInstruction::TupleAccess { dest, .. }
             | SsaInstruction::ArenaIntrospect { dest, .. }
             | SsaInstruction::CapabilityCheck { dest, .. }
             | SsaInstruction::Lease {
@@ -183,6 +185,12 @@ impl SsaInstructionProperties for SsaInstruction {
             SsaInstruction::Entangle { regs: r_vec } => {
                 regs.extend(r_vec.iter().cloned());
             }
+            SsaInstruction::TupleLit { elems, .. } => {
+                regs.extend(elems.iter().cloned());
+            }
+            SsaInstruction::TupleAccess { tuple, .. } => {
+                regs.push(*tuple);
+            }
             _ => {}
         }
         regs
@@ -267,6 +275,8 @@ impl InstructionProperties for crate::Instruction {
             | crate::Instruction::ConditionalSelect { dest, .. }
             | crate::Instruction::Defer { dest, .. }
             | crate::Instruction::Syscall { dest, .. }
+            | crate::Instruction::TupleLit { dest, .. }
+            | crate::Instruction::TupleAccess { dest, .. }
             | crate::Instruction::ArenaIntrospect { dest, .. }
             | crate::Instruction::CapabilityCheck { dest, .. }
             | crate::Instruction::Lease {
@@ -392,6 +402,12 @@ impl InstructionProperties for crate::Instruction {
             }
             crate::Instruction::Entangle { regs: r_vec } => {
                 regs.extend(r_vec.iter().cloned());
+            }
+            crate::Instruction::TupleLit { elems, .. } => {
+                regs.extend(elems.iter().cloned());
+            }
+            crate::Instruction::TupleAccess { tuple, .. } => {
+                regs.push(*tuple);
             }
             _ => {}
         }

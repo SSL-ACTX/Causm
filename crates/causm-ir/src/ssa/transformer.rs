@@ -1382,6 +1382,32 @@ impl SsaTransformer {
                     capability: capability.clone(),
                 }
             }
+            Instruction::TupleLit { dest, elems } => {
+                let ssa_elems =
+                    elems.iter().map(|r| self.current_ssa_reg(*r)).collect();
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::TupleLit {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    elems: ssa_elems,
+                }
+            }
+            Instruction::TupleAccess { dest, tuple, index } => {
+                let tuple_ssa = self.current_ssa_reg(*tuple);
+                let dest_ver = self.next_version(dest.0);
+                self.push_version(dest.0, dest_ver);
+                SsaInstruction::TupleAccess {
+                    dest: SsaReg {
+                        reg: dest.0,
+                        version: dest_ver,
+                    },
+                    tuple: tuple_ssa,
+                    index: *index,
+                }
+            }
             _ => SsaInstruction::Other(format!("{:?}", instr)),
         }
     }

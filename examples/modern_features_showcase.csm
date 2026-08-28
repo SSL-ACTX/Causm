@@ -1,0 +1,81 @@
+@0ms: {
+    // 1. Compiler Attributes & Automatic @derive
+    @derive(Clone, Debug, PartialEq)
+    type GeoPoint = struct {
+        x: int = 0,
+        y: int = 0
+    }
+
+    // 2. Nominal Distinct Newtypes (Prevents accidental ID/Unit mixups)
+    type NodeId = distinct int
+    type SequenceNum = distinct int
+
+    routine NodeId.to_str(peek self) -> string (taking 5ms) {
+        let val = self.value
+        yield f"node_#{val}"
+    }
+
+    // 3. Const Generics with Compile-Time Calculations
+    type FixedPacketBuffer<const BUFFER_SIZE: int> = struct {
+        capacity: int = BUFFER_SIZE,
+        header_len: int = 32,
+        max_payload: int = BUFFER_SIZE - 32,
+        count: int = 0
+    }
+
+    // 4. Pattern Matching with Enums, Tuples, and Guards
+    enum PacketKind {
+        Ping,
+        Telemetry(int, int),
+        Handshake(string)
+    }
+
+    // Instantiate distinct newtypes
+    let nid: NodeId = struct { value = 1042 }
+    let seq: SequenceNum = struct { value = 1 }
+
+    // Instantiate const generic ring buffers of different sizes
+    let ring_small: FixedPacketBuffer<64> = struct {}
+    let ring_large: FixedPacketBuffer<2048> = struct {}
+
+    let small_cap = ring_small.capacity
+    let large_payload = ring_large.max_payload
+
+    // Complex pattern matching
+    let incoming_event = PacketKind::Telemetry(10, 20)
+    let processed_event = match incoming_event {
+        PacketKind::Ping => "ping_acknowledged",
+        PacketKind::Telemetry(0, 0) => "stationary_telemetry",
+        PacketKind::Telemetry(x, y) => f"telemetry_delta({x}, {y})",
+        PacketKind::Handshake(client_id) => f"handshake_from_{client_id}",
+        _ => "unknown_packet"
+    }
+
+    // Tuple decomposition with multi-variable matching
+    let quadrant_tag = match (100, 200) {
+        (0, 0) => "origin",
+        (x, 200) => f"aligned_y_at_{x}",
+        (x, y) => f"coords_{x}_{y}",
+        _ => "unmatched"
+    }
+
+    // @derive method calls
+    let p1: GeoPoint = struct { x = 45, y = 90 }
+    let p2 = p1.clone()
+    let p1_str = p1.to_string()
+
+    // Distinct newtype method dispatch
+    let formatted_node = nid.to_str()
+
+    print("=== Causm Modern Features Showcase ===")
+    print("Distinct Node ID:")
+    print(formatted_node)
+    print("Const Generic Buffer Capacities:")
+    print(small_cap)
+    print(large_payload)
+    print("Advanced Pattern Matching Output:")
+    print(processed_event)
+    print(quadrant_tag)
+    print("Derived Struct Debug String:")
+    print(p1_str)
+}
