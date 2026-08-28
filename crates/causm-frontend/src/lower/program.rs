@@ -80,8 +80,42 @@ pub fn lower_program(program: &Program) -> IrProgram {
                                 }
                             }
 
-                            for s in default_body {
+                            for (i, s) in default_body.iter().enumerate() {
+                                if i == default_body.len() - 1 {
+                                    if let causm_core::Statement::Expression(
+                                        ref expr,
+                                    ) = s.stmt
+                                    {
+                                        let ret_reg =
+                                            super::expressions::lower_expression(
+                                                &mut sub_ctx,
+                                                expr,
+                                            );
+                                        sub_ctx.push(
+                                            causm_ir::Instruction::Return {
+                                                src: Some(ret_reg),
+                                            },
+                                        );
+                                        continue;
+                                    }
+                                }
                                 lower_spanned(&mut sub_ctx, s);
+                            }
+
+                            if !sub_ctx
+                                .instructions
+                                .last()
+                                .map(|instr| {
+                                    matches!(
+                                        instr,
+                                        causm_ir::Instruction::Return { .. }
+                                    )
+                                })
+                                .unwrap_or(false)
+                            {
+                                sub_ctx.push(causm_ir::Instruction::Return {
+                                    src: None,
+                                });
                             }
 
                             let routine = IrRoutine {

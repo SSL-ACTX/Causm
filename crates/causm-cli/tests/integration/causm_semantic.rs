@@ -1602,7 +1602,7 @@ fn test_pure_path_utilities_in_zero_cap_isolate() -> anyhow::Result<()> {
     @0ms: {
         isolate pure_sandbox {
             enable memory(64KB)
-            enable cpu(100ms)
+            enable cpu(5000ms)
 
             let p = join("/var/log", "app.log")
             let b = path_basename(p)

@@ -1,4 +1,4 @@
-use causm_core::value::{Arena, Payload};
+use causm_core::value::{Arena, EntropicState, Payload, ValueMetadata};
 use causm_core::{Manifest, ParamMode, SpeculationCommitMode};
 use std::collections::{HashMap, VecDeque};
 
@@ -109,12 +109,23 @@ pub struct Vm {
 
 #[derive(Clone, Debug)]
 pub struct CallFrame {
-    pub caller_branch_id: String,
     pub return_dest: causm_ir::Reg,
+    pub return_pc: usize,
+    pub saved_instructions: Vec<causm_ir::Instruction>,
+    pub saved_spans: Vec<Option<causm_core::Span>>,
+    pub saved_manifest_stack: Vec<Manifest>,
+    pub caller_start_clock: u64,
     pub budget: Option<u64>,
     pub routine_name: String,
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub args: Vec<causm_ir::Reg>,
+    pub caller_arena_regs: Vec<EntropicState>,
+    pub caller_arena_meta: Vec<Option<ValueMetadata>>,
+    pub caller_arena_used: u64,
+    pub caller_loop_depth: u32,
+    pub caller_loop_stack: Vec<(u64, u64)>,
+    pub caller_flat_loops: Vec<FlatLoopState>,
+    pub caller_break_requested: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -157,6 +168,7 @@ pub struct Timeline {
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
     pub return_value: Option<Payload>,
+    pub call_stack: Vec<CallFrame>,
 }
 
 impl Timeline {

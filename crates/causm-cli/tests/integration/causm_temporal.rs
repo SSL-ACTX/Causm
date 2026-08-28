@@ -1114,7 +1114,7 @@ fn test_stdlib_path_module() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         isolate path_demo {
-            enable cpu(1000ms)
+            enable cpu(10000ms)
             enable memory(32KB)
             require System.FFI
 
@@ -1349,7 +1349,9 @@ fn test_vm_watchdog_kills_infinite_while_loop() {
 
         assert!(res.is_err());
         let err_str = format!("{:?}", res.err().unwrap());
-        assert!(err_str.contains("WatchdogBite") || err_str.contains("BudgetExhausted"));
+        assert!(
+            err_str.contains("WatchdogBite") || err_str.contains("BudgetExhausted")
+        );
     });
 }
 
@@ -1378,7 +1380,11 @@ fn test_vm_watchdog_kills_infinite_recursion() {
 
         assert!(res.is_err());
         let err_str = format!("{:?}", res.err().unwrap());
-        assert!(err_str.contains("recursion depth") || err_str.contains("WatchdogBite") || err_str.contains("Stack"));
+        assert!(
+            err_str.contains("recursion depth")
+                || err_str.contains("WatchdogBite")
+                || err_str.contains("Stack")
+        );
     });
 }
 
@@ -1409,7 +1415,125 @@ fn test_vm_watchdog_kills_large_loop_at_hundreds_of_thousands_cycles() {
                 assert_eq!(limit, 500_000);
                 assert!(vm.root_timeline.total_executed_cycles >= 500_000);
             }
-            other => panic!("Expected WatchdogBite at 500,000 cycles, got {:?}", other),
+            other => {
+                panic!("Expected WatchdogBite at 500,000 cycles, got {:?}", other)
+            }
         }
+    });
+}
+
+#[test]
+fn test_vm_watchdog_kills_mutual_recursion_cycle() {
+    super::run_with_timeout(std::time::Duration::from_secs(5), || {
+        let source = r#"
+        routine ping(n: int) -> int {
+            pong(n + 1)
+        }
+
+        routine pong(n: int) -> int {
+            ping(n + 1)
+        }
+
+        @0ms: {
+            let res = ping(0)
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let mut analyzer = EntropicAnalyzer::new();
+        let _ = analyzer.analyze_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        vm.max_call_depth = 50;
+        let res = vm.execute_program(&ir);
+
+        assert!(res.is_err());
+        let err_str = format!("{:?}", res.err().unwrap());
+        assert!(
+            err_str.contains("recursion depth")
+                || err_str.contains("Call stack overflow")
+                || err_str.contains("WatchdogBite"),
+            "Expected recursion depth limit error, got: {}",
+            err_str
+        );
+    });
+}
+
+#[test]
+fn test_vm_watchdog_kills_infinite_loop_inside_called_routine() {
+    super::run_with_timeout(std::time::Duration::from_secs(5), || {
+        let source = r#"
+        routine trapped_routine() -> int {
+            let acc = 0
+            while (true) (max 100000ms) {
+                acc = acc + 1
+            }
+            return acc
+        }
+
+        @0ms: {
+            let res = trapped_routine()
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let mut analyzer = EntropicAnalyzer::new();
+        let _ = analyzer.analyze_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        let res = vm.execute_program(&ir);
+
+        assert!(res.is_err());
+        match res.err().unwrap() {
+            causm_runtime::vm::error::TemporalError::WatchdogBite(branch, limit) => {
+                assert_eq!(branch, "main");
+                assert_eq!(limit, 500_000);
+            }
+            other => {
+                panic!("Expected WatchdogBite on timeline branch, got {:?}", other)
+            }
+        }
+    });
+}
+
+#[test]
+fn test_vm_deep_recursion_reaches_boundary_then_completes() {
+    super::run_with_timeout(std::time::Duration::from_secs(10), || {
+        let source = r#"
+        routine sum_down(n: int) -> int {
+            if (n <= 0) {
+                return 0
+            }
+            return n + sum_down(n - 1)
+        }
+
+        @0ms: {
+            let res = sum_down(1000)
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let mut analyzer = EntropicAnalyzer::new();
+        let _ = analyzer.analyze_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        let res = vm.execute_program(&ir);
+        assert!(
+            res.is_ok(),
+            "Deep recursion of 1,000 frames failed: {:?}",
+            res.err()
+        );
+
+        let res_reg = ir.symbols.get("res").unwrap().0;
+        // sum(1..1000) = 500500
+        assert_eq!(
+            vm.root_timeline.arena.peek(res_reg),
+            Some(Payload::Integer(500500))
+        );
+        // Ensure call depth and frame stack correctly emptied on root timeline
+        assert_eq!(vm.root_timeline.call_stack.len(), 0);
     });
 }

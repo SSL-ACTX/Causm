@@ -210,6 +210,15 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 lower_spanned(&mut sub_ctx, s);
             }
 
+            if !sub_ctx
+                .instructions
+                .last()
+                .map(|instr| matches!(instr, Instruction::Return { .. }))
+                .unwrap_or(false)
+            {
+                sub_ctx.push(Instruction::Return { src: None });
+            }
+
             let routine = IrRoutine {
                 params: params
                     .iter()

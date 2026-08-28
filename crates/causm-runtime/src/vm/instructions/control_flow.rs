@@ -83,36 +83,10 @@ impl Vm {
         args: Vec<Reg>,
         dest: Reg,
     ) -> Result<(), TemporalError> {
-        if self.call_depth >= self.max_call_depth {
-            return Err(TemporalError::EvalError(format!(
-                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
-                self.max_call_depth, routine
-            )));
-        }
         self.execute_call(branch_id, routine, args, dest, None)
     }
 
     fn execute_call(
-        &mut self,
-        branch_id: &str,
-        routine: String,
-        args: Vec<Reg>,
-        dest: Reg,
-        budget: Option<u64>,
-    ) -> Result<(), TemporalError> {
-        if self.call_depth >= self.max_call_depth {
-            return Err(TemporalError::EvalError(format!(
-                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
-                self.max_call_depth, routine
-            )));
-        }
-        self.call_depth += 1;
-        let res = self.execute_call_inner(branch_id, routine, args, dest, budget);
-        self.call_depth -= 1;
-        res
-    }
-
-    fn execute_call_inner(
         &mut self,
         branch_id: &str,
         routine: String,
@@ -242,7 +216,7 @@ impl Vm {
 
             if let Some(cost) = routine_def.taking_ms {
                 let branch = self.get_branch_mut(branch_id)?;
-                branch.local_clock += cost;
+                branch.local_clock = branch.local_clock.saturating_add(cost);
                 branch.consume_budget(cost)?;
             }
 
@@ -253,32 +227,56 @@ impl Vm {
             );
         }
 
-        // Consume arguments if needed
+        let max_depth = self.max_call_depth as usize;
+        let branch = self.get_branch_mut(branch_id)?;
+        if branch.call_stack.len() >= max_depth {
+            return Err(TemporalError::EvalError(format!(
+                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
+                max_depth, routine
+            )));
+        }
+
+        // Consume arguments if needed on caller
         for (i, reg) in args.iter().enumerate() {
             let (mode, _, _) = &params[i];
             if let causm_core::ParamMode::Consume = mode {
-                self.consume_reg(branch_id, reg.0)?;
+                if let Some(state) = branch.arena.registers.get_mut(reg.0 as usize) {
+                    *state = causm_core::value::EntropicState::Consumed;
+                }
             }
         }
 
-        let caller_call_depth = self.get_branch(branch_id)?.call_depth;
+        // Save caller state into CallFrame
+        let caller_frame = crate::vm::state::CallFrame {
+            return_dest: dest,
+            return_pc: branch.pc,
+            saved_instructions: std::mem::take(&mut branch.instructions),
+            saved_spans: std::mem::take(&mut branch.spans),
+            saved_manifest_stack: branch.manifest_stack.clone(),
+            caller_start_clock: branch.local_clock,
+            budget,
+            routine_name: routine,
+            params: params.clone(),
+            args: args.clone(),
+            caller_arena_regs: std::mem::take(&mut branch.arena.registers),
+            caller_arena_meta: std::mem::take(&mut branch.arena.metadata),
+            caller_arena_used: branch.arena.used,
+            caller_loop_depth: branch.loop_depth,
+            caller_loop_stack: std::mem::take(&mut branch.loop_stack),
+            caller_flat_loops: std::mem::take(&mut branch.flat_loops),
+            caller_break_requested: branch.break_requested,
+        };
+        branch.call_stack.push(caller_frame);
 
-        let caller_manifest_stack = self
-            .get_branch(branch_id)
-            .map(|b| b.manifest_stack.clone())
-            .unwrap_or_default();
-        let call_idx = self.next_call_id;
-        self.next_call_id += 1;
-        let child_id =
-            format!("__routine_{}_{}_{}", routine, self.global_clock, call_idx);
-        let mut child = crate::vm::state::Timeline::new(
-            child_id.clone(),
-            1024 * 1024,
-            self.global_clock,
-        );
-        child.instructions = routine_def.instructions.clone();
-        child.manifest_stack = caller_manifest_stack;
-        child.call_depth = caller_call_depth + 1;
+        // Initialize child frame registers and instructions
+        branch.instructions = routine_def.instructions.clone();
+        branch.spans = routine_def.instructions.iter().map(|_| None).collect();
+        branch.pc = 0;
+        branch.arena.used = 0;
+        branch.loop_depth = 0;
+        branch.loop_stack = Vec::new();
+        branch.flat_loops = Vec::new();
+        branch.break_requested = false;
 
         for (i, (mode, _name, _)) in params.iter().enumerate() {
             let val = arg_values[i].clone();
@@ -289,13 +287,13 @@ impl Vm {
                 | causm_core::ParamMode::Peek
                 | causm_core::ParamMode::Lease => {
                     if let Some(m) = meta {
-                        child.arena.insert_with_metadata(
+                        branch.arena.insert_with_metadata(
                             i as u32,
                             causm_core::value::EntropicState::Valid(val),
                             m,
                         )?;
                     } else {
-                        child.arena.insert(
+                        branch.arena.insert(
                             i as u32,
                             causm_core::value::EntropicState::Valid(val),
                         )?;
@@ -303,13 +301,13 @@ impl Vm {
                 }
                 causm_core::ParamMode::Decay => {
                     if let Some(m) = meta {
-                        child.arena.insert_with_metadata(
+                        branch.arena.insert_with_metadata(
                             i as u32,
                             causm_core::value::EntropicState::Valid(val),
                             m,
                         )?;
                     } else {
-                        child.arena.insert(
+                        branch.arena.insert(
                             i as u32,
                             causm_core::value::EntropicState::Valid(val),
                         )?;
@@ -318,95 +316,7 @@ impl Vm {
             }
         }
 
-        self.active_branches.insert(child_id.clone(), child);
-
-        let exec_res = (|| -> Result<(), TemporalError> {
-            while {
-                let b = self.get_branch_mut(&child_id)?;
-                b.pc < b.instructions.len()
-            } {
-                {
-                    let b = self.get_branch_mut(&child_id)?;
-                    b.total_executed_cycles += 1;
-                    if b.total_executed_cycles > b.max_cycles_watchdog {
-                        return Err(TemporalError::WatchdogBite(
-                            child_id.clone(),
-                            b.max_cycles_watchdog,
-                        ));
-                    }
-                }
-                self.execute_instruction(&child_id)?;
-                self.handle_break(&child_id)?;
-            }
-            Ok(())
-        })();
-
-        let child_branch = self.active_branches.remove(&child_id);
-        exec_res?;
-        let child_branch = child_branch
-            .ok_or_else(|| TemporalError::BranchNotFound(child_id.clone()))?;
-
-        let elapsed = child_branch.local_clock;
-        if let Some(limit) = budget {
-            if elapsed > limit {
-                return Err(TemporalError::EvalError(format!(
-                    "temporal contract violated: concrete implementation of method '{}' took {}ms, exceeding the interface's budget of {}ms",
-                    routine, elapsed, limit
-                )));
-            }
-        }
-
-        // Write back any modified lease or FFI pointer buffer argument payloads from child arena to caller registers
-        for (i, (mode, _, expected_type)) in params.iter().enumerate() {
-            let is_ffi_buf = matches!(mode, causm_core::ParamMode::Peek)
-                && matches!(
-                    expected_type,
-                    causm_core::types::Type::I64
-                        | causm_core::types::Type::I32
-                        | causm_core::types::Type::U64
-                        | causm_core::types::Type::Integer
-                );
-            if matches!(mode, causm_core::ParamMode::Lease) || is_ffi_buf {
-                if let Some(child_val) = child_branch.arena.peek(i as u32) {
-                    if matches!(
-                        child_val,
-                        causm_core::value::Payload::Array(_)
-                            | causm_core::value::Payload::Struct(_)
-                    ) {
-                        let caller_val = self.peek_reg(branch_id, args[i].0);
-                        if let Ok(cval) = caller_val {
-                            if !matches!(cval, causm_core::value::Payload::String(_))
-                            {
-                                self.insert_reg(
-                                    branch_id,
-                                    args[i].0,
-                                    causm_core::value::EntropicState::Valid(
-                                        child_val,
-                                    ),
-                                )?;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let result = child_branch
-            .return_value
-            .or_else(|| {
-                if params.is_empty() {
-                    child_branch.arena.peek(0)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(causm_core::value::Payload::String("void".to_string()));
-
-        self.insert_reg(
-            branch_id,
-            dest.0,
-            causm_core::value::EntropicState::Valid(result),
-        )
+        Ok(())
     }
 
     pub(crate) fn Return(
@@ -414,18 +324,136 @@ impl Vm {
         branch_id: &str,
         src: Option<Reg>,
     ) -> Result<(), TemporalError> {
-        let val = if let Some(reg) = src {
-            self.peek_reg(branch_id, reg.0)
-                .unwrap_or(causm_core::value::Payload::Null)
-        } else {
-            causm_core::value::Payload::Null
-        };
         let branch = self.get_branch_mut(branch_id)?;
-        branch.return_value = Some(val.clone());
-        branch
-            .arena
-            .insert(0, causm_core::value::EntropicState::Valid(val))?;
-        branch.pc = branch.instructions.len();
+        let (return_val, return_meta) = if let Some(reg) = src {
+            let val = branch
+                .arena
+                .peek(reg.0)
+                .unwrap_or(causm_core::value::Payload::String("void".to_string()));
+            let meta = branch
+                .arena
+                .metadata
+                .get(reg.0 as usize)
+                .and_then(|m| m.as_ref())
+                .cloned();
+            (val, meta)
+        } else {
+            (causm_core::value::Payload::String("void".to_string()), None)
+        };
+
+        if let Some(frame) = branch.call_stack.pop() {
+            // Restore caller instructions, spans, and manifest stack
+            branch.instructions = frame.saved_instructions;
+            branch.spans = frame.saved_spans;
+            branch.pc = frame.return_pc;
+            branch.manifest_stack = frame.saved_manifest_stack;
+            branch.loop_depth = frame.caller_loop_depth;
+            branch.loop_stack = frame.caller_loop_stack;
+            branch.flat_loops = frame.caller_flat_loops;
+            branch.break_requested = frame.caller_break_requested;
+
+            // Capture child registers and metadata before restoring caller frame
+            let child_regs = std::mem::replace(
+                &mut branch.arena.registers,
+                frame.caller_arena_regs,
+            );
+            let child_meta = std::mem::replace(
+                &mut branch.arena.metadata,
+                frame.caller_arena_meta,
+            );
+            branch.arena.used = frame.caller_arena_used;
+
+            let elapsed = branch
+                .local_clock
+                .saturating_sub(frame.caller_start_clock)
+                .max(1);
+            if let Some(limit) = frame.budget {
+                if elapsed > limit {
+                    return Err(TemporalError::EvalError(format!(
+                        "temporal contract violated: concrete implementation of method '{}' took {}ms, exceeding the interface's budget of {}ms",
+                        frame.routine_name, elapsed, limit
+                    )));
+                }
+            }
+
+            // Write back any modified lease, struct, array, or FFI pointer buffer argument payloads from child to caller registers
+            for (i, (mode, _, expected_type)) in frame.params.iter().enumerate() {
+                let is_ffi_buf = matches!(mode, causm_core::ParamMode::Peek)
+                    && matches!(
+                        expected_type,
+                        causm_core::types::Type::I64
+                            | causm_core::types::Type::I32
+                            | causm_core::types::Type::U64
+                            | causm_core::types::Type::Integer
+                    );
+                if matches!(mode, causm_core::ParamMode::Lease) || is_ffi_buf {
+                    if let Some(child_state) = child_regs.get(i) {
+                        let caller_reg = frame.args[i].0;
+                        branch.arena.insert(caller_reg, child_state.clone())?;
+                        if let Some(Some(m)) = child_meta.get(i) {
+                            if (caller_reg as usize) < branch.arena.metadata.len() {
+                                branch.arena.metadata[caller_reg as usize] =
+                                    Some(m.clone());
+                            }
+                        }
+                    }
+                } else if matches!(
+                    mode,
+                    causm_core::ParamMode::Peek | causm_core::ParamMode::Clone
+                ) {
+                    if let Some(causm_core::value::EntropicState::Valid(
+                        ref child_val,
+                    )) = child_regs.get(i)
+                    {
+                        let caller_reg = frame.args[i].0;
+                        if let Some(causm_core::value::EntropicState::Valid(
+                            ref mut caller_val,
+                        )) = branch.arena.registers.get_mut(caller_reg as usize)
+                        {
+                            if matches!(
+                                (&*caller_val, child_val),
+                                (
+                                    causm_core::value::Payload::Struct(_),
+                                    causm_core::value::Payload::Struct(_)
+                                ) | (
+                                    causm_core::value::Payload::Array(_),
+                                    causm_core::value::Payload::Array(_)
+                                )
+                            ) {
+                                branch.arena.insert(
+                                    caller_reg,
+                                    causm_core::value::EntropicState::Valid(
+                                        child_val.clone(),
+                                    ),
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Place return value in caller destination register with metadata
+            if let Some(m) = return_meta {
+                branch.arena.insert_with_metadata(
+                    frame.return_dest.0,
+                    causm_core::value::EntropicState::Valid(return_val),
+                    m,
+                )?;
+            } else {
+                branch.arena.insert(
+                    frame.return_dest.0,
+                    causm_core::value::EntropicState::Valid(return_val),
+                )?;
+            }
+        } else {
+            // Root return
+            branch.return_value = Some(return_val.clone());
+            branch
+                .arena
+                .insert(0, causm_core::value::EntropicState::Valid(return_val))?;
+            branch.pc = branch.instructions.len();
+        }
+
         Ok(())
     }
 

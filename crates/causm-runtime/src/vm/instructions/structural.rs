@@ -273,7 +273,13 @@ impl Vm {
                 };
                 let val = if matches {
                     match &branch.arena.registers[idx] {
-                        EntropicState::Valid(p) => Some(p.clone()),
+                        EntropicState::Valid(p) => {
+                            if let Payload::Struct(fields) = p {
+                                Some(Payload::Struct(fields.clone()))
+                            } else {
+                                Some(p.clone())
+                            }
+                        }
                         _ => None,
                     }
                 } else {
@@ -290,10 +296,11 @@ impl Vm {
                     dest.0,
                     causm_core::value::EntropicState::Valid(val),
                 )?;
-                if let Some(m) = meta {
-                    let branch = self.get_branch_mut(branch_id)?;
-                    branch.arena.metadata[dest.0 as usize] = Some(m);
+                let branch = self.get_branch_mut(branch_id)?;
+                if dest.0 as usize >= branch.arena.metadata.len() {
+                    branch.arena.metadata.resize(dest.0 as usize + 1, None);
                 }
+                branch.arena.metadata[dest.0 as usize] = meta;
             }
             self.insert_reg(
                 branch_id,
@@ -492,11 +499,38 @@ impl Vm {
                             ))
                         }
                         _ => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::KeyNotFound(
-                                    field.clone(),
-                                ),
-                            ))
+                            if let Some(stripped) = field.strip_prefix('_') {
+                                if let Ok(idx_n) = stripped.parse::<usize>() {
+                                    let mut non_tag_fields: Vec<_> = fields
+                                        .iter()
+                                        .filter(|(k, _)| *k != "tag")
+                                        .collect();
+                                    non_tag_fields.sort_by_key(|(k, _)| *k);
+                                    if let Some((_, EntropicState::Valid(p))) =
+                                        non_tag_fields.get(idx_n)
+                                    {
+                                        p.clone()
+                                    } else {
+                                        return Err(TemporalError::MemoryFault(
+                                            causm_core::value::MemoryError::KeyNotFound(
+                                                field.clone(),
+                                            ),
+                                        ));
+                                    }
+                                } else {
+                                    return Err(TemporalError::MemoryFault(
+                                        causm_core::value::MemoryError::KeyNotFound(
+                                            field.clone(),
+                                        ),
+                                    ));
+                                }
+                            } else {
+                                return Err(TemporalError::MemoryFault(
+                                    causm_core::value::MemoryError::KeyNotFound(
+                                        field.clone(),
+                                    ),
+                                ));
+                            }
                         }
                     };
                     (EntropicState::Valid(val), true)
