@@ -5,55 +5,52 @@ Welcome to the official documentation for the Causm. This hub provides a structu
 ## 1. Formal Language Specifications (`docs/spec/`)
 The following documents define the formal behavior, syntax, and semantics of Causm.
 
-- **[Formal Syntax Reference](./spec/causm_spec_syntax.md)**: EBNF grammar and program structure.
+- **[Formal Syntax Reference](./spec/causm_spec_syntax.md)**: EBNF grammar, compiler attributes, and program structure.
 - **[Core Semantic Model](./spec/causm_spec_semantics.md)**: Operational semantics and entropic state transitions.
 - **[Formal Verification Guard](./spec/causm_spec_formal_verification.md)**: Symbolic correctness kernel powered by Z3.
-- **[Entropic Channels](./spec/causm_spec_channels.md)**: Mid-timeline state transfer and causal synchronization.
-- **[Control Flow](./spec/causm_spec_control_flow.md)**: Branching, speculative execution, and reconciliation.
-- **[Iteration & Pacing](./spec/causm_spec_iteration.md)**: Deterministic loops and temporal pacing.
-- **[Routine Contracts](./spec/causm_spec_routines.md)**: Procedure definitions and WCET enforcement.
+- **[Control Flow & Pattern Matching](./spec/causm_spec_control_flow.md)**: Branching, algebraic matching, speculative execution, and reconciliation.
+- **[Iteration & Pacing](./spec/causm_spec_iteration.md)**: Deterministic loops, stepped ranges, and temporal pacing.
+- **[Routine Contracts](./spec/causm_spec_routines.md)**: Procedure definitions, direct invocations, and WCET enforcement.
 - **[Speculative Branches](./spec/causm_spec_speculation.md)**: Micro-timelines and rollback mechanisms.
 - **[Temporal Leases](./spec/causm_spec_leases.md)**: Transient, time-bound memory borrowing.
-- **[Type System](./spec/causm_spec_types.md)**: Entropic types (int/float) and temporal contracts.
-- **[Object-Oriented Programming](./spec/causm_spec_oop.md)**: Struct types, default values, constants, and methods.
+- **[Type System](./spec/causm_spec_types.md)**: Entropic types, tuples, fixed arrays, and temporal contracts.
+- **[Object-Oriented Programming](./spec/causm_spec_oop.md)**: Struct types, ADT Enums, distinct newtypes, const generics, and methods.
 - **[Topological Field Access](./spec/causm_spec_topologies.md)**: Memory layout and field-level entropy.
 - **[Asynchronous Promises](./spec/causm_spec_promises.md)**: Temporal promises and causal synchronization.
 - **[Timeline Routing](./spec/causm_spec_temporal_routing.md)**: Advanced routing across isolated timelines.
 - **[Isochronous Scheduling](./spec/causm_spec_isochronous_scheduling.md)**: High-precision temporal synchronization.
 - **[Module System & Imports](./spec/causm_spec_modules.md)**: Multi-file code imports, namespaces, and dependency graphs.
 
-## 2. TVM Internals (`docs/tvm/`)
-Technical documentation regarding the Register-based Temporal Virtual Machine.
+## 2. Standard Library (`crates/causm-stdlib/`)
+Documentation for the pure Causm embedded standard library modules.
 
-- **[Acausal Debugging](./tvm/causm_tvm_debugging.md)**: Time-travel diagnostics and trace logs.
-- **[Memory Reclamation](./tvm/causm_tvm_memory_reclamation.md)**: Entropic Garbage Collection (EGC) and arena management.
+- **[Standard Library Overview](../crates/causm-stdlib/README.md)**: Architecture, `.csa` bytecode archive caching, and module guide.
+  - **`std/fs`**: POSIX file operations, directory traversal, and auto-closing handles.
+  - **`std/net`**: POSIX TCP stream connections and socket listeners.
+  - **`std/time`**: High-resolution monotonic timestamps (`Instant`), durations, and precision sleeping.
+  - **`std/json`**: Pure Causm native JSON parsing, serialization, and ADT enum representations.
+  - **`std/http`**: HTTP/1.1 request formatting, client networking, and response decoding.
+  - **`std/encoding`**: Base64 encoding/decoding, binary serialization, and bitwise manipulation.
+  - **`std/collection`**: Array utilities, `RingBuffer`, `Stack`, `Queue`, and `BitSet`.
+  - **`std/process`**: Process spawning, pipe redirection, and exit status inspections.
 
-## 3. Design Proposals & RFCs (`docs/proposals/`, `docs/rfc/`)
-Historical design documents and the standard RFC process.
+---
 
-- **[Standard RFC Template](./rfc/causm_RFC.md)**: Guidelines for proposing language changes.
-- **[FFI & Syscall Bridge Proposal](./proposals/causm_prop_ffi_syscall_bridge.md)**: Foreign function interface, native system calls, and self-hosted standard library architecture.
-- **[Module System Proposal](./proposals/causm_prop_import_system.md)**: Code imports, manifests, and entropic namespace resolution.
-- **[Entropic GC Proposal](./proposals/causm_prop_egc.md)**: Original design for deterministic reclamation.
-- **[Advanced Mechanics](./proposals/causm_prop_advanced_mechanics.md)**: Refinements for channels, contracts, and diagnostics.
-- **[Advanced Routing](./proposals/causm_prop_advanced_routing.md)**: Early designs for complex timeline topologies.
-- **[Advanced Data Structures](./proposals/causm_prop_advanced_data_structures.md)**: Proposals for complex entropic collection types.
-- **[Advanced Loops](./proposals/causm_prop_advanced_loops.md)**: Extended iteration and pacing mechanisms.
-- **[Developer Ergonomics](./proposals/causm_prop_dev_ergonomics.md)**: Strategies for improving language usability.
-- **[If/Else Speculation](./proposals/causm_prop_if_else.md)**: Design for speculative conditional branches.
-- **[Isochronous Matrix](./proposals/causm_prop_isochronous_matrix.md)**: Mathematical foundations for temporal scheduling.
-- **[Iterative Paced Loops](./proposals/causm_prop_iter_paced_loop.md)**: Proposal for time-constrained iteration.
-- **[Primitive Types](./proposals/causm_prop_primitive_types.md)**: Specification for primitive numeric type extensions.
-- **[Promises & Causality](./proposals/causm_prop_promises.md)**: Design for acausal synchronization.
-- **[Routine TP Contracts](./proposals/causm_prop_routines_tp_contract.md)**: Temporal performance contracts for routines.
-- **[Speculative Branches Proposal](./proposals/causm_prop_speculative_branches.md)**: Early research on speculative execution.
-- **[Temporal Leases Proposal](./proposals/causm_prop_temporal_leases.md)**: Design for time-bound resource ownership.
-- **[Type Casting & Broadcasting](./proposals/causm_prop_casting_and_broadcasting.md)**: Design for the `as` casting operator and elementwise array broadcasting.
-- **[Advanced Entropic OOP](./proposals/causm_prop_advanced_entropic_oop.md)**: Monomorphized generic method dispatch, associated lifecycle types, and entropic interface constraints.
-- **[Profile-Guided Tuning & DevTools](./proposals/causm_prop_profile_guided_tuning_and_devtools.md)**: Inferred (`taking _`) and empirical (`taking ?`) temporal contracts, `causm-devtools` profiling/tuning suite, and continuous contract synthesis.
-- **[Self-Hosted std/time Module](./proposals/causm_prop_std_time.md)**: High-resolution monotonic timestamps (`Instant`, `Duration`), wall-clock epoch time, and precision sleeping.
-- **[Self-Hosted std/net Module](./proposals/causm_prop_std_net.md)**: POSIX socket networking, `SocketAddr`, `TcpStream`, `TcpListener`, and socket descriptor management.
-- **[Compiler Plugins & WASM SDK Proposal](./proposals/causm_prop_compiler_plugins_and_wasm_sdk.md)**: WebAssembly (wasmi 2.0) and Stdio IPC compiler plugin architecture, `causm.toml` declarative discovery, and `causm-plugin-sdk`.
+## 3. TVM Internals (`docs/tvm/`)
+Technical architecture of the Register-based Temporal Virtual Machine.
+
+- **[Acausal Debugging](./tvm/causm_tvm_debugging.md)**: Time-travel diagnostics, causal trace logs, and state rollback.
+- **[Memory Reclamation & EGC](./tvm/causm_tvm_memory_reclamation.md)**: Entropic Garbage Collection, dual-partitioned linear epoch arenas, and saturation policies.
+- **[TVM Optimization Passes](./tvm/causm_tvm_optimizations.md)**: SSA phi nodes, dominance trees, CFG simplification, and copy propagation.
+
+---
+
+## 4. Proposals, RFCs & Developer Guides (`docs/proposals/`, `docs/rfc/`)
+Design proposals, Request for Comments (RFCs), and compiler extension guides.
+
+- **[Standard RFC Template](./rfc/causm_RFC.md)**: Process and template for proposing language modifications.
+- **[Compiler Plugins & WebAssembly SDK](./proposals/causm_prop_compiler_plugins_and_wasm_sdk.md)**: Plugin architecture, WASM host sandbox (`wasmi`), IPC driver, and `causm-plugin-sdk`.
+- **[Implemented Proposals Archive](./proposals/implemented/)**: Complete catalog of historical design proposals detailing core grammar, memory models, and standard libraries.
 
 ---
 *This index is maintained as the authoritative source for Causm documentation.*

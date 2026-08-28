@@ -13,7 +13,7 @@
 
 Causm is a domain-specific research language designed to address inherent non-determinism in concurrent systems. By treating time as a first-class execution primitive and implementing an entropic memory model, Causm provides a framework where race conditions are eliminated through the mathematical enforcement of temporal invariants.
 
-This repository contains the reference implementation of the Causm toolchain, including the compiler, entropic analyzer, and Z3-governed Register-based Temporal Virtual Machine (TVM).
+This repository contains the reference implementation of the Causm toolchain, including the compiler, entropic analyzer, and formal SMT-governed Register-based Temporal Virtual Machine (TVM).
 
 ---
 
@@ -22,7 +22,7 @@ This repository contains the reference implementation of the Causm toolchain, in
 1. **Temporal Execution Primitives**: Eliminating race conditions via Isochronous Scheduling.
 2. **Entropic Memory Model**: Modeling memory safety through state decay (`Valid`, `Leased`, `Decayed`, `Consumed`, `Pending`).
 3. **Causal Synchronization**: Synchronizing cross-timeline state transitions without lock contention.
-4. **SMT-Based Temporal Correctness**: Formally proving Worst-Case Execution Time (WCET) bounds using a Z3 correctness kernel.
+4. **SMT-Based Temporal Correctness**: Formally proving Worst-Case Execution Time (WCET) bounds using a pluggable SMT Correctness Kernel (featuring pure-Rust **OxiZ** as default and optional **Z3** integration).
 
 ---
 
@@ -35,8 +35,8 @@ graph TD
 
     subgraph "Correctness Kernel"
         AST --> Analyzer["Entropic Analyzer"]
-        Analyzer --> Z3Guard["Formal Verification Guard (Z3)"]
-        Z3Guard --> Proofs{{"Symbolic Proofs + WCET Bounds"}}
+        Analyzer --> SMTGuard["Formal Verification Guard (OxiZ / Z3)"]
+        SMTGuard --> Proofs{{"Symbolic Proofs + WCET Bounds"}}
     end
 
     Proofs -- "UNSAT (Violation)" --> Error["Semantic Error"]
@@ -44,8 +44,7 @@ graph TD
 
     subgraph "IR Optimization Pipeline"
         Lowering --> CfgSimp["CfgSimplificationPass"]
-        CfgSimp --> ChanLive["ChannelLivenessPass"]
-        ChanLive --> LeaseOpt["LeaseOptimizationPass"]
+        CfgSimp --> LeaseOpt["LeaseOptimizationPass"]
         LeaseOpt --> ConcurAn["ConcurrencyAnalysisPass"]
         ConcurAn --> Verifier["VerifierPass (SSA Phi)"]
     end
@@ -68,7 +67,7 @@ graph TD
         let raw_reading = 150
         let ref_reading = &raw_reading
 
-        let digest = call compute_telemetry_digest(raw_reading)
+        let digest = compute_telemetry_digest(raw_reading)
         let sensor_pack = struct { status = "active", level = digest }
 
         lease current_pack = sensor_pack 30ms {
@@ -105,8 +104,11 @@ causm run examples/module_import_showcase.csm
 # Run with timeline merge diagnostics
 causm run --explain-merge examples/module_import_showcase.csm
 
-# Perform formal Z3 verification check only
+# Perform formal SMT verification check (OxiZ / Z3)
 causm check examples/module_import_showcase.csm
+
+# Run with explicit Z3 solver backend
+causm check --z3 examples/module_import_showcase.csm
 
 # Emit intermediate representations (AST, IR, CFG, SSA)
 causm emit examples/module_import_showcase.csm --emit cfg-dot

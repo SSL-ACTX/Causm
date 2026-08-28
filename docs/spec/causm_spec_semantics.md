@@ -10,14 +10,16 @@ The Entropic memory model constitutes the foundational architecture of Causm. It
 
 ### Entropic States
 - **Valid**: The value is owned by the active branch and is fully accessible for computation.
-- **Pending**: The value represents a promise (e.g., resulting from a `defer` operation) that will be resolved at a future `local_clock` coordinate.
+- **Pending**: The value represents a promise (e.g., resulting from an asynchronous operation) that will be resolved at a future `local_clock` coordinate.
 - **Decayed**: The value (typically a structure) has undergone partial consumption of its internal fields. The parent structure is no longer "sealed" and cannot be moved or transmitted as a unified entity.
-- **Consumed**: The value has been destructively read (e.g., via a `let` assignment or `chan_send` operation) and is no longer present within the memory arena.
+- **Consumed**: The value has been destructively read (e.g., via a `let` assignment, move, or routine consumption) and is no longer present within the memory arena.
+- **Leased**: The value is temporarily borrowed under a time-bounded lease; moves are prohibited during the lease duration.
 
 ### Consumption Regulations
 1. **Movement by Default**: Assignments (e.g., `let a = b`) transfer ownership of `b` to `a`. Subsequently, `b` transitions to the `Consumed` state.
 2. **Structural Decay**: Accessing a sub-field `s.f` consumes `f` and transitions the parent structure `s` to the `Decayed` state.
 3. **Explicit Replication**: Reusing a value without consumption requires the `clone(x)` operation, which incurs a deterministic temporal cost.
+4. **Non-Consuming Borrow**: Reading via `&x` or passing `peek` parameters does not consume `x` or decay parent structures.
 
 ---
 
@@ -44,6 +46,7 @@ Concurrency in Causm is modeled through isolated **Timelines** (branches).
 ### Split and Reconciliation
 - **`split`**: Generates child timelines initialized with a snapshot of the parent arena and temporal clock.
 - **`merge`**: Recombines child timelines into the parent context. Conflicts (e.g., concurrent modification or consumption of shared state) must be resolved via explicit `reconcile` or `resolving` protocols.
+- **`entangle`**: Binds variables across split timelines to share a unified entropic state with zero-latency state reflection.
 
 ---
 
@@ -52,7 +55,7 @@ Concurrency in Causm is modeled through isolated **Timelines** (branches).
 For applications requiring high-precision timing, Causm supports the **Isochronous Matrix** scheduling model.
 
 - **Temporal Slices**: The `slice Nms` primitive establishes a fixed tick frequency.
-- **Phase Commits**: `loop tick` blocks ensure that all channel operations occur within deterministic phases; transmissions are buffered until the tick boundary, and receptions read from the buffer of the preceding tick.
+- **Phase Commits**: `loop tick` blocks ensure that operations occur within deterministic time boundaries and commit state at tick borders.
 
 ---
 
@@ -66,9 +69,8 @@ Causm facilitates high-assurance state recovery through the `anchor` and `rewind
 
 ### Paradox Prevention Mechanisms
 To maintain temporal consistency, the TVM prevents the occurrence of **Causal Paradoxes**:
-1. **Unconsumed Side Effects**: A branch may rewind past a `chan_send` only if the transmitted message hasn't been consumed by another branch. The VM facilitates an automated "un-send" operation.
-2. **Causal Outflow Locking**: If a transmitted message has already been consumed by another branch, the source branch is "causally locked" to that event. Any attempt to rewind past this point triggers a `Causal Paradox` error.
-3. **Automated Reception Reversal**: If a branch rewinds past a `chan_recv`, the message is automatically restored to the channel buffer to preserve systemic data integrity.
+1. **Unconsumed Side Effects**: A branch may rewind to an anchor as long as state invariants remain mathematically satisfiable.
+2. **Causal Horizon Locking**: If state modifications have been irrevocably entangled and merged, attempts to rewind past that boundary trigger a `Causal Paradox` error.
 
 ---
 

@@ -57,7 +57,7 @@ while (sensor_active) 500ms {
 ### 2.2 Continuous Event Loops (`loop on`)
 ```causm
 loop on event_stream {
-    let packet = chan_recv(event_stream)
+    let packet = event_stream.poll()
     process_packet(packet)
 }
 ```
@@ -77,36 +77,12 @@ loop tick {
 
 ---
 
-## 3. Scatter-Gather Parallelism (`split_map`)
-
-The `split_map` primitive implements a deterministic parallel mapping architecture.
-
-### Formal Syntax
-```causm
-split_map <item> <mode> <source> {
-  <statements>
-  [yield <expression>]
-} [reconcile (<resolution_rules>)]
-```
-
-**Execution Semantics:**
-1. **Parallel Timeline Initialization**: A child timeline is initialized for each element within the `<source>` collection.
-2. **Snapshot Initialization**: Each child timeline begins execution with a snapshot of the parent's state.
-3. **Timeline Isolation**: Child timelines execute the logic block independently and concurrently.
-4. **Data Aggregation**: Values emitted via the `yield` primitive in each child are aggregated into a specialized `splitmap_results` array within the parent timeline.
-
-### Reconciliation Protocols
-Conflicts arising from concurrent modifications of shared variables (cloned from the parent) are resolved through formal `reconcile` rules.
-
----
-
-## 4. Iterative Construct Comparative Analysis
+## 3. Iterative Construct Comparative Analysis
 
 | Primitive | Execution Model | Memory Arena Impact | Primary Use Case |
 | :--- | :--- | :--- | :--- |
 | **`for`** | Sequential | Consumptive or Cloning | Sequential data processing with temporal pacing. |
 | **`for..in..step`** | Paced Stepping | Arena scalars | Deterministic clock-stepped numeric loops. |
-| **`split_map`** | Parallel | Isolated Snapshots | Computation-intensive parallel mapping operations. |
 | **`loop`** | Repeated | Entropic state rules | Periodic tasks with deterministic temporal budgets. |
 | **`loop on`** | Event-driven | Stream consumption | Continuous event-loop stream processing. |
 | **`loop tick`** | Isochronous | Phase-committed commits | Real-time control systems and isochronous pipelines. |

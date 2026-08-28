@@ -16,13 +16,13 @@ The Entropic Memory Model typically requires `clone()` for non-destructive acces
 
 ## 2. Syntax
 
-The `lease` primitive establishes a block-scoped binding for a specified duration.
+The `lease` primitive establishes a block-scoped binding for a specified duration, with optional state reconciliation.
 
 **Syntax:**
 ```causm
-lease <binding> = <source> for <duration>ms {
+lease <binding> = <source> <duration>ms {
     <statements>
-}
+} [reconcile (auto | <rules>)]
 ```
 
 **Example:**
@@ -30,12 +30,11 @@ lease <binding> = <source> for <duration>ms {
 @0ms: {
     let system_state = struct { status = "OK", metrics = 42 }
     
-    // Establishing a 20ms lease. 
+    // Establishing a 20ms lease with auto reconciliation.
     // 'system_state' transitions to 'Leased' state.
-    lease view = system_state for 20ms {
+    lease view = system_state 20ms {
         print("Status is: " + view.status)
-        // Mutation is ILLEGAL here: view.status = "ERR"
-    }
+    } reconcile auto
     
     // After exactly 20ms (plus setup), 'system_state' is 'Valid' again.
     debug(system_state)
