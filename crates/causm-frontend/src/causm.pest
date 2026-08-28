@@ -15,14 +15,20 @@ branch_name    = { identifier }
 
 statement_block = { "{" ~ statement* ~ "}" | statement }
 
+attribute = { "@" ~ attribute_name ~ ("(" ~ attribute_args? ~ ")")? }
+attribute_name = { "derive" | "must_use" | "inline" | "test" | "doc" | "repr" }
+attribute_args = { attribute_arg ~ ("," ~ attribute_arg)* ~ ","? }
+attribute_arg = { string_literal | identifier }
+
 statement = {
-    macro_def_stmt
-    | macro_call_stmt
-    | directive_stmt
-    | isolate_stmt
-    | using_stmt
-    | split_stmt
-    | routine_stmt
+    attribute* ~ (
+        macro_def_stmt
+        | macro_call_stmt
+        | directive_stmt
+        | isolate_stmt
+        | using_stmt
+        | split_stmt
+        | routine_stmt
     | merge_stmt
     | for_stmt
     | lease_stmt
@@ -62,6 +68,7 @@ statement = {
     | from_import_stmt
     | foreign_block_stmt
     | expression_stmt
+    )
 }
 
 foreign_block_stmt = { "foreign" ~ string_literal ~ "abi" ~ "(" ~ string_literal ~ ")" ~ "{" ~ foreign_routine* ~ "}" }

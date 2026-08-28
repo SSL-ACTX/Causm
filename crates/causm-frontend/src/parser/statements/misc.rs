@@ -147,8 +147,8 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             _ => {}
                         }
                     }
-                    routines.push(SpannedStatement {
-                        stmt: Statement::RoutineDef {
+                    routines.push(SpannedStatement::new(
+                        Statement::RoutineDef {
                             name,
                             params,
                             return_type,
@@ -157,8 +157,8 @@ pub fn parse_misc_stmt(pair: Pair<Rule>) -> Statement {
                             required_capabilities,
                             body: Vec::new(),
                         },
-                        span: full_span.clone(),
-                    });
+                        full_span.clone(),
+                    ));
                 }
             }
             Statement::ForeignBlock {

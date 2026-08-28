@@ -48,9 +48,7 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
             let mut statements = Vec::new();
             if let Some(block_inner) = inner.next() {
                 for stmt_pair in block_inner.into_inner() {
-                    if let Some(actual_stmt) = stmt_pair.into_inner().next() {
-                        statements.push(parse_statement(actual_stmt));
-                    }
+                    statements.push(parse_statement(stmt_pair));
                 }
             }
             Statement::RelativisticBlock {
@@ -195,10 +193,10 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                             .next()
                             .map(crate::parser::expressions::parse_expression)
                             .unwrap_or(Expression::Null);
-                        body.push(SpannedStatement {
-                            stmt: Statement::Expression(expr),
-                            span: Span { start: 0, end: 0 },
-                        });
+                        body.push(SpannedStatement::new(
+                            Statement::Expression(expr),
+                            Span { start: 0, end: 0 },
+                        ));
                     }
                     Rule::statement => {
                         if let Some(s) = current.into_inner().next() {

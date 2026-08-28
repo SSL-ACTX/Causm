@@ -136,10 +136,10 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                     }
                     Rule::if_stmt => {
                         let parsed_else_if = parse_control_flow_stmt(next_pair);
-                        else_branch = Some(vec![SpannedStatement {
-                            stmt: parsed_else_if,
-                            span: Span { start: 0, end: 0 },
-                        }]);
+                        else_branch = Some(vec![SpannedStatement::new(
+                            parsed_else_if,
+                            Span { start: 0, end: 0 },
+                        )]);
                         if let Some(rec_pair) = inner.next() {
                             reconcile_rules = Some(parse_reconcile_clause(rec_pair));
                         }

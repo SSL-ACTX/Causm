@@ -20,6 +20,29 @@ pub struct Span {
 pub struct SpannedStatement {
     pub stmt: Statement,
     pub span: Span,
+    pub attributes: Vec<Attribute>,
+}
+
+impl SpannedStatement {
+    pub fn new(stmt: Statement, span: Span) -> Self {
+        Self {
+            stmt,
+            span,
+            attributes: Vec::new(),
+        }
+    }
+
+    pub fn with_attributes(
+        stmt: Statement,
+        span: Span,
+        attributes: Vec<Attribute>,
+    ) -> Self {
+        Self {
+            stmt,
+            span,
+            attributes,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +126,23 @@ pub enum MacroParamKind {
 pub struct MacroParam {
     pub name: String,
     pub kind: MacroParamKind,
+}
+
+/// Compiler attribute kind: @derive, @must_use, @inline, @test, or custom
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AttributeKind {
+    Derive(Vec<String>),
+    MustUse(Option<String>),
+    Inline,
+    Test,
+    Custom { name: String, args: Vec<String> },
+}
+
+/// A parsed compiler attribute attached to items: @name(args)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attribute {
+    pub kind: AttributeKind,
+    pub span: Span,
 }
 
 #[allow(dead_code)]

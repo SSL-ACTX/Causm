@@ -54,6 +54,38 @@ fn format_spanned_statement(
     depth: usize,
 ) {
     let indent = indent_str(config, depth);
+    for attr in &stmt.attributes {
+        match &attr.kind {
+            causm_core::AttributeKind::Derive(traits) => {
+                out.push_str(&format!("{}@derive({})\n", indent, traits.join(", ")));
+            }
+            causm_core::AttributeKind::MustUse(msg) => {
+                if let Some(m) = msg {
+                    out.push_str(&format!("{}@must_use(\"{}\")\n", indent, m));
+                } else {
+                    out.push_str(&format!("{}@must_use\n", indent));
+                }
+            }
+            causm_core::AttributeKind::Inline => {
+                out.push_str(&format!("{}@inline\n", indent));
+            }
+            causm_core::AttributeKind::Test => {
+                out.push_str(&format!("{}@test\n", indent));
+            }
+            causm_core::AttributeKind::Custom { name, args } => {
+                if args.is_empty() {
+                    out.push_str(&format!("{}@{}\n", indent, name));
+                } else {
+                    out.push_str(&format!(
+                        "{}@{}({})\n",
+                        indent,
+                        name,
+                        args.join(", ")
+                    ));
+                }
+            }
+        }
+    }
     match &stmt.stmt {
         Statement::Assignment {
             target,

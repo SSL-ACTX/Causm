@@ -387,16 +387,16 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                 if let Statement::Expression(expr) =
                                     body[0].stmt.clone()
                                 {
-                                    *body = vec![SpannedStatement {
-                                        stmt: Statement::Assignment {
+                                    *body = vec![SpannedStatement::new(
+                                        Statement::Assignment {
                                             target: lhs_name.clone(),
                                             mutable: false,
                                             var_type: None,
                                             lifetime: None,
                                             expr,
                                         },
-                                        span: body[0].span.clone(),
-                                    }];
+                                        body[0].span.clone(),
+                                    )];
                                 }
                             }
                         }
@@ -410,16 +410,16 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                 if let Statement::Expression(expr) =
                                     body[0].stmt.clone()
                                 {
-                                    *body = vec![SpannedStatement {
-                                        stmt: Statement::Assignment {
+                                    *body = vec![SpannedStatement::new(
+                                        Statement::Assignment {
                                             target: lhs_name.clone(),
                                             mutable: false,
                                             var_type: None,
                                             lifetime: None,
                                             expr,
                                         },
-                                        span: body[0].span.clone(),
-                                    }];
+                                        body[0].span.clone(),
+                                    )];
                                 }
                             }
                         }

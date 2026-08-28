@@ -69,6 +69,7 @@ pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
 
     let mut prog = Program { timelines };
     crate::macro_expand::expand_program(&mut prog);
+    crate::derive::expand_derives(&mut prog);
     Ok(prog)
 }
 
@@ -131,8 +132,8 @@ fn expand_spanned_statements(
                             } => {
                                 if !name.starts_with(&format!("{}.", ns)) {
                                     let qualified_name = format!("{}.{}", ns, name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::RoutineDef {
+                                    result.push(SpannedStatement::new(
+                                        Statement::RoutineDef {
                                             name: qualified_name,
                                             params: params.clone(),
                                             return_type: return_type.clone(),
@@ -143,8 +144,8 @@ fn expand_spanned_statements(
                                                 required_capabilities.clone(),
                                             body: body.clone(),
                                         },
-                                        span: s.span.clone(),
-                                    });
+                                        s.span.clone(),
+                                    ));
                                 }
                             }
                             Statement::ForeignBlock {
@@ -173,8 +174,8 @@ fn expand_spanned_statements(
                                                 } else {
                                                     name.clone()
                                                 };
-                                                SpannedStatement {
-                                                    stmt: Statement::RoutineDef {
+                                                SpannedStatement::new(
+                                                    Statement::RoutineDef {
                                                         name: qualified_name,
                                                         params: params.clone(),
                                                         return_type: return_type
@@ -187,21 +188,21 @@ fn expand_spanned_statements(
                                                                 .clone(),
                                                         body: body.clone(),
                                                     },
-                                                    span: r_spanned.span.clone(),
-                                                }
+                                                    r_spanned.span.clone(),
+                                                )
                                             } else {
                                                 r_spanned.clone()
                                             }
                                         })
                                         .collect();
-                                result.push(SpannedStatement {
-                                    stmt: Statement::ForeignBlock {
+                                result.push(SpannedStatement::new(
+                                    Statement::ForeignBlock {
                                         lib_name: lib_name.clone(),
                                         abi: abi.clone(),
                                         routines: qualified_routines,
                                     },
-                                    span: s.span.clone(),
-                                });
+                                    s.span.clone(),
+                                ));
                             }
                             Statement::TypeDecl {
                                 name,
@@ -213,8 +214,8 @@ fn expand_spanned_statements(
                             } => {
                                 if !name.starts_with(&format!("{}.", ns)) {
                                     let qualified_name = format!("{}.{}", ns, name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::TypeDecl {
+                                    result.push(SpannedStatement::new(
+                                        Statement::TypeDecl {
                                             name: qualified_name,
                                             extends: extends.clone(),
                                             fields: fields.clone(),
@@ -222,20 +223,20 @@ fn expand_spanned_statements(
                                             auto_drop: auto_drop.clone(),
                                             scoped_branch: scoped_branch.clone(),
                                         },
-                                        span: s.span.clone(),
-                                    });
+                                        s.span.clone(),
+                                    ));
                                 }
                             }
                             Statement::EnumDecl { name, variants } => {
                                 if !name.starts_with(&format!("{}.", ns)) {
                                     let qualified_name = format!("{}.{}", ns, name);
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::EnumDecl {
+                                    result.push(SpannedStatement::new(
+                                        Statement::EnumDecl {
                                             name: qualified_name,
                                             variants: variants.clone(),
                                         },
-                                        span: s.span.clone(),
-                                    });
+                                        s.span.clone(),
+                                    ));
                                 }
                             }
                             Statement::InterfaceDecl {
@@ -244,14 +245,14 @@ fn expand_spanned_statements(
                                 methods,
                             } if !name.starts_with(&format!("{}.", ns)) => {
                                 let qualified_name = format!("{}.{}", ns, name);
-                                result.push(SpannedStatement {
-                                    stmt: Statement::InterfaceDecl {
+                                result.push(SpannedStatement::new(
+                                    Statement::InterfaceDecl {
                                         name: qualified_name,
                                         extends: extends.clone(),
                                         methods: methods.clone(),
                                     },
-                                    span: s.span.clone(),
-                                });
+                                    s.span.clone(),
+                                ));
                             }
                             _ => {}
                         }
@@ -323,8 +324,8 @@ fn expand_spanned_statements(
                                     } else {
                                         name.clone()
                                     };
-                                    result.push(SpannedStatement {
-                                        stmt: Statement::RoutineDef {
+                                    result.push(SpannedStatement::new(
+                                        Statement::RoutineDef {
                                             name: target_name,
                                             params: params.clone(),
                                             return_type: return_type.clone(),
@@ -335,8 +336,8 @@ fn expand_spanned_statements(
                                                 required_capabilities.clone(),
                                             body: body.clone(),
                                         },
-                                        span: s.span.clone(),
-                                    });
+                                        s.span.clone(),
+                                    ));
                                 }
                                 Statement::TypeDecl {
                                     name,
@@ -349,8 +350,8 @@ fn expand_spanned_statements(
                                     result.push(s.clone());
                                     if let Some(alias) = sym_alias {
                                         if alias != name {
-                                            result.push(SpannedStatement {
-                                                stmt: Statement::TypeDecl {
+                                            result.push(SpannedStatement::new(
+                                                Statement::TypeDecl {
                                                     name: alias.clone(),
                                                     extends: extends.clone(),
                                                     fields: fields.clone(),
@@ -359,8 +360,8 @@ fn expand_spanned_statements(
                                                     scoped_branch: scoped_branch
                                                         .clone(),
                                                 },
-                                                span: s.span.clone(),
-                                            });
+                                                s.span.clone(),
+                                            ));
                                         }
                                     }
                                 }
@@ -370,13 +371,13 @@ fn expand_spanned_statements(
                                     result.push(s.clone());
                                     if let Some(alias) = sym_alias {
                                         if alias != name {
-                                            result.push(SpannedStatement {
-                                                stmt: Statement::EnumDecl {
+                                            result.push(SpannedStatement::new(
+                                                Statement::EnumDecl {
                                                     name: alias.clone(),
                                                     variants: variants.clone(),
                                                 },
-                                                span: s.span.clone(),
-                                            });
+                                                s.span.clone(),
+                                            ));
                                         }
                                     }
                                 }
@@ -388,14 +389,14 @@ fn expand_spanned_statements(
                                     result.push(s.clone());
                                     if let Some(alias) = sym_alias {
                                         if alias != name {
-                                            result.push(SpannedStatement {
-                                                stmt: Statement::InterfaceDecl {
+                                            result.push(SpannedStatement::new(
+                                                Statement::InterfaceDecl {
                                                     name: alias.clone(),
                                                     extends: extends.clone(),
                                                     methods: methods.clone(),
                                                 },
-                                                span: s.span.clone(),
-                                            });
+                                                s.span.clone(),
+                                            ));
                                         }
                                     }
                                 }
@@ -411,21 +412,21 @@ fn expand_spanned_statements(
             Statement::Isolate(mut iso) => {
                 iso.body =
                     expand_spanned_statements(iso.body, base_dir, loaded_files)?;
-                result.push(SpannedStatement {
-                    stmt: Statement::Isolate(iso),
-                    span: spanned.span,
-                });
+                result.push(SpannedStatement::new(
+                    Statement::Isolate(iso),
+                    spanned.span,
+                ));
             }
             Statement::RelativisticBlock { time, body } => {
                 let expanded_body =
                     expand_spanned_statements(body, base_dir, loaded_files)?;
-                result.push(SpannedStatement {
-                    stmt: Statement::RelativisticBlock {
+                result.push(SpannedStatement::new(
+                    Statement::RelativisticBlock {
                         time,
                         body: expanded_body,
                     },
-                    span: spanned.span,
-                });
+                    spanned.span,
+                ));
             }
             _ => result.push(spanned),
         }
@@ -447,6 +448,7 @@ pub fn parse_causm_with_imports(
     }
 
     crate::macro_expand::expand_program(&mut program);
+    crate::derive::expand_derives(&mut program);
     Ok(program)
 }
 

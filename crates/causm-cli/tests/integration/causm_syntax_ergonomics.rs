@@ -782,3 +782,70 @@ fn test_syntax_declarative_macro_multiple_expansions() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_compiler_attribute_derive_struct() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        @derive(Clone, Debug, PartialEq)
+        type Point = struct { x: int, y: int }
+
+        let p1 = struct { x = 10, y = 20 }
+        let p2 = p1.clone()
+        let is_eq = p1.equals(p2)
+        let str_rep = p1.to_string()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let eq_reg = ir.symbols.get("is_eq").expect("is_eq symbol").0;
+    assert_eq!(vm.peek_reg("main", eq_reg)?, Payload::Bool(true));
+
+    let str_reg = ir.symbols.get("str_rep").expect("str_rep symbol").0;
+    assert_eq!(
+        vm.peek_reg("main", str_reg)?,
+        Payload::String("Point { x: 10, y: 20 }".to_string())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_compiler_attribute_derive_enum() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        @derive(Clone, Debug)
+        enum Status {
+            Active,
+            Pending(int),
+        }
+
+        let s1 = Status::Pending(42)
+        let s2 = s1.clone()
+        let str_s1 = s1.to_string()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let str_reg = ir.symbols.get("str_s1").expect("str_s1 symbol").0;
+    assert_eq!(
+        vm.peek_reg("main", str_reg)?,
+        Payload::String("Status::Pending(42)".to_string())
+    );
+
+    Ok(())
+}

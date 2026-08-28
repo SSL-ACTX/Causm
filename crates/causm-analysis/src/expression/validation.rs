@@ -196,6 +196,23 @@ pub(crate) fn analyze_expression(
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
                 Type::Custom(name) => name.clone(),
+                Type::Struct(s) => {
+                    let mut matched = None;
+                    for (tname, fields) in &analyzer.type_decls {
+                        if fields.len() == s.fields.len()
+                            && fields.keys().all(|k| s.fields.contains_key(k))
+                        {
+                            matched = Some(tname.clone());
+                            break;
+                        }
+                    }
+                    matched.ok_or_else(|| {
+                        analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            "method call target must be a custom type instance"
+                                .into(),
+                        ))
+                    })?
+                }
                 _ => {
                     return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                         "method call target must be a custom type instance".into(),

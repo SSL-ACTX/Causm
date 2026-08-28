@@ -172,11 +172,18 @@ impl EntropicAnalyzer {
             causm_core::types::Type::Custom(name.to_string()),
         );
         for variant in variants {
+            let qualified = format!("{}::{}", name, variant.name);
+            branch.types.insert(
+                qualified.clone(),
+                causm_core::types::Type::Custom(name.to_string()),
+            );
             branch.types.insert(
                 variant.name.clone(),
                 causm_core::types::Type::Custom(name.to_string()),
             );
         }
+        self.type_decls
+            .insert(name.to_string(), std::collections::HashMap::new());
         Ok(())
     }
 
