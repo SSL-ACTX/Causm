@@ -4,6 +4,9 @@ members = [
     "plugins/*",
    # "lsp"
 ]
+default-members = [
+    "crates/*",
+]
 resolver = "2"
 
 [workspace.package]

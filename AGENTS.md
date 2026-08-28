@@ -25,9 +25,15 @@ This document outlines the core architectural constraints, design patterns, deve
 
 ## 2. Rust Codebase Rules
 
-### 2.1 Fast Feedback Loop (Compile Limits)
-*   **Parallel Compilation Limit:** If executing on Termux or other resource-constrained host environments, limit cargo processes to 3 jobs (`-j 3`) (e.g., `cargo check -j 3`, `cargo test -j 3`) to prevent CPU exhaustion. On standard developer environments, do NOT use `-j` limits.
-*   **Dev Mode Speed:** Utilize `cargo check` (optionally with `-j 3` if on Termux) for fast feedback during iteration. Only invoke the full `cargo test` suite when modifications are stable and ready for validation.
+### 2.1 Fast Feedback Loop & Build Pipelines
+*   **Default Workspace Members (Exclude Plugins from Default Builds):** The root `Cargo.toml` sets `default-members = ["crates/*"]`. Standard `cargo check` and `cargo build` will ONLY build core crates and will NOT build plugins to preserve CPU and build time.
+*   **Specialized Cargo Aliases (in `.cargo/config.toml`):**
+    *   `cargo check-core` / `cargo build-core`: Fast check/build of compiler crates only (`-j 3`).
+    *   `cargo build-plugins`: Builds WASM plugins (`wasm32-unknown-unknown`).
+    *   `cargo check-all` / `cargo build-all`: Builds entire workspace including plugins (`--workspace -j 3`).
+    *   `cargo test-fast` / `cargo test-all`: Runs test suites with `-j 3` parallel limits.
+*   **Parallel Compilation Limit:** If executing on Termux or other resource-constrained host environments, limit cargo processes to 3 jobs (`-j 3`) to prevent CPU exhaustion. On standard developer environments, do NOT use `-j` limits.
+*   **Dev Mode Speed:** Utilize `cargo check-core` (or `cargo check`) for fast feedback during iteration. Only invoke the full `cargo test-all` suite when modifications are stable and ready for validation.
 
 ### 2.2 Zero Warnings Policy
 *   **Clean Builds:** We maintain a strict zero-warning policy. All unused imports, variables, and dead code must be resolved or removed before committing.
