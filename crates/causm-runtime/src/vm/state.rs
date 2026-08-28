@@ -102,7 +102,19 @@ pub struct Vm {
     pub trace_entropy: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,
+    pub call_depth: u32,
+    pub max_call_depth: u32,
     pub foreign_manager: std::sync::Arc<crate::vm::ffi::ForeignLibraryManager>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CallFrame {
+    pub caller_branch_id: String,
+    pub return_dest: causm_ir::Reg,
+    pub budget: Option<u64>,
+    pub routine_name: String,
+    pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
+    pub args: Vec<causm_ir::Reg>,
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +148,9 @@ pub struct Timeline {
     pub loop_depth: u32,
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
     pub flat_loops: Vec<FlatLoopState>,
+    pub total_executed_cycles: u64,
+    pub max_cycles_watchdog: u64,
+    pub call_depth: u32,
     pub saturation_policies:
         HashMap<causm_core::PolicyTarget, causm_core::SaturationPolicy>,
     pub pc: usize,

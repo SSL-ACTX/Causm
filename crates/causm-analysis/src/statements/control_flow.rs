@@ -637,6 +637,7 @@ impl EntropicAnalyzer {
 
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
+        routine_analyzer.analyzed_routines = self.analyzed_routines.clone();
         routine_analyzer
             .routines
             .insert(name.clone(), preliminary_routine_info.clone());

@@ -1326,3 +1326,90 @@ fn test_arena_saturation_policy_fail_fast_and_throttle() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_vm_watchdog_kills_infinite_while_loop() {
+    super::run_with_timeout(std::time::Duration::from_secs(5), || {
+        let source = r#"
+        @0ms: {
+            let x = 1
+            while (true) (max 100ms) {
+                x = x + 1
+            }
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        // Configure small cycle ceiling for test responsiveness
+        vm.root_timeline.max_cycles_watchdog = 500;
+        let res = vm.execute_program(&ir);
+
+        assert!(res.is_err());
+        let err_str = format!("{:?}", res.err().unwrap());
+        assert!(err_str.contains("WatchdogBite") || err_str.contains("BudgetExhausted"));
+    });
+}
+
+#[test]
+fn test_vm_watchdog_kills_infinite_recursion() {
+    super::run_with_timeout(std::time::Duration::from_secs(5), || {
+        let source = r#"
+        routine infinite_recurse(x: int) -> int {
+            infinite_recurse(x + 1)
+        }
+
+        @0ms: {
+            let res = infinite_recurse(0)
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let mut analyzer = EntropicAnalyzer::new();
+        let _ = analyzer.analyze_program(&program);
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        // Configure small recursion depth for instant test response
+        vm.max_call_depth = 20;
+        let res = vm.execute_program(&ir);
+
+        assert!(res.is_err());
+        let err_str = format!("{:?}", res.err().unwrap());
+        assert!(err_str.contains("recursion depth") || err_str.contains("WatchdogBite") || err_str.contains("Stack"));
+    });
+}
+
+#[test]
+fn test_vm_watchdog_kills_large_loop_at_hundreds_of_thousands_cycles() {
+    super::run_with_timeout(std::time::Duration::from_secs(10), || {
+        let source = r#"
+        @0ms: {
+            let count = 0
+            while (true) (max 1000000ms) {
+                count = count + 1
+            }
+        }
+        "#;
+
+        let program = parser::parse_causm(source).unwrap();
+        let ir = causm_frontend::lower::lower_program(&program);
+
+        let mut vm = Vm::new();
+        // Default watchdog is 500,000 instruction cycles
+        assert_eq!(vm.root_timeline.max_cycles_watchdog, 500_000);
+        let res = vm.execute_program(&ir);
+
+        assert!(res.is_err());
+        match res.err().unwrap() {
+            causm_runtime::vm::error::TemporalError::WatchdogBite(branch, limit) => {
+                assert_eq!(branch, "main");
+                assert_eq!(limit, 500_000);
+                assert!(vm.root_timeline.total_executed_cycles >= 500_000);
+            }
+            other => panic!("Expected WatchdogBite at 500,000 cycles, got {:?}", other),
+        }
+    });
+}

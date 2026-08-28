@@ -26,3 +26,17 @@ pub mod causm_temporal_contracts;
 pub mod causm_vfs;
 pub mod causm_z3_routine_test;
 pub mod causm_z3_verification;
+
+pub fn run_with_timeout<F, T>(timeout: std::time::Duration, f: F) -> T
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let res = f();
+        let _ = tx.send(res);
+    });
+    rx.recv_timeout(timeout)
+        .expect("Test execution timed out: runtime guard failed to terminate within time limit")
+}

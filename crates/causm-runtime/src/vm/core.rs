@@ -42,6 +42,8 @@ impl Vm {
             trace_entropy: false,
             _is_decaying: false,
             current_span: None,
+            call_depth: 0,
+            max_call_depth: 10_000,
             foreign_manager: std::sync::Arc::new(
                 crate::vm::ffi::ForeignLibraryManager::new(),
             ),
@@ -84,6 +86,16 @@ impl Vm {
             let branch = self.get_branch_mut(branch_id)?;
             branch.pc < branch.instructions.len()
         } {
+            {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.total_executed_cycles += 1;
+                if branch.total_executed_cycles > branch.max_cycles_watchdog {
+                    return Err(TemporalError::WatchdogBite(
+                        branch_id.to_string(),
+                        branch.max_cycles_watchdog,
+                    ));
+                }
+            }
             self.execute_instruction(branch_id)?;
         }
 
@@ -293,6 +305,13 @@ impl Vm {
             loop {
                 let (pc, len) = {
                     let branch = self.get_branch_mut(branch_id)?;
+                    branch.total_executed_cycles += 1;
+                    if branch.total_executed_cycles > branch.max_cycles_watchdog {
+                        return Err(TemporalError::WatchdogBite(
+                            branch_id.to_string(),
+                            branch.max_cycles_watchdog,
+                        ));
+                    }
                     (branch.pc, branch.instructions.len())
                 };
                 if pc >= len {
@@ -750,6 +769,9 @@ impl Timeline {
             loop_depth: 0,
             loop_stack: Vec::new(),
             flat_loops: Vec::new(),
+            total_executed_cycles: 0,
+            max_cycles_watchdog: 500_000, // 500,000 instruction cycle ceiling per branch segment
+            call_depth: 0,
             saturation_policies: HashMap::new(),
             pc: 0,
             instructions: Vec::new(),

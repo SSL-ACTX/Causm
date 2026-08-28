@@ -83,10 +83,36 @@ impl Vm {
         args: Vec<Reg>,
         dest: Reg,
     ) -> Result<(), TemporalError> {
+        if self.call_depth >= self.max_call_depth {
+            return Err(TemporalError::EvalError(format!(
+                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
+                self.max_call_depth, routine
+            )));
+        }
         self.execute_call(branch_id, routine, args, dest, None)
     }
 
     fn execute_call(
+        &mut self,
+        branch_id: &str,
+        routine: String,
+        args: Vec<Reg>,
+        dest: Reg,
+        budget: Option<u64>,
+    ) -> Result<(), TemporalError> {
+        if self.call_depth >= self.max_call_depth {
+            return Err(TemporalError::EvalError(format!(
+                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
+                self.max_call_depth, routine
+            )));
+        }
+        self.call_depth += 1;
+        let res = self.execute_call_inner(branch_id, routine, args, dest, budget);
+        self.call_depth -= 1;
+        res
+    }
+
+    fn execute_call_inner(
         &mut self,
         branch_id: &str,
         routine: String,
@@ -235,6 +261,8 @@ impl Vm {
             }
         }
 
+        let caller_call_depth = self.get_branch(branch_id)?.call_depth;
+
         let caller_manifest_stack = self
             .get_branch(branch_id)
             .map(|b| b.manifest_stack.clone())
@@ -250,6 +278,7 @@ impl Vm {
         );
         child.instructions = routine_def.instructions.clone();
         child.manifest_stack = caller_manifest_stack;
+        child.call_depth = caller_call_depth + 1;
 
         for (i, (mode, _name, _)) in params.iter().enumerate() {
             let val = arg_values[i].clone();
@@ -291,17 +320,30 @@ impl Vm {
 
         self.active_branches.insert(child_id.clone(), child);
 
-        while {
-            let b = self.get_branch_mut(&child_id)?;
-            b.pc < b.instructions.len()
-        } {
-            self.execute_instruction(&child_id)?;
-            self.handle_break(&child_id)?;
-        }
+        let exec_res = (|| -> Result<(), TemporalError> {
+            while {
+                let b = self.get_branch_mut(&child_id)?;
+                b.pc < b.instructions.len()
+            } {
+                {
+                    let b = self.get_branch_mut(&child_id)?;
+                    b.total_executed_cycles += 1;
+                    if b.total_executed_cycles > b.max_cycles_watchdog {
+                        return Err(TemporalError::WatchdogBite(
+                            child_id.clone(),
+                            b.max_cycles_watchdog,
+                        ));
+                    }
+                }
+                self.execute_instruction(&child_id)?;
+                self.handle_break(&child_id)?;
+            }
+            Ok(())
+        })();
 
-        let child_branch = self
-            .active_branches
-            .remove(&child_id)
+        let child_branch = self.active_branches.remove(&child_id);
+        exec_res?;
+        let child_branch = child_branch
             .ok_or_else(|| TemporalError::BranchNotFound(child_id.clone()))?;
 
         let elapsed = child_branch.local_clock;
