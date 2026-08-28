@@ -1,6 +1,6 @@
 # Proposal: Pre-compiled & Pre-verified Standard Library Archives (`.csa`) and Fast Dependency Caching
 
-**Status:** Draft / Approved  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Modular Systems, Compilation Pipeline & Formal Verification  
 

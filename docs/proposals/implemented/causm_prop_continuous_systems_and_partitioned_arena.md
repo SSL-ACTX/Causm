@@ -1,6 +1,6 @@
 # Proposal: Continuous Systems, Isochronous Periodic Epochs, and Partitioned Arena Memory
 
-**Status:** Proposed  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Core Language Architecture, Temporal Scheduling & Memory Model  
 **Target Crates:** `causm-runtime`, `causm-analysis`, `causm-frontend`, `causm-ir`, `causm-stdlib`

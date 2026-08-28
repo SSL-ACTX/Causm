@@ -1,6 +1,6 @@
 # Proposal: Causm Modern Syntax Modernization, Developer Ergonomics & Expressive Primitives
 
-**Status:** Proposed  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Language Frontend, Grammar, Developer Ergonomics & Syntactic Sugar  
 **Target Crates:** `causm-frontend`, `causm-devtools` (fmt/linter), `causm-stdlib`

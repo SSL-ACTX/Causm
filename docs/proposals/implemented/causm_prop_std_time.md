@@ -2,7 +2,7 @@
 
 * **Proposal Name:** `causm_prop_std_time`
 * **Author:** Iris Seravelle & Seuriin
-* **Status:** Proposed / Draft
+* **Status:** Approved & Implemented  
 * **Category:** Standard Library / Runtime Architecture / Real-Time Systems
 * **Target Version:** `causm-stdlib v0.2.0`
 

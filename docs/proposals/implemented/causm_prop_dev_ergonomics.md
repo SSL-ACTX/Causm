@@ -1,6 +1,6 @@
 # Proposal: Developer Ergonomics, Language Server Diagnostics, and Visual Causality
 
-**Status:** Approved & In Progress  
+**Status:** Approved & Implemented  
 **Author:** Seuriin <seuriin@gmail.com>  
 **Category:** Developer Tooling & LSP Architecture  
 

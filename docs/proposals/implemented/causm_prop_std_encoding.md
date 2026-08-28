@@ -1,6 +1,6 @@
 # Proposal: Causm Standard Library — `std/encoding` (UTF-8, Base64, Binary)
 
-**Status:** Proposed  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Standard Library  
 **Target Crates:** `causm-stdlib`, `causm-frontend`, `causm-runtime`, `causm-core`

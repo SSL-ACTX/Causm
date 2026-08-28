@@ -1,6 +1,6 @@
 # Proposal: Causm Metaprogramming, Advanced Semantics, Expressive Operators, and Unified Type System
 
-**Status:** Proposed  
+**Status:** Implemented & Accepted  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Language Core, Metaprogramming, Type System & Syntax Modernization  
 **Target Crates:** `causm-frontend`, `causm-core`, `causm-analysis`, `causm-devtools`, `causm-stdlib`

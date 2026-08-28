@@ -1,6 +1,6 @@
 # Proposal: Profile-Guided Temporal Contracts (`causm tune`), Inferred Budgets (`taking _`), and Developer Tooling Suite (`causm-devtools`)
 
-**Status:** Proposed  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Compiler Tooling, Temporal Verification & Real-Time Portability  
 **Target Crates:** `causm-devtools` (formerly `causm-tracer`), `causm-analysis`, `causm-frontend`, `causm-cli`

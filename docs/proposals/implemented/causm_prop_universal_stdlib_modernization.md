@@ -1,6 +1,6 @@
 # Proposal: Universal Standard Library Modernization — Isolate-Native Sandboxing, WASM/WASI Virtualization, and Tiered FFI Architecture
 
-**Status:** Proposed  
+**Status:** Approved & Implemented  
 **Authors:** Seuriin <seuriin@gmail.com>, Iris Seravelle <iris.seravelle@gmail.com>  
 **Category:** Standard Library Architecture, Capability-Based Security & Platform Virtualization  
 **Target Crates:** `causm-stdlib`, `causm-runtime`, `causm-frontend`, `causm-analysis`
