@@ -24,6 +24,8 @@ impl Vm {
                 | "string_from_bytes"
                 | "char_at"
                 | "str_slice"
+                | "json_parse"
+                | "json_stringify"
         )
     }
 
@@ -205,6 +207,37 @@ impl Vm {
                         "str_slice expects string".to_string(),
                     )),
                 }
+            }
+            "json_parse" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "json_parse expects (json_string)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Payload::String(s) => {
+                        let parsed = crate::vm::intrinsics::json::parse_json(s)
+                            .map_err(|e| {
+                                TemporalError::EvalError(format!(
+                                    "JSON parse error: {}",
+                                    e
+                                ))
+                            })?;
+                        Ok(parsed)
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "json_parse expects string".to_string(),
+                    )),
+                }
+            }
+            "json_stringify" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "json_stringify expects (payload)".to_string(),
+                    ));
+                }
+                let s = crate::vm::intrinsics::json::stringify_json(&args[0]);
+                Ok(Payload::String(s))
             }
             _ => {
                 if args.len() != 1 {

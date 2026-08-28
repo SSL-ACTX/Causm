@@ -8,6 +8,7 @@ pub mod error;
 pub mod eval;
 pub mod ffi;
 pub mod instructions;
+pub mod intrinsics;
 pub mod state;
 
 #[cfg(test)]

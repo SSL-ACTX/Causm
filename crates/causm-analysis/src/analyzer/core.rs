@@ -200,6 +200,8 @@ impl EntropicAnalyzer {
                 vec![Type::String, Type::Integer, Type::Integer],
                 Type::String,
             ),
+            ("json_parse", vec![Type::String], Type::Unknown),
+            ("json_stringify", vec![Type::Unknown], Type::String),
         ];
 
         for (name, params, ret) in collection_intrinsics {
