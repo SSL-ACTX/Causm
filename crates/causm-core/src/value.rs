@@ -419,6 +419,15 @@ impl Arena {
         Ok(())
     }
 
+    pub fn get_metadata(&self, reg: u32) -> Option<&ValueMetadata> {
+        self.metadata.get(reg as usize).and_then(|m| m.as_ref())
+    }
+
+    pub fn set_metadata(&mut self, reg: u32, meta: Option<ValueMetadata>) {
+        self.ensure_register(reg);
+        self.metadata[reg as usize] = meta;
+    }
+
     /// Drop all arena state immediately for deterministic bulk deallocation.
     pub fn clear(&mut self) {
         self.registers.clear();

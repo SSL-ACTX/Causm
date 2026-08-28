@@ -30,15 +30,11 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         let val = self.peek_reg(branch_id, src.0)?;
         let type_name = {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = src.0 as usize;
-            if idx < branch.arena.metadata.len() {
-                branch.arena.metadata[idx]
-                    .as_ref()
-                    .and_then(|m| m.type_name.clone())
-            } else {
-                None
-            }
+            let branch = self.get_branch(branch_id)?;
+            branch
+                .arena
+                .get_metadata(src.0)
+                .and_then(|m| m.type_name.clone())
         };
         let sent_at = {
             let branch = self.get_branch_mut(branch_id)?;
@@ -148,21 +144,16 @@ impl Vm {
             causm_core::value::EntropicState::Valid(message.payload.clone())
         };
 
-        self.insert_reg(branch_id, dest.0, final_state)?;
-
-        // Populate metadata for the register in the receiver's arena.
-        {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = dest.0 as usize;
-            if idx < branch.arena.metadata.len() {
-                branch.arena.metadata[idx] =
-                    Some(causm_core::value::ValueMetadata {
-                        instantiated_at: message.sent_at,
-                        type_name: message.type_name.clone(),
-                        decay_after_ms: decay_limit,
-                    });
-            }
-        }
+        self.insert_reg_with_metadata(
+            branch_id,
+            dest.0,
+            final_state,
+            Some(causm_core::value::ValueMetadata {
+                instantiated_at: message.sent_at,
+                type_name: message.type_name.clone(),
+                decay_after_ms: decay_limit,
+            }),
+        )?;
 
         // Execute recovery / decay handler if one is registered for the type.
         if is_decayed {

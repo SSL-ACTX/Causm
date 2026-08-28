@@ -391,10 +391,7 @@ impl Vm {
                         let caller_reg = frame.args[i].0;
                         branch.arena.insert(caller_reg, child_state.clone())?;
                         if let Some(Some(m)) = child_meta.get(i) {
-                            if (caller_reg as usize) < branch.arena.metadata.len() {
-                                branch.arena.metadata[caller_reg as usize] =
-                                    Some(m.clone());
-                            }
+                            branch.arena.set_metadata(caller_reg, Some(m.clone()));
                         }
                     }
                 } else if matches!(

@@ -11,58 +11,18 @@ impl Vm {
         parent_id: &str,
         branches: Vec<&str>,
     ) -> Result<(), TemporalError> {
-        let (
-            base_arena,
-            cpu_budget_ms,
-            entropy_mode,
-            resource_budgets,
-            slice_ms,
-            parent_global_time,
-        ) = {
-            let parent_timeline = if parent_id == "main" {
-                &self.root_timeline
-            } else {
-                self.active_branches.get(parent_id).ok_or_else(|| {
-                    TemporalError::BranchNotFound(parent_id.to_string())
-                })?
-            };
-            (
-                parent_timeline.arena.clone(),
-                parent_timeline.cpu_budget_ms,
-                parent_timeline.entropy_mode,
-                parent_timeline.resource_budgets.clone(),
-                parent_timeline.slice_ms,
-                parent_timeline.birth_global_time + parent_timeline.local_clock,
-            )
+        let (parent_timeline, parent_global_time) = {
+            let parent = self.get_branch(parent_id)?;
+            let birth_time = parent.birth_global_time + parent.local_clock;
+            (parent.clone(), birth_time)
         };
 
         for branch_name in branches {
-            let new_branch = Timeline {
-                id: branch_name.to_string(),
-                birth_global_time: parent_global_time,
-                local_clock: 0,
-                arena: base_arena.clone(),
-                cpu_budget_ms,
-                slice_ms,
-                anchors: HashMap::new(),
-                commit_horizon_passed: false,
-                manifest_stack: Vec::new(),
-                resource_budgets: resource_budgets.clone(),
-                entropy_mode,
-                break_requested: false,
-                loop_depth: 0,
-                loop_stack: Vec::new(),
-                flat_loops: Vec::new(),
-                total_executed_cycles: 0,
-                max_cycles_watchdog: 500_000,
-                call_depth: 0,
-                saturation_policies: HashMap::new(),
-                pc: 0,
-                instructions: Vec::new(),
-                spans: Vec::new(),
-                return_value: None,
-                call_stack: Vec::new(),
-            };
+            let new_branch = Timeline::fork_from(
+                branch_name.to_string(),
+                &parent_timeline,
+                parent_global_time,
+            );
             self.active_branches
                 .insert(branch_name.to_string(), new_branch);
 

@@ -71,16 +71,12 @@ impl Vm {
             )));
         }
 
-        self.insert_reg(
+        self.insert_reg_with_metadata(
             branch_id,
             dest.0,
             causm_core::value::EntropicState::Valid(val),
-        )?;
-        if let Some(m) = meta {
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.arena.metadata[dest.0 as usize] = Some(m);
-        }
-        Ok(())
+            meta,
+        )
     }
 
     pub(crate) fn TypeCast(
@@ -188,15 +184,12 @@ impl Vm {
 
         if matches {
             let val = self.peek_reg(branch_id, src.0)?;
-            self.insert_reg(
+            self.insert_reg_with_metadata(
                 branch_id,
                 dest.0,
                 causm_core::value::EntropicState::Valid(val),
+                meta,
             )?;
-            if let Some(m) = meta {
-                let branch = self.get_branch_mut(branch_id)?;
-                branch.arena.metadata[dest.0 as usize] = Some(m);
-            }
             self.insert_reg(
                 branch_id,
                 success.0,
@@ -291,16 +284,12 @@ impl Vm {
 
         if matches {
             if let Some(val) = payload_val {
-                self.insert_reg(
+                self.insert_reg_with_metadata(
                     branch_id,
                     dest.0,
                     causm_core::value::EntropicState::Valid(val),
+                    meta,
                 )?;
-                let branch = self.get_branch_mut(branch_id)?;
-                if dest.0 as usize >= branch.arena.metadata.len() {
-                    branch.arena.metadata.resize(dest.0 as usize + 1, None);
-                }
-                branch.arena.metadata[dest.0 as usize] = meta;
             }
             self.insert_reg(
                 branch_id,

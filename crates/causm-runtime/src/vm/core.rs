@@ -119,23 +119,19 @@ impl Vm {
         }
 
         let has_decay = {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = reg as usize;
-            if idx < branch.arena.registers.len() {
-                if let Some(meta) = &branch.arena.metadata[idx] {
-                    if let Some(decay_after_ms) = meta.decay_after_ms {
-                        let current_time =
-                            branch.birth_global_time + branch.local_clock;
-                        if current_time >= meta.instantiated_at {
-                            let elapsed = current_time - meta.instantiated_at;
-                            if elapsed >= decay_after_ms {
-                                matches!(
+            let branch = self.get_branch(branch_id)?;
+            if let Some(meta) = branch.arena.get_metadata(reg) {
+                if let Some(decay_after_ms) = meta.decay_after_ms {
+                    let current_time = branch.birth_global_time + branch.local_clock;
+                    if current_time >= meta.instantiated_at {
+                        let elapsed = current_time - meta.instantiated_at;
+                        if elapsed >= decay_after_ms {
+                            let idx = reg as usize;
+                            idx < branch.arena.registers.len()
+                                && matches!(
                                     branch.arena.registers[idx],
                                     EntropicState::Valid(_)
                                 )
-                            } else {
-                                false
-                            }
                         } else {
                             false
                         }
@@ -161,8 +157,9 @@ impl Vm {
                 let decayed_state = old_state.decay_recursive();
                 branch.arena.registers[idx] = decayed_state;
                 branch.arena.compact_consumed();
-                branch.arena.metadata[idx]
-                    .as_ref()
+                branch
+                    .arena
+                    .get_metadata(reg)
                     .and_then(|m| m.type_name.clone())
             };
 
@@ -253,6 +250,21 @@ impl Vm {
                 }
                 other => return Err(TemporalError::MemoryFault(other)),
             }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn insert_reg_with_metadata(
+        &mut self,
+        branch_id: &str,
+        reg: u32,
+        state: EntropicState,
+        meta: Option<ValueMetadata>,
+    ) -> Result<(), TemporalError> {
+        self.insert_reg(branch_id, reg, state)?;
+        if let Some(m) = meta {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.arena.set_metadata(reg, Some(m));
         }
         Ok(())
     }
@@ -779,6 +791,16 @@ impl Timeline {
             return_value: None,
             call_stack: Vec::new(),
         }
+    }
+
+    pub fn fork_from(id: String, parent: &Timeline, birth_time: u64) -> Self {
+        let mut child = Self::new(id, parent.arena.capacity, birth_time);
+        child.arena = parent.arena.clone();
+        child.cpu_budget_ms = parent.cpu_budget_ms;
+        child.slice_ms = parent.slice_ms;
+        child.resource_budgets = parent.resource_budgets.clone();
+        child.entropy_mode = parent.entropy_mode;
+        child
     }
 
     pub fn consume_budget(&mut self, amount: u64) -> Result<(), TemporalError> {

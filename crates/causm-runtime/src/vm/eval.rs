@@ -130,7 +130,12 @@ impl Vm {
                     ));
                 }
                 let idx = match args[1] {
-                    Payload::Integer(i) => i.max(0) as usize,
+                    Payload::Integer(i) => {
+                        if i < 0 {
+                            return Ok(Payload::Integer(0));
+                        }
+                        i as usize
+                    }
                     _ => {
                         return Err(TemporalError::TypeMismatch(
                             "char_at index must be integer".to_string(),
@@ -139,7 +144,15 @@ impl Vm {
                 };
                 match &args[0] {
                     Payload::String(s) => {
-                        let ch = s.chars().nth(idx).map(|c| c as i64).unwrap_or(0);
+                        let ch = if s.is_ascii() {
+                            s.as_bytes()
+                                .get(idx)
+                                .copied()
+                                .map(|b| b as i64)
+                                .unwrap_or(0)
+                        } else {
+                            s.chars().nth(idx).map(|c| c as i64).unwrap_or(0)
+                        };
                         Ok(Payload::Integer(ch))
                     }
                     _ => Err(TemporalError::TypeMismatch(
@@ -171,12 +184,22 @@ impl Vm {
                 };
                 match &args[0] {
                     Payload::String(s) => {
-                        let chars: Vec<char> = s.chars().collect();
-                        let clamped_start = start.min(chars.len());
-                        let clamped_end = end.min(chars.len()).max(clamped_start);
-                        let sliced: String =
-                            chars[clamped_start..clamped_end].iter().collect();
-                        Ok(Payload::String(sliced))
+                        if s.is_ascii() {
+                            let len = s.len();
+                            let clamped_start = start.min(len);
+                            let clamped_end = end.min(len).max(clamped_start);
+                            Ok(Payload::String(
+                                s[clamped_start..clamped_end].to_string(),
+                            ))
+                        } else {
+                            let chars: Vec<char> = s.chars().collect();
+                            let clamped_start = start.min(chars.len());
+                            let clamped_end =
+                                end.min(chars.len()).max(clamped_start);
+                            let sliced: String =
+                                chars[clamped_start..clamped_end].iter().collect();
+                            Ok(Payload::String(sliced))
+                        }
                     }
                     _ => Err(TemporalError::TypeMismatch(
                         "str_slice expects string".to_string(),
