@@ -97,6 +97,7 @@ impl Vm {
                 }
             }
             self.execute_instruction(branch_id)?;
+            self.handle_break(branch_id)?;
         }
 
         {
@@ -369,7 +370,7 @@ impl Vm {
         if !b.break_requested {
             return Ok(());
         }
-        let target_depth = b.loop_depth;
+        let target_depth = b.loop_depth.saturating_sub(1);
         b.break_requested = false;
 
         while {
@@ -393,9 +394,9 @@ impl Vm {
                 causm_ir::Instruction::EndFor => {
                     let b = self.get_branch_mut(branch_id)?;
                     b.loop_depth = b.loop_depth.saturating_sub(1);
-                    if b.loop_depth < target_depth {
-                        self.EndFor(branch_id)?;
+                    if b.loop_depth <= target_depth {
                         let b = self.get_branch_mut(branch_id)?;
+                        b.loop_depth = target_depth;
                         b.flat_loops.pop();
                         b.pc += 1;
                         if b.pc < b.instructions.len() {
@@ -405,14 +406,15 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndForStep => {
                     let b = self.get_branch_mut(branch_id)?;
                     b.loop_depth = b.loop_depth.saturating_sub(1);
-                    if b.loop_depth < target_depth {
+                    if b.loop_depth <= target_depth {
                         let b = self.get_branch_mut(branch_id)?;
+                        b.loop_depth = target_depth;
                         b.flat_loops.pop();
                         b.pc += 1;
                         if b.pc < b.instructions.len() {
@@ -422,13 +424,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndLoop { max_ms } => {
                     let b = self.get_branch_mut(branch_id)?;
                     b.loop_depth = b.loop_depth.saturating_sub(1);
-                    if b.loop_depth < target_depth {
+                    if b.loop_depth <= target_depth {
                         let max_ms_val = max_ms;
                         self.EndLoop(branch_id, max_ms_val)?;
                         let b = self.get_branch_mut(branch_id)?;
@@ -441,13 +443,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndWhile { max_ms } => {
                     let b = self.get_branch_mut(branch_id)?;
                     b.loop_depth = b.loop_depth.saturating_sub(1);
-                    if b.loop_depth < target_depth {
+                    if b.loop_depth <= target_depth {
                         let max_ms_val = max_ms;
                         self.EndWhile(branch_id, max_ms_val)?;
                         let b = self.get_branch_mut(branch_id)?;
@@ -460,13 +462,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndLoopTick => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         self.EndLoopTick(branch_id)?;
                         let b = self.get_branch_mut(branch_id)?;
                         b.pc += 1;
@@ -478,7 +480,7 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 _ => {}

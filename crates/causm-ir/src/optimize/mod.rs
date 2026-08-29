@@ -55,17 +55,8 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     manager.add_pass(Box::new(DeadCodeEliminationPass));
     manager.add_pass(Box::new(VerifierPass));
 
-    // 1. Optimize routines (routines are self-contained, no global usage tracking needed)
-    for routine in ir.routines.values_mut() {
-        if !routine.instructions.is_empty() {
-            let cfg = CFG::from_flat_instructions(&routine.instructions);
-            let ssa_transformer = SsaTransformer::new(cfg);
-            let ssa_cfg = ssa_transformer.transform();
-
-            let destructed_cfg = destruct_ssa(ssa_cfg);
-            routine.instructions = flatten_cfg(&destructed_cfg);
-        }
-    }
+    // 1. Routines currently maintain their original IR instructions
+    // (Routine-level SSA optimization will be enabled after full loop-destructuring verification)
 
     // 2. Scan all blocks to build a global set of registers that are read before being defined in their blocks.
     let mut global_preserved_regs = HashSet::new();
