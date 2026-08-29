@@ -5,7 +5,14 @@ members = [
    # "lsp"
 ]
 default-members = [
-    "crates/*",
+    "crates/causm-core",
+    "crates/causm-ir",
+    "crates/causm-frontend",
+    "crates/causm-analysis",
+    "crates/causm-runtime",
+    "crates/causm-stdlib",
+    "crates/causm-devtools",
+    "crates/causm-cli",
 ]
 resolver = "2"
 

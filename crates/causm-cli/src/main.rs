@@ -581,6 +581,7 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
+        #[allow(unused_mut)]
         let mut program = match parser::parse_causm_with_imports(
             &source,
             path.parent(),
@@ -598,63 +599,78 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
-        let mut plugin_engine = causm_plugins::PluginEngine::new();
+        #[cfg(feature = "plugins")]
+        {
+            let mut plugin_engine = causm_plugins::PluginEngine::new();
 
-        // Auto-discover causm.toml in parent tree if present
-        let mut curr_dir = path.parent();
-        while let Some(dir) = curr_dir {
-            let manifest_candidate = dir.join("causm.toml");
-            if manifest_candidate.exists() {
-                let _ = plugin_engine.load_from_causm_toml(&manifest_candidate);
-                break;
+            // Auto-discover causm.toml in parent tree if present
+            let mut curr_dir = path.parent();
+            while let Some(dir) = curr_dir {
+                let manifest_candidate = dir.join("causm.toml");
+                if manifest_candidate.exists() {
+                    let _ = plugin_engine.load_from_causm_toml(&manifest_candidate);
+                    break;
+                }
+                curr_dir = dir.parent();
             }
-            curr_dir = dir.parent();
-        }
 
-        // Register explicit CLI --plugin specs
-        for plugin_spec in &config.plugins {
-            if let Err(err) = plugin_engine.register_from_spec(plugin_spec) {
-                eprintln!(
-                    "\x1b[1;31merror: failed to load plugin '{}':\x1b[0m {}",
-                    plugin_spec, err
-                );
-                had_error = true;
-                break;
+            // Register explicit CLI --plugin specs
+            for plugin_spec in &config.plugins {
+                if let Err(err) = plugin_engine.register_from_spec(plugin_spec) {
+                    eprintln!(
+                        "\x1b[1;31merror: failed to load plugin '{}':\x1b[0m {}",
+                        plugin_spec, err
+                    );
+                    had_error = true;
+                    break;
+                }
             }
-        }
-        if had_error {
-            continue;
-        }
+            if had_error {
+                continue;
+            }
 
-        match plugin_engine.run_ast_pipeline(&path.display().to_string(), program) {
-            Ok((transformed_ast, diagnostics)) => {
-                program = transformed_ast;
-                for diag in diagnostics {
-                    let level_str = match diag.level {
-                        causm_plugins::DiagnosticLevel::Error => {
-                            "\x1b[1;31mplugin error:\x1b[0m"
+            match plugin_engine
+                .run_ast_pipeline(&path.display().to_string(), program)
+            {
+                Ok((transformed_ast, diagnostics)) => {
+                    program = transformed_ast;
+                    for diag in diagnostics {
+                        let level_str = match diag.level {
+                            causm_plugins::DiagnosticLevel::Error => {
+                                "\x1b[1;31mplugin error:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Warning => {
+                                "\x1b[1;33mplugin warning:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Note => {
+                                "\x1b[1;36mplugin note:\x1b[0m"
+                            }
+                        };
+                        eprintln!("{} {}", level_str, diag.message);
+                        if matches!(
+                            diag.level,
+                            causm_plugins::DiagnosticLevel::Error
+                        ) {
+                            had_error = true;
                         }
-                        causm_plugins::DiagnosticLevel::Warning => {
-                            "\x1b[1;33mplugin warning:\x1b[0m"
-                        }
-                        causm_plugins::DiagnosticLevel::Note => {
-                            "\x1b[1;36mplugin note:\x1b[0m"
-                        }
-                    };
-                    eprintln!("{} {}", level_str, diag.message);
-                    if matches!(diag.level, causm_plugins::DiagnosticLevel::Error) {
-                        had_error = true;
+                    }
+                    if had_error {
+                        continue;
                     }
                 }
-                if had_error {
+                Err(err) => {
+                    eprintln!("\x1b[1;31mplugin execution error:\x1b[0m {:#}", err);
+                    had_error = true;
                     continue;
                 }
             }
-            Err(err) => {
-                eprintln!("\x1b[1;31mplugin execution error:\x1b[0m {:#}", err);
-                had_error = true;
-                continue;
-            }
+        }
+
+        #[cfg(not(feature = "plugins"))]
+        if !config.plugins.is_empty() {
+            eprintln!(
+                "\x1b[1;33mwarning: plugin flags specified, but causm-cli was built without 'plugins' feature\x1b[0m"
+            );
         }
 
         if config.emit == Some(DumpFormat::Ast) {

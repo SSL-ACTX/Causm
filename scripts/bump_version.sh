@@ -1,10 +1,10 @@
 #!/bin/sh
-set -euo pipefail
+set -eu
 
 # scripts/bump_version.sh
 # Consistent SemVer version management for Causm workspace, crates, and documentation.
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT_VERSION="0.1.0-alpha.1"
 
 # Extract current workspace version from root Cargo.toml if available
@@ -34,8 +34,8 @@ usage() {
 }
 
 create_branch() {
-    local prefix="${1:-release}"
-    local branch_name="${prefix}/v${CURRENT_VERSION}"
+    prefix="${1:-release}"
+    branch_name="${prefix}/v${CURRENT_VERSION}"
     echo "==> Creating git branch: $branch_name"
     if git rev-parse --verify "$branch_name" >/dev/null 2>&1; then
         echo "Branch '$branch_name' already exists. Checking out..."
@@ -47,7 +47,7 @@ create_branch() {
 }
 
 update_files() {
-    local target_ver="$1"
+    target_ver="$1"
     echo "==> Updating Causm version: $CURRENT_VERSION -> $target_ver"
 
     # 1. Update root Cargo.toml workspace.package version
@@ -57,19 +57,13 @@ update_files() {
     fi
 
     # 2. Update crate-level Cargo.toml files (only the [package] version)
-    while IFS= read -r crate_toml; do
+    # Excludes plugins/ which has independent versioning starting at 0.0.1
+    for crate_toml in $(find "$ROOT_DIR/crates" -name "Cargo.toml"); do
         # Replace only the first occurrence of version = "..." under [package]
         sed -i -E "0,/^version = \"[^\"]+\"/ s/^version = \"[^\"]+\"/version = \"$target_ver\"/" "$crate_toml"
         echo "  [✓] Updated $crate_toml"
-    done < <(find "$ROOT_DIR/crates" -name "Cargo.toml")
+    done
 
-    # 3. Update plugin Cargo.toml files
-    if [ -d "$ROOT_DIR/plugins" ]; then
-        while IFS= read -r plugin_toml; do
-            sed -i -E "0,/^version = \"[^\"]+\"/ s/^version = \"[^\"]+\"/version = \"$target_ver\"/" "$plugin_toml"
-            echo "  [✓] Updated $plugin_toml"
-        done < <(find "$ROOT_DIR/plugins" -name "Cargo.toml")
-    fi
 
     # 4. Update documentation references in docs/causm_index.md
     if [ -f "$ROOT_DIR/docs/causm_index.md" ]; then

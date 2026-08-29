@@ -4,6 +4,10 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 license = "AGPL-3.0-only"
 
+[features]
+default = []
+plugins = ["dep:causm-plugins", "dep:causm-plugin-sdk"]
+
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-frontend = { path = "../causm-frontend" }
@@ -12,9 +16,7 @@ causm-runtime = { path = "../causm-runtime" }
 causm-ir = { path = "../causm-ir" }
 causm-stdlib = { path = "../causm-stdlib" }
 causm-devtools = { path = "../causm-devtools" }
-causm-plugins = { path = "../causm-plugins" }
+causm-plugins = { path = "../causm-plugins", optional = true }
+causm-plugin-sdk = { path = "../causm-plugin-sdk", optional = true }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
-
-[dev-dependencies]
-causm-plugin-sdk = { path = "../causm-plugin-sdk" }
