@@ -548,7 +548,7 @@ fn serialize_payload(payload: &Payload, out: &mut String) {
             }
             out.push('}');
         }
-        Payload::Topology(_) | Payload::Tuple(_) => {
+        Payload::Topology(_) | Payload::Tuple(_) | Payload::Range(_, _) => {
             out.push_str("null");
         }
     }

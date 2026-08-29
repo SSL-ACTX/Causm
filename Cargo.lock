@@ -195,7 +195,9 @@ name = "causm-runtime"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "causm-analysis",
  "causm-core",
+ "causm-frontend",
  "causm-ir",
  "dashmap",
  "libc",

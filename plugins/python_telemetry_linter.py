@@ -8,6 +8,7 @@ Performs semantic AST auditing:
 - Identifies unhandled decayed entropic patterns in match blocks
 - Recursively audits isolate statements and capability boundaries
 """
+
 import json
 import sys
 from typing import Any

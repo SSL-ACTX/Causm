@@ -183,7 +183,14 @@ impl Vm {
         branch_id: &str,
         reg: u32,
     ) -> Result<Payload, TemporalError> {
-        self.check_and_apply_decay(branch_id, reg)?;
+        let has_meta = {
+            let branch = self.get_branch(branch_id)?;
+            let idx = reg as usize;
+            idx < branch.arena.metadata.len() && branch.arena.metadata[idx].is_some()
+        };
+        if has_meta {
+            self.check_and_apply_decay(branch_id, reg)?;
+        }
         let branch = self.get_branch_mut(branch_id)?;
         branch
             .arena
@@ -196,7 +203,14 @@ impl Vm {
         branch_id: &str,
         reg: u32,
     ) -> Result<EntropicState, TemporalError> {
-        self.check_and_apply_decay(branch_id, reg)?;
+        let has_meta = {
+            let branch = self.get_branch(branch_id)?;
+            let idx = reg as usize;
+            idx < branch.arena.metadata.len() && branch.arena.metadata[idx].is_some()
+        };
+        if has_meta {
+            self.check_and_apply_decay(branch_id, reg)?;
+        }
         let branch = self.get_branch_mut(branch_id)?;
         Ok(branch
             .arena

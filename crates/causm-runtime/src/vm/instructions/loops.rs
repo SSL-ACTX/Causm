@@ -1,5 +1,5 @@
 use crate::vm::error::TemporalError;
-use crate::vm::state::{FlatLoopState, Timeline, Vm};
+use crate::vm::state::{FlatLoopSource, FlatLoopState, Timeline, Vm};
 use causm_core::value::{EntropicState, Payload};
 use causm_core::{MergeResolution, ParamMode};
 use causm_ir::{Instruction, Reg};
@@ -79,7 +79,7 @@ impl Vm {
                 header_pc,
                 end_pc: 0,
                 item_name: item_name.clone(),
-                elements,
+                source: FlatLoopSource::Array(elements),
                 index: 0,
                 pacing_ms,
                 max_ms,
@@ -88,29 +88,45 @@ impl Vm {
             });
         }
 
-        let (index, elements_len, max_allowed, start_local_clock) = {
+        let (has_next, item_value, max_allowed, start_local_clock) = {
             let branch = self.get_branch(branch_id)?;
             let loop_state = branch.flat_loops.last().unwrap();
-            (
-                loop_state.index,
-                loop_state.elements.len(),
-                loop_state.max_ms.unwrap_or(u64::MAX),
-                loop_state.start_local_clock,
-            )
+            let max_allowed = loop_state.max_ms.unwrap_or(u64::MAX);
+            let start_local_clock = loop_state.start_local_clock;
+            match &loop_state.source {
+                FlatLoopSource::Array(elements) => {
+                    if loop_state.index < elements.len() {
+                        (
+                            true,
+                            Some(elements[loop_state.index].clone()),
+                            max_allowed,
+                            start_local_clock,
+                        )
+                    } else {
+                        (false, None, max_allowed, start_local_clock)
+                    }
+                }
+                FlatLoopSource::Range { current, end } => {
+                    let cur = *current + loop_state.index as i64;
+                    if cur < *end {
+                        (
+                            true,
+                            Some(Payload::Integer(cur)),
+                            max_allowed,
+                            start_local_clock,
+                        )
+                    } else {
+                        (false, None, max_allowed, start_local_clock)
+                    }
+                }
+            }
         };
 
         let local_clock = self.get_branch(branch_id)?.local_clock;
 
-        if index < elements_len && (local_clock - start_local_clock) < max_allowed {
-            let item_value = {
-                let branch = self.get_branch(branch_id)?;
-                branch.flat_loops.last().unwrap().elements[index].clone()
-            };
-            self.insert_reg(
-                branch_id,
-                item_reg.0,
-                EntropicState::Valid(item_value),
-            )?;
+        if has_next && (local_clock - start_local_clock) < max_allowed {
+            let item_val = item_value.unwrap();
+            self.insert_reg(branch_id, item_reg.0, EntropicState::Valid(item_val))?;
 
             let local_clock = self.get_branch(branch_id)?.local_clock;
             let branch = self.get_branch_mut(branch_id)?;
@@ -123,18 +139,34 @@ impl Vm {
                 EntropicState::Valid(Payload::Bool(true)),
             )?;
         } else {
-            let branch = self.get_branch_mut(branch_id)?;
-            branch.loop_depth = branch.loop_depth.saturating_sub(1);
-            branch.flat_loops.pop();
-
-            if let Some(max) = max_ms {
+            let (_total_elapsed, pad_needed) = {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.loop_depth = branch.loop_depth.saturating_sub(1);
+                branch.flat_loops.pop();
                 let total_elapsed = branch.local_clock - start_local_clock;
-                if total_elapsed < max {
-                    let pad = max - total_elapsed;
-                    branch.local_clock += pad;
-                    branch.consume_budget(pad)?;
-                }
+                let pad = if let Some(max) = max_ms {
+                    if total_elapsed < max {
+                        max - total_elapsed
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                (total_elapsed, pad)
+            };
+
+            if pad_needed > 0 {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock += pad_needed;
+                branch.consume_budget(pad_needed)?;
             }
+
+            self.insert_reg(
+                branch_id,
+                dest_cond.0,
+                EntropicState::Valid(Payload::Bool(false)),
+            )?;
 
             self.insert_reg(
                 branch_id,
@@ -418,11 +450,15 @@ impl Vm {
 
         if !loop_exists {
             let source_payload = self.peek_reg(branch_id, source.0)?;
-            let elements = match source_payload {
-                Payload::Array(vec) => vec,
+            let loop_source = match source_payload {
+                Payload::Array(vec) => FlatLoopSource::Array(vec),
+                Payload::Range(start, end) => FlatLoopSource::Range {
+                    current: start,
+                    end,
+                },
                 _ => {
                     return Err(TemporalError::EvalError(
-                        "for-step source must be array".into(),
+                        "for-step source must be array or range".into(),
                     ))
                 }
             };
@@ -434,7 +470,7 @@ impl Vm {
                 header_pc,
                 end_pc: 0,
                 item_name: item_name.clone(),
-                elements,
+                source: loop_source,
                 index: 0,
                 pacing_ms: step_ms,
                 max_ms: None,
@@ -443,22 +479,31 @@ impl Vm {
             });
         }
 
-        let (index, elements_len) = {
+        let (has_next, item_value) = {
             let branch = self.get_branch(branch_id)?;
             let loop_state = branch.flat_loops.last().unwrap();
-            (loop_state.index, loop_state.elements.len())
+            match &loop_state.source {
+                FlatLoopSource::Array(elements) => {
+                    if loop_state.index < elements.len() {
+                        (true, Some(elements[loop_state.index].clone()))
+                    } else {
+                        (false, None)
+                    }
+                }
+                FlatLoopSource::Range { current, end } => {
+                    let cur = *current + loop_state.index as i64;
+                    if cur < *end {
+                        (true, Some(Payload::Integer(cur)))
+                    } else {
+                        (false, None)
+                    }
+                }
+            }
         };
 
-        if index < elements_len {
-            let item_value = {
-                let branch = self.get_branch(branch_id)?;
-                branch.flat_loops.last().unwrap().elements[index].clone()
-            };
-            self.insert_reg(
-                branch_id,
-                item_reg.0,
-                EntropicState::Valid(item_value),
-            )?;
+        if has_next {
+            let item_val = item_value.unwrap();
+            self.insert_reg(branch_id, item_reg.0, EntropicState::Valid(item_val))?;
 
             let local_clock = self.get_branch(branch_id)?.local_clock;
             let branch = self.get_branch_mut(branch_id)?;

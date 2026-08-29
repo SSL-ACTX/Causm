@@ -968,6 +968,12 @@ pub unsafe fn invoke_foreign_symbol(
                         .to_string(),
                 ));
             }
+            Payload::Range(_, _) => {
+                return Err(TemporalError::EvalError(
+                    "Passing range types directly to raw C FFI is unsupported"
+                        .to_string(),
+                ));
+            }
         }
     }
 

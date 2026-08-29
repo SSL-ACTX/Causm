@@ -129,11 +129,17 @@ pub struct CallFrame {
 }
 
 #[derive(Clone, Debug)]
+pub enum FlatLoopSource {
+    Array(Vec<Payload>),
+    Range { current: i64, end: i64 },
+}
+
+#[derive(Clone, Debug)]
 pub struct FlatLoopState {
     pub header_pc: usize,
     pub end_pc: usize,
     pub item_name: String,
-    pub elements: Vec<Payload>,
+    pub source: FlatLoopSource,
     pub index: usize,
     pub pacing_ms: Option<u64>,
     pub max_ms: Option<u64>,

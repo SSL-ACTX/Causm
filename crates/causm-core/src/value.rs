@@ -70,6 +70,7 @@ pub enum Payload {
     Topology(HashMap<String, EntropicState>),
     Array(Vec<Payload>),
     Tuple(Vec<Payload>),
+    Range(i64, i64),
     Null,
 }
 
@@ -140,6 +141,7 @@ impl std::fmt::Display for Payload {
                     elems.iter().map(|e| format!("{}", e)).collect();
                 write!(f, "({})", strings.join(", "))
             }
+            Payload::Range(start, end) => write!(f, "{}..{}", start, end),
             Payload::Null => write!(f, "null"),
         }
     }
@@ -218,6 +220,7 @@ impl Payload {
                 let total: u64 = elems.iter().map(|p| p.weight()).sum();
                 total + 24 // Vec overhead
             }
+            Payload::Range(_, _) => 16,
             Payload::Null => 8,
         }
     }
@@ -338,8 +341,8 @@ impl Arena {
             used: 0,
             base_watermark_used: 0,
             base_watermark_regs: 0,
-            registers: Vec::new(),
-            metadata: Vec::new(),
+            registers: vec![EntropicState::Consumed; 256],
+            metadata: vec![None; 256],
             is_persistent_partition: false,
         }
     }
