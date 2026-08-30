@@ -216,4 +216,41 @@ strict = true
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_plugins_wasm_driver_fuel_exhaustion() {
+        // Module with an infinite loop inside causm_plugin_transform
+        let wat_src = r#"
+        (module
+            (memory (export "memory") 1)
+            (func (export "causm_plugin_alloc") (param $len i32) (result i32)
+                (i32.const 0)
+            )
+            (func (export "causm_plugin_dealloc") (param $ptr i32) (param $len i32)
+            )
+            (func (export "causm_plugin_transform") (param $in_ptr i32) (param $in_len i32) (result i64)
+                (loop $inf (br $inf))
+                (i64.const 0)
+            )
+        )
+        "#;
+        let wasm_bytes = wat::parse_str(wat_src).expect("wat parse should succeed");
+        // Limit driver to a low fuel budget
+        let driver = WasmPluginDriver::new(wasm_bytes).with_fuel_budget(500);
+
+        let sample_program = Program { timelines: vec![] };
+        let req = PluginRequest::new("infinite_loop.csm", sample_program);
+        let res = driver.transform(&req);
+
+        // Transformation MUST fail due to fuel exhaustion (cannot freeze host)
+        assert!(res.is_err());
+        let err_str = format!("{:#}", res.unwrap_err());
+        assert!(
+            err_str.contains("fuel")
+                || err_str.contains("trap")
+                || err_str.contains("consumed"),
+            "Error was: {}",
+            err_str
+        );
+    }
 }

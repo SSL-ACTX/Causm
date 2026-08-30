@@ -387,7 +387,7 @@ impl Arena {
         }
     }
 
-    fn ensure_register(&mut self, reg: u32) {
+    pub fn ensure_register(&mut self, reg: u32) {
         let idx = reg as usize;
         if idx >= self.registers.len() {
             self.registers.resize(idx + 1, EntropicState::Consumed);
@@ -631,6 +631,29 @@ impl Arena {
             _ => {
                 self.registers[idx] = state;
                 Err(MemoryError::NotAStruct)
+            }
+        }
+    }
+
+    pub fn get_payload(&self, reg: u32) -> Result<Payload, MemoryError> {
+        let idx = reg as usize;
+        if idx >= self.registers.len() {
+            return Ok(Payload::Null);
+        }
+        match &self.registers[idx] {
+            EntropicState::Valid(payload) => Ok(payload.clone()),
+            EntropicState::Decayed(fields) => Ok(Payload::Struct(fields.clone())),
+            EntropicState::Leased { original, .. } => match &**original {
+                EntropicState::Valid(p) => Ok(p.clone()),
+                EntropicState::Decayed(f) => Ok(Payload::Struct(f.clone())),
+                _ => Ok(Payload::Null),
+            },
+            _ => {
+                if let Some(p) = self.peek(reg) {
+                    Ok(p)
+                } else {
+                    Ok(Payload::Null)
+                }
             }
         }
     }

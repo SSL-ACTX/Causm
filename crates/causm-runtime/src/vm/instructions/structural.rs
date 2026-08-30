@@ -13,10 +13,27 @@ impl Vm {
         fields: HashMap<String, Reg>,
         type_name: Option<String>,
     ) -> Result<(), TemporalError> {
-        let mut evaluated_fields = HashMap::new();
-        for (name, reg) in fields {
-            let val = self.peek_reg(branch_id, reg.0)?;
-            evaluated_fields.insert(name.clone(), EntropicState::Valid(val));
+        let mut field_map = HashMap::new();
+        for (field_name, src_reg) in fields {
+            let payload = {
+                let branch = self.get_branch(branch_id)?;
+                let idx = src_reg.0 as usize;
+                if idx < branch.arena.registers.len() {
+                    match &branch.arena.registers[idx] {
+                        EntropicState::Valid(p) => p.clone(),
+                        EntropicState::Decayed(f) => Payload::Struct(f.clone()),
+                        EntropicState::Leased { original, .. } => match original.as_ref() {
+                            EntropicState::Valid(p) => p.clone(),
+                            EntropicState::Decayed(f) => Payload::Struct(f.clone()),
+                            _ => Payload::Null,
+                        },
+                        _ => branch.arena.peek(src_reg.0).unwrap_or(Payload::Null),
+                    }
+                } else {
+                    Payload::Null
+                }
+            };
+            field_map.insert(field_name, EntropicState::Valid(payload));
         }
 
         let decay_after_ms = type_name
@@ -34,7 +51,7 @@ impl Vm {
 
         branch.arena.insert_with_metadata(
             dest.0,
-            EntropicState::Valid(Payload::Struct(evaluated_fields)),
+            EntropicState::Valid(Payload::Struct(field_map)),
             meta,
         )?;
         Ok(())
@@ -500,6 +517,11 @@ impl Vm {
         }
     }
 
+    // DEV NOTE (Entropic & Structural Access Invariant):
+    // `FieldAccess` reads payload fields non-destructively for standard routine/struct access
+    // patterns (preserving remaining fields in the parent struct for sequential lookups), while
+    // recording a `CausalEvent::Decay` in `causal_history` for acausal tracking and triggering
+    // `propagate_field_decay` across entangled timelines if the register is in an active entanglement set.
     pub(crate) fn FieldAccess(
         &mut self,
         branch_id: &str,
@@ -507,137 +529,74 @@ impl Vm {
         target: Reg,
         field: String,
     ) -> Result<(), TemporalError> {
-        self.check_and_apply_decay(branch_id, target.0)?;
-        let (field_state, decay_parent) = {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = target.0 as usize;
-            if idx >= branch.arena.registers.len() {
+        let (field_val, is_entangled) = {
+            let branch = self.get_branch(branch_id)?;
+            let parent_payload = branch.arena.get_payload(target.0).map_err(TemporalError::MemoryFault)?;
+            if let Payload::Struct(fields) | Payload::Topology(fields) = parent_payload {
+                if let Some(field_state) = fields.get(&field) {
+                    match field_state {
+                        EntropicState::Valid(val) => {
+                            let entangled = self.entanglements.iter().any(|g| g.contains(&(branch_id.to_string(), target.0)));
+                            (val.clone(), entangled)
+                        }
+                        EntropicState::Consumed | EntropicState::Decayed(_) => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::AlreadyConsumed,
+                            ));
+                        }
+                        _ => {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::KeyNotFound(field),
+                            ));
+                        }
+                    }
+                } else if let Some(stripped) = field.strip_prefix('_') {
+                    if let Ok(idx_n) = stripped.parse::<usize>() {
+                        let mut non_tag_fields: Vec<_> = fields
+                            .iter()
+                            .filter(|(k, _)| *k != "tag")
+                            .collect();
+                        non_tag_fields.sort_by_key(|(k, _)| *k);
+                        if let Some((_, EntropicState::Valid(p))) = non_tag_fields.get(idx_n) {
+                            (p.clone(), false)
+                        } else {
+                            return Err(TemporalError::MemoryFault(
+                                causm_core::value::MemoryError::KeyNotFound(field),
+                            ));
+                        }
+                    } else {
+                        return Err(TemporalError::MemoryFault(
+                            causm_core::value::MemoryError::KeyNotFound(field),
+                        ));
+                    }
+                } else {
+                    return Err(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::KeyNotFound(field),
+                    ));
+                }
+            } else {
                 return Err(TemporalError::MemoryFault(
-                    causm_core::value::MemoryError::AlreadyConsumed,
+                    causm_core::value::MemoryError::NotAStruct,
                 ));
             }
-            match &branch.arena.registers[idx] {
-                EntropicState::Valid(Payload::Struct(fields))
-                | EntropicState::Valid(Payload::Topology(fields)) => {
-                    let val = match fields.get(&field) {
-                        Some(EntropicState::Valid(p)) => p.clone(),
-                        Some(EntropicState::Decayed(_)) => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::StructurallyDecayed,
-                            ))
-                        }
-                        Some(EntropicState::Consumed) => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::AlreadyConsumed,
-                            ))
-                        }
-                        _ => {
-                            if let Some(stripped) = field.strip_prefix('_') {
-                                if let Ok(idx_n) = stripped.parse::<usize>() {
-                                    let mut non_tag_fields: Vec<_> = fields
-                                        .iter()
-                                        .filter(|(k, _)| *k != "tag")
-                                        .collect();
-                                    non_tag_fields.sort_by_key(|(k, _)| *k);
-                                    if let Some((_, EntropicState::Valid(p))) =
-                                        non_tag_fields.get(idx_n)
-                                    {
-                                        p.clone()
-                                    } else {
-                                        return Err(TemporalError::MemoryFault(
-                                            causm_core::value::MemoryError::KeyNotFound(
-                                                field.clone(),
-                                            ),
-                                        ));
-                                    }
-                                } else {
-                                    return Err(TemporalError::MemoryFault(
-                                        causm_core::value::MemoryError::KeyNotFound(
-                                            field.clone(),
-                                        ),
-                                    ));
-                                }
-                            } else {
-                                return Err(TemporalError::MemoryFault(
-                                    causm_core::value::MemoryError::KeyNotFound(
-                                        field.clone(),
-                                    ),
-                                ));
-                            }
-                        }
-                    };
-                    (EntropicState::Valid(val), true)
-                }
-                EntropicState::Decayed(fields) => {
-                    let val = match fields.get(&field) {
-                        Some(EntropicState::Valid(p)) => p.clone(),
-                        Some(EntropicState::Decayed(_)) => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::StructurallyDecayed,
-                            ))
-                        }
-                        Some(EntropicState::Consumed) => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::AlreadyConsumed,
-                            ))
-                        }
-                        _ => {
-                            return Err(TemporalError::MemoryFault(
-                                causm_core::value::MemoryError::KeyNotFound(
-                                    field.clone(),
-                                ),
-                            ))
-                        }
-                    };
-                    (EntropicState::Valid(val), false)
-                }
-                EntropicState::Consumed => {
-                    return Err(TemporalError::MemoryFault(
-                        causm_core::value::MemoryError::AlreadyConsumed,
-                    ))
-                }
-                EntropicState::Leased { .. } => {
-                    return Err(TemporalError::MemoryFault(
-                        causm_core::value::MemoryError::Leased,
-                    ))
-                }
-                _ => {
-                    return Err(TemporalError::MemoryFault(
-                        causm_core::value::MemoryError::NotAStruct,
-                    ))
-                }
-            }
         };
-
-        if decay_parent {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = target.0 as usize;
-            if let EntropicState::Valid(Payload::Struct(fields)) =
-                &branch.arena.registers[idx]
-            {
-                branch.arena.registers[idx] = EntropicState::Decayed(fields.clone());
-            } else if let EntropicState::Valid(Payload::Topology(fields)) =
-                &branch.arena.registers[idx]
-            {
-                branch.arena.registers[idx] = EntropicState::Decayed(fields.clone());
-            }
-        }
 
         let time = {
-            let branch = self.get_branch_mut(branch_id)?;
+            let branch = self.get_branch(branch_id)?;
             branch.birth_global_time + branch.local_clock
         };
+        self.causal_history.push(crate::vm::state::CausalEvent::Decay {
+            branch_id: branch_id.to_string(),
+            reg: target.0,
+            field: field.clone(),
+            time,
+        });
 
-        self.causal_history
-            .push(crate::vm::state::CausalEvent::Decay {
-                branch_id: branch_id.to_string(),
-                reg: target.0,
-                field: field.clone(),
-                time,
-            });
+        if is_entangled {
+            self.propagate_field_decay(branch_id, target.0, &field)?;
+        }
 
-        self.insert_reg(branch_id, dest.0, field_state)?;
-        self.propagate_field_decay(branch_id, target.0, &field)
+        self.insert_reg(branch_id, dest.0, EntropicState::Valid(field_val))
     }
 
     pub(crate) fn FieldUpdate(
@@ -654,6 +613,11 @@ impl Vm {
         Ok(())
     }
 
+    // DEV NOTE (Dynamic Indexing & Entanglement Invariant):
+    // `IndexAccess` handles dynamic key lookup on Structs, Topologies, and Arrays.
+    // For associative structures (Struct/Topology), if the accessed element is `Valid`, we emit
+    // a `CausalEvent::Decay` and propagate field consumption across entangled partner branches,
+    // ensuring cross-timeline state checks (e.g. `match entropy(network["node"])`) detect remote access.
     pub(crate) fn IndexAccess(
         &mut self,
         branch_id: &str,
@@ -672,24 +636,42 @@ impl Vm {
                 ))
             }
         };
-        let state = match target_val {
-            Payload::Struct(fields) | Payload::Topology(fields) => fields
-                .get(&idx_str)
-                .cloned()
-                .unwrap_or(EntropicState::Consumed),
+        let (state, is_struct_or_topology) = match target_val {
+            Payload::Struct(fields) | Payload::Topology(fields) => {
+                let s = fields.get(&idx_str).cloned().unwrap_or(EntropicState::Consumed);
+                (s, true)
+            }
             Payload::Array(elements) => {
                 if let Payload::Integer(i) = idx_val {
                     if i >= 0 && (i as usize) < elements.len() {
-                        EntropicState::Valid(elements[i as usize].clone())
+                        (EntropicState::Valid(elements[i as usize].clone()), false)
                     } else {
-                        EntropicState::Consumed
+                        (EntropicState::Consumed, false)
                     }
                 } else {
-                    EntropicState::Consumed
+                    (EntropicState::Consumed, false)
                 }
             }
-            _ => EntropicState::Consumed,
+            _ => (EntropicState::Consumed, false),
         };
+
+        if is_struct_or_topology && matches!(state, EntropicState::Valid(_)) {
+            let is_entangled = self.entanglements.iter().any(|g| g.contains(&(branch_id.to_string(), target.0)));
+            let time = {
+                let branch = self.get_branch(branch_id)?;
+                branch.birth_global_time + branch.local_clock
+            };
+            self.causal_history.push(crate::vm::state::CausalEvent::Decay {
+                branch_id: branch_id.to_string(),
+                reg: target.0,
+                field: idx_str.clone(),
+                time,
+            });
+            if is_entangled {
+                self.propagate_field_decay(branch_id, target.0, &idx_str)?;
+            }
+        }
+
         self.insert_reg(branch_id, dest.0, state)
     }
 

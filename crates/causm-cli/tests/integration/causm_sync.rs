@@ -297,3 +297,55 @@ fn test_sync_channel_bounded_fifo() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_sync_channel_cross_branch_merge_and_field_access() -> anyhow::Result<()> {
+    let source = r#"
+    import "std/sync" as Sync
+
+    @0ms: {
+        let ch = Sync.SyncChannel.new(4)
+        split main into [producer, consumer]
+    }
+
+    @10ms: {
+        @producer: {
+            let send_res = Sync.SyncChannel.send(ch, 999)
+            let send_ok = send_res.ok
+        }
+        @consumer: {
+            let initial_empty = true
+        }
+    }
+
+    @20ms: {
+        merge [producer, consumer] into main
+        let recv_res = Sync.SyncChannel.recv(send_res.chan)
+        let recv_val = recv_res.val
+        let recv_ok = recv_res.ok
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let val_reg = ir.symbols.get("recv_val").expect("recv_val not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(val_reg),
+        Some(Payload::Integer(999))
+    );
+
+    let ok_reg = ir.symbols.get("recv_ok").expect("recv_ok not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(ok_reg),
+        Some(Payload::Bool(true))
+    );
+
+    Ok(())
+}

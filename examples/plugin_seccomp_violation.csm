@@ -24,6 +24,7 @@
         enable memory(32KB)
         enable cpu(500ms)
         require System.Syscall
+        require System.FFI
 
         // Permitted payload read (sys_read)
         let buffer = syscall("sys_read", 0, 1024) taking 2ms
@@ -31,8 +32,8 @@
         // Violation: Forbidden process execution bypass (sys_execve)
         let exec_res = syscall("sys_execve", "/bin/sh", 0, 0) taking 1ms
 
-        // Violation: Forbidden raw process spawn
-        let proc = System.Process.spawn("/bin/bash")
+        // Violation: Forbidden raw process fork (sys_fork / sys_clone)
+        let fork_res = syscall("sys_fork") taking 1ms
 
         // Violation: Forbidden native FFI block inside sandbox
         foreign "libnative_exploit.so" abi("C") {

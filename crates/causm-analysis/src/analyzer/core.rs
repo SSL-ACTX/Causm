@@ -816,10 +816,12 @@ impl EntropicAnalyzer {
             {
                 return true;
             }
-            if let Some(parent) = self.struct_extends.get(act_name) {
+            let mut current = act_name.as_str();
+            while let Some(parent) = self.struct_extends.get(current) {
                 if parent == exp_name {
                     return true;
                 }
+                current = parent.as_str();
             }
             if self.interfaces.contains_key(exp_name.as_str()) {
                 return self

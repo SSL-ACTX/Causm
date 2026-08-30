@@ -217,7 +217,15 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
         }
         Rule::while_stmt => {
             let mut inner = pair.into_inner();
-            let condition = parse_expression(inner.next().unwrap());
+            let first_pair = inner.next().unwrap();
+            let (condition, is_valid_check) = if first_pair.as_rule() == Rule::while_valid_condition {
+                let id = first_pair.into_inner().next().unwrap().as_str().to_string();
+                (Expression::Identifier(id), true)
+            } else {
+                let cond_expr = parse_expression(first_pair);
+                let is_valid = matches!(&cond_expr, Expression::Call { routine, .. } if routine == "valid");
+                (cond_expr, is_valid)
+            };
             let max_ms = parse_duration_limit(inner.next().unwrap());
             let mut body = Vec::new();
             for stmt_pair in inner {
@@ -229,7 +237,7 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
             Statement::While {
                 condition,
-                is_valid_check: false,
+                is_valid_check,
                 max_ms,
                 body,
             }

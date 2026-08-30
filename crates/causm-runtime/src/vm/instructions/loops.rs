@@ -304,7 +304,7 @@ impl Vm {
 
             let child_branch = self
                 .active_branches
-                .remove(&child_name)
+                .shift_remove(&child_name)
                 .ok_or_else(|| TemporalError::BranchNotFound(child_name.clone()))?;
 
             let yielded = child_branch.arena.peek(0);

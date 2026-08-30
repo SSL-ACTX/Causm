@@ -202,9 +202,32 @@ impl EntropicAnalyzer {
             return Err(self.annotate(SemanticErrorKind::InvalidLoopBudget));
         }
 
-        crate::expression::analyze_expression_nonconsuming(self, condition)?;
-
-        if !*is_valid_check {
+        if *is_valid_check {
+            match condition {
+                Expression::Identifier(var_name) => {
+                    let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+                    if branch.consumed.contains(var_name) {
+                        return Err(self.annotate(SemanticErrorKind::UseAfterConsume(var_name.clone())));
+                    }
+                }
+                Expression::Call { args, .. } if !args.is_empty() => {
+                    for arg in args {
+                        if let Expression::Identifier(var_name) = arg {
+                            let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+                            if branch.consumed.contains(var_name) {
+                                return Err(self.annotate(SemanticErrorKind::UseAfterConsume(var_name.clone())));
+                            }
+                        } else {
+                            crate::expression::analyze_expression_nonconsuming(self, arg)?;
+                        }
+                    }
+                }
+                _ => {
+                    crate::expression::analyze_expression_nonconsuming(self, condition)?;
+                }
+            }
+        } else {
+            crate::expression::analyze_expression_nonconsuming(self, condition)?;
             let cond_type =
                 crate::expression::infer_expression_type(self, condition)?;
             if cond_type != causm_core::types::Type::Bool {

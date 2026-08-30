@@ -293,10 +293,196 @@ pub trait AstVisitor {
     }
 }
 
+/// Mutable AST Transformer trait (AstFolder) for rewriting AST nodes safely.
+pub trait AstFolder {
+    fn fold_program(
+        &mut self,
+        mut program: causm_core::Program,
+        ctx: &PluginContext,
+    ) -> Result<causm_core::Program, PluginError> {
+        let mut folded_timelines = Vec::with_capacity(program.timelines.len());
+        for tb in program.timelines {
+            folded_timelines.push(self.fold_timeline(tb, ctx)?);
+        }
+        program.timelines = folded_timelines;
+        Ok(program)
+    }
+
+    fn fold_timeline(
+        &mut self,
+        mut tb: causm_core::TimelineBlock,
+        ctx: &PluginContext,
+    ) -> Result<causm_core::TimelineBlock, PluginError> {
+        let mut folded_statements = Vec::with_capacity(tb.statements.len());
+        for stmt in tb.statements {
+            folded_statements.push(self.fold_spanned_statement(stmt, ctx)?);
+        }
+        tb.statements = folded_statements;
+        Ok(tb)
+    }
+
+    fn fold_spanned_statement(
+        &mut self,
+        mut stmt: causm_core::SpannedStatement,
+        ctx: &PluginContext,
+    ) -> Result<causm_core::SpannedStatement, PluginError> {
+        stmt.stmt =
+            self.fold_statement(stmt.stmt, &stmt.span, &stmt.attributes, ctx)?;
+        Ok(stmt)
+    }
+
+    fn fold_statement(
+        &mut self,
+        stmt: causm_core::Statement,
+        span: &causm_core::Span,
+        _attrs: &[causm_core::Attribute],
+        ctx: &PluginContext,
+    ) -> Result<causm_core::Statement, PluginError> {
+        match stmt {
+            causm_core::Statement::Assignment {
+                target,
+                mutable,
+                var_type,
+                lifetime,
+                expr,
+            } => {
+                let folded_expr = self.fold_expression(expr, span, ctx)?;
+                Ok(causm_core::Statement::Assignment {
+                    target,
+                    mutable,
+                    var_type,
+                    lifetime,
+                    expr: folded_expr,
+                })
+            }
+            causm_core::Statement::Isolate(mut isolate) => {
+                let mut folded_body = Vec::with_capacity(isolate.body.len());
+                for inner in isolate.body {
+                    folded_body.push(self.fold_spanned_statement(inner, ctx)?);
+                }
+                isolate.body = folded_body;
+                Ok(causm_core::Statement::Isolate(isolate))
+            }
+            causm_core::Statement::RoutineDef {
+                name,
+                params,
+                return_type,
+                taking_ms,
+                state_constraint,
+                required_capabilities,
+                body,
+            } => {
+                let mut folded_body = Vec::with_capacity(body.len());
+                for inner in body {
+                    folded_body.push(self.fold_spanned_statement(inner, ctx)?);
+                }
+                Ok(causm_core::Statement::RoutineDef {
+                    name,
+                    params,
+                    return_type,
+                    taking_ms,
+                    state_constraint,
+                    required_capabilities,
+                    body: folded_body,
+                })
+            }
+            causm_core::Statement::Expression(expr) => {
+                let folded_expr = self.fold_expression(expr, span, ctx)?;
+                Ok(causm_core::Statement::Expression(folded_expr))
+            }
+            causm_core::Statement::Return(opt_expr) => {
+                let folded = match opt_expr {
+                    Some(e) => Some(self.fold_expression(e, span, ctx)?),
+                    None => None,
+                };
+                Ok(causm_core::Statement::Return(folded))
+            }
+            other => Ok(other),
+        }
+    }
+
+    fn fold_expression(
+        &mut self,
+        expr: causm_core::Expression,
+        _span: &causm_core::Span,
+        _ctx: &PluginContext,
+    ) -> Result<causm_core::Expression, PluginError> {
+        Ok(expr)
+    }
+}
+
 pub mod prelude {
     pub use super::core::*;
     pub use super::{
-        causm_plugin, AstVisitor, DiagnosticBuilder, DiagnosticLevel, PluginContext,
-        PluginDiagnostic, PluginError, PluginRequest, PluginResponse, PluginStatus,
+        causm_plugin, AstFolder, AstVisitor, DiagnosticBuilder, DiagnosticLevel,
+        PluginContext, PluginDiagnostic, PluginError, PluginRequest, PluginResponse,
+        PluginStatus,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use causm_core::*;
+
+    struct ConstantAdderFolder {
+        add_val: i64,
+    }
+
+    impl AstFolder for ConstantAdderFolder {
+        fn fold_expression(
+            &mut self,
+            expr: Expression,
+            _span: &Span,
+            _ctx: &PluginContext,
+        ) -> Result<Expression, PluginError> {
+            match expr {
+                Expression::Integer(n) => Ok(Expression::Integer(n + self.add_val)),
+                other => Ok(other),
+            }
+        }
+    }
+
+    #[test]
+    fn test_ast_folder_expression_transformation() {
+        let program = Program {
+            timelines: vec![TimelineBlock {
+                time: TimeCoordinate::Global(0),
+                no_z3: false,
+                entropy_mode: None,
+                statements: vec![SpannedStatement::new(
+                    Statement::Assignment {
+                        target: "count".to_string(),
+                        mutable: true,
+                        var_type: None,
+                        lifetime: None,
+                        expr: Expression::Integer(10),
+                    },
+                    Span { start: 0, end: 10 },
+                )],
+            }],
+        };
+
+        let ctx = PluginContext {
+            protocol_version: "0.1.0".to_string(),
+            compiler_version: "0.1.0".to_string(),
+            target_arch: "x86_64".to_string(),
+            target_os: "linux".to_string(),
+            file_path: "main.csm".to_string(),
+            options: std::collections::HashMap::new(),
+        };
+
+        let mut folder = ConstantAdderFolder { add_val: 32 };
+        let folded_program = folder
+            .fold_program(program, &ctx)
+            .expect("folding should succeed");
+
+        if let Statement::Assignment { expr, .. } =
+            &folded_program.timelines[0].statements[0].stmt
+        {
+            assert_eq!(*expr, Expression::Integer(42));
+        } else {
+            panic!("Expected assignment statement");
+        }
+    }
 }

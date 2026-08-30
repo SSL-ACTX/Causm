@@ -778,21 +778,10 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 });
             }
 
-            match expr {
-                Expression::Identifier(_) => {
+            if let Expression::Identifier(_) = expr {
+                if src != dest {
                     ctx.push(Instruction::Consume { src });
                 }
-                Expression::IndexAccess { target, index } => {
-                    if let Expression::Identifier(name) = &**target {
-                        let target_reg = ctx.get_reg(name);
-                        let index_reg = lower_expression(ctx, index);
-                        ctx.push(Instruction::ConsumeFieldDynamic {
-                            target: target_reg,
-                            index: index_reg,
-                        });
-                    }
-                }
-                _ => {}
             }
         }
         Statement::Print(args) => {
@@ -1095,9 +1084,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::While {
                 max_ms: while_limit,
             });
-            let start_pc = ctx.instructions.len();
 
             if *is_valid_check {
+                let start_pc = ctx.instructions.len();
                 let cond_reg = lower_expression(ctx, condition);
                 let match_entropy_idx = ctx.instructions.len();
                 ctx.push(Instruction::MatchEntropy {
@@ -1133,6 +1122,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *consumed_target = Some(end_while_idx);
                 }
             } else {
+                let start_pc = ctx.instructions.len();
                 let cond_reg = lower_expression(ctx, condition);
                 let jump_to_end_idx = ctx.instructions.len();
                 ctx.push(Instruction::JumpIfNot {

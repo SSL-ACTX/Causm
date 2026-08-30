@@ -21,7 +21,8 @@ impl Vm {
             symbols: HashMap::new(),
             global_clock: 0,
             root_timeline: Timeline::new("main".to_string(), 1024 * 1024, 0),
-            active_branches: HashMap::new(),
+            active_branches: indexmap::IndexMap::new(),
+
             capability_handlers: HashMap::new(),
             channels: HashMap::new(),
             pending_channels: HashMap::new(),
@@ -40,6 +41,7 @@ impl Vm {
             next_payload_id: 0,
             next_call_id: 0,
             trace_entropy: false,
+            trace_causal: false,
             _is_decaying: false,
             current_span: None,
             call_depth: 0,
@@ -495,7 +497,7 @@ impl Vm {
         &mut self,
         branch_id: &str,
     ) -> Result<(), TemporalError> {
-        if self.debug_mode {
+        if self.debug_mode || self.trace_causal {
             let branch = self.get_branch(branch_id)?;
             let snapshot = branch.clone();
             self.causal_trace.push((branch_id.to_string(), snapshot));

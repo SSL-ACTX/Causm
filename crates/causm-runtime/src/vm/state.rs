@@ -1,6 +1,8 @@
 use causm_core::value::{Arena, EntropicState, Payload, ValueMetadata};
 use causm_core::{Manifest, ParamMode, SpeculationCommitMode};
 use std::collections::{HashMap, VecDeque};
+use indexmap::IndexMap;
+
 
 pub type CapHandler =
     Box<dyn Fn(&HashMap<String, String>) -> Result<Payload, String>>;
@@ -82,7 +84,8 @@ pub struct Vm {
     pub speculative_commit_mode: SpeculationCommitMode,
     pub global_clock: u64,
     pub root_timeline: Timeline,
-    pub active_branches: HashMap<String, Timeline>,
+    pub active_branches: IndexMap<String, Timeline>,
+
     pub capability_handlers: HashMap<String, CapHandler>,
     pub channels: HashMap<String, VecDeque<Message>>,
     pub pending_channels: HashMap<String, VecDeque<Message>>,
@@ -100,6 +103,7 @@ pub struct Vm {
     pub next_payload_id: u64,
     pub next_call_id: u64,
     pub trace_entropy: bool,
+    pub trace_causal: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,
     pub call_depth: u32,

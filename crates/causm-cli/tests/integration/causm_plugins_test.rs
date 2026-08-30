@@ -159,3 +159,29 @@ fn test_plugin_seccomp_guard_showcase_rejected() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_plugin_post_analysis_lifecycle_hook() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 42
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let artifacts = AnalysisArtifacts {
+        verification_passed: true,
+        timeline_count: 1,
+        total_estimated_cost: 0,
+    };
+
+    let req = PluginRequest::new("telemetry_pass.csm", program)
+        .with_phase(PluginPhase::PostAnalysis)
+        .with_analysis(artifacts);
+
+    assert_eq!(req.phase, PluginPhase::PostAnalysis);
+    assert!(req.analysis.is_some());
+    assert_eq!(req.analysis.unwrap().timeline_count, 1);
+
+    Ok(())
+}

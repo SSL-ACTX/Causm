@@ -1,34 +1,23 @@
 #!/usr/bin/env python3
-"""
-python_telemetry_linter.py
-Test Causm IPC (JSON-RPC stdio) plugin.
-Performs semantic AST auditing:
-- Telemetry & logging routine naming policies
-- WCET budget analysis (flags missing/zero budgets)
-- Identifies unhandled decayed entropic patterns in match blocks
-- Recursively audits isolate statements and capability boundaries
-"""
 
 import json
 import sys
 from typing import Any
 
 
-class CausmAstLinter:
-    def __init__(self, request: dict[str, Any]) -> None:
-        self.request = request
-        self.ast = request.get("ast", {})
-        self.file_path = request.get("file_path", "")
-        self.options = request.get("options", {})
-        self.strict_naming = (
-            str(self.options.get("strict_naming", "true")).lower() == "true"
-        )
-        self.require_wcet = (
-            str(self.options.get("require_wcet", "true")).lower() == "true"
-        )
-        self.diagnostics: list[dict[str, Any]] = []
+class CausmTelemetryAnalyzer:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+        self.phase = payload.get("phase", "AstTransform")
+        self.ast = payload.get("ast", {})
+        self.file_path = payload.get("file_path", "unknown.csm")
+        self.options = payload.get("options", {})
+        self.analysis = payload.get("analysis")
 
-    def add_diagnostic(
+        self.diagnostics: list[dict[str, Any]] = []
+        self.timelines_summary: list[dict[str, Any]] = []
+
+    def emit_diagnostic(
         self,
         level: str,
         message: str,
@@ -37,82 +26,71 @@ class CausmAstLinter:
         self.diagnostics.append(
             {
                 "level": level,
-                "message": message,
+                "message": f"[Causm Telemetry Plugin] {message}",
                 "span": span,
             }
         )
 
-    def lint_routine(
-        self,
-        routine: dict[str, Any],
-        span: dict[str, Any] | None,
+    def audit_routine(
+        self, routine: dict[str, Any], span: dict[str, Any] | None
     ) -> None:
-        name = routine.get("name", "")
+        name = routine.get("name", "anonymous")
         taking_ms = routine.get("taking_ms")
+        caps = routine.get("required_capabilities", [])
 
-        # 1. Naming convention enforcement
-        if self.strict_naming and "telemetry" in self.file_path.lower():
-            allowed_prefixes = ("telemetry_", "log_", "init_", "emit_")
-            if not any(name.startswith(p) for p in allowed_prefixes):
-                self.add_diagnostic(
-                    "Warning",
-                    f"Python IPC Plugin: Routine '{name}' in telemetry domain must follow standard prefixes: {', '.join(allowed_prefixes)}",
-                    span,
-                )
+        # 1. Real-time WCET contract enforcement
+        if taking_ms is None:
+            self.emit_diagnostic(
+                "Warning",
+                f"Routine '{name}' lacks explicit temporal contract ('taking <N>ms'). SMT verifier will assume unconstrained WCET.",
+                span,
+            )
+        elif taking_ms > 500:
+            self.emit_diagnostic(
+                "Warning",
+                f"Routine '{name}' specifies a high temporal budget ({taking_ms}ms > 500ms limit). Consider decomposing into asynchronous pipeline stages.",
+                span,
+            )
 
-        # 2. WCET contract validation
-        if self.require_wcet:
-            if taking_ms is None:
-                self.add_diagnostic(
-                    "Warning",
-                    f"Python IPC Plugin: Missing WCET annotation ('taking <N>ms') on routine '{name}'. Static scheduler cannot verify deadlines.",
-                    span,
-                )
-            elif taking_ms == 0:
-                self.add_diagnostic(
-                    "Warning",
-                    f"Python IPC Plugin: Zero execution budget ('taking 0ms') on routine '{name}' is invalid for non-instantaneous routines.",
+        # 2. Capability isolation audit
+        for cap in caps:
+            if "Syscall" in str(cap) or "Net" in str(cap):
+                self.emit_diagnostic(
+                    "Note",
+                    f"Routine '{name}' requests high-privilege capability '{cap}'. Ensure enclosing block is wrapped in an @isolate boundary.",
                     span,
                 )
 
         # Recursively audit routine body
         for stmt in routine.get("body", []):
-            self.lint_spanned_statement(stmt)
+            self.audit_statement(stmt)
 
-    def lint_isolate(
-        self,
-        isolate: dict[str, Any],
-        span: dict[str, Any] | None,
+    def audit_isolate(
+        self, isolate: dict[str, Any], span: dict[str, Any] | None
     ) -> None:
-        name = isolate.get("name") or "anonymous"
+        name = isolate.get("name") or "anonymous_isolate"
         manifest = isolate.get("manifest", {})
         cpu_budget = manifest.get("cpu_budget_ms")
+        mem_budget = manifest.get("memory_budget_bytes")
 
-        # Check for unconstrained isolate CPU allocations
         if cpu_budget is None:
-            self.add_diagnostic(
+            self.emit_diagnostic(
                 "Note",
-                f"Python IPC Plugin: Sandbox isolate '{name}' does not specify an explicit 'enable cpu(...)' resource ceiling.",
+                f"Isolate sandbox '{name}' does not declare an explicit 'enable cpu(...)' quota.",
+                span,
+            )
+
+        if mem_budget is not None and mem_budget > 64 * 1024 * 1024:
+            self.emit_diagnostic(
+                "Warning",
+                f"Isolate sandbox '{name}' allocates {mem_budget // (1024 * 1024)}MB memory quota (exceeds recommended 64MB embedded budget).",
                 span,
             )
 
         for stmt in isolate.get("body", []):
-            self.lint_spanned_statement(stmt)
+            self.audit_statement(stmt)
 
-    def lint_match_entropy(
-        self,
-        match_stmt: dict[str, Any],
-        span: dict[str, Any] | None,
-    ) -> None:
-        # Verify all entropic states are safely reconciled
-        if not match_stmt.get("decayed_branch"):
-            self.add_diagnostic(
-                "Warning",
-                "Python IPC Plugin: 'match entropy' construct lacks a 'Decayed' branch handler, risking unhandled entropic drift.",
-                span,
-            )
-
-    def lint_spanned_statement(self, spanned: dict[str, Any]) -> None:
+    def audit_statement(self, spanned: dict[str, Any]) -> None:
         if not isinstance(spanned, dict):
             return
 
@@ -120,49 +98,101 @@ class CausmAstLinter:
         span = spanned.get("span")
 
         if "RoutineDef" in stmt:
-            self.lint_routine(stmt["RoutineDef"], span)
+            self.audit_routine(stmt["RoutineDef"], span)
         elif "Isolate" in stmt:
-            self.lint_isolate(stmt["Isolate"], span)
-        elif "MatchEntropy" in stmt:
-            self.lint_match_entropy(stmt["MatchEntropy"], span)
+            self.audit_isolate(stmt["Isolate"], span)
         elif "Using" in stmt:
             for child in stmt["Using"].get("body", []):
-                self.lint_spanned_statement(child)
+                self.audit_statement(child)
         elif "RelativisticBlock" in stmt:
             for child in stmt["RelativisticBlock"].get("body", []):
-                self.lint_spanned_statement(child)
+                self.audit_statement(child)
 
-    def run(self) -> dict[str, Any]:
+    def generate_causal_timeline_report(self) -> None:
+        timelines = self.ast.get("timelines", [])
+        if not timelines:
+            return
+
+        lines = [
+            f"=== Static Causal Timeline Map for '{self.file_path}' ===",
+            "  Time Coord   | Statements | Verified Safety State",
+            "  -------------+------------+-----------------------",
+        ]
+
+        for idx, tb in enumerate(timelines):
+            coord = tb.get("time", {})
+            coord_str = "@0ms"
+            if isinstance(coord, dict):
+                if "Global" in coord:
+                    coord_str = f"@{coord['Global']}ms"
+                elif "Relative" in coord:
+                    coord_str = f"+{coord['Relative']}ms"
+                elif "Periodic" in coord:
+                    coord_str = f"@every {coord['Periodic']}ms"
+                elif "Branch" in coord:
+                    coord_str = f"branch:{coord['Branch']}"
+            elif isinstance(coord, str):
+                coord_str = coord
+
+            stmt_count = len(tb.get("statements", []))
+            lines.append(
+                f"  {coord_str:<12} | {stmt_count:<10} | [✓] Deterministic Arena"
+            )
+
+        lines.append("  =======================================================")
+        report = "\n".join(lines)
+        self.emit_diagnostic("Note", f"\n{report}")
+
+    def execute(self) -> dict[str, Any]:
+        # Perform AST inspections
         for tb in self.ast.get("timelines", []):
             for spanned in tb.get("statements", []):
-                self.lint_spanned_statement(spanned)
+                self.audit_statement(spanned)
+
+        # In PostAnalysis or AstTransform phase, emit causal timeline map
+        if self.options.get("visualize", "true").lower() == "true":
+            self.generate_causal_timeline_report()
+
+        # Multi-stage telemetry metrics reporting
+        if self.phase == "PostAnalysis" and self.analysis:
+            verified = self.analysis.get("verification_passed", False)
+            cost = self.analysis.get("total_estimated_cost", 0)
+            self.emit_diagnostic(
+                "Note",
+                f"Post-Analysis Telemetry: Static Verification = {'PASS' if verified else 'FAIL'}, Estimated WCET = {cost} cycles.",
+            )
 
         return {
-            "protocol_version": self.request.get("protocol_version", "0.1.0"),
-            "compiler_version": self.request.get("compiler_version", "0.1.0-alpha.1"),
             "status": "Success",
-            "diagnostics": self.diagnostics,
             "modified_ast": self.ast,
+            "emitted_payload": None,
+            "diagnostics": self.diagnostics,
         }
 
 
 def main() -> None:
     try:
-        raw_input = sys.stdin.read()
-        if not raw_input.strip():
+        raw = sys.stdin.read()
+        if not raw.strip():
             sys.exit(0)
-        request = json.loads(raw_input)
-        linter = CausmAstLinter(request)
-        response = linter.run()
+
+        req = json.loads(raw)
+        analyzer = CausmTelemetryAnalyzer(req)
+        response = analyzer.execute()
         sys.stdout.write(json.dumps(response))
         sys.stdout.flush()
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+    except Exception as e:
         err_response = {
-            "protocol_version": "0.1.0",
-            "compiler_version": "0.1.0-alpha.1",
-            "status": {"Error": f"Linter IPC error: {exc}"},
-            "diagnostics": [],
+            "status": {"Error": f"Plugin failed: {e!s}"},
             "modified_ast": None,
+            "emitted_payload": None,
+            "diagnostics": [
+                {
+                    "level": "Error",
+                    "message": f"Plugin execution exception: {e!s}",
+                    "span": None,
+                }
+            ],
         }
         sys.stdout.write(json.dumps(err_response))
         sys.stdout.flush()

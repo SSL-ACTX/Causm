@@ -26,13 +26,29 @@ pub enum PluginStatus {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum PluginPhase {
+    AstTransform,
+    PostAnalysis,
+    IrEmit,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+pub struct AnalysisArtifacts {
+    pub verification_passed: bool,
+    pub timeline_count: usize,
+    pub total_estimated_cost: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PluginRequest {
     pub protocol_version: String,
     pub compiler_version: String,
     pub target_arch: String,
     pub target_os: String,
     pub file_path: String,
+    pub phase: PluginPhase,
     pub ast: Program,
+    pub analysis: Option<AnalysisArtifacts>,
     pub options: HashMap<String, String>,
 }
 
@@ -40,6 +56,7 @@ pub struct PluginRequest {
 pub struct PluginResponse {
     pub status: PluginStatus,
     pub modified_ast: Option<Program>,
+    pub emitted_payload: Option<Vec<u8>>,
     pub diagnostics: Vec<PluginDiagnostic>,
 }
 
@@ -51,9 +68,21 @@ impl PluginRequest {
             target_arch: std::env::consts::ARCH.to_string(),
             target_os: std::env::consts::OS.to_string(),
             file_path: file_path.into(),
+            phase: PluginPhase::AstTransform,
             ast,
+            analysis: None,
             options: HashMap::new(),
         }
+    }
+
+    pub fn with_phase(mut self, phase: PluginPhase) -> Self {
+        self.phase = phase;
+        self
+    }
+
+    pub fn with_analysis(mut self, analysis: AnalysisArtifacts) -> Self {
+        self.analysis = Some(analysis);
+        self
     }
 
     pub fn with_target(
@@ -80,6 +109,19 @@ impl PluginResponse {
         Self {
             status: PluginStatus::Success,
             modified_ast,
+            emitted_payload: None,
+            diagnostics,
+        }
+    }
+
+    pub fn emit_payload(
+        payload: Vec<u8>,
+        diagnostics: Vec<PluginDiagnostic>,
+    ) -> Self {
+        Self {
+            status: PluginStatus::Success,
+            modified_ast: None,
+            emitted_payload: Some(payload),
             diagnostics,
         }
     }
@@ -91,6 +133,7 @@ impl PluginResponse {
         Self {
             status: PluginStatus::Error(message.into()),
             modified_ast: None,
+            emitted_payload: None,
             diagnostics,
         }
     }

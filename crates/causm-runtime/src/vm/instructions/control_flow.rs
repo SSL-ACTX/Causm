@@ -56,19 +56,17 @@ impl Vm {
                     .to_string(),
             ));
         }
-        let receiver_reg = args[0].0;
+        let receiver_reg = args[0];
         let type_name = {
-            let branch = self.get_branch_mut(branch_id)?;
-            let meta = branch
+            let branch = self.get_branch(branch_id)?;
+            let meta_type = branch
                 .arena
                 .metadata
-                .get(receiver_reg as usize)
+                .get(receiver_reg.0 as usize)
                 .and_then(|m| m.as_ref())
-                .ok_or_else(|| {
-                    TemporalError::EvalError("receiver has no metadata".to_string())
-                })?;
-            meta.type_name.clone().ok_or_else(|| {
-                TemporalError::EvalError("receiver has no type name".to_string())
+                .and_then(|m| m.type_name.clone());
+            meta_type.ok_or_else(|| {
+                TemporalError::EvalError("receiver has no metadata".to_string())
             })?
         };
 
@@ -328,7 +326,7 @@ impl Vm {
         let (return_val, return_meta) = if let Some(reg) = src {
             let val = branch
                 .arena
-                .peek(reg.0)
+                .get_payload(reg.0)
                 .unwrap_or(causm_core::value::Payload::String("void".to_string()));
             let meta = branch
                 .arena
@@ -417,12 +415,16 @@ impl Vm {
                                     causm_core::value::Payload::Array(_)
                                 )
                             ) {
+                                let caller_meta = branch.arena.get_metadata(caller_reg).cloned();
                                 branch.arena.insert(
                                     caller_reg,
                                     causm_core::value::EntropicState::Valid(
                                         child_val.clone(),
                                     ),
                                 )?;
+                                if let Some(m) = caller_meta {
+                                    branch.arena.set_metadata(caller_reg, Some(m));
+                                }
                             }
                         }
                     }
@@ -499,6 +501,11 @@ impl Vm {
         Ok(())
     }
 
+    // DEV NOTE (Causal History & Entropy Pattern Matching):
+    // `MatchEntropy` determines runtime control flow based on entropic state (`Valid`, `Decayed`, `Pending`, `Consumed`).
+    // In addition to inspecting direct register state, when a register is `Valid`, we query `causal_history`
+    // for local `CausalEvent::Decay` records. If individual fields were accessed destructively, the struct
+    // pattern matcher accurately routes execution to the `Decayed` branch without requiring destructive parent truncation.
     pub(crate) fn MatchEntropy(
         &mut self,
         branch_id: &str,
@@ -510,7 +517,22 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         let state = self.peek_state(branch_id, target.0)?;
         let maybe_jump = match &state {
-            causm_core::value::EntropicState::Valid(_) => valid_target,
+            causm_core::value::EntropicState::Valid(_) => {
+                // Check causal history: if any field decay was recorded for this register
+                // in this branch, treat it as Decayed.
+                let has_field_decay = self.causal_history.iter().any(|ev| {
+                    if let crate::vm::state::CausalEvent::Decay { branch_id: b, reg, .. } = ev {
+                        b == branch_id && *reg == target.0
+                    } else {
+                        false
+                    }
+                });
+                if has_field_decay {
+                    decayed_target
+                } else {
+                    valid_target
+                }
+            }
             causm_core::value::EntropicState::Leased { original, .. } => {
                 match &**original {
                     causm_core::value::EntropicState::Valid(_) => valid_target,

@@ -145,7 +145,8 @@ debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
 if_stmt = { "if" ~ "("? ~ expression ~ ")"? ~ statement_block ~ ("else" ~ (if_stmt | statement_block))? ~ reconcile_clause? }
 loop_stmt = { "loop" ~ "on" ~ expression ~ statement_block | "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
-while_stmt = { "while" ~ "("? ~ expression ~ ")"? ~ duration_limit ~ "{" ~ statement* ~ "}" }
+while_valid_condition = { "valid" ~ "("? ~ identifier ~ ")"? }
+while_stmt = { "while" ~ (while_valid_condition | "("? ~ expression ~ ")"? ) ~ duration_limit ~ "{" ~ statement* ~ "}" }
 step_spec = { duration_wildcard | duration_literal }
 for_step_stmt = { "for" ~ identifier ~ "in" ~ range_expr ~ "step" ~ step_spec ~ "{" ~ statement* ~ "}" }
 range_expr = { (duration_literal | expression) ~ ".." ~ (duration_literal | expression) | expression }

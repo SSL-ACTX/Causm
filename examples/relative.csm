@@ -1,0 +1,36 @@
+@0ms: {
+    print("=== Causm Relative Time Offsets Showcase ===")
+    print("Main timeline initialized at global t=0ms")
+}
+
+@20ms: {
+    print("Global t=20ms: Splitting main into [sensor_fast, watchdog_slow]")
+    split main into [sensor_fast, watchdog_slow]
+}
+
+@sensor_fast: {
+    @+10ms: {
+        // Relative to split point (Global t = 20ms + 10ms = 30ms)
+        let sample = 1042
+        print(f"sensor_fast relative @+10ms (Global 30ms): Sample read = {sample}")
+    }
+
+    @+25ms: {
+        // Relative to split point (Global t = 20ms + 25ms = 45ms)
+        print("sensor_fast relative @+25ms (Global 45ms): Processing complete.")
+    }
+}
+
+@watchdog_slow: {
+    @+50ms: {
+        // Relative to split point (Global t = 20ms + 50ms = 70ms)
+        print("watchdog_slow relative @+50ms (Global 70ms): Watchdog timer elapsed.")
+    }
+}
+
+@80ms: {
+    // Global synchronization point after all relative offsets complete
+    merge [sensor_fast, watchdog_slow] into main
+    print("Global t=80ms: All relative branches merged successfully into main.")
+    print("=== Relative Time Showcase Complete ===")
+}

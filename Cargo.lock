@@ -200,6 +200,7 @@ dependencies = [
  "causm-frontend",
  "causm-ir",
  "dashmap",
+ "indexmap",
  "libc",
  "thiserror",
 ]

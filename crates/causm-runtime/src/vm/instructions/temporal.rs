@@ -173,35 +173,25 @@ impl Vm {
             t.pc = block_pc;
         }
 
-        for _ in 0..block_len {
-            let (pc, instrs_len) = {
+        // DEV NOTE (Relativistic Execution & Temporal Control Flow):
+        // When executing a RelativisticBlock on a branch, called routines (e.g. SyncChannel.send,
+        // Mutex.try_lock) switch `t.pc` to 0 and push a frame onto `t.call_stack`. We must guard
+        // against premature block loop exit (`!in_call`) so nested routine execution completes and
+        // returns to the block before checking whether the block's outer PC range has elapsed.
+        loop {
+            let (pc, in_call, instrs_len) = {
                 let t = self.get_branch_mut(&target_id)?;
-                (t.pc, t.instructions.len())
+                (t.pc, !t.call_stack.is_empty(), t.instructions.len())
             };
-            if pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len {
-                // println!(
-                //     "[VM] RelativisticBlock: PC {} out of bounds [{}, {}), stopping.",
-                //     pc,
-                //     block_pc,
-                //     block_pc + block_len
-                // );
+            if !in_call && (pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len) {
                 break;
             }
-            // println!(
-            //     "[VM] RelativisticBlock execution: step {}/{} on {} at PC {}",
-            //     i + 1,
-            //     block_len,
-            //     target_id,
-            //     pc
-            // );
             self.execute_instruction(&target_id)?;
 
-            // Handle break within the relativistic block
             let b = self.get_branch_mut(&target_id)?;
             if b.break_requested {
                 let target_depth = b.loop_depth;
                 b.break_requested = false;
-                let _ = b;
 
                 while {
                     let b = self.get_branch_mut(&target_id)?;
@@ -262,9 +252,31 @@ impl Vm {
             }
         }
 
-        let t = self.get_branch_mut(&target_id)?;
-        t.instructions = old_instrs;
-        t.pc = old_pc;
+        // DEV NOTE (Cross-Timeline Scope & Arena Sync):
+        // Relativistic blocks execute inside the target branch's timeline, modifying registers
+        // in `target.arena`. To allow consecutive blocks on the parent timeline or subsequent
+        // merges to access newly materialized values (e.g., intermediate structs or channel payloads),
+        // we synchronize active (non-Consumed) registers back into the calling timeline arena.
+        {
+            let target_registers = {
+                let t = self.get_branch_mut(&target_id)?;
+                t.instructions = old_instrs;
+                t.pc = old_pc;
+                t.arena.registers.clone()
+            };
+            let caller = self.get_branch_mut(branch_id)?;
+            if caller.arena.registers.len() < target_registers.len() {
+                caller.arena.registers.resize(
+                    target_registers.len(),
+                    causm_core::value::EntropicState::Consumed,
+                );
+            }
+            for (idx, state) in target_registers.iter().enumerate() {
+                if !matches!(state, causm_core::value::EntropicState::Consumed) {
+                    caller.arena.registers[idx] = state.clone();
+                }
+            }
+        }
         // println!("[VM] RelativisticBlock finished: {}", target_id);
         Ok(())
     }

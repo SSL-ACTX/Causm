@@ -61,6 +61,17 @@
         } reconcile auto
     }
 
+    routine spawn(peek cmd: string) -> ChildProcess taking _ {
+        if capability(System.FFI) {
+            let status = run_command(cmd)
+            struct { is_running = status.success, pid = 0 }
+        } else {
+            struct { is_running = false, pid = -1 }
+        } reconcile auto
+    }
+
+    routine exec(peek cmd: string) -> ExitStatus taking _ => run_command(cmd)
+
     routine run_command(peek cmd: string) -> ExitStatus taking _ {
         if capability(System.FFI) {
             let raw_status = system(cmd)

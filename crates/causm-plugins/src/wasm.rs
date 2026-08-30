@@ -1,10 +1,13 @@
 use crate::protocol::{PluginRequest, PluginResponse};
 use anyhow::{bail, Context, Result};
-use wasmi::{Engine, Linker, Module, Store};
+use wasmi::{Config, Engine, Linker, Module, Store};
+
+pub const DEFAULT_WASM_FUEL_BUDGET: u64 = 10_000_000; // 10M fuel units
 
 pub struct WasmPluginDriver {
     wasm_bytes: Vec<u8>,
     max_memory_bytes: usize,
+    fuel_budget: u64,
 }
 
 impl WasmPluginDriver {
@@ -12,15 +15,27 @@ impl WasmPluginDriver {
         Self {
             wasm_bytes,
             max_memory_bytes: 16 * 1024 * 1024, // 16 MB limit
+            fuel_budget: DEFAULT_WASM_FUEL_BUDGET,
         }
     }
 
+    pub fn with_fuel_budget(mut self, fuel_budget: u64) -> Self {
+        self.fuel_budget = fuel_budget;
+        self
+    }
+
     pub fn transform(&self, request: &PluginRequest) -> Result<PluginResponse> {
-        let engine = Engine::default();
+        let mut config = Config::default();
+        config.consume_fuel(true);
+        let engine = Engine::new(&config);
         let module = Module::new(&engine, &self.wasm_bytes)
             .context("Failed to parse WebAssembly plugin module")?;
 
         let mut store = Store::new(&engine, ());
+        store
+            .set_fuel(self.fuel_budget)
+            .context("Failed to initialize fuel for WASM plugin store")?;
+
         let linker = Linker::new(&engine);
         let instance = linker
             .instantiate_and_start(&mut store, &module)

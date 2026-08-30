@@ -36,7 +36,7 @@ impl PluginDriver {
 
 #[derive(Default)]
 pub struct PluginEngine {
-    plugins: Vec<(String, PluginDriver, HashMap<String, String>)>,
+    pub plugins: Vec<(String, PluginDriver, HashMap<String, String>)>,
 }
 
 impl PluginEngine {
@@ -141,6 +141,7 @@ impl PluginEngine {
 
         for (name, plugin, options) in &self.plugins {
             let req = PluginRequest::new(file_path, program.clone())
+                .with_phase(crate::protocol::PluginPhase::AstTransform)
                 .with_options(options.clone());
 
             let response = plugin
@@ -164,5 +165,63 @@ impl PluginEngine {
         }
 
         Ok((program, all_diagnostics))
+    }
+
+    pub fn run_post_analysis_pipeline(
+        &self,
+        file_path: &str,
+        program: &Program,
+        artifacts: crate::protocol::AnalysisArtifacts,
+    ) -> Result<Vec<PluginDiagnostic>> {
+        let mut all_diagnostics = Vec::new();
+
+        for (name, plugin, options) in &self.plugins {
+            let req = PluginRequest::new(file_path, program.clone())
+                .with_phase(crate::protocol::PluginPhase::PostAnalysis)
+                .with_analysis(artifacts.clone())
+                .with_options(options.clone());
+
+            let response = plugin.transform(&req).with_context(|| {
+                format!("Failed executing post-analysis plugin '{}'", name)
+            })?;
+
+            all_diagnostics.extend(response.diagnostics);
+
+            if let PluginStatus::Error(err_msg) = response.status {
+                if all_diagnostics.is_empty() {
+                    bail!(
+                        "Post-analysis plugin '{}' reported failure: {}",
+                        name,
+                        err_msg
+                    );
+                }
+            }
+        }
+
+        Ok(all_diagnostics)
+    }
+
+    pub fn run_ir_emit_pipeline(
+        &self,
+        file_path: &str,
+        program: &Program,
+    ) -> Result<Vec<(String, Vec<u8>)>> {
+        let mut emitted_outputs = Vec::new();
+
+        for (name, plugin, options) in &self.plugins {
+            let req = PluginRequest::new(file_path, program.clone())
+                .with_phase(crate::protocol::PluginPhase::IrEmit)
+                .with_options(options.clone());
+
+            let response = plugin.transform(&req).with_context(|| {
+                format!("Failed executing IR emit plugin '{}'", name)
+            })?;
+
+            if let Some(payload) = response.emitted_payload {
+                emitted_outputs.push((name.clone(), payload));
+            }
+        }
+
+        Ok(emitted_outputs)
     }
 }
