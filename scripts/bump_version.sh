@@ -29,12 +29,12 @@ usage() {
     echo "  $0 set 0.1.0-alpha.2"
     echo "  $0 bump alpha"
     echo "  $0 branch"
-    echo "  $0 branch release"
+    echo "  $0 branch releases"
     exit 1
 }
 
 create_branch() {
-    prefix="${1:-release}"
+    prefix="${1:-releases}"
     branch_name="${prefix}/v${CURRENT_VERSION}"
     echo "==> Creating git branch: $branch_name"
     if git rev-parse --verify "$branch_name" >/dev/null 2>&1; then
@@ -168,7 +168,7 @@ case "$COMMAND" in
         parse_and_bump "$2"
         ;;
     branch)
-        create_branch "${2:-release}"
+        create_branch "${2:-releases}"
         ;;
     *)
         usage

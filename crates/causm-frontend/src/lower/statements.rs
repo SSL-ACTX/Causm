@@ -408,7 +408,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             } else {
                 let target = match time {
                     causm_core::TimeCoordinate::Branch(b) => b.clone(),
-                    _ => "main".to_string(),
+                    _ => ctx.current_branch.clone().unwrap_or_else(|| "main".to_string()),
                 };
 
                 let rb_instr_idx = ctx.instructions.len();

@@ -3,7 +3,7 @@ target/
 bak/
 
 .env
-
+.synapse/
 .causm_cache/
 
 __pycache__/
@@ -12,3 +12,4 @@ node_modules/
 *.exe
 *.csa
 *.swt_env
+*.bin

@@ -261,7 +261,9 @@ impl Vm {
             let target_registers = {
                 let t = self.get_branch_mut(&target_id)?;
                 t.instructions = old_instrs;
-                t.pc = old_pc;
+                if branch_id != target_id {
+                    t.pc = old_pc;
+                }
                 t.arena.registers.clone()
             };
             let caller = self.get_branch_mut(branch_id)?;

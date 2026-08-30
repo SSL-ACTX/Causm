@@ -41,6 +41,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             left
         }
         Rule::expression
+        | Rule::lvalue
         | Rule::logical_or_expr
         | Rule::logical_and_expr
         | Rule::relational_expr
@@ -314,6 +315,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 args,
             }
         }
+
         Rule::direct_call_expr => {
             let mut inner = pair.into_inner();
             let routine = inner
@@ -589,11 +591,29 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
-        Rule::struct_lit | Rule::topology_lit => {
+        Rule::struct_lit | Rule::named_struct_lit | Rule::topology_lit => {
             let rule = pair.as_rule();
             let mut inner = pair.into_inner();
 
-            let (type_name, params_pair) = (None, inner.next());
+            let (type_name, params_pair) = if rule == Rule::struct_lit {
+                if let Some(first) = inner.peek() {
+                    if first.as_rule() == Rule::named_struct_lit {
+                        let named_pair = inner.next().unwrap();
+                        let mut named_inner = named_pair.into_inner();
+                        let t_name = named_inner.next().map(|p| p.as_str().to_string());
+                        (t_name, named_inner.next())
+                    } else {
+                        (None, inner.next())
+                    }
+                } else {
+                    (None, inner.next())
+                }
+            } else if rule == Rule::named_struct_lit {
+                let t_name = inner.next().map(|p| p.as_str().to_string());
+                (t_name, inner.next())
+            } else {
+                (None, inner.next())
+            };
 
             let mut fields = HashMap::new();
             if let Some(params) = params_pair {
@@ -607,10 +627,10 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     }
                 }
             }
-            if rule == Rule::struct_lit {
-                Expression::StructLit(std::cell::RefCell::new(type_name), fields)
-            } else {
+            if rule == Rule::topology_lit {
                 Expression::TopologyLit(fields)
+            } else {
+                Expression::StructLit(std::cell::RefCell::new(type_name), fields)
             }
         }
         Rule::array_lit => {

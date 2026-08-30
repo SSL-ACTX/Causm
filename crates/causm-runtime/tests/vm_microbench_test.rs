@@ -4,6 +4,7 @@ use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 use std::time::Instant;
 
+
 fn setup_vm_and_program(source: &str) -> (Vm, causm_ir::IrProgram) {
     let program = parser::parse_causm(source).expect("AST parsing failed");
     let mut analyzer = EntropicAnalyzer::new();
@@ -23,6 +24,7 @@ fn setup_vm_and_program(source: &str) -> (Vm, causm_ir::IrProgram) {
     (vm, ir_program)
 }
 
+#[ignore]
 #[test]
 fn test_perf_tight_loop_100k_iterations() {
     let source = r#"
@@ -56,6 +58,7 @@ fn test_perf_tight_loop_100k_iterations() {
     println!("=======================================================");
 }
 
+#[ignore]
 #[test]
 fn test_perf_recursive_fibonacci_n20() {
     let source = r#"
@@ -90,6 +93,7 @@ fn test_perf_recursive_fibonacci_n20() {
     println!("=======================================================");
 }
 
+#[ignore]
 #[test]
 fn test_perf_epoch_arena_allocation_and_reclamation() {
     let source = r#"

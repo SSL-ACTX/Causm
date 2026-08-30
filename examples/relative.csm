@@ -1,36 +1,74 @@
+type SensorReading = struct {
+    id: int,
+    value: int,
+    units: str,
+    status: str
+}
+
 @0ms: {
-    print("=== Causm Relative Time Offsets Showcase ===")
-    print("Main timeline initialized at global t=0ms")
+    print("Global t=0ms: Initializing root control timeline")
+    
+    let baseline = SensorReading {
+        id: 100,
+        value: 42,
+        units: "psi",
+        status: "nominal"
+    }
+    print(f"Global t=0ms: Baseline initialized -> id={baseline.id}, val={baseline.value} {baseline.units}")
 }
 
 @20ms: {
-    print("Global t=20ms: Splitting main into [sensor_fast, watchdog_slow]")
-    split main into [sensor_fast, watchdog_slow]
+    print("Global t=20ms: Forking main into concurrent telemetry and telemetry monitor branches")
+    split main into [telemetry_pipeline, anomaly_monitor]
 }
 
-@sensor_fast: {
+@telemetry_pipeline: {
     @+10ms: {
-        // Relative to split point (Global t = 20ms + 10ms = 30ms)
-        let sample = 1042
-        print(f"sensor_fast relative @+10ms (Global 30ms): Sample read = {sample}")
+        let sample_a = SensorReading {
+            id: 101,
+            value: 88,
+            units: "psi",
+            status: "active"
+        }
+        print(f"telemetry_pipeline relative @+10ms (Global 30ms): Sample A acquired -> {sample_a.value} {sample_a.units}")
     }
 
     @+25ms: {
-        // Relative to split point (Global t = 20ms + 25ms = 45ms)
-        print("sensor_fast relative @+25ms (Global 45ms): Processing complete.")
+        let sample_b = SensorReading {
+            id: 102,
+            value: 124,
+            units: "psi",
+            status: "alert"
+        }
+        print(f"telemetry_pipeline relative @+25ms (Global 45ms): Sample B acquired -> {sample_b.value} {sample_b.units}")
+    }
+
+    @+40ms: {
+        let max_val = 124
+        let avg_val = (88 + 124) / 2
+        print(f"telemetry_pipeline relative @+40ms (Global 60ms): Aggregated telemetry -> avg={avg_val} psi, max={max_val} psi")
     }
 }
 
-@watchdog_slow: {
+@anomaly_monitor: {
+    @+15ms: {
+        print("anomaly_monitor relative @+15ms (Global 35ms): Initial health-check passed")
+    }
+
+    @+35ms: {
+        print("anomaly_monitor relative @+35ms (Global 55ms): Pressure threshold check -> within tolerance")
+    }
+
     @+50ms: {
-        // Relative to split point (Global t = 20ms + 50ms = 70ms)
-        print("watchdog_slow relative @+50ms (Global 70ms): Watchdog timer elapsed.")
+        print("anomaly_monitor relative @+50ms (Global 70ms): Watchdog verification cycle completed without anomaly")
     }
 }
 
 @80ms: {
-    // Global synchronization point after all relative offsets complete
-    merge [sensor_fast, watchdog_slow] into main
-    print("Global t=80ms: All relative branches merged successfully into main.")
-    print("=== Relative Time Showcase Complete ===")
+    merge [telemetry_pipeline, anomaly_monitor] into main
+    print("Global t=80ms: Telemetry pipeline and anomaly monitor synchronized back to main")
+}
+
+@100ms: {
+    print("Global t=100ms: Final system health report confirmed")
 }

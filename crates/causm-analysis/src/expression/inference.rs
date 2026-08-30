@@ -46,12 +46,14 @@ pub(crate) fn infer_expression_type(
                 .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
         },
         Expression::StructLit(type_name, fields) => {
-            if let Some(ref name) = *type_name.borrow() {
-                return Ok(Type::Custom(name.clone()));
-            }
             let mut schema = std::collections::HashMap::new();
             for (k, v) in fields {
                 schema.insert(k.clone(), infer_expression_type(analyzer, v)?);
+            }
+            if let Some(ref name) = *type_name.borrow() {
+                if analyzer.type_decls.contains_key(name) {
+                    return Ok(Type::Custom(name.clone()));
+                }
             }
             Ok(Type::Struct(causm_core::types::StructType {
                 fields: schema,

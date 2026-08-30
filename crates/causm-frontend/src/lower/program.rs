@@ -13,9 +13,14 @@ pub fn lower_program(program: &Program) -> IrProgram {
         if let Some(mode) = tb.entropy_mode {
             ctx.entropy_modes.push(mode);
         }
+        ctx.current_branch = match &tb.time {
+            causm_core::TimeCoordinate::Branch(b) => Some(b.clone()),
+            _ => None,
+        };
         for stmt in &tb.statements {
             lower_spanned(&mut ctx, stmt);
         }
+        ctx.current_branch = None;
         if tb.entropy_mode.is_some() {
             ctx.entropy_modes.pop();
         }
