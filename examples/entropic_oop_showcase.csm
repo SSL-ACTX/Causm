@@ -10,30 +10,30 @@
     }
 
     interface Encryptable {
-        routine encrypt_payload(peek self) -> int taking 15ms
+        routine encrypt_payload(&self) -> int taking 15ms
     }
 
     interface AuditNode = Encryptable + interface {
-        routine audit(peek self) -> int taking 10ms {
+        routine audit(&self) -> int taking 10ms {
             print("Audit log recorded to immutable ledger.")
             let ok = 1
             yield ok
         }
     }
 
-    routine QuantumVault<int>.inspect_secure(peek self) -> int taking 20ms {
+    routine QuantumVault<int>.inspect_secure(&self) -> int taking 20ms {
         let code = self.vault_code
         print("Quantum Vault leased securely. Decrypted Code: " + code)
         yield code
     }
 
-    routine QuantumVault.verify_clearance(peek self) -> int taking 15ms where self.state == Valid {
+    routine QuantumVault.verify_clearance(&self) -> int taking 15ms where self.state == Valid {
         let level = self.clearance_level
         print("Clearance Verified Level: " + level)
         yield level
     }
 
-    routine QuantumVault.encrypt_payload(peek self) -> int taking 15ms {
+    routine QuantumVault.encrypt_payload(&self) -> int taking 15ms {
         let code = self.vault_code
         print("Payload Encrypted with Quantum Entanglement.")
         yield code

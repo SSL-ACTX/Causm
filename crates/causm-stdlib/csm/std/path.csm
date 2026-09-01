@@ -1,32 +1,32 @@
 @0ms: {
-    routine join(peek dir: string, peek file: string) -> string taking _ {
-        if len(dir) == 0 {
+    routine join(&dir: string, &file: string) -> string taking _ {
+        if (len(dir) == 0) {
             return file
-        } else if len(file) == 0 {
+        } else if (len(file) == 0) {
             return dir
-        } else if char_at(dir, len(dir) - 1) == 47 {
+        } else if (char_at(dir, len(dir) - 1) == 47) {
             return dir + file
         } else {
             return dir + "/" + file
         }
     }
 
-    routine path_basename(peek path: string) -> string taking _ {
+    routine path_basename(&path: string) -> string taking _ {
         let n = len(path)
-        if n == 0 {
+        if (n == 0) {
             return ""
         } else {
             let mut last_slash = -1
             let mut i = 0
-            while (i < n) 1ms {
-                if char_at(path, i) == 47 {
+            while (i < n) taking 1ms {
+                if (char_at(path, i) == 47) {
                     last_slash = i
                 }
                 i = i + 1
             }
-            if last_slash < 0 {
+            if (last_slash < 0) {
                 return path
-            } else if last_slash == n - 1 {
+            } else if (last_slash == n - 1) {
                 return ""
             } else {
                 return str_slice(path, last_slash + 1, n)
@@ -34,22 +34,22 @@
         }
     }
 
-    routine path_dirname(peek path: string) -> string taking _ {
+    routine path_dirname(&path: string) -> string taking _ {
         let n = len(path)
-        if n == 0 {
+        if (n == 0) {
             return "."
         } else {
             let mut last_slash = -1
             let mut i = 0
-            while (i < n) 1ms {
-                if char_at(path, i) == 47 {
+            while (i < n) taking 1ms {
+                if (char_at(path, i) == 47) {
                     last_slash = i
                 }
                 i = i + 1
             }
-            if last_slash < 0 {
+            if (last_slash < 0) {
                 return "."
-            } else if last_slash == 0 {
+            } else if (last_slash == 0) {
                 return "/"
             } else {
                 return str_slice(path, 0, last_slash)
@@ -57,24 +57,24 @@
         }
     }
 
-    routine extension(peek path: string) -> string taking _ {
+    routine extension(&path: string) -> string taking _ {
         let n = len(path)
-        if n == 0 {
+        if (n == 0) {
             return ""
         } else {
             let mut last_dot = -1
             let mut last_slash = -1
             let mut i = 0
-            while (i < n) 1ms {
+            while (i < n) taking 1ms {
                 let ch = char_at(path, i)
-                if ch == 46 {
+                if (ch == 46) {
                     last_dot = i
-                } else if ch == 47 {
+                } else if (ch == 47) {
                     last_slash = i
                 }
                 i = i + 1
             }
-            if last_dot > last_slash && last_dot >= 0 {
+            if (last_dot > last_slash && last_dot >= 0) {
                 return str_slice(path, last_dot, n)
             } else {
                 return ""

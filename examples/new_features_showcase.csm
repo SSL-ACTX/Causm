@@ -14,7 +14,9 @@
         let typed_channel_capacity = Channel<u8>::new(128)
         let accum = 0
         let auth_session = "token_x89"
-        type Telemetry = struct decay_after 500ms { stream: int }
+        type Telemetry = struct decay_after 500ms {
+            stream: int
+        }
         on_decay(Telemetry) {
             print("Automatic entropic decay handler triggered for telemetry")
         }

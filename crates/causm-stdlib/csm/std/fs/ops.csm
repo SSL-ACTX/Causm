@@ -3,34 +3,64 @@
     from "std/fs/ffi" import *
 
     routine open_readonly(&path: string) -> File taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             let raw_fd = open(path, 0, 0)
-            struct { fd = raw_fd, is_open = true, is_virtual = false, path = path }
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
         } else {
-            struct { fd = -1, is_open = false, is_virtual = true, path = path }
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
         } reconcile auto
     }
 
     routine create_file(&path: string) -> File taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             let raw_fd = open(path, 577, 420)
-            struct { fd = raw_fd, is_open = true, is_virtual = false, path = path }
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
         } else {
-            struct { fd = -1, is_open = false, is_virtual = true, path = path }
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
         } reconcile auto
     }
 
     routine open_append(&path: string) -> File taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             let raw_fd = open(path, 1089, 420)
-            struct { fd = raw_fd, is_open = true, is_virtual = false, path = path }
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
         } else {
-            struct { fd = -1, is_open = false, is_virtual = true, path = path }
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
         } reconcile auto
     }
 
     routine write_all(&file: File, &content: string, &len: u64) -> i64 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             write(file.fd, content, len)
         } else {
             0
@@ -38,7 +68,7 @@
     }
 
     routine read_exact(&file: File, &buf: i64, &count: u64) -> i64 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             read(file.fd, buf, count)
         } else {
             0
@@ -46,7 +76,7 @@
     }
 
     routine flush_file(&file: File) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             fsync(file.fd)
         } else {
             0
@@ -54,7 +84,7 @@
     }
 
     routine truncate_file(&file: File, &length: i64) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             ftruncate(file.fd, length)
         } else {
             0
@@ -62,7 +92,7 @@
     }
 
     routine seek_start(&file: File, &offset: i64) -> i64 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             lseek(file.fd, offset, 0)
         } else {
             0
@@ -70,7 +100,7 @@
     }
 
     routine seek_end(&file: File, &offset: i64) -> i64 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             lseek(file.fd, offset, 2)
         } else {
             0
@@ -78,7 +108,7 @@
     }
 
     routine file_exists(&path: string) -> bool taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             access(path, 0) == 0
         } else {
             false
@@ -86,7 +116,7 @@
     }
 
     routine remove_file(&path: string) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             unlink(path)
         } else {
             -1
@@ -94,7 +124,7 @@
     }
 
     routine rename_file(&old_path: string, &new_path: string) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             rename(old_path, new_path)
         } else {
             -1
@@ -102,7 +132,7 @@
     }
 
     routine create_dir(&path: string) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             mkdir(path, 493)
         } else {
             -1
@@ -122,7 +152,7 @@
     }
 
     routine remove_dir(&path: string) -> i32 taking _ {
-        if capability(System.FFI) || capability(System.WASI) {
+        if (capability(System.FFI) || capability(System.WASI)) {
             rmdir(path)
         } else {
             -1

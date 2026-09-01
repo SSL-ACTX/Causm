@@ -1,26 +1,13 @@
 @0ms: {
     from "std/sync/types" import Mutex, LockResult
 
-    routine Mutex.new() -> Mutex taking _ => struct { locked = false, owner = "" }
+    routine Mutex.new() -> Mutex taking _ => __sync_mutex_new()
 
-    routine Mutex.try_lock(consume m: Mutex, peek owner: string) -> LockResult taking _ {
-        let mut next_mutex = m
-        let is_free = !next_mutex.locked
-        if (is_free) {
-            next_mutex.locked = true
-            next_mutex.owner = owner
-        }
-        struct { acquired = is_free, mutex = next_mutex }
-    }
+    routine Mutex.try_lock(consume m: Mutex, &owner: string) -> LockResult taking _ => __sync_mutex_try_lock(m, owner)
 
-    routine Mutex.unlock(consume m: Mutex) -> Mutex taking _ {
-        let mut unlocked = m
-        unlocked.locked = false
-        unlocked.owner = ""
-        unlocked
-    }
+    routine Mutex.unlock(consume m: Mutex) -> Mutex taking _ => __sync_mutex_unlock(m)
 
-    routine Mutex.is_locked(peek m: Mutex) -> bool taking _ => m.locked
+    routine Mutex.is_locked(&m: Mutex) -> bool taking _ => __sync_mutex_is_locked(m)
 
-    routine Mutex.owner(peek m: Mutex) -> string taking _ => m.owner
+    routine Mutex.owner(&m: Mutex) -> string taking _ => __sync_mutex_owner(m)
 }

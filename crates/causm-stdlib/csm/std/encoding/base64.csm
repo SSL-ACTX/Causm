@@ -1,5 +1,5 @@
 @0ms: {
-    routine Base64.alphabet_char(peek idx: i32) -> i32 taking _ => if (idx < 26) {
+    routine Base64.alphabet_char(&idx: i32) -> i32 taking _ => if (idx < 26) {
         65 + idx
     } else if (idx < 52) {
         71 + idx
@@ -7,7 +7,7 @@
         idx - 4
     } else if (idx == 62) { 43 } else { 47 }
 
-    routine Base64.decode_char(peek c: i32) -> i32 taking _ => if (c == 43) {
+    routine Base64.decode_char(&c: i32) -> i32 taking _ => if (c == 43) {
         62
     } else if (c == 47) {
         63
@@ -21,7 +21,7 @@
         0
     }
 
-    routine Base64.encode_chunk(peek b0: i32, peek b1: i32, peek b2: i32) -> array taking _ {
+    routine Base64.encode_chunk(&b0: i32, &b1: i32, &b2: i32) -> array taking _ {
         let i0 = b0 / 4
         let i1 = (b0 % 4) * 16 + b1 / 16
         let i2 = (b1 % 16) * 4 + b2 / 64
@@ -33,7 +33,7 @@
         [c0, c1, c2, c3]
     }
 
-    routine Base64.decode_chunk(peek c0: i32, peek c1: i32, peek c2: i32, peek c3: i32) -> array taking _ {
+    routine Base64.decode_chunk(&c0: i32, &c1: i32, &c2: i32, &c3: i32) -> array taking _ {
         let v0 = Base64.decode_char(c0)
         let v1 = Base64.decode_char(c1)
         let v2 = Base64.decode_char(c2)
@@ -44,7 +44,7 @@
         [b0, b1, b2]
     }
 
-    routine Base64.encode(peek bytes: array) -> string taking _ {
+    routine Base64.encode(&bytes: array) -> string taking _ {
         let n = len(bytes)
         let mut out = []
         let mut i = 0
@@ -78,7 +78,7 @@
         string_from_bytes(out)
     }
 
-    routine Base64.decode(peek b64: string) -> array taking _ {
+    routine Base64.decode(&b64: string) -> array taking _ {
         let encoded_bytes = str_bytes(b64)
         let n = len(encoded_bytes)
         let mut out = []

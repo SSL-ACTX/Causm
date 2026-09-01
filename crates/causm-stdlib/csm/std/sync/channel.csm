@@ -1,78 +1,19 @@
 @0ms: {
     from "std/sync/types" import SyncChannel, SendResult, RecvResult
 
-    routine SyncChannel.new(peek capacity: int) -> SyncChannel taking _ {
-        let storage = [0; capacity]
-        struct {
-            capacity = capacity,
-            closed = false,
-            count = 0,
-            data = storage,
-            head = 0,
-            tail = 0
-        }
-    }
+    routine SyncChannel.new(&capacity: int) -> SyncChannel taking _ => __sync_channel_new(capacity)
 
-    routine SyncChannel.send(consume ch: SyncChannel, peek val: int) -> SendResult taking _ {
-        let can_send = !ch.closed && ch.count < ch.capacity
-        let mut cur_head = ch.head
-        let mut cur_tail = ch.tail
-        let mut cur_count = ch.count
-        let mut cur_cap = ch.capacity
-        let mut cur_closed = ch.closed
-        let mut data = ch.data
-        if (can_send) {
-            data[cur_tail] = val
-            cur_tail = (cur_tail + 1) % cur_cap
-            cur_count = cur_count + 1
-        }
-        let next_ch: SyncChannel = struct {
-            capacity = cur_cap,
-            closed = cur_closed,
-            count = cur_count,
-            data = data,
-            head = cur_head,
-            tail = cur_tail
-        }
-        struct { chan = next_ch, ok = can_send }
-    }
+    routine SyncChannel.send(consume ch: SyncChannel, &val: int) -> SendResult taking _ => __sync_channel_send(ch, val)
 
-    routine SyncChannel.recv(consume ch: SyncChannel) -> RecvResult taking _ {
-        let has_item = ch.count > 0
-        let mut cur_head = ch.head
-        let mut cur_tail = ch.tail
-        let mut cur_count = ch.count
-        let mut cur_cap = ch.capacity
-        let mut cur_closed = ch.closed
-        let data = ch.data
-        let mut item = 0
-        if (has_item) {
-            item = data[cur_head]
-            cur_head = (cur_head + 1) % cur_cap
-            cur_count = cur_count - 1
-        }
-        let next_ch: SyncChannel = struct {
-            capacity = cur_cap,
-            closed = cur_closed,
-            count = cur_count,
-            data = data,
-            head = cur_head,
-            tail = cur_tail
-        }
-        struct { chan = next_ch, ok = has_item, val = item }
-    }
+    routine SyncChannel.recv(consume ch: SyncChannel) -> RecvResult taking _ => __sync_channel_recv(ch)
 
-    routine SyncChannel.close(consume ch: SyncChannel) -> SyncChannel taking _ {
-        let mut closed_ch = ch
-        closed_ch.closed = true
-        closed_ch
-    }
+    routine SyncChannel.close(consume ch: SyncChannel) -> SyncChannel taking _ => __sync_channel_close(ch)
 
-    routine SyncChannel.is_closed(peek ch: SyncChannel) -> bool taking _ => ch.closed
+    routine SyncChannel.is_closed(&ch: SyncChannel) -> bool taking _ => __sync_channel_is_closed(ch)
 
-    routine SyncChannel.len(peek ch: SyncChannel) -> int taking _ => ch.count
+    routine SyncChannel.len(&ch: SyncChannel) -> int taking _ => __sync_channel_len(ch)
 
-    routine SyncChannel.is_full(peek ch: SyncChannel) -> bool taking _ => ch.count >= ch.capacity
+    routine SyncChannel.is_full(&ch: SyncChannel) -> bool taking _ => __sync_channel_is_full(ch)
 
-    routine SyncChannel.is_empty(peek ch: SyncChannel) -> bool taking _ => ch.count == 0
+    routine SyncChannel.is_empty(&ch: SyncChannel) -> bool taking _ => __sync_channel_is_empty(ch)
 }

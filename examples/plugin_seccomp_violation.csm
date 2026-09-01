@@ -1,44 +1,27 @@
 @0ms: {
-    // 1. Fully permitted sandbox isolate with explicit telemetry whitelist
-    @seccomp("sys_read", "sys_write", "sys_exit", "sys_getpid", "sys_nanosleep")
+    @seccomp(sys_read, sys_write, sys_exit, sys_getpid, sys_nanosleep)
     isolate telemetry_agent {
-        enable memory(64KB)
         enable cpu(1000ms)
+        enable memory(65536bytes)
         require System.Syscall
         require System.Log
-
-        // Permitted standard I/O (sys_write)
         let msg = "telemetry stream online\n"
         let w_res = syscall("sys_write", 1, msg, len(msg)) taking 2ms
-
-        // Permitted PID query (sys_getpid)
         let pid = syscall("sys_getpid") taking 1ms
-
-        // Permitted clean exit (sys_exit)
         let exit_code = syscall("sys_exit", 0) taking 1ms
     }
 
-    // 2. Restricted sandbox isolate blocking unauthorized system operations
-    @seccomp("sys_read", "sys_write", "sys_exit")
+    @seccomp(sys_read, sys_write, sys_exit)
     isolate untrusted_processor {
-        enable memory(32KB)
         enable cpu(500ms)
+        enable memory(32768bytes)
         require System.Syscall
         require System.FFI
-
-        // Permitted payload read (sys_read)
         let buffer = syscall("sys_read", 0, 1024) taking 2ms
-
-        // Violation: Forbidden process execution bypass (sys_execve)
         let exec_res = syscall("sys_execve", "/bin/sh", 0, 0) taking 1ms
-
-        // Violation: Forbidden raw process fork (sys_fork / sys_clone)
         let fork_res = syscall("sys_fork") taking 1ms
-
-        // Violation: Forbidden native FFI block inside sandbox
         foreign "libnative_exploit.so" abi("C") {
             routine trigger_native_call() -> i32 taking 5ms
         }
     }
 }
-

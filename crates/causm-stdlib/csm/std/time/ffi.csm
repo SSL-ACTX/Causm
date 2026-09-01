@@ -1,7 +1,7 @@
 @0ms: {
     foreign "libc.so.6" abi("C") {
-        routine clock_gettime(peek clk_id: i32, peek tp: struct) -> i32 taking 1ms
-        routine nanosleep(peek req: struct, peek rem: struct) -> i32 taking 1ms
-        routine time(peek tloc: i64) -> i64 taking 1ms
+        routine clock_gettime(&clk_id: i32, &tp: struct) -> i32 taking 1ms
+        routine nanosleep(&req: struct, &rem: struct) -> i32 taking 1ms
+        routine time(&tloc: i64) -> i64 taking 1ms
     }
 }

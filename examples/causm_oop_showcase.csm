@@ -12,20 +12,20 @@
         score: int
     }
 
-    routine Actor.introduce(peek self) -> int taking 20ms {
+    routine Actor.introduce(&self) -> int taking 20ms {
         let name = self.name
         print("Hello, I am Actor: " + name)
         let res = 0
         yield res
     }
 
-    routine Robot.status(peek self) -> int taking 20ms {
+    routine Robot.status(&self) -> int taking 20ms {
         print("Robot status: active")
         let res = 0
         yield res
     }
 
-    routine PlayableRobot.status(peek self) -> int taking 20ms {
+    routine PlayableRobot.status(&self) -> int taking 20ms {
         let score = self.score
         print("Playable Robot status: active, score=" + score)
         let res = 0
@@ -37,7 +37,7 @@
     }
 
     interface PlayableWorker = Worker + interface {
-        routine play(peek self) -> int taking 20ms {
+        routine play(&self) -> int taking 20ms {
             let bonus = 100
             yield bonus
         }
@@ -49,7 +49,7 @@
         yield res
     }
 
-    routine Robot.check_battery(peek self) -> int taking 20ms where self.state == Valid {
+    routine Robot.check_battery(&self) -> int taking 20ms where self.state == Valid {
         print("Battery OK")
         let res = 0
         yield res

@@ -2,13 +2,13 @@
     foreign "libc.so.6" abi("C") {
         routine getpid() -> i32 taking 1ms
         routine getppid() -> i32 taking 1ms
-        routine kill(peek pid: i32, peek sig: i32) -> i32 taking 1ms
-        routine waitpid(peek pid: i32, peek status: i64, peek options: i32) -> i32 taking 10ms
-        routine pipe(peek pipefd: i64) -> i32 taking 2ms
-        routine read(peek fd: i32, peek buf: i64, peek count: u64) -> i64 taking 3ms
-        routine write(peek fd: i32, peek buf: i64, peek count: u64) -> i64 taking 2ms
-        routine close(peek fd: i32) -> i32 taking 1ms
-        routine system(peek command: string) -> i32 taking 50ms
-        routine exit(peek status: i32) -> i32 taking 1ms
+        routine kill(&pid: i32, &sig: i32) -> i32 taking 1ms
+        routine waitpid(&pid: i32, &status: i64, &options: i32) -> i32 taking 10ms
+        routine pipe(&pipefd: i64) -> i32 taking 2ms
+        routine read(&fd: i32, &buf: i64, &count: u64) -> i64 taking 3ms
+        routine write(&fd: i32, &buf: i64, &count: u64) -> i64 taking 2ms
+        routine close(&fd: i32) -> i32 taking 1ms
+        routine system(&command: string) -> i32 taking 50ms
+        routine exit(&status: i32) -> i32 taking 1ms
     }
 }
