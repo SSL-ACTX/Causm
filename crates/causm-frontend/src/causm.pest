@@ -26,6 +26,8 @@ statement = {
         | macro_call_stmt
         | directive_stmt
         | isolate_stmt
+        | actor_stmt
+        | send_stmt
         | using_stmt
         | split_stmt
         | routine_stmt
@@ -159,6 +161,10 @@ policy_stmt = { "policy" ~ policy_target ~ "=" ~ policy_kind }
 slice_stmt = { "slice" ~ amount ~ "ms" }
 
 isolate_stmt = { "isolate" ~ identifier? ~ "{" ~ manifest ~ statement* ~ "}" }
+actor_stmt = { "actor" ~ identifier? ~ "{" ~ manifest ~ actor_handler* ~ "}" }
+actor_handler = { "on" ~ actor_pattern ~ ("taking" ~ amount ~ "ms")? ~ statement_block }
+actor_pattern = { identifier ~ ("::" ~ identifier)? }
+send_stmt = { "send" ~ "(" ~ param_mode? ~ expression ~ ")" ~ "to" ~ identifier }
 manifest     = { (resource_decl | require_decl | slice_decl)* }
 slice_decl   = { "slice" ~ amount ~ "ms" }
 resource_decl = { "enable" ~ identifier ~ "(" ~ amount ~ unit? ~ ")" }

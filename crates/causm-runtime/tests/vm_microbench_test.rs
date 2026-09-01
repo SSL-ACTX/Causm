@@ -4,7 +4,6 @@ use causm_frontend::parser;
 use causm_runtime::vm::Vm;
 use std::time::Instant;
 
-
 fn setup_vm_and_program(source: &str) -> (Vm, causm_ir::IrProgram) {
     let program = parser::parse_causm(source).expect("AST parsing failed");
     let mut analyzer = EntropicAnalyzer::new();

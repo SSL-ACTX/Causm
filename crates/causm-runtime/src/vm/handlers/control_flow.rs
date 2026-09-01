@@ -180,7 +180,7 @@ impl Vm {
                 .foreign_manager
                 .get_or_load_symbol(&binding.lib_name, &binding.symbol)?;
             let result_payload = unsafe {
-                crate::vm::ffi::invoke_foreign_symbol(
+                crate::vm::handlers::ffi::invoke_foreign_symbol(
                     sym_ptr,
                     &mut arg_values,
                     &routine_def.return_type,
@@ -415,7 +415,8 @@ impl Vm {
                                     causm_core::value::Payload::Array(_)
                                 )
                             ) {
-                                let caller_meta = branch.arena.get_metadata(caller_reg).cloned();
+                                let caller_meta =
+                                    branch.arena.get_metadata(caller_reg).cloned();
                                 branch.arena.insert(
                                     caller_reg,
                                     causm_core::value::EntropicState::Valid(
@@ -521,7 +522,12 @@ impl Vm {
                 // Check causal history: if any field decay was recorded for this register
                 // in this branch, treat it as Decayed.
                 let has_field_decay = self.causal_history.iter().any(|ev| {
-                    if let crate::vm::state::CausalEvent::Decay { branch_id: b, reg, .. } = ev {
+                    if let crate::vm::state::CausalEvent::Decay {
+                        branch_id: b,
+                        reg,
+                        ..
+                    } = ev
+                    {
                         b == branch_id && *reg == target.0
                     } else {
                         false

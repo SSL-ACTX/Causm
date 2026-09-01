@@ -130,14 +130,13 @@ impl Vm {
                             let strategy = reg_resolutions
                                 .get(&(idx as u32))
                                 .unwrap_or(&ResolutionStrategy::Auto);
-                            let (resolved, rev) = self
-                                .resolve_entropic_conflict(
-                                    &idx.to_string(),
-                                    ext,
-                                    incoming,
-                                    strategy,
-                                    branch_name,
-                                );
+                            let (resolved, rev) = self.resolve_entropic_conflict(
+                                &idx.to_string(),
+                                ext,
+                                incoming,
+                                strategy,
+                                branch_name,
+                            );
                             if pending_reversion.is_none() {
                                 pending_reversion = rev;
                             }
@@ -186,7 +185,9 @@ impl Vm {
                 let meta = merged_metadata.get(idx).and_then(|m| m.clone());
                 target_branch.arena.ensure_register(idx as u32);
                 if let Some(m) = meta {
-                    target_branch.arena.insert_with_metadata(idx as u32, state, m)?;
+                    target_branch
+                        .arena
+                        .insert_with_metadata(idx as u32, state, m)?;
                 } else {
                     target_branch.arena.insert(idx as u32, state)?;
                 }
@@ -363,8 +364,12 @@ impl Vm {
                     match (existing, incoming) {
                         (EntropicState::Consumed, other) => (other.clone(), None),
                         (other, EntropicState::Consumed) => (other.clone(), None),
-                        (_, incoming_valid @ EntropicState::Valid(_)) => (incoming_valid.clone(), None),
-                        (existing_valid @ EntropicState::Valid(_), _) => (existing_valid.clone(), None),
+                        (_, incoming_valid @ EntropicState::Valid(_)) => {
+                            (incoming_valid.clone(), None)
+                        }
+                        (existing_valid @ EntropicState::Valid(_), _) => {
+                            (existing_valid.clone(), None)
+                        }
                         _ => (incoming.clone(), None),
                     }
                 }

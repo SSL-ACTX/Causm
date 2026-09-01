@@ -600,7 +600,8 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     if first.as_rule() == Rule::named_struct_lit {
                         let named_pair = inner.next().unwrap();
                         let mut named_inner = named_pair.into_inner();
-                        let t_name = named_inner.next().map(|p| p.as_str().to_string());
+                        let t_name =
+                            named_inner.next().map(|p| p.as_str().to_string());
                         (t_name, named_inner.next())
                     } else {
                         (None, inner.next())

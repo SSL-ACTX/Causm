@@ -183,7 +183,9 @@ impl Vm {
                 let t = self.get_branch_mut(&target_id)?;
                 (t.pc, !t.call_stack.is_empty(), t.instructions.len())
             };
-            if !in_call && (pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len) {
+            if !in_call
+                && (pc < block_pc || pc >= block_pc + block_len || pc >= instrs_len)
+            {
                 break;
             }
             self.execute_instruction(&target_id)?;

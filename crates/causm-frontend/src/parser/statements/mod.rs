@@ -37,6 +37,8 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         Rule::timeline_block
         | Rule::directive_stmt
         | Rule::isolate_stmt
+        | Rule::actor_stmt
+        | Rule::send_stmt
         | Rule::routine_stmt
         | Rule::require_decl
         | Rule::anchor_stmt

@@ -1,7 +1,7 @@
 use crate::vm::error::TemporalError;
 use crate::vm::state::{CausalEvent, Message, Vm};
+use causm_concurrency::mailbox::{BoundedMailbox, MailboxError, SaturationPolicy};
 use causm_ir::Reg;
-use std::collections::VecDeque;
 
 #[allow(non_snake_case)]
 impl Vm {
@@ -12,10 +12,15 @@ impl Vm {
         capacity: usize,
         decay_after_ms: Option<u64>,
     ) -> Result<(), TemporalError> {
-        self.channels
-            .insert(name.clone(), VecDeque::with_capacity(capacity));
-        self.pending_channels
-            .insert(name.clone(), VecDeque::with_capacity(capacity));
+        let cap = capacity.max(1);
+        self.channels.insert(
+            name.clone(),
+            BoundedMailbox::new(cap, SaturationPolicy::RingBuffer),
+        );
+        self.pending_channels.insert(
+            name.clone(),
+            BoundedMailbox::new(cap, SaturationPolicy::RingBuffer),
+        );
         if let Some(decay) = decay_after_ms {
             self.channel_decay_limits.insert(name, decay);
         }
@@ -53,7 +58,12 @@ impl Vm {
 
         if is_isochronous {
             if let Some(pending) = self.pending_channels.get_mut(&chan_id) {
-                pending.push_back(message.clone());
+                if let Err(MailboxError::Full(_)) = pending.push(message.clone()) {
+                    return Err(TemporalError::ChannelFault(format!(
+                        "Channel overflow: {}",
+                        chan_id
+                    )));
+                }
             } else {
                 return Err(TemporalError::ChannelFault(format!(
                     "Channel not found: {}",
@@ -61,7 +71,12 @@ impl Vm {
                 )));
             }
         } else if let Some(chan) = self.channels.get_mut(&chan_id) {
-            chan.push_back(message.clone());
+            if let Err(MailboxError::Full(_)) = chan.push(message.clone()) {
+                return Err(TemporalError::ChannelFault(format!(
+                    "Channel overflow: {}",
+                    chan_id
+                )));
+            }
         } else {
             return Err(TemporalError::ChannelFault(format!(
                 "Channel not found: {}",
@@ -89,7 +104,7 @@ impl Vm {
                     chan_id
                 ))
             })?;
-            chan.front().map(|m| m.sent_at).ok_or_else(|| {
+            chan.peek().map(|m| m.sent_at).ok_or_else(|| {
                 TemporalError::ChannelFault(format!("Channel empty: {}", chan_id))
             })?
         };
@@ -119,7 +134,7 @@ impl Vm {
                     chan_id
                 ))
             })?;
-            chan.pop_front().ok_or_else(|| {
+            chan.pop().ok_or_else(|| {
                 TemporalError::ChannelFault(format!("Channel empty: {}", chan_id))
             })?
         };

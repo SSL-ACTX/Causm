@@ -676,7 +676,9 @@ fn main() -> anyhow::Result<()> {
                 while let Some(dir) = curr_dir {
                     let manifest_candidate = dir.join("causm.toml");
                     if manifest_candidate.exists() {
-                        if let Err(e) = plugin_engine.load_from_causm_toml(&manifest_candidate) {
+                        if let Err(e) =
+                            plugin_engine.load_from_causm_toml(&manifest_candidate)
+                        {
                             eprintln!("\x1b[1;33mwarning: failed to load causm.toml at '{}':\x1b[0m {}", manifest_candidate.display(), e);
                         }
                         break;

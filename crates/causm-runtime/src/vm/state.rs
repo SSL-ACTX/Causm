@@ -1,8 +1,8 @@
+use causm_concurrency::mailbox::BoundedMailbox;
 use causm_core::value::{Arena, EntropicState, Payload, ValueMetadata};
 use causm_core::{Manifest, ParamMode, SpeculationCommitMode};
-use std::collections::{HashMap, VecDeque};
 use indexmap::IndexMap;
-
+use std::collections::HashMap;
 
 pub type CapHandler =
     Box<dyn Fn(&HashMap<String, String>) -> Result<Payload, String>>;
@@ -87,8 +87,8 @@ pub struct Vm {
     pub active_branches: IndexMap<String, Timeline>,
 
     pub capability_handlers: HashMap<String, CapHandler>,
-    pub channels: HashMap<String, VecDeque<Message>>,
-    pub pending_channels: HashMap<String, VecDeque<Message>>,
+    pub channels: HashMap<String, BoundedMailbox<Message>>,
+    pub pending_channels: HashMap<String, BoundedMailbox<Message>>,
     pub channel_decay_limits: HashMap<String, u64>,
     pub routines: HashMap<String, Routine>,
     pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
@@ -108,7 +108,7 @@ pub struct Vm {
     pub current_span: Option<causm_core::Span>,
     pub call_depth: u32,
     pub max_call_depth: u32,
-    pub foreign_manager: std::sync::Arc<crate::vm::ffi::ForeignLibraryManager>,
+    pub foreign_manager: std::sync::Arc<crate::vm::handlers::ffi::ForeignLibraryManager>,
 }
 
 #[derive(Clone, Debug)]

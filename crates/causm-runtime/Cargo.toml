@@ -5,6 +5,7 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
+causm-concurrency = { path = "../causm-concurrency" }
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
 thiserror = "2.0.18"

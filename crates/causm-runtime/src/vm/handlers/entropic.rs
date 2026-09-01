@@ -45,7 +45,7 @@ impl Vm {
                     {
                         unsafe {
                             let mut args = [field_val.clone()];
-                            let _ = crate::vm::ffi::invoke_foreign_symbol(
+                            let _ = crate::vm::handlers::ffi::invoke_foreign_symbol(
                                 sym_ptr,
                                 &mut args,
                                 &causm_core::types::Type::I32,

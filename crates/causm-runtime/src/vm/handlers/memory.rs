@@ -22,7 +22,9 @@ impl Vm {
                     match &branch.arena.registers[idx] {
                         EntropicState::Valid(p) => p.clone(),
                         EntropicState::Decayed(f) => Payload::Struct(f.clone()),
-                        EntropicState::Leased { original, .. } => match original.as_ref() {
+                        EntropicState::Leased { original, .. } => match original
+                            .as_ref()
+                        {
                             EntropicState::Valid(p) => p.clone(),
                             EntropicState::Decayed(f) => Payload::Struct(f.clone()),
                             _ => Payload::Null,
@@ -531,12 +533,19 @@ impl Vm {
     ) -> Result<(), TemporalError> {
         let (field_val, is_entangled) = {
             let branch = self.get_branch(branch_id)?;
-            let parent_payload = branch.arena.get_payload(target.0).map_err(TemporalError::MemoryFault)?;
-            if let Payload::Struct(fields) | Payload::Topology(fields) = parent_payload {
+            let parent_payload = branch
+                .arena
+                .get_payload(target.0)
+                .map_err(TemporalError::MemoryFault)?;
+            if let Payload::Struct(fields) | Payload::Topology(fields) =
+                parent_payload
+            {
                 if let Some(field_state) = fields.get(&field) {
                     match field_state {
                         EntropicState::Valid(val) => {
-                            let entangled = self.entanglements.iter().any(|g| g.contains(&(branch_id.to_string(), target.0)));
+                            let entangled = self.entanglements.iter().any(|g| {
+                                g.contains(&(branch_id.to_string(), target.0))
+                            });
                             (val.clone(), entangled)
                         }
                         EntropicState::Consumed | EntropicState::Decayed(_) => {
@@ -552,12 +561,12 @@ impl Vm {
                     }
                 } else if let Some(stripped) = field.strip_prefix('_') {
                     if let Ok(idx_n) = stripped.parse::<usize>() {
-                        let mut non_tag_fields: Vec<_> = fields
-                            .iter()
-                            .filter(|(k, _)| *k != "tag")
-                            .collect();
+                        let mut non_tag_fields: Vec<_> =
+                            fields.iter().filter(|(k, _)| *k != "tag").collect();
                         non_tag_fields.sort_by_key(|(k, _)| *k);
-                        if let Some((_, EntropicState::Valid(p))) = non_tag_fields.get(idx_n) {
+                        if let Some((_, EntropicState::Valid(p))) =
+                            non_tag_fields.get(idx_n)
+                        {
                             (p.clone(), false)
                         } else {
                             return Err(TemporalError::MemoryFault(
@@ -585,12 +594,13 @@ impl Vm {
             let branch = self.get_branch(branch_id)?;
             branch.birth_global_time + branch.local_clock
         };
-        self.causal_history.push(crate::vm::state::CausalEvent::Decay {
-            branch_id: branch_id.to_string(),
-            reg: target.0,
-            field: field.clone(),
-            time,
-        });
+        self.causal_history
+            .push(crate::vm::state::CausalEvent::Decay {
+                branch_id: branch_id.to_string(),
+                reg: target.0,
+                field: field.clone(),
+                time,
+            });
 
         if is_entangled {
             self.propagate_field_decay(branch_id, target.0, &field)?;
@@ -638,7 +648,10 @@ impl Vm {
         };
         let (state, is_struct_or_topology) = match target_val {
             Payload::Struct(fields) | Payload::Topology(fields) => {
-                let s = fields.get(&idx_str).cloned().unwrap_or(EntropicState::Consumed);
+                let s = fields
+                    .get(&idx_str)
+                    .cloned()
+                    .unwrap_or(EntropicState::Consumed);
                 (s, true)
             }
             Payload::Array(elements) => {
@@ -656,17 +669,21 @@ impl Vm {
         };
 
         if is_struct_or_topology && matches!(state, EntropicState::Valid(_)) {
-            let is_entangled = self.entanglements.iter().any(|g| g.contains(&(branch_id.to_string(), target.0)));
+            let is_entangled = self
+                .entanglements
+                .iter()
+                .any(|g| g.contains(&(branch_id.to_string(), target.0)));
             let time = {
                 let branch = self.get_branch(branch_id)?;
                 branch.birth_global_time + branch.local_clock
             };
-            self.causal_history.push(crate::vm::state::CausalEvent::Decay {
-                branch_id: branch_id.to_string(),
-                reg: target.0,
-                field: idx_str.clone(),
-                time,
-            });
+            self.causal_history
+                .push(crate::vm::state::CausalEvent::Decay {
+                    branch_id: branch_id.to_string(),
+                    reg: target.0,
+                    field: idx_str.clone(),
+                    time,
+                });
             if is_entangled {
                 self.propagate_field_decay(branch_id, target.0, &idx_str)?;
             }

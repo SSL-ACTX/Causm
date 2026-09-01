@@ -108,6 +108,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "causm-concurrency"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "causm-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "causm-core"
 version = "0.1.0-alpha.1"
 dependencies = [
@@ -196,6 +206,7 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "causm-analysis",
+ "causm-concurrency",
  "causm-core",
  "causm-frontend",
  "causm-ir",

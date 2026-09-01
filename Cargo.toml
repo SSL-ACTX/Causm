@@ -6,6 +6,7 @@ members = [
 ]
 default-members = [
     "crates/causm-core",
+    "crates/causm-concurrency",
     "crates/causm-ir",
     "crates/causm-frontend",
     "crates/causm-analysis",

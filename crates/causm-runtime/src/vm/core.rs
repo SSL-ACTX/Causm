@@ -1,6 +1,7 @@
 use crate::gc::GarbageCollector;
 use crate::vm::error::TemporalError;
 use crate::vm::state::{AnchorPoint, Routine, SpeculationContext, Timeline, Vm};
+use causm_concurrency::mailbox::MailboxError;
 use causm_core::value::{Arena, EntropicState, MemoryError, Payload, ValueMetadata};
 use causm_core::{
     BinaryOperator, Capability, EntropyMode, Expression, MergeResolution, ParamMode,
@@ -47,7 +48,7 @@ impl Vm {
             call_depth: 0,
             max_call_depth: 10_000,
             foreign_manager: std::sync::Arc::new(
-                crate::vm::ffi::ForeignLibraryManager::new(),
+                crate::vm::handlers::ffi::ForeignLibraryManager::new(),
             ),
         }
     }
@@ -528,41 +529,31 @@ impl Vm {
             branch.pc += 1;
         }
 
-        #[allow(non_snake_case)]
-        macro_rules! dispatch_instruction {
-            ($($name:ident $({ $($field:ident: $type:ty),* })?),*) => {
-                match instr {
-                    $(
-                        causm_ir::Instruction::$name $({ $($field),* })? => {
-                            if let Err(e) = self.$name(branch_id, $($($field),*)?) {
-                                if self.debug_mode {
-                                    let span_str = self
-                                        .current_span
-                                        .as_ref()
-                                        .map(|s| format!("span {}-{}", s.start, s.end))
-                                        .unwrap_or_else(|| "unknown span".to_string());
-                                    let clock = self
-                                        .get_branch(branch_id)
-                                        .map(|b| b.local_clock)
-                                        .unwrap_or(0);
-                                    eprintln!(
-                                        "[TVM FAULT] [{}] @{}ms ({}) | instruction: {} -> {}",
-                                        branch_id,
-                                        clock,
-                                        span_str,
-                                        stringify!($name),
-                                        e
-                                    );
-                                }
-                                return Err(e);
-                            }
-                        },
-                    )*
-                }
+        {
+            let instr_debug = format!("{:?}", instr);
+            let dispatch_result = {
+                let mut ctx = crate::vm::context::VmContext::new(self, branch_id);
+                crate::vm::handlers::dispatch_instruction(&mut ctx, instr)
             };
+            if let Err(e) = dispatch_result {
+                if self.debug_mode {
+                    let span_str = self
+                        .current_span
+                        .as_ref()
+                        .map(|s| format!("span {}-{}", s.start, s.end))
+                        .unwrap_or_else(|| "unknown span".to_string());
+                    let clock = self
+                        .get_branch(branch_id)
+                        .map(|b| b.local_clock)
+                        .unwrap_or(0);
+                    eprintln!(
+                        "[TVM FAULT] [{}] @{}ms ({}) | instruction: {} -> {}",
+                        branch_id, clock, span_str, instr_debug, e
+                    );
+                }
+                return Err(e);
+            }
         }
-
-        causm_ir::instructions!(dispatch_instruction);
 
         if self.trace_entropy {
             println!("\x1b[1;30m--- Entropy Trace [{}] ---\x1b[0m", branch_id);
@@ -714,9 +705,8 @@ impl Vm {
 
                     let mut found = false;
                     if let Some(chan) = self.channels.get_mut(&channel_id_val) {
-                        if let Some(pos) =
-                            chan.iter().position(|m| m.id == payload_id_val)
-                        {
+                        let pos = chan.iter().position(|m| m.id == payload_id_val);
+                        if let Some(pos) = pos {
                             chan.remove(pos);
                             found = true;
                         }
@@ -725,9 +715,8 @@ impl Vm {
                         if let Some(pending) =
                             self.pending_channels.get_mut(&channel_id_val)
                         {
-                            if let Some(pos) =
-                                pending.iter().position(|m| m.id == payload_id_val)
-                            {
+                            let pos = pending.iter().position(|m| m.id == payload_id_val);
+                            if let Some(pos) = pos {
                                 pending.remove(pos);
                                 found = true;
                             }
@@ -744,7 +733,9 @@ impl Vm {
                     message,
                 } if b_id == branch_id => {
                     if let Some(chan) = self.channels.get_mut(&channel_id) {
-                        chan.push_front(message.clone());
+                        if let Err(MailboxError::Full(_)) = chan.push_front(message.clone()) {
+                            return Err(TemporalError::Paradox);
+                        }
                     } else {
                         return Err(TemporalError::Paradox);
                     }

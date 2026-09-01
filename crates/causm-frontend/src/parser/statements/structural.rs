@@ -4,6 +4,79 @@ use crate::parser::Rule;
 use causm_core::*;
 use pest::iterators::Pair;
 
+fn parse_actor_handler(
+    actor_name: Option<&str>,
+    pair: Pair<Rule>,
+) -> SpannedStatement {
+    let mut inner = pair.into_inner();
+    let pattern_pair = inner.next().expect("missing actor message pattern");
+    let mut pattern = "anonymous".to_string();
+    let mut taking_ms = None;
+    let mut body = Vec::new();
+
+    if pattern_pair.as_rule() == Rule::actor_pattern {
+        let mut parts = pattern_pair.into_inner();
+        let first = parts.next().unwrap().as_str().to_string();
+        let second = parts.next().map(|p| p.as_str().to_string());
+        pattern = match second {
+            Some(s) => format!("{}::{}", first, s),
+            None => first,
+        };
+    }
+
+    for current in inner {
+        match current.as_rule() {
+            Rule::duration_limit => {
+                if current.as_str().contains('_') || current.as_str().contains('?') {
+                    taking_ms = None;
+                } else if let Some(amount_pair) =
+                    current.into_inner().find(|p| p.as_rule() == Rule::amount)
+                {
+                    taking_ms = amount_pair.as_str().parse::<u64>().ok();
+                }
+            }
+            Rule::statement_block => {
+                for stmt_pair in current.into_inner() {
+                    body.push(parse_statement(stmt_pair));
+                }
+            }
+            Rule::statement => {
+                body.push(parse_statement(current));
+            }
+            _ => {}
+        }
+    }
+
+    let routine_name = match actor_name {
+        Some(name) => format!("{}::{}", name, pattern),
+        None => pattern,
+    };
+
+    SpannedStatement::new(
+        Statement::RoutineDef {
+            name: routine_name,
+            params: Vec::new(),
+            return_type: None,
+            taking_ms,
+            state_constraint: None,
+            required_capabilities: Vec::new(),
+            body,
+        },
+        Span { start: 0, end: 0 },
+    )
+}
+
+fn parse_send_value(expr: Expression) -> String {
+    match expr {
+        Expression::Identifier(name) => name,
+        Expression::FieldAccess { target, field } => match *target {
+            Expression::Identifier(base) => format!("{}.{}", base, field),
+            _ => "__send_value".to_string(),
+        },
+        _ => "__send_value".to_string(),
+    }
+}
+
 pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
     match pair.as_rule() {
         Rule::timeline_block => {
@@ -76,6 +149,58 @@ pub fn parse_structural_stmt(pair: Pair<Rule>) -> Statement {
                 manifest,
                 body,
             })
+        }
+        Rule::actor_stmt => {
+            let inner = pair.into_inner();
+            let mut name = None;
+            let mut manifest = Manifest::default();
+            let mut body = Vec::new();
+            for current in inner {
+                match current.as_rule() {
+                    Rule::identifier => name = Some(current.as_str().to_string()),
+                    Rule::manifest => manifest = parse_manifest(current),
+                    Rule::actor_handler => {
+                        body.push(parse_actor_handler(name.as_deref(), current));
+                    }
+                    _ => {}
+                }
+            }
+            Statement::Isolate(IsolateBlock {
+                name,
+                manifest,
+                body,
+            })
+        }
+        Rule::send_stmt => {
+            let inner = pair.into_inner();
+            let mut value_expr = None;
+            let mut target_name = None;
+            let mut value_id = "__send_value".to_string();
+            for current in inner {
+                match current.as_rule() {
+                    Rule::expression => {
+                        value_expr = Some(
+                            crate::parser::expressions::parse_expression(current),
+                        );
+                    }
+                    Rule::identifier => {
+                        if target_name.is_none() {
+                            target_name = Some(current.as_str().to_string());
+                        }
+                    }
+                    Rule::param_mode => {
+                        // mode is accepted syntactically and ignored for this phase
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(expr) = value_expr {
+                value_id = parse_send_value(expr);
+            }
+            Statement::Send {
+                value_id,
+                target_branch: target_name.unwrap_or_else(|| "main".to_string()),
+            }
         }
         Rule::routine_stmt => {
             let mut inner = pair.into_inner();

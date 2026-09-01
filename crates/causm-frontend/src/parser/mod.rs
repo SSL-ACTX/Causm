@@ -71,6 +71,31 @@ pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
     Ok(prog)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::parse_causm;
+    use causm_core::Statement;
+
+    #[test]
+    fn test_actor_and_send_syntax_parses() {
+        let program = parse_causm(
+            "actor FlightController { require System.Log on FlightCommand::SetThrottle taking 5ms { print(1) } } send(consume cmd) to FlightController",
+        )
+        .unwrap();
+
+        assert!(program.timelines.iter().any(|tl| {
+            tl.statements
+                .iter()
+                .any(|stmt| matches!(stmt.stmt, Statement::Isolate(_)))
+        }));
+        assert!(program.timelines.iter().any(|tl| {
+            tl.statements
+                .iter()
+                .any(|stmt| matches!(stmt.stmt, Statement::Send { .. }))
+        }));
+    }
+}
+
 fn expand_spanned_statements(
     stmts: Vec<SpannedStatement>,
     base_dir: Option<&Path>,

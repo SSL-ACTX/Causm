@@ -205,25 +205,39 @@ impl EntropicAnalyzer {
         if *is_valid_check {
             match condition {
                 Expression::Identifier(var_name) => {
-                    let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+                    let branch =
+                        self.branch_contexts.get(&self.current_branch).unwrap();
                     if branch.consumed.contains(var_name) {
-                        return Err(self.annotate(SemanticErrorKind::UseAfterConsume(var_name.clone())));
+                        return Err(self.annotate(
+                            SemanticErrorKind::UseAfterConsume(var_name.clone()),
+                        ));
                     }
                 }
                 Expression::Call { args, .. } if !args.is_empty() => {
                     for arg in args {
                         if let Expression::Identifier(var_name) = arg {
-                            let branch = self.branch_contexts.get(&self.current_branch).unwrap();
+                            let branch = self
+                                .branch_contexts
+                                .get(&self.current_branch)
+                                .unwrap();
                             if branch.consumed.contains(var_name) {
-                                return Err(self.annotate(SemanticErrorKind::UseAfterConsume(var_name.clone())));
+                                return Err(self.annotate(
+                                    SemanticErrorKind::UseAfterConsume(
+                                        var_name.clone(),
+                                    ),
+                                ));
                             }
                         } else {
-                            crate::expression::analyze_expression_nonconsuming(self, arg)?;
+                            crate::expression::analyze_expression_nonconsuming(
+                                self, arg,
+                            )?;
                         }
                     }
                 }
                 _ => {
-                    crate::expression::analyze_expression_nonconsuming(self, condition)?;
+                    crate::expression::analyze_expression_nonconsuming(
+                        self, condition,
+                    )?;
                 }
             }
         } else {
