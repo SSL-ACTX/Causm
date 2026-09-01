@@ -1,6 +1,10 @@
 pub mod analyzer;
+pub mod codegen;
 pub mod expression;
+pub mod resolve;
 pub mod oxiz;
+pub mod pipeline;
+pub mod ssa;
 pub mod solver;
 pub mod statement;
 pub mod statements;
