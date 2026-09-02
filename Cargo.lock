@@ -81,7 +81,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "causm-analysis"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "causm-core",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "causm-cli"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "causm-analysis",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "causm-concurrency"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "causm-core",
  "serde",
@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "causm-core"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "bincode",
  "serde",
@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "causm-devtools"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "causm-analysis",
  "causm-core",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "causm-frontend"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "causm-core",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "causm-ir"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "causm-core",
  "serde",
@@ -165,7 +165,7 @@ dependencies = [
 
 [[package]]
 name = "causm-plugin-sdk"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "bincode",
  "causm-core",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "causm-plugin-sdk-macros"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "causm-plugins"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "causm-runtime"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "causm-analysis",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "causm-stdlib"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "bincode",
