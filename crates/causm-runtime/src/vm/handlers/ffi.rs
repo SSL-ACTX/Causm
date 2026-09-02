@@ -1080,10 +1080,8 @@ pub unsafe fn invoke_foreign_symbol(
                     }
                 }
             } else {
-                for (i, chunk) in buf.chunks_exact(8).enumerate() {
-                    let mut bytes = [0u8; 8];
-                    bytes.copy_from_slice(chunk);
-                    let val_i64 = i64::from_ne_bytes(bytes);
+                for (i, chunk) in buf.as_chunks::<8>().0.iter().enumerate() {
+                    let val_i64 = i64::from_ne_bytes(*chunk);
                     if i < elements.len() {
                         elements[i] = Payload::Integer(val_i64);
                     } else {

@@ -1,16 +1,14 @@
+pub mod liveness;
+
+pub use liveness::{LiveRange, LiveRangeTable};
+
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::{Program, TimeCoordinate};
 
 /// Stage 2 of the analysis pipeline: SSA Construction & Control Flow Graph.
 ///
 /// Iterates every timeline block in the program, advances the virtual clock,
-/// and runs `analyze_statement` on each statement in order. This corresponds
-/// to the live-range / entropic state tracking pass that assigns SSA versions
-/// to registers and checks consume/peek/lease invariants.
-///
-/// The formal SSA IR (basic blocks, phi nodes, dominance frontiers) is
-/// constructed by `causm-ir`; this stage performs semantic validation in
-/// parallel on the same source structure.
+/// computes non-lexical live ranges, and runs semantic statement analysis.
 pub struct SsaStage;
 
 impl SsaStage {

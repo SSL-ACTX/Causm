@@ -9,7 +9,7 @@ use causm_core::Program;
 /// ```text
 /// Stage 1  hir::HirStage     — HIR Resolution & Capability Gating
 /// Stage 2  ssa::SsaStage     — SSA Construction & Control Flow Graph
-/// Stage 3  solver::SolverStage — Entropic-Polonius Solver (EGC + SMT)
+/// Stage 3  solver::SolverStage — Entropius Solver (EGC + SMT)
 /// Stage 4  codegen::CodegenStage — Optimization & Bytecode Lowering
 /// ```
 ///
@@ -29,11 +29,20 @@ impl<'a> AnalysisPipeline<'a> {
         // Stage 1: HIR resolution — intrinsics, types, routines, interfaces.
         crate::resolve::ResolveStage::run(self.analyzer, program);
 
-        // Stage 2: SSA semantic analysis — timeline traversal + live-range tracking.
+        // Stage 2a (Entropius Relational Pre-pass):
+        //   Extract facts from the raw AST and verify Invariants 1, 2, 3.
+        //   This runs BEFORE SsaStage so the rich multi-span diagnostic fires
+        //   before any legacy procedural error can mask it.
+        crate::solver::SolverStage::run_relational(self.analyzer, program)?;
+
+        // Stage 2b: SSA semantic analysis — timeline traversal + live-range tracking.
+        //   Populates branch_contexts.produced, routines WCET, entanglement sets.
         crate::ssa::SsaStage::run(self.analyzer, program)?;
 
-        // Stage 3: Entropic-Polonius solver — EGC invariant + SMT formal verification.
-        crate::solver::SolverStage::run(self.analyzer, program)?;
+        // Stage 2c (Post-SSA Solver): EGC unconsumed-variable check + full symbolic
+        //   SMT WcetSolver (WCET, temporal contracts, and isolate budgets) that depend on
+        //   the populated branch_contexts and routines from SsaStage.
+        crate::solver::SolverStage::run_post_ssa(self.analyzer, program)?;
 
         // Stage 4: Codegen — optimization coordination (stub; optimizer runs in causm-ir).
         crate::codegen::CodegenStage::run(self.analyzer, program)?;

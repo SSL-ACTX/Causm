@@ -793,7 +793,7 @@ impl Vm {
                 BinaryOperator::BitwiseOr => Payload::Integer(l | r),
                 BinaryOperator::BitwiseXor => Payload::Integer(l ^ r),
                 BinaryOperator::Shl => {
-                    if r < 0 || r >= 64 {
+                    if !(0..64).contains(&r) {
                         return Err(TemporalError::EvalError(
                             "Shift operand out of bounds [0, 63]".into(),
                         ));
@@ -801,7 +801,7 @@ impl Vm {
                     Payload::Integer(l << (r as u32))
                 }
                 BinaryOperator::Shr => {
-                    if r < 0 || r >= 64 {
+                    if !(0..64).contains(&r) {
                         return Err(TemporalError::EvalError(
                             "Shift operand out of bounds [0, 63]".into(),
                         ));

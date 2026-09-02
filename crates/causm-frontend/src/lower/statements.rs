@@ -26,7 +26,6 @@ pub fn lower_routine_body(sub_ctx: &mut LoweringContext, body: &[SpannedStatemen
                 ref condition,
                 ref then_branch,
                 ref else_branch,
-                reconcile: _,
                 ..
             } = s.stmt
             {

@@ -288,7 +288,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut inner = pair.into_inner();
             let mut type_parts = Vec::new();
             let mut type_args = Vec::new();
-            while let Some(p) = inner.next() {
+            for p in inner.by_ref() {
                 if p.as_rule() == Rule::type_param_list {
                     type_args =
                         crate::parser::statements::utils::parse_type_param_list(p);

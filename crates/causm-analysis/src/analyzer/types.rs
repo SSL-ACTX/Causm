@@ -5,6 +5,8 @@ use thiserror::Error;
 #[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum SemanticErrorKind {
+    #[error("{0}")]
+    EntropiusDiagnostic(String),
     #[error("Compile-Time Entropic Violation: '{0}' has been consumed or decayed and cannot be moved/reused.")]
     UseAfterConsume(String),
     #[error("Entropy Violation: Variable '{0}' has decayed after {1}ms (instantiated at {2}ms, currently at {3}ms)")]
@@ -79,6 +81,10 @@ pub struct SemanticError {
 
 impl std::fmt::Display for SemanticError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let SemanticErrorKind::EntropiusDiagnostic(ref rich) = *self.kind {
+            return write!(f, "{}", rich);
+        }
+
         let location_prefix = match (&self.file, self.line, self.column) {
             (Some(file), Some(line), Some(col)) => {
                 format!("{}:{}:{}", file, line, col)

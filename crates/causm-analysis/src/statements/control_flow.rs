@@ -576,6 +576,7 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn RoutineDef(
         &mut self,
         name: &String,

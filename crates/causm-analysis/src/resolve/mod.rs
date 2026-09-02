@@ -1,6 +1,8 @@
 pub mod declarations;
+pub mod methods;
 
 pub use declarations::run_resolve_stage;
+pub use methods::{resolve_method_call, MethodTargetResolution};
 
 /// Stage 1 of the analysis pipeline: HIR Resolution & Capability Gating.
 ///

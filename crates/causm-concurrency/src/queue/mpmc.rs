@@ -25,18 +25,15 @@ impl<T, const N: usize> MpmcQueue<T, N> {
             N > 0 && (N & (N - 1)) == 0,
             "MpmcQueue capacity must be a non-zero power of 2"
         );
-        let buffer = unsafe {
-            let mut arr: [Cell<T>; N] = MaybeUninit::uninit().assume_init();
+        let buffer = {
+            let mut arr: [MaybeUninit<Cell<T>>; N] = unsafe { MaybeUninit::uninit().assume_init() };
             for (i, elem) in arr.iter_mut().enumerate() {
-                std::ptr::write(
-                    elem,
-                    Cell {
-                        sequence: AtomicUsize::new(i),
-                        value: UnsafeCell::new(MaybeUninit::uninit()),
-                    },
-                );
+                elem.write(Cell {
+                    sequence: AtomicUsize::new(i),
+                    value: UnsafeCell::new(MaybeUninit::uninit()),
+                });
             }
-            arr
+            unsafe { std::mem::transmute_copy(&arr) }
         };
 
         Self {

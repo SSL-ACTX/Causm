@@ -539,6 +539,9 @@ impl EntropicAnalyzer {
 
     #[allow(dead_code)]
     pub fn format_semantic_error(&self, err: &SemanticError) -> String {
+        if let SemanticErrorKind::EntropiusDiagnostic(ref rich) = *err.kind {
+            return rich.clone();
+        }
         let mut message = format!("{}", err.kind);
         if let Some(line) = err.line {
             message.push_str(&format!(" at {}:{}", line, err.column.unwrap_or(0)));
@@ -747,12 +750,10 @@ impl EntropicAnalyzer {
                     || act_name == "any"
                     || act_name.starts_with(&format!("{}::", exp_name))
                     || exp_name.starts_with(&format!("{}::", act_name))
-                {
-                    true
-                } else if exp_name.contains('<')
-                    && act_name.contains('<')
-                    && exp_name.split('<').next().unwrap_or(exp_name).trim()
-                        == act_name.split('<').next().unwrap_or(act_name).trim()
+                    || (exp_name.contains('<')
+                        && act_name.contains('<')
+                        && exp_name.split('<').next().unwrap_or(exp_name).trim()
+                            == act_name.split('<').next().unwrap_or(act_name).trim())
                 {
                     true
                 } else if self.interfaces.contains_key(exp_name.as_str()) {

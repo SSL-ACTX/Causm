@@ -145,11 +145,7 @@ impl Vm {
                 branch.flat_loops.pop();
                 let total_elapsed = branch.local_clock - start_local_clock;
                 let pad = if let Some(max) = max_ms {
-                    if total_elapsed < max {
-                        max - total_elapsed
-                    } else {
-                        0
-                    }
+                    max.saturating_sub(total_elapsed)
                 } else {
                     0
                 };

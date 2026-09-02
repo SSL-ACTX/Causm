@@ -16,6 +16,7 @@ pub mod causm_match;
 pub mod causm_oop;
 #[cfg(feature = "plugins")]
 pub mod causm_plugins_test;
+pub mod causm_entropius_relational;
 pub mod causm_process;
 pub mod causm_reconciliation;
 pub mod causm_semantic;

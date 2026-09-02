@@ -209,20 +209,19 @@ fn parse_raw_string(bytes: &[u8], pos: &mut usize) -> Result<String, JsonError> 
                 b't' => out.push('\t'),
                 b'u' => {
                     let code = parse_hex4(bytes, pos)?;
-                    if (0xD800..=0xDBFF).contains(&code) {
-                        if *pos + 2 <= bytes.len()
-                            && &bytes[*pos..*pos + 2] == b"\\u"
-                        {
-                            *pos += 2;
-                            let low = parse_hex4(bytes, pos)?;
-                            if (0xDC00..=0xDFFF).contains(&low) {
-                                let scalar = 0x10000
-                                    + (((code as u32 - 0xD800) << 10)
-                                        | (low as u32 - 0xDC00));
-                                if let Some(c) = char::from_u32(scalar) {
-                                    out.push(c);
-                                    continue;
-                                }
+                    if (0xD800..=0xDBFF).contains(&code)
+                        && *pos + 2 <= bytes.len()
+                        && &bytes[*pos..*pos + 2] == b"\\u"
+                    {
+                        *pos += 2;
+                        let low = parse_hex4(bytes, pos)?;
+                        if (0xDC00..=0xDFFF).contains(&low) {
+                            let scalar = 0x10000
+                                + (((code as u32 - 0xD800) << 10)
+                                    | (low as u32 - 0xDC00));
+                            if let Some(c) = char::from_u32(scalar) {
+                                out.push(c);
+                                continue;
                             }
                         }
                     }
@@ -473,7 +472,7 @@ fn serialize_payload(payload: &Payload, out: &mut String) {
                         if let Some(EntropicState::Valid(v)) = fields.get("_0") {
                             serialize_payload(v, out);
                         } else {
-                            out.push_str("0");
+                            out.push('0');
                         }
                         return;
                     }
