@@ -6,6 +6,8 @@ bak/
 .synapse/
 .causm_cache/
 
+.causm_cache/
+
 __pycache__/
 node_modules/
 *.vsix
