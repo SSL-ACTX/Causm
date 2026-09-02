@@ -1,7 +1,7 @@
+use crate::vm::error::TemporalError;
 use crate::vm::state::Vm;
 use causm_core::value::Payload;
 use causm_ir::Instruction;
-use crate::vm::error::TemporalError;
 
 pub struct VmContext<'a> {
     pub vm: &'a mut Vm,

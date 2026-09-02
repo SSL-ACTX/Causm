@@ -70,7 +70,11 @@ fn test_z3_use_after_consume_symbolic() -> anyhow::Result<()> {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("use of consumed variable") || err.contains("has been consumed"), "Expected use-after-consume error, got: {err}");
+    assert!(
+        err.contains("use of consumed variable")
+            || err.contains("has been consumed"),
+        "Expected use-after-consume error, got: {err}"
+    );
 
     Ok(())
 }
@@ -119,7 +123,11 @@ fn test_z3_loop_double_consume() -> anyhow::Result<()> {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("use of consumed variable") || err.contains("has been consumed"), "Expected use-after-consume error, got: {err}");
+    assert!(
+        err.contains("use of consumed variable")
+            || err.contains("has been consumed"),
+        "Expected use-after-consume error, got: {err}"
+    );
 
     Ok(())
 }
@@ -168,7 +176,10 @@ fn test_z3_causal_paradox() -> anyhow::Result<()> {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("Causal Paradox") || err.contains("causal horizon"), "Expected causal paradox error, got: {err}");
+    assert!(
+        err.contains("Causal Paradox") || err.contains("causal horizon"),
+        "Expected causal paradox error, got: {err}"
+    );
 
     Ok(())
 }
@@ -193,7 +204,12 @@ fn test_z3_entanglement_violation() -> anyhow::Result<()> {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("entangled variable") || err.contains("use of consumed variable") || err.contains("has been consumed"), "Expected entanglement or consume error, got: {err}");
+    assert!(
+        err.contains("entangled variable")
+            || err.contains("use of consumed variable")
+            || err.contains("has been consumed"),
+        "Expected entanglement or consume error, got: {err}"
+    );
 
     Ok(())
 }

@@ -15,4 +15,3 @@ mod math_tests;
 
 pub use error::TemporalError;
 pub use state::{AnchorPoint, Routine, Timeline, Vm};
-

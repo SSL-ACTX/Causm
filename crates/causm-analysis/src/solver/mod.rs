@@ -6,7 +6,10 @@ pub mod wcet;
 
 pub use backend::SolverBackend;
 pub use diagnostics::EntropicDiagnostic;
-pub use facts::{extract_facts, extract_ssa_facts, EntropicFact, PointIndex, ProgramFacts, SsaPointIndex};
+pub use facts::{
+    extract_facts, extract_ssa_facts, EntropicFact, PointIndex, ProgramFacts,
+    SsaPointIndex,
+};
 pub use relational::RelationalInvariantSolver;
 pub use wcet::WcetSolver;
 
@@ -34,10 +37,14 @@ impl SolverStage {
         program: &Program,
     ) -> Result<(), SemanticError> {
         let source = analyzer.source.clone().unwrap_or_default();
-        let filename = analyzer.filename.clone().unwrap_or_else(|| "<unknown>".to_string());
+        let filename = analyzer
+            .filename
+            .clone()
+            .unwrap_or_else(|| "<unknown>".to_string());
         let facts = extract_facts(program, &source, &filename);
 
-        let mut relational_solver = RelationalInvariantSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
+        let mut relational_solver =
+            RelationalInvariantSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
         relational_solver.solve_invariants(&facts)?;
 
         Ok(())
@@ -69,7 +76,8 @@ impl SolverStage {
         // Full symbolic SMT verification: WCET path conditions, temporal contracts,
         // and isolate bounds via WcetSolver.
         if analyzer.use_z3 {
-            let mut wcet_solver = WcetSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
+            let mut wcet_solver =
+                WcetSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
             wcet_solver.verify_and_compute(program)?;
         }
 

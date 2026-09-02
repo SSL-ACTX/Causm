@@ -7,7 +7,10 @@ use causm_core::{Program, SpannedStatement, Statement};
 /// This is a forward-scan pass: it does not perform full type-checking but
 /// ensures every name is visible to all later expression analysis, regardless
 /// of textual declaration order.
-pub fn pre_register_program_declarations(analyzer: &mut EntropicAnalyzer, program: &Program) {
+pub fn pre_register_program_declarations(
+    analyzer: &mut EntropicAnalyzer,
+    program: &Program,
+) {
     fn visit_stmts(analyzer: &mut EntropicAnalyzer, stmts: &[SpannedStatement]) {
         for stmt in stmts {
             match &stmt.stmt {

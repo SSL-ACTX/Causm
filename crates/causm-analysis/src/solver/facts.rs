@@ -46,7 +46,15 @@ impl PointIndex {
         col: usize,
         source_text: String,
     ) -> Self {
-        Self { timeline_idx, statement_idx, sub_point, file, line, col, source_text }
+        Self {
+            timeline_idx,
+            statement_idx,
+            sub_point,
+            file,
+            line,
+            col,
+            source_text,
+        }
     }
 }
 
@@ -58,8 +66,11 @@ impl PartialOrd for PointIndex {
 
 impl Ord for PointIndex {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.timeline_idx, self.statement_idx, self.sub_point)
-            .cmp(&(other.timeline_idx, other.statement_idx, other.sub_point))
+        (self.timeline_idx, self.statement_idx, self.sub_point).cmp(&(
+            other.timeline_idx,
+            other.statement_idx,
+            other.sub_point,
+        ))
     }
 }
 
@@ -149,10 +160,7 @@ pub enum EntropicFact {
         point: PointIndex,
     },
     /// Causal commitment (e.g. Yield / Commit) establishing a forward horizon.
-    CausalCommit {
-        clock: u64,
-        point: PointIndex,
-    },
+    CausalCommit { clock: u64, point: PointIndex },
 }
 
 /// Complete collection of relational facts and relations extracted for a program.
@@ -204,10 +212,12 @@ impl ProgramFacts {
                 t_end,
                 point,
             } => {
-                self.active_leases
-                    .entry(var.clone())
-                    .or_default()
-                    .push((lease_id.clone(), *t_start, *t_end, point.clone()));
+                self.active_leases.entry(var.clone()).or_default().push((
+                    lease_id.clone(),
+                    *t_start,
+                    *t_end,
+                    point.clone(),
+                ));
             }
             EntropicFact::TemporalDecay {
                 var,
@@ -255,7 +265,11 @@ impl ProgramFacts {
             EntropicFact::Anchor { name, clock, point } => {
                 self.anchors.insert(name.clone(), (*clock, point.clone()));
             }
-            EntropicFact::Rewind { target, clock, point } => {
+            EntropicFact::Rewind {
+                target,
+                clock,
+                point,
+            } => {
                 self.rewinds.push((target.clone(), *clock, point.clone()));
             }
             EntropicFact::CausalCommit { clock, point } => {
@@ -507,7 +521,8 @@ impl FactExtractor {
                 });
 
                 if let Some(LifetimeAnnotation::Decayed(duration_ms)) = lifetime {
-                    let expire_time = self.current_clock.saturating_add(*duration_ms);
+                    let expire_time =
+                        self.current_clock.saturating_add(*duration_ms);
                     self.push_fact(EntropicFact::TemporalDecay {
                         var: target.clone(),
                         t_expire: expire_time,
@@ -838,11 +853,14 @@ impl FactExtractor {
 /// Extract relational facts and CFG edge relations from the AST & timeline structure.
 ///
 /// `source` is the full source text; `filename` is the path for diagnostic rendering.
-pub fn extract_facts(program: &Program, source: &str, filename: &str) -> ProgramFacts {
+pub fn extract_facts(
+    program: &Program,
+    source: &str,
+    filename: &str,
+) -> ProgramFacts {
     let extractor = FactExtractor::new(source, filename);
     extractor.extract_all(program)
 }
-
 
 /// Extract SSA-level relational facts directly from an SsaCFG basic block graph.
 pub fn extract_ssa_facts(ssa_cfg: &SsaCFG) -> ProgramFacts {
@@ -883,7 +901,10 @@ pub fn extract_ssa_facts(ssa_cfg: &SsaCFG) -> ProgramFacts {
                     });
                 }
                 causm_ir::ssa::SsaInstruction::BinaryOp {
-                    dest, left, right, ..
+                    dest,
+                    left,
+                    right,
+                    ..
                 } => {
                     program_facts.insert_fact(EntropicFact::AccessAt {
                         var: format!("{}", left),

@@ -63,7 +63,6 @@ pub enum EntropicDiagnostic {
     },
 }
 
-
 /// Render a single source span annotation block with optional token highlighting.
 ///
 /// If `highlight` is `Some(token)`, the underline (`^^^`) is placed under that
@@ -72,9 +71,13 @@ fn find_word_token(src: &str, tok: &str) -> Option<(usize, usize)> {
     let mut offset = 0;
     while let Some(idx) = src[offset..].find(tok) {
         let abs_pos = offset + idx;
-        let before_ok = abs_pos == 0 || !src[..abs_pos].chars().last().unwrap().is_alphanumeric() && src[..abs_pos].chars().last().unwrap() != '_';
+        let before_ok = abs_pos == 0
+            || !src[..abs_pos].chars().last().unwrap().is_alphanumeric()
+                && src[..abs_pos].chars().last().unwrap() != '_';
         let after_pos = abs_pos + tok.len();
-        let after_ok = after_pos >= src.len() || !src[after_pos..].chars().next().unwrap().is_alphanumeric() && src[after_pos..].chars().next().unwrap() != '_';
+        let after_ok = after_pos >= src.len()
+            || !src[after_pos..].chars().next().unwrap().is_alphanumeric()
+                && src[after_pos..].chars().next().unwrap() != '_';
         if before_ok && after_ok {
             return Some((abs_pos, tok.len()));
         }
@@ -87,7 +90,10 @@ fn find_word_token(src: &str, tok: &str) -> Option<(usize, usize)> {
 fn render_span(pt: &PointIndex, label: &str, highlight: Option<&str>) -> String {
     let mut out = String::new();
     if pt.line == 0 {
-        out.push_str(&format!("\x1b[1;34m  --> \x1b[0m{}:?:?\n\x1b[1;34m   |\x1b[0m\n   = {}\n", pt.file, label));
+        out.push_str(&format!(
+            "\x1b[1;34m  --> \x1b[0m{}:?:?\n\x1b[1;34m   |\x1b[0m\n   = {}\n",
+            pt.file, label
+        ));
         return out;
     }
     let line_num_width = pt.line.to_string().len().max(2);
@@ -102,22 +108,41 @@ fn render_span(pt: &PointIndex, label: &str, highlight: Option<&str>) -> String 
             (pos, tok.len())
         } else {
             let col0 = pt.col.saturating_sub(1);
-            let tlen = src[col0..].split_whitespace().next().map(|t| t.len()).unwrap_or(1);
+            let tlen = src[col0..]
+                .split_whitespace()
+                .next()
+                .map(|t| t.len())
+                .unwrap_or(1);
             (col0, tlen)
         }
     } else {
         let col0 = pt.col.saturating_sub(1);
-        let tlen = src[col0..].split_whitespace().next().map(|t| t.len()).unwrap_or(1);
+        let tlen = src[col0..]
+            .split_whitespace()
+            .next()
+            .map(|t| t.len())
+            .unwrap_or(1);
         (col0, tlen)
     };
     let display_col = ul_start + 1;
 
-    out.push_str(&format!("\x1b[1;34m  --> \x1b[0m{}:{}:{}\n", pt.file, pt.line, display_col));
+    out.push_str(&format!(
+        "\x1b[1;34m  --> \x1b[0m{}:{}:{}\n",
+        pt.file, pt.line, display_col
+    ));
     out.push_str(&format!("\x1b[1;34m{pad} |\x1b[0m\n"));
     let underline = " ".repeat(ul_start) + &"^".repeat(ul_len.max(1));
 
-    out.push_str(&format!("\x1b[1;34m{:>width$} | \x1b[0m{}\n", pt.line, src, width = line_num_width));
-    out.push_str(&format!("\x1b[1;34m{pad} | \x1b[1;31m{}\x1b[0m {}\n", underline, label));
+    out.push_str(&format!(
+        "\x1b[1;34m{:>width$} | \x1b[0m{}\n",
+        pt.line,
+        src,
+        width = line_num_width
+    ));
+    out.push_str(&format!(
+        "\x1b[1;34m{pad} | \x1b[1;31m{}\x1b[0m {}\n",
+        underline, label
+    ));
     out.push_str(&format!("\x1b[1;34m{pad} |\x1b[0m\n"));
     out
 }
@@ -159,11 +184,17 @@ impl EntropicDiagnostic {
                     "[1;31merror[E0001][0m:[1m use of consumed variable `{var}`[0m\n"
                 ));
                 if let Some(orig) = origin_point {
-                    out.push_str(&render_span(orig, &format!("`{var}` value introduced here"), Some(var)));
+                    out.push_str(&render_span(
+                        orig,
+                        &format!("`{var}` value introduced here"),
+                        Some(var),
+                    ));
                 }
                 out.push_str(&render_span(
                     consume_point,
-                    &format!("`{var}` linearly consumed here — ownership transferred"),
+                    &format!(
+                        "`{var}` linearly consumed here — ownership transferred"
+                    ),
                     Some(var),
                 ));
                 out.push_str(&render_span(
@@ -327,7 +358,9 @@ impl EntropicDiagnostic {
                 ));
                 out.push_str(&render_span(
                     partner_consume_point,
-                    &format!("entangled partner `{partner_var}` linearly consumed here"),
+                    &format!(
+                        "entangled partner `{partner_var}` linearly consumed here"
+                    ),
                     Some(partner_var),
                 ));
                 out.push_str(&render_span(

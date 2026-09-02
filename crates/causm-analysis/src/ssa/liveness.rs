@@ -20,7 +20,8 @@ pub struct LiveRangeTable {
 impl LiveRangeTable {
     pub fn compute_from_facts(facts: &crate::solver::ProgramFacts) -> Self {
         let mut ranges = HashMap::new();
-        let mut live_at_points: HashMap<crate::solver::PointIndex, HashSet<String>> = HashMap::new();
+        let mut live_at_points: HashMap<crate::solver::PointIndex, HashSet<String>> =
+            HashMap::new();
 
         for (var, origins) in &facts.var_origins {
             if let Some(def_pt) = origins.iter().next() {
@@ -31,7 +32,11 @@ impl LiveRangeTable {
                         def_point: def_pt.clone(),
                         use_points: Vec::new(),
                         is_consumed: facts.var_consumes.contains_key(var),
-                        consume_point: facts.var_consumes.get(var).and_then(|c| c.iter().next()).cloned(),
+                        consume_point: facts
+                            .var_consumes
+                            .get(var)
+                            .and_then(|c| c.iter().next())
+                            .cloned(),
                     },
                 );
             }
@@ -41,7 +46,10 @@ impl LiveRangeTable {
             if let Some(range) = ranges.get_mut(var) {
                 for (pt, _) in accesses {
                     range.use_points.push(pt.clone());
-                    live_at_points.entry(pt.clone()).or_default().insert(var.clone());
+                    live_at_points
+                        .entry(pt.clone())
+                        .or_default()
+                        .insert(var.clone());
                 }
             }
         }

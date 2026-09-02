@@ -1,6 +1,8 @@
 use causm_analysis::analyzer::EntropicAnalyzer;
 use causm_analysis::oxiz::OxiZBackend;
-use causm_analysis::solver::{extract_facts, EntropicDiagnostic, RelationalInvariantSolver};
+use causm_analysis::solver::{
+    extract_facts, EntropicDiagnostic, RelationalInvariantSolver,
+};
 use causm_analysis::ssa::LiveRangeTable;
 use causm_frontend::parser;
 

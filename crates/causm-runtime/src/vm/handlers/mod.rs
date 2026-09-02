@@ -9,7 +9,6 @@ pub mod misc;
 pub mod speculation;
 pub mod temporal;
 
-
 use crate::vm::context::VmContext;
 use crate::vm::error::TemporalError;
 

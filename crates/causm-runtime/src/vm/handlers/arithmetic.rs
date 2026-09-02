@@ -224,7 +224,6 @@ impl Vm {
         )
     }
 
-
     pub(crate) fn call_intrinsic(
         &self,
         name: &str,
@@ -441,196 +440,443 @@ impl Vm {
                     _ => 0,
                 };
                 let mut m = std::collections::HashMap::new();
-                m.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(initial)));
+                m.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(
+                        initial,
+                    )),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_atomic_load_int" => match args.first() {
                 Some(Payload::Struct(fields)) => match fields.get("val") {
-                    Some(causm_core::value::EntropicState::Valid(v)) => Ok(v.clone()),
+                    Some(causm_core::value::EntropicState::Valid(v)) => {
+                        Ok(v.clone())
+                    }
                     _ => Ok(Payload::Integer(0)),
                 },
-                _ => Err(TemporalError::TypeMismatch("Atomic.load_int expects AtomicInt".into())),
+                _ => Err(TemporalError::TypeMismatch(
+                    "Atomic.load_int expects AtomicInt".into(),
+                )),
             },
             "__sync_atomic_store_int" => {
                 let val = match args.get(1) {
                     Some(Payload::Integer(i)) => *i,
-                    _ => return Err(TemporalError::TypeMismatch("Atomic.store_int: value must be int".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.store_int: value must be int".into(),
+                        ))
+                    }
                 };
                 let mut m = std::collections::HashMap::new();
-                m.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(val)));
+                m.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(val)),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_atomic_fetch_add" => {
                 let old = match args.first() {
                     Some(Payload::Struct(f)) => match f.get("val") {
-                        Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Integer(i),
+                        )) => *i,
                         _ => 0,
                     },
-                    _ => return Err(TemporalError::TypeMismatch("Atomic.fetch_add expects AtomicInt".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.fetch_add expects AtomicInt".into(),
+                        ))
+                    }
                 };
                 let delta = match args.get(1) {
                     Some(Payload::Integer(d)) => *d,
-                    _ => return Err(TemporalError::TypeMismatch("Atomic.fetch_add: delta must be int".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.fetch_add: delta must be int".into(),
+                        ))
+                    }
                 };
                 let mut next = std::collections::HashMap::new();
-                next.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(old + delta)));
+                next.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(
+                        old + delta,
+                    )),
+                );
                 let mut res = std::collections::HashMap::new();
-                res.insert("atomic".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(next)));
-                res.insert("old".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(old)));
+                res.insert(
+                    "atomic".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(next)),
+                );
+                res.insert(
+                    "old".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(old)),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_atomic_cas_int" => {
                 let cur = match args.first() {
                     Some(Payload::Struct(f)) => match f.get("val") {
-                        Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Integer(i),
+                        )) => *i,
                         _ => 0,
                     },
-                    _ => return Err(TemporalError::TypeMismatch("Atomic.cas_int expects AtomicInt".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_int expects AtomicInt".into(),
+                        ))
+                    }
                 };
-                let exp = match args.get(1) { Some(Payload::Integer(i)) => *i, _ => return Err(TemporalError::TypeMismatch("Atomic.cas_int: bad expected".into())) };
-                let des = match args.get(2) { Some(Payload::Integer(i)) => *i, _ => return Err(TemporalError::TypeMismatch("Atomic.cas_int: bad desired".into())) };
+                let exp = match args.get(1) {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_int: bad expected".into(),
+                        ))
+                    }
+                };
+                let des = match args.get(2) {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_int: bad desired".into(),
+                        ))
+                    }
+                };
                 let ok = cur == exp;
                 let mut next = std::collections::HashMap::new();
-                next.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(if ok { des } else { cur })));
+                next.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(
+                        if ok { des } else { cur },
+                    )),
+                );
                 let mut res = std::collections::HashMap::new();
-                res.insert("atomic".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(next)));
-                res.insert("success".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(ok)));
+                res.insert(
+                    "atomic".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(next)),
+                );
+                res.insert(
+                    "success".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(ok)),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_atomic_new_bool" => {
                 let initial = matches!(args.first(), Some(Payload::Bool(true)));
                 let mut m = std::collections::HashMap::new();
-                m.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(initial)));
+                m.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(initial)),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_atomic_load_bool" => match args.first() {
                 Some(Payload::Struct(fields)) => match fields.get("val") {
-                    Some(causm_core::value::EntropicState::Valid(v)) => Ok(v.clone()),
+                    Some(causm_core::value::EntropicState::Valid(v)) => {
+                        Ok(v.clone())
+                    }
                     _ => Ok(Payload::Bool(false)),
                 },
-                _ => Err(TemporalError::TypeMismatch("Atomic.load_bool expects AtomicBool".into())),
+                _ => Err(TemporalError::TypeMismatch(
+                    "Atomic.load_bool expects AtomicBool".into(),
+                )),
             },
             "__sync_atomic_store_bool" => {
-                let val = match args.get(1) { Some(Payload::Bool(b)) => *b, _ => return Err(TemporalError::TypeMismatch("Atomic.store_bool: bad value".into())) };
+                let val = match args.get(1) {
+                    Some(Payload::Bool(b)) => *b,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.store_bool: bad value".into(),
+                        ))
+                    }
+                };
                 let mut m = std::collections::HashMap::new();
-                m.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(val)));
+                m.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(val)),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_atomic_cas_bool" => {
                 let cur = match args.first() {
                     Some(Payload::Struct(f)) => match f.get("val") {
-                        Some(causm_core::value::EntropicState::Valid(Payload::Bool(b))) => *b,
+                        Some(causm_core::value::EntropicState::Valid(
+                            Payload::Bool(b),
+                        )) => *b,
                         _ => false,
                     },
-                    _ => return Err(TemporalError::TypeMismatch("Atomic.cas_bool expects AtomicBool".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_bool expects AtomicBool".into(),
+                        ))
+                    }
                 };
-                let exp = match args.get(1) { Some(Payload::Bool(b)) => *b, _ => return Err(TemporalError::TypeMismatch("Atomic.cas_bool: bad expected".into())) };
-                let des = match args.get(2) { Some(Payload::Bool(b)) => *b, _ => return Err(TemporalError::TypeMismatch("Atomic.cas_bool: bad desired".into())) };
+                let exp = match args.get(1) {
+                    Some(Payload::Bool(b)) => *b,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_bool: bad expected".into(),
+                        ))
+                    }
+                };
+                let des = match args.get(2) {
+                    Some(Payload::Bool(b)) => *b,
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Atomic.cas_bool: bad desired".into(),
+                        ))
+                    }
+                };
                 let ok = cur == exp;
                 let mut next = std::collections::HashMap::new();
-                next.insert("val".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(if ok { des } else { cur })));
+                next.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(if ok {
+                        des
+                    } else {
+                        cur
+                    })),
+                );
                 let mut res = std::collections::HashMap::new();
-                res.insert("atomic".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(next)));
-                res.insert("success".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(ok)));
+                res.insert(
+                    "atomic".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(next)),
+                );
+                res.insert(
+                    "success".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(ok)),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_mutex_new" => {
                 let mut m = std::collections::HashMap::new();
-                m.insert("locked".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(false)));
-                m.insert("owner".to_string(), causm_core::value::EntropicState::Valid(Payload::String(String::new())));
+                m.insert(
+                    "locked".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(false)),
+                );
+                m.insert(
+                    "owner".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::String(
+                        String::new(),
+                    )),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_mutex_try_lock" => {
                 let (locked, owner_cur) = match args.first() {
                     Some(Payload::Struct(f)) => {
-                        let l = matches!(f.get("locked"), Some(causm_core::value::EntropicState::Valid(Payload::Bool(true))));
+                        let l = matches!(
+                            f.get("locked"),
+                            Some(causm_core::value::EntropicState::Valid(
+                                Payload::Bool(true)
+                            ))
+                        );
                         let o = match f.get("owner") {
-                            Some(causm_core::value::EntropicState::Valid(Payload::String(s))) => s.clone(),
+                            Some(causm_core::value::EntropicState::Valid(
+                                Payload::String(s),
+                            )) => s.clone(),
                             _ => String::new(),
                         };
                         (l, o)
                     }
-                    _ => return Err(TemporalError::TypeMismatch("Mutex.try_lock expects Mutex".into())),
+                    _ => {
+                        return Err(TemporalError::TypeMismatch(
+                            "Mutex.try_lock expects Mutex".into(),
+                        ))
+                    }
                 };
-                let requester = match args.get(1) { Some(Payload::String(s)) => s.clone(), _ => "anonymous".to_string() };
+                let requester = match args.get(1) {
+                    Some(Payload::String(s)) => s.clone(),
+                    _ => "anonymous".to_string(),
+                };
                 let acquired = !locked;
                 let mut next = std::collections::HashMap::new();
-                next.insert("locked".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(if acquired { true } else { locked })));
-                next.insert("owner".to_string(), causm_core::value::EntropicState::Valid(Payload::String(if acquired { requester } else { owner_cur })));
+                next.insert(
+                    "locked".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(
+                        if acquired { true } else { locked },
+                    )),
+                );
+                next.insert(
+                    "owner".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::String(
+                        if acquired { requester } else { owner_cur },
+                    )),
+                );
                 let mut res = std::collections::HashMap::new();
-                res.insert("acquired".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(acquired)));
-                res.insert("mutex".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(next)));
+                res.insert(
+                    "acquired".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(acquired)),
+                );
+                res.insert(
+                    "mutex".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(next)),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_mutex_unlock" => {
                 let mut m = std::collections::HashMap::new();
-                m.insert("locked".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(false)));
-                m.insert("owner".to_string(), causm_core::value::EntropicState::Valid(Payload::String(String::new())));
+                m.insert(
+                    "locked".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(false)),
+                );
+                m.insert(
+                    "owner".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::String(
+                        String::new(),
+                    )),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_mutex_is_locked" => match args.first() {
                 Some(Payload::Struct(f)) => Ok(match f.get("locked") {
-                    Some(causm_core::value::EntropicState::Valid(Payload::Bool(b))) => Payload::Bool(*b),
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::Bool(b),
+                    )) => Payload::Bool(*b),
                     _ => Payload::Bool(false),
                 }),
-                _ => Err(TemporalError::TypeMismatch("Mutex.is_locked expects Mutex".into())),
+                _ => Err(TemporalError::TypeMismatch(
+                    "Mutex.is_locked expects Mutex".into(),
+                )),
             },
             "__sync_mutex_owner" => match args.first() {
                 Some(Payload::Struct(f)) => Ok(match f.get("owner") {
-                    Some(causm_core::value::EntropicState::Valid(Payload::String(s))) => Payload::String(s.clone()),
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::String(s),
+                    )) => Payload::String(s.clone()),
                     _ => Payload::String(String::new()),
                 }),
-                _ => Err(TemporalError::TypeMismatch("Mutex.owner expects Mutex".into())),
+                _ => Err(TemporalError::TypeMismatch(
+                    "Mutex.owner expects Mutex".into(),
+                )),
             },
             "__sync_channel_new" => {
-                let cap = match args.first() { Some(Payload::Integer(i)) => (*i).max(1), _ => 1 };
+                let cap = match args.first() {
+                    Some(Payload::Integer(i)) => (*i).max(1),
+                    _ => 1,
+                };
                 let mut m = std::collections::HashMap::new();
-                m.insert("capacity".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(cap)));
-                m.insert("closed".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(false)));
-                m.insert("count".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(0)));
-                m.insert("data".to_string(), causm_core::value::EntropicState::Valid(Payload::Array(vec![Payload::Integer(0); cap as usize])));
-                m.insert("head".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(0)));
-                m.insert("tail".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(0)));
+                m.insert(
+                    "capacity".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(cap)),
+                );
+                m.insert(
+                    "closed".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(false)),
+                );
+                m.insert(
+                    "count".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(0)),
+                );
+                m.insert(
+                    "data".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Array(
+                        vec![Payload::Integer(0); cap as usize],
+                    )),
+                );
+                m.insert(
+                    "head".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(0)),
+                );
+                m.insert(
+                    "tail".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Integer(0)),
+                );
                 Ok(Payload::Struct(m))
             }
             "__sync_channel_send" => {
-                let (cap, closed, mut count, mut data, head, mut tail) = Self::extract_channel_fields(&args)?;
+                let (cap, closed, mut count, mut data, head, mut tail) =
+                    Self::extract_channel_fields(&args)?;
                 let val = args.get(1).cloned().unwrap_or(Payload::Null);
                 let can_send = !closed && count < cap;
                 if can_send {
-                    if let Payload::Array(ref mut arr) = data { if (tail as usize) < arr.len() { arr[tail as usize] = val; } }
+                    if let Payload::Array(ref mut arr) = data {
+                        if (tail as usize) < arr.len() {
+                            arr[tail as usize] = val;
+                        }
+                    }
                     tail = (tail + 1) % cap;
                     count += 1;
                 }
                 let mut res = std::collections::HashMap::new();
-                res.insert("chan".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(Self::build_channel_struct(cap, closed, count, data, head, tail))));
-                res.insert("ok".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(can_send)));
+                res.insert(
+                    "chan".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(
+                        Self::build_channel_struct(
+                            cap, closed, count, data, head, tail,
+                        ),
+                    )),
+                );
+                res.insert(
+                    "ok".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(can_send)),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_channel_recv" => {
-                let (cap, closed, mut count, mut data, mut head, tail) = Self::extract_channel_fields(&args)?;
+                let (cap, closed, mut count, mut data, mut head, tail) =
+                    Self::extract_channel_fields(&args)?;
                 let has_item = count > 0;
                 let mut item = Payload::Integer(0);
                 if has_item {
-                    if let Payload::Array(ref arr) = data { if (head as usize) < arr.len() { item = arr[head as usize].clone(); } }
-                    if let Payload::Array(ref mut arr) = data { if (head as usize) < arr.len() { arr[head as usize] = Payload::Integer(0); } }
+                    if let Payload::Array(ref arr) = data {
+                        if (head as usize) < arr.len() {
+                            item = arr[head as usize].clone();
+                        }
+                    }
+                    if let Payload::Array(ref mut arr) = data {
+                        if (head as usize) < arr.len() {
+                            arr[head as usize] = Payload::Integer(0);
+                        }
+                    }
                     head = (head + 1) % cap;
                     count -= 1;
                 }
                 let mut res = std::collections::HashMap::new();
-                res.insert("chan".to_string(), causm_core::value::EntropicState::Valid(Payload::Struct(Self::build_channel_struct(cap, closed, count, data, head, tail))));
-                res.insert("ok".to_string(), causm_core::value::EntropicState::Valid(Payload::Bool(has_item)));
-                res.insert("val".to_string(), causm_core::value::EntropicState::Valid(item));
+                res.insert(
+                    "chan".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Struct(
+                        Self::build_channel_struct(
+                            cap, closed, count, data, head, tail,
+                        ),
+                    )),
+                );
+                res.insert(
+                    "ok".to_string(),
+                    causm_core::value::EntropicState::Valid(Payload::Bool(has_item)),
+                );
+                res.insert(
+                    "val".to_string(),
+                    causm_core::value::EntropicState::Valid(item),
+                );
                 Ok(Payload::Struct(res))
             }
             "__sync_channel_close" => {
-                let (cap, _, count, data, head, tail) = Self::extract_channel_fields(&args)?;
-                Ok(Payload::Struct(Self::build_channel_struct(cap, true, count, data, head, tail)))
+                let (cap, _, count, data, head, tail) =
+                    Self::extract_channel_fields(&args)?;
+                Ok(Payload::Struct(Self::build_channel_struct(
+                    cap, true, count, data, head, tail,
+                )))
             }
-            "__sync_channel_is_closed" => { let (_, closed, ..) = Self::extract_channel_fields(&args)?; Ok(Payload::Bool(closed)) }
-            "__sync_channel_len"       => { let (_, _, count, ..) = Self::extract_channel_fields(&args)?; Ok(Payload::Integer(count)) }
-            "__sync_channel_is_full"   => { let (cap, _, count, ..) = Self::extract_channel_fields(&args)?; Ok(Payload::Bool(count >= cap)) }
-            "__sync_channel_is_empty"  => { let (_, _, count, ..) = Self::extract_channel_fields(&args)?; Ok(Payload::Bool(count == 0)) }
+            "__sync_channel_is_closed" => {
+                let (_, closed, ..) = Self::extract_channel_fields(&args)?;
+                Ok(Payload::Bool(closed))
+            }
+            "__sync_channel_len" => {
+                let (_, _, count, ..) = Self::extract_channel_fields(&args)?;
+                Ok(Payload::Integer(count))
+            }
+            "__sync_channel_is_full" => {
+                let (cap, _, count, ..) = Self::extract_channel_fields(&args)?;
+                Ok(Payload::Bool(count >= cap))
+            }
+            "__sync_channel_is_empty" => {
+                let (_, _, count, ..) = Self::extract_channel_fields(&args)?;
+                Ok(Payload::Bool(count == 0))
+            }
             _ => {
                 if args.len() != 1 {
                     return Err(TemporalError::EvalError(format!(
@@ -900,28 +1146,81 @@ impl Vm {
     ) -> Result<(i64, bool, i64, Payload, i64, i64), TemporalError> {
         match args.first() {
             Some(Payload::Struct(fields)) => {
-                let cap   = match fields.get("capacity") { Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i, _ => 1 };
-                let closed = matches!(fields.get("closed"), Some(causm_core::value::EntropicState::Valid(Payload::Bool(true))));
-                let count = match fields.get("count")    { Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i, _ => 0 };
-                let data  = match fields.get("data")     { Some(causm_core::value::EntropicState::Valid(p)) => p.clone(), _ => Payload::Array(vec![]) };
-                let head  = match fields.get("head")     { Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i, _ => 0 };
-                let tail  = match fields.get("tail")     { Some(causm_core::value::EntropicState::Valid(Payload::Integer(i))) => *i, _ => 0 };
+                let cap = match fields.get("capacity") {
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::Integer(i),
+                    )) => *i,
+                    _ => 1,
+                };
+                let closed = matches!(
+                    fields.get("closed"),
+                    Some(causm_core::value::EntropicState::Valid(Payload::Bool(
+                        true
+                    )))
+                );
+                let count = match fields.get("count") {
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::Integer(i),
+                    )) => *i,
+                    _ => 0,
+                };
+                let data = match fields.get("data") {
+                    Some(causm_core::value::EntropicState::Valid(p)) => p.clone(),
+                    _ => Payload::Array(vec![]),
+                };
+                let head = match fields.get("head") {
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::Integer(i),
+                    )) => *i,
+                    _ => 0,
+                };
+                let tail = match fields.get("tail") {
+                    Some(causm_core::value::EntropicState::Valid(
+                        Payload::Integer(i),
+                    )) => *i,
+                    _ => 0,
+                };
                 Ok((cap, closed, count, data, head, tail))
             }
-            _ => Err(TemporalError::TypeMismatch("SyncChannel intrinsic expects SyncChannel struct".into())),
+            _ => Err(TemporalError::TypeMismatch(
+                "SyncChannel intrinsic expects SyncChannel struct".into(),
+            )),
         }
     }
 
     fn build_channel_struct(
-        cap: i64, closed: bool, count: i64, data: Payload, head: i64, tail: i64,
+        cap: i64,
+        closed: bool,
+        count: i64,
+        data: Payload,
+        head: i64,
+        tail: i64,
     ) -> std::collections::HashMap<String, causm_core::value::EntropicState> {
         let mut m = std::collections::HashMap::new();
-        m.insert("capacity".to_string(), causm_core::value::EntropicState::Valid(Payload::Integer(cap)));
-        m.insert("closed".to_string(),   causm_core::value::EntropicState::Valid(Payload::Bool(closed)));
-        m.insert("count".to_string(),    causm_core::value::EntropicState::Valid(Payload::Integer(count)));
-        m.insert("data".to_string(),     causm_core::value::EntropicState::Valid(data));
-        m.insert("head".to_string(),     causm_core::value::EntropicState::Valid(Payload::Integer(head)));
-        m.insert("tail".to_string(),     causm_core::value::EntropicState::Valid(Payload::Integer(tail)));
+        m.insert(
+            "capacity".to_string(),
+            causm_core::value::EntropicState::Valid(Payload::Integer(cap)),
+        );
+        m.insert(
+            "closed".to_string(),
+            causm_core::value::EntropicState::Valid(Payload::Bool(closed)),
+        );
+        m.insert(
+            "count".to_string(),
+            causm_core::value::EntropicState::Valid(Payload::Integer(count)),
+        );
+        m.insert(
+            "data".to_string(),
+            causm_core::value::EntropicState::Valid(data),
+        );
+        m.insert(
+            "head".to_string(),
+            causm_core::value::EntropicState::Valid(Payload::Integer(head)),
+        );
+        m.insert(
+            "tail".to_string(),
+            causm_core::value::EntropicState::Valid(Payload::Integer(tail)),
+        );
         m
     }
 }

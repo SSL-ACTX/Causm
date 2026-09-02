@@ -26,7 +26,8 @@ impl<T, const N: usize> MpmcQueue<T, N> {
             "MpmcQueue capacity must be a non-zero power of 2"
         );
         let buffer = {
-            let mut arr: [MaybeUninit<Cell<T>>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+            let mut arr: [MaybeUninit<Cell<T>>; N] =
+                unsafe { MaybeUninit::uninit().assume_init() };
             for (i, elem) in arr.iter_mut().enumerate() {
                 elem.write(Cell {
                     sequence: AtomicUsize::new(i),

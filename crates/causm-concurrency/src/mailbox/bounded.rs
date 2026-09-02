@@ -125,7 +125,11 @@ impl<T> BoundedMailbox<T> {
             match self.push(item) {
                 Ok(_) => {}
                 Err(MailboxError::Full(item)) => {
-                    if matches!(self.policy, SaturationPolicy::RingBuffer | SaturationPolicy::EvictDecayed) {
+                    if matches!(
+                        self.policy,
+                        SaturationPolicy::RingBuffer
+                            | SaturationPolicy::EvictDecayed
+                    ) {
                         self.buffer.pop_front();
                         self.buffer.push_back(item);
                     } else {

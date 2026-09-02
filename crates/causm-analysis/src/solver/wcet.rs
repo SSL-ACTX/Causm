@@ -24,7 +24,10 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
 
     /// Primary entry point: verifies all temporal budgets, isolate limits, routine WCET contracts,
     /// and populates analyzer.analyzed_wcet.
-    pub fn verify_and_compute(&mut self, program: &Program) -> Result<(), SemanticError> {
+    pub fn verify_and_compute(
+        &mut self,
+        program: &Program,
+    ) -> Result<(), SemanticError> {
         self.solver.reset();
 
         for (idx, timeline) in program.timelines.iter().enumerate() {
@@ -122,7 +125,8 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
         path_condition: &S::Bool,
         in_clock: &S::Int,
     ) -> Result<S::Int, SemanticError> {
-        let cost = crate::statement::estimate_statement_cost(self.analyzer, &spanned.stmt);
+        let cost =
+            crate::statement::estimate_statement_cost(self.analyzer, &spanned.stmt);
         let cost_int = self.solver.int_from_u64(cost);
         let current_clock = self.solver.int_add(&[in_clock, &cost_int]);
 
@@ -164,7 +168,11 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 if let Some(fb) = fallback {
                     let mut fb_clock = current_clock.clone();
                     for s in fb {
-                        fb_clock = self.verify_statement_wcet(s, path_condition, &fb_clock)?;
+                        fb_clock = self.verify_statement_wcet(
+                            s,
+                            path_condition,
+                            &fb_clock,
+                        )?;
                     }
                     Ok(fb_clock)
                 } else {
@@ -176,7 +184,8 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 let mut iso_clock = self.solver.int_from_u64(0);
 
                 for s in &block.body {
-                    iso_clock = self.verify_statement_wcet(s, path_condition, &iso_clock)?;
+                    iso_clock =
+                        self.verify_statement_wcet(s, path_condition, &iso_clock)?;
                 }
 
                 let budget_int = self.solver.int_from_u64(budget);
@@ -205,7 +214,11 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 let mut body_clock = routine_solver.solver.int_from_u64(0);
 
                 for s in body {
-                    body_clock = routine_solver.verify_statement_wcet(s, &true_bool, &body_clock)?;
+                    body_clock = routine_solver.verify_statement_wcet(
+                        s,
+                        &true_bool,
+                        &body_clock,
+                    )?;
                 }
 
                 let wcet = routine_solver.find_max_value(&body_clock, &true_bool);
@@ -216,14 +229,13 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
 
                 if let Some(limit) = *taking_ms {
                     let limit_int = routine_solver.solver.int_from_u64(limit);
-                    let violation = routine_solver.solver.int_gt(&body_clock, &limit_int);
+                    let violation =
+                        routine_solver.solver.int_gt(&body_clock, &limit_int);
                     routine_solver.solver.push();
                     routine_solver.solver.assert(&violation);
                     if routine_solver.solver.check() {
-                        let actual_wcet = routine_solver
-                            .solver
-                            .eval_u64(&body_clock)
-                            .unwrap_or(0);
+                        let actual_wcet =
+                            routine_solver.solver.eval_u64(&body_clock).unwrap_or(0);
                         routine_solver.solver.pop(1);
                         return Err(self.analyzer.annotate(
                             SemanticErrorKind::TemporalAssertionViolation(
@@ -244,7 +256,8 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
             } => {
                 let mut loop_clock = self.solver.int_from_u64(0);
                 for s in body {
-                    loop_clock = self.verify_statement_wcet(s, path_condition, &loop_clock)?;
+                    loop_clock =
+                        self.verify_statement_wcet(s, path_condition, &loop_clock)?;
                 }
 
                 if let Some(max) = max_ms {
@@ -258,10 +271,12 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                     };
                     let violation = self.solver.int_gt(&iteration_cost, &max_int);
                     self.solver.push();
-                    let cond_and = self.solver.bool_and(&[path_condition, &violation]);
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
                     self.solver.assert(&cond_and);
                     if self.solver.check() {
-                        let actual_wcet = self.solver.eval_u64(&iteration_cost).unwrap_or(0);
+                        let actual_wcet =
+                            self.solver.eval_u64(&iteration_cost).unwrap_or(0);
                         self.solver.pop(1);
                         return Err(self.analyzer.annotate(
                             SemanticErrorKind::TemporalAssertionViolation(
@@ -279,25 +294,25 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                     Ok(self.solver.int_add(&[in_clock, &loop_clock]))
                 }
             }
-            Statement::ForStep {
-                body,
-                step_ms,
-                ..
-            } => {
+            Statement::ForStep { body, step_ms, .. } => {
                 let mut loop_clock = self.solver.int_from_u64(0);
                 for s in body {
-                    loop_clock = self.verify_statement_wcet(s, path_condition, &loop_clock)?;
+                    loop_clock =
+                        self.verify_statement_wcet(s, path_condition, &loop_clock)?;
                 }
 
                 if let Some(ms) = step_ms {
                     let step_int = self.solver.int_from_u64(*ms);
                     let violation = self.solver.int_gt(&loop_clock, &step_int);
                     self.solver.push();
-                    let cond_and = self.solver.bool_and(&[path_condition, &violation]);
+                    let cond_and =
+                        self.solver.bool_and(&[path_condition, &violation]);
                     self.solver.assert(&cond_and);
                     if self.solver.check() {
                         self.solver.pop(1);
-                        return Err(self.analyzer.annotate(SemanticErrorKind::PacingViolation));
+                        return Err(self
+                            .analyzer
+                            .annotate(SemanticErrorKind::PacingViolation));
                     }
                     self.solver.pop(1);
                     Ok(self.solver.int_add(&[in_clock, &step_int]))
@@ -313,13 +328,18 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
             } => {
                 let mut then_clock = current_clock.clone();
                 for s in then_branch {
-                    then_clock = self.verify_statement_wcet(s, path_condition, &then_clock)?;
+                    then_clock =
+                        self.verify_statement_wcet(s, path_condition, &then_clock)?;
                 }
 
                 let mut else_clock = current_clock.clone();
                 if let Some(else_stmts) = else_branch {
                     for s in else_stmts {
-                        else_clock = self.verify_statement_wcet(s, path_condition, &else_clock)?;
+                        else_clock = self.verify_statement_wcet(
+                            s,
+                            path_condition,
+                            &else_clock,
+                        )?;
                     }
                 }
 
@@ -327,13 +347,19 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 Ok(self.solver.int_ite(&then_is_gt, &then_clock, &else_clock))
             }
             Statement::DirectiveBlock { directives, body } => {
-                let bypass = directives.iter().any(|d| matches!(d, causm_core::BlockDirective::NoZ3));
+                let bypass = directives
+                    .iter()
+                    .any(|d| matches!(d, causm_core::BlockDirective::NoZ3));
                 if bypass {
                     Ok(current_clock)
                 } else {
                     let mut block_clock = in_clock.clone();
                     for s in body {
-                        block_clock = self.verify_statement_wcet(s, path_condition, &block_clock)?;
+                        block_clock = self.verify_statement_wcet(
+                            s,
+                            path_condition,
+                            &block_clock,
+                        )?;
                     }
                     Ok(block_clock)
                 }
@@ -347,10 +373,12 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 let slice_int = self.solver.int_from_u64(slice);
                 let mut body_clock = self.solver.int_from_u64(0);
                 for s in body {
-                    body_clock = self.verify_statement_wcet(s, path_condition, &body_clock)?;
+                    body_clock =
+                        self.verify_statement_wcet(s, path_condition, &body_clock)?;
                 }
                 let body_gt_slice = self.solver.int_gt(&body_clock, &slice_int);
-                let final_tick_cost = self.solver.int_ite(&body_gt_slice, &body_clock, &slice_int);
+                let final_tick_cost =
+                    self.solver.int_ite(&body_gt_slice, &body_clock, &slice_int);
                 Ok(self.solver.int_add(&[in_clock, &final_tick_cost]))
             }
             Statement::RelativisticBlock { body, .. }
@@ -358,7 +386,8 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
             | Statement::DecayHandler { body, .. } => {
                 let mut block_clock = in_clock.clone();
                 for s in body {
-                    block_clock = self.verify_statement_wcet(s, path_condition, &block_clock)?;
+                    block_clock =
+                        self.verify_statement_wcet(s, path_condition, &block_clock)?;
                 }
                 Ok(block_clock)
             }

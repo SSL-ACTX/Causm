@@ -715,7 +715,8 @@ impl Vm {
                         if let Some(pending) =
                             self.pending_channels.get_mut(&channel_id_val)
                         {
-                            let pos = pending.iter().position(|m| m.id == payload_id_val);
+                            let pos =
+                                pending.iter().position(|m| m.id == payload_id_val);
                             if let Some(pos) = pos {
                                 pending.remove(pos);
                                 found = true;
@@ -733,7 +734,9 @@ impl Vm {
                     message,
                 } if b_id == branch_id => {
                     if let Some(chan) = self.channels.get_mut(&channel_id) {
-                        if let Err(MailboxError::Full(_)) = chan.push_front(message.clone()) {
+                        if let Err(MailboxError::Full(_)) =
+                            chan.push_front(message.clone())
+                        {
                             return Err(TemporalError::Paradox);
                         }
                     } else {

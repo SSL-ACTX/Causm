@@ -1,4 +1,6 @@
-use crate::analyzer::{EntropicAnalyzer, RoutineInfo, SemanticError, SemanticErrorKind};
+use crate::analyzer::{
+    EntropicAnalyzer, RoutineInfo, SemanticError, SemanticErrorKind,
+};
 use crate::expression::infer_expression_type;
 use causm_core::types::Type;
 use causm_core::Expression;
@@ -36,7 +38,10 @@ pub fn resolve_method_call(
             .unwrap_or(false);
         if !is_local_var && analyzer.routines.contains_key(&static_routine_name) {
             let info = analyzer.routines.get(&static_routine_name).unwrap().clone();
-            return Ok(MethodTargetResolution::StaticRoutine(static_routine_name, info));
+            return Ok(MethodTargetResolution::StaticRoutine(
+                static_routine_name,
+                info,
+            ));
         }
     }
 
@@ -78,7 +83,10 @@ pub fn resolve_method_call(
                 )))
             })?
             .clone();
-        return Ok(MethodTargetResolution::InterfaceMethod(struct_name, interface_method));
+        return Ok(MethodTargetResolution::InterfaceMethod(
+            struct_name,
+            interface_method,
+        ));
     }
 
     let mut current_struct = struct_name.clone();

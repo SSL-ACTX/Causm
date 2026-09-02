@@ -148,18 +148,29 @@ pub(crate) fn analyze_expression(
             resolved_routine,
             resolved_budget,
         } => {
-            let resolution = crate::resolve::resolve_method_call(analyzer, target, method)?;
+            let resolution =
+                crate::resolve::resolve_method_call(analyzer, target, method)?;
             match resolution {
                 crate::resolve::MethodTargetResolution::EnumConstructor => {
                     for arg in args {
                         analyze_expression_nonconsuming(analyzer, arg)?;
                     }
-                    *resolved_routine.borrow_mut() = Some("<enum_constructor>".to_string());
+                    *resolved_routine.borrow_mut() =
+                        Some("<enum_constructor>".to_string());
                     Ok(())
                 }
-                crate::resolve::MethodTargetResolution::StaticRoutine(static_name, info) => {
-                    validate_call_arguments(analyzer, &static_name, &info.params, args)?;
-                    *resolved_routine.borrow_mut() = Some(format!("<static>{}", static_name));
+                crate::resolve::MethodTargetResolution::StaticRoutine(
+                    static_name,
+                    info,
+                ) => {
+                    validate_call_arguments(
+                        analyzer,
+                        &static_name,
+                        &info.params,
+                        args,
+                    )?;
+                    *resolved_routine.borrow_mut() =
+                        Some(format!("<static>{}", static_name));
                     let cost = info.taking_ms;
                     let branch = analyzer
                         .branch_contexts
@@ -168,7 +179,10 @@ pub(crate) fn analyze_expression(
                     branch.accumulated_cost += cost;
                     Ok(())
                 }
-                crate::resolve::MethodTargetResolution::InterfaceMethod(_struct_name, interface_method) => {
+                crate::resolve::MethodTargetResolution::InterfaceMethod(
+                    _struct_name,
+                    interface_method,
+                ) => {
                     if args.len() + 1 != interface_method.params.len() {
                         return Err(analyzer.annotate(
                             SemanticErrorKind::ArgumentCountMismatch(format!(
@@ -249,7 +263,9 @@ pub(crate) fn analyze_expression(
                                     .unwrap();
                                 if state.consumed.contains(name) {
                                     return Err(analyzer.annotate(
-                                        SemanticErrorKind::UseAfterConsume(name.clone()),
+                                        SemanticErrorKind::UseAfterConsume(
+                                            name.clone(),
+                                        ),
                                     ));
                                 }
                             }
@@ -283,11 +299,16 @@ pub(crate) fn analyze_expression(
 
                     Ok(())
                 }
-                crate::resolve::MethodTargetResolution::StructMethod(resolved_name, info) => {
+                crate::resolve::MethodTargetResolution::StructMethod(
+                    resolved_name,
+                    info,
+                ) => {
                     let target_type = infer_expression_type(analyzer, target)?;
                     let struct_name = match &target_type {
                         Type::Custom(name) => name.clone(),
-                        _ => resolved_name.split('.').next().unwrap_or("").to_string(),
+                        _ => {
+                            resolved_name.split('.').next().unwrap_or("").to_string()
+                        }
                     };
 
                     if method.starts_with('_') {
@@ -301,20 +322,24 @@ pub(crate) fn analyze_expression(
                             }
                         }
                         if !is_allowed {
-                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                                format!(
+                            return Err(analyzer.annotate(
+                                SemanticErrorKind::TypeMismatch(format!(
                                     "Method '{}' is private to type '{}'",
                                     method, struct_name
-                                ),
-                            )));
+                                )),
+                            ));
                         }
                     }
 
                     *resolved_routine.borrow_mut() = Some(resolved_name);
 
-                    check_required_capabilities(analyzer, &info.required_capabilities)?;
+                    check_required_capabilities(
+                        analyzer,
+                        &info.required_capabilities,
+                    )?;
 
-                    if let Some((ref param_name, ref expected_state)) = info.state_constraint
+                    if let Some((ref param_name, ref expected_state)) =
+                        info.state_constraint
                     {
                         if param_name == "self" {
                             if let Expression::Identifier(ref name) = &**target {
@@ -355,19 +380,28 @@ pub(crate) fn analyze_expression(
                     let (self_mode, _self_name, self_type) = &info.params[0];
                     let self_type_normalized = match self_type {
                         Type::Custom(name) => Type::Custom(
-                            name.split('<').next().unwrap_or(name).trim().to_string(),
+                            name.split('<')
+                                .next()
+                                .unwrap_or(name)
+                                .trim()
+                                .to_string(),
                         ),
                         other => other.clone(),
                     };
                     let target_type_normalized = match &target_type {
                         Type::Custom(name) => Type::Custom(
-                            name.split('<').next().unwrap_or(name).trim().to_string(),
+                            name.split('<')
+                                .next()
+                                .unwrap_or(name)
+                                .trim()
+                                .to_string(),
                         ),
                         other => other.clone(),
                     };
-                    if !analyzer
-                        .types_compatible(&self_type_normalized, &target_type_normalized)
-                    {
+                    if !analyzer.types_compatible(
+                        &self_type_normalized,
+                        &target_type_normalized,
+                    ) {
                         return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                             format!(
                                 "method {} self type mismatch: expected {:?}, got {:?}",
@@ -390,7 +424,9 @@ pub(crate) fn analyze_expression(
                                     .unwrap();
                                 if state.consumed.contains(name) {
                                     return Err(analyzer.annotate(
-                                        SemanticErrorKind::UseAfterConsume(name.clone()),
+                                        SemanticErrorKind::UseAfterConsume(
+                                            name.clone(),
+                                        ),
                                     ));
                                 }
                             }
@@ -398,7 +434,12 @@ pub(crate) fn analyze_expression(
                         _ => {}
                     }
 
-                    validate_call_arguments(analyzer, method, &info.params[1..], args)?;
+                    validate_call_arguments(
+                        analyzer,
+                        method,
+                        &info.params[1..],
+                        args,
+                    )?;
 
                     Ok(())
                 }

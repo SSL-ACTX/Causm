@@ -108,7 +108,8 @@ pub struct Vm {
     pub current_span: Option<causm_core::Span>,
     pub call_depth: u32,
     pub max_call_depth: u32,
-    pub foreign_manager: std::sync::Arc<crate::vm::handlers::ffi::ForeignLibraryManager>,
+    pub foreign_manager:
+        std::sync::Arc<crate::vm::handlers::ffi::ForeignLibraryManager>,
 }
 
 #[derive(Clone, Debug)]

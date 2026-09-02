@@ -77,8 +77,7 @@ impl SsaStage {
             for stmt in &block.statements {
                 let old_stmt = analyzer.current_statement.clone();
                 let old_span = analyzer.current_span.clone();
-                analyzer.current_statement =
-                    Some(analyzer.statement_snippet(stmt));
+                analyzer.current_statement = Some(analyzer.statement_snippet(stmt));
                 analyzer.current_span = Some(stmt.span.clone());
                 analyzer.analyze_statement(stmt)?;
                 analyzer.current_statement = old_stmt;
