@@ -34,9 +34,59 @@ impl PluginDriver {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct PluginScope {
+    pub targets: Vec<String>,
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+}
+
+impl PluginScope {
+    pub fn is_platform_supported(&self) -> bool {
+        if self.targets.is_empty() {
+            return true;
+        }
+        let current_target = if cfg!(target_arch = "wasm32") {
+            "wasm32"
+        } else {
+            "native"
+        };
+        self.targets.iter().any(|t| {
+            t == current_target
+                || (current_target == "native"
+                    && (t == "host"
+                        || t == "unix"
+                        || t == "linux"
+                        || t == "macos"
+                        || t == "windows"))
+        })
+    }
+
+    pub fn matches_file(&self, file_path: &str) -> bool {
+        // If excludes match, reject
+        for excl in &self.exclude {
+            if file_path.contains(excl) {
+                return false;
+            }
+        }
+        // If includes are specified, at least one must match
+        if !self.include.is_empty() {
+            return self.include.iter().any(|incl| file_path.contains(incl));
+        }
+        true
+    }
+}
+
+pub struct RegisteredPlugin {
+    pub name: String,
+    pub driver: PluginDriver,
+    pub options: HashMap<String, String>,
+    pub scope: PluginScope,
+}
+
 #[derive(Default)]
 pub struct PluginEngine {
-    pub plugins: Vec<(String, PluginDriver, HashMap<String, String>)>,
+    pub plugins: Vec<RegisteredPlugin>,
 }
 
 impl PluginEngine {
@@ -50,7 +100,27 @@ impl PluginEngine {
         driver: PluginDriver,
         options: HashMap<String, String>,
     ) {
-        self.plugins.push((name.into(), driver, options));
+        self.register_plugin_with_scope(
+            name,
+            driver,
+            options,
+            PluginScope::default(),
+        );
+    }
+
+    pub fn register_plugin_with_scope(
+        &mut self,
+        name: impl Into<String>,
+        driver: PluginDriver,
+        options: HashMap<String, String>,
+        scope: PluginScope,
+    ) {
+        self.plugins.push(RegisteredPlugin {
+            name: name.into(),
+            driver,
+            options,
+            scope,
+        });
     }
 
     pub fn register_from_spec(&mut self, spec: &str) -> Result<()> {
@@ -78,6 +148,7 @@ impl PluginEngine {
 
             for (plugin_name, plugin_def) in plugins_table {
                 let mut options = HashMap::new();
+                let mut scope = PluginScope::default();
 
                 let driver = match plugin_def {
                     toml::Value::String(s) => {
@@ -91,6 +162,48 @@ impl PluginEngine {
                         }
                     }
                     toml::Value::Table(tbl) => {
+                        // Read targets scope if present
+                        if let Some(targets_val) = tbl.get("targets") {
+                            if let Some(arr) = targets_val.as_array() {
+                                scope.targets = arr
+                                    .iter()
+                                    .filter_map(|v| {
+                                        v.as_str().map(ToString::to_string)
+                                    })
+                                    .collect();
+                            } else if let Some(s) = targets_val.as_str() {
+                                scope.targets = vec![s.to_string()];
+                            }
+                        }
+
+                        // Read include scope if present
+                        if let Some(incl_val) = tbl.get("include") {
+                            if let Some(arr) = incl_val.as_array() {
+                                scope.include = arr
+                                    .iter()
+                                    .filter_map(|v| {
+                                        v.as_str().map(ToString::to_string)
+                                    })
+                                    .collect();
+                            } else if let Some(s) = incl_val.as_str() {
+                                scope.include = vec![s.to_string()];
+                            }
+                        }
+
+                        // Read exclude scope if present
+                        if let Some(excl_val) = tbl.get("exclude") {
+                            if let Some(arr) = excl_val.as_array() {
+                                scope.exclude = arr
+                                    .iter()
+                                    .filter_map(|v| {
+                                        v.as_str().map(ToString::to_string)
+                                    })
+                                    .collect();
+                            } else if let Some(s) = excl_val.as_str() {
+                                scope.exclude = vec![s.to_string()];
+                            }
+                        }
+
                         // Check options subtable if any
                         if let Some(opts) =
                             tbl.get("options").and_then(|o| o.as_table())
@@ -117,7 +230,19 @@ impl PluginEngine {
                         } else if let Some(cmd) =
                             tbl.get("command").and_then(|c| c.as_str())
                         {
-                            PluginDriver::Stdio(StdioPluginDriver::new(cmd))
+                            // In wasm32, IPC plugins cannot spawn processes. Skip if target is wasm32.
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                eprintln!(
+                                    "\x1b[1;33mwarning:\x1b[0m skipping IPC plugin '{}' on wasm32 target: external command '{}' is not supported in WASI sandboxes",
+                                    plugin_name, cmd
+                                );
+                                continue;
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                PluginDriver::Stdio(StdioPluginDriver::new(cmd))
+                            }
                         } else {
                             continue;
                         }
@@ -125,7 +250,12 @@ impl PluginEngine {
                     _ => continue,
                 };
 
-                self.register_plugin(plugin_name, driver, options);
+                // If targets are specified and don't match the current platform, skip loading
+                if !scope.is_platform_supported() {
+                    continue;
+                }
+
+                self.register_plugin_with_scope(plugin_name, driver, options, scope);
             }
         }
 
@@ -139,14 +269,18 @@ impl PluginEngine {
     ) -> Result<(Program, Vec<PluginDiagnostic>)> {
         let mut all_diagnostics = Vec::new();
 
-        for (name, plugin, options) in &self.plugins {
+        for plugin in &self.plugins {
+            if !plugin.scope.matches_file(file_path) {
+                continue;
+            }
+
             let req = PluginRequest::new(file_path, program.clone())
                 .with_phase(crate::protocol::PluginPhase::AstTransform)
-                .with_options(options.clone());
+                .with_options(plugin.options.clone());
 
-            let response = plugin
-                .transform(&req)
-                .with_context(|| format!("Failed executing plugin '{}'", name))?;
+            let response = plugin.driver.transform(&req).with_context(|| {
+                format!("Failed executing plugin '{}'", plugin.name)
+            })?;
 
             all_diagnostics.extend(response.diagnostics);
 
@@ -158,7 +292,11 @@ impl PluginEngine {
                 }
                 PluginStatus::Error(err_msg) => {
                     if all_diagnostics.is_empty() {
-                        bail!("Plugin '{}' reported failure: {}", name, err_msg);
+                        bail!(
+                            "Plugin '{}' reported failure: {}",
+                            plugin.name,
+                            err_msg
+                        );
                     }
                 }
             }
@@ -175,14 +313,18 @@ impl PluginEngine {
     ) -> Result<Vec<PluginDiagnostic>> {
         let mut all_diagnostics = Vec::new();
 
-        for (name, plugin, options) in &self.plugins {
+        for plugin in &self.plugins {
+            if !plugin.scope.matches_file(file_path) {
+                continue;
+            }
+
             let req = PluginRequest::new(file_path, program.clone())
                 .with_phase(crate::protocol::PluginPhase::PostAnalysis)
                 .with_analysis(artifacts.clone())
-                .with_options(options.clone());
+                .with_options(plugin.options.clone());
 
-            let response = plugin.transform(&req).with_context(|| {
-                format!("Failed executing post-analysis plugin '{}'", name)
+            let response = plugin.driver.transform(&req).with_context(|| {
+                format!("Failed executing post-analysis plugin '{}'", plugin.name)
             })?;
 
             all_diagnostics.extend(response.diagnostics);
@@ -191,7 +333,7 @@ impl PluginEngine {
                 if all_diagnostics.is_empty() {
                     bail!(
                         "Post-analysis plugin '{}' reported failure: {}",
-                        name,
+                        plugin.name,
                         err_msg
                     );
                 }
@@ -208,17 +350,21 @@ impl PluginEngine {
     ) -> Result<Vec<(String, Vec<u8>)>> {
         let mut emitted_outputs = Vec::new();
 
-        for (name, plugin, options) in &self.plugins {
+        for plugin in &self.plugins {
+            if !plugin.scope.matches_file(file_path) {
+                continue;
+            }
+
             let req = PluginRequest::new(file_path, program.clone())
                 .with_phase(crate::protocol::PluginPhase::IrEmit)
-                .with_options(options.clone());
+                .with_options(plugin.options.clone());
 
-            let response = plugin.transform(&req).with_context(|| {
-                format!("Failed executing IR emit plugin '{}'", name)
+            let response = plugin.driver.transform(&req).with_context(|| {
+                format!("Failed executing IR emit plugin '{}'", plugin.name)
             })?;
 
             if let Some(payload) = response.emitted_payload {
-                emitted_outputs.push((name.clone(), payload));
+                emitted_outputs.push((plugin.name.clone(), payload));
             }
         }
 

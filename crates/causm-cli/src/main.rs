@@ -55,6 +55,10 @@ struct Cli {
     #[arg(long)]
     explain_merge: bool,
 
+    /// Bypass loading compiler plugins (both causm.toml and CLI)
+    #[arg(long)]
+    no_plugins: bool,
+
     /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
     #[arg(long = "plugin", value_name = "SPEC")]
     plugins: Vec<String>,
@@ -96,6 +100,10 @@ enum Commands {
         #[arg(long)]
         explain_merge: bool,
 
+        /// Bypass loading compiler plugins
+        #[arg(long)]
+        no_plugins: bool,
+
         /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
         #[arg(long = "plugin", value_name = "SPEC")]
         plugins: Vec<String>,
@@ -114,6 +122,10 @@ enum Commands {
         /// Bypass Z3 formal verification
         #[arg(long)]
         no_z3: bool,
+
+        /// Bypass loading compiler plugins
+        #[arg(long)]
+        no_plugins: bool,
 
         /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
         #[arg(long = "plugin", value_name = "SPEC")]
@@ -275,6 +287,7 @@ struct RunConfig {
     no_z3: bool,
     chaos: bool,
     explain_merge: bool,
+    no_plugins: bool,
     plugins: Vec<String>,
 }
 
@@ -291,6 +304,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            no_plugins,
             plugins,
         }) => RunConfig {
             files,
@@ -302,12 +316,14 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            no_plugins: no_plugins || cli.no_plugins,
             plugins,
         },
         Some(Commands::Check {
             files,
             verbose,
             no_z3,
+            no_plugins,
             plugins,
         }) => RunConfig {
             files,
@@ -319,6 +335,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos: false,
             explain_merge: false,
+            no_plugins: no_plugins || cli.no_plugins,
             plugins,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
@@ -331,6 +348,7 @@ fn main() -> anyhow::Result<()> {
             no_z3: false,
             chaos: false,
             explain_merge: false,
+            no_plugins: true,
             plugins: Vec::new(),
         },
         Some(Commands::Tune {
@@ -617,6 +635,7 @@ fn main() -> anyhow::Result<()> {
                 no_z3: cli.no_z3,
                 chaos: cli.chaos,
                 explain_merge: cli.explain_merge,
+                no_plugins: cli.no_plugins,
                 plugins: cli.plugins,
             }
         }
@@ -660,7 +679,7 @@ fn main() -> anyhow::Result<()> {
         let mut plugin_engine = causm_plugins::PluginEngine::new();
 
         #[cfg(feature = "plugins")]
-        {
+        if !config.no_plugins {
             // Auto-discover causm.toml in file path ancestors or current working directory
             let target_abs = path.canonicalize().unwrap_or_else(|_| path.clone());
             let mut search_dirs = Vec::new();
@@ -743,7 +762,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         #[cfg(not(feature = "plugins"))]
-        if !config.plugins.is_empty() {
+        if !config.plugins.is_empty() && !config.no_plugins {
             eprintln!(
                 "\x1b[1;33mwarning: plugin flags specified, but causm-cli was built without 'plugins' feature\x1b[0m"
             );

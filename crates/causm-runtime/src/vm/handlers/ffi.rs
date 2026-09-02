@@ -96,6 +96,15 @@ impl ForeignLibraryManager {
         match symbol {
             "socket" => Ok(wasm_socket as RawHandle),
             "connect" => Ok(wasm_connect as RawHandle),
+            "bind" => Ok(wasm_bind as RawHandle),
+            "listen" => Ok(wasm_listen as RawHandle),
+            "accept" => Ok(wasm_accept as RawHandle),
+            "setsockopt" => Ok(wasm_setsockopt as RawHandle),
+            "shutdown" => Ok(wasm_shutdown as RawHandle),
+            "fcntl" => Ok(wasm_fcntl as RawHandle),
+            "sendto" => Ok(wasm_sendto as RawHandle),
+            "recvfrom" => Ok(wasm_recvfrom as RawHandle),
+            "htons" => Ok(wasm_htons as RawHandle),
             "send" | "write" => Ok(wasm_vfs_write as RawHandle),
             "recv" | "read" => Ok(wasm_vfs_read as RawHandle),
             "close" => Ok(wasm_vfs_close as RawHandle),
@@ -458,10 +467,184 @@ extern "C" fn wasm_recv(fd: i32, buf: *mut u8, len: usize, _flags: i32) -> isize
 }
 
 #[cfg(not(unix))]
+static WASM_LISTENERS: std::sync::Mutex<
+    Option<HashMap<i32, std::net::TcpListener>>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(not(unix))]
+extern "C" fn wasm_bind(fd: i32, addr_buf: *const u8, _addrlen: i32) -> i32 {
+    if addr_buf.is_null() {
+        return -1;
+    }
+    unsafe {
+        let slice = std::slice::from_raw_parts(addr_buf, 16);
+        let port = ((slice[2] as u16) << 8) | (slice[3] as u16);
+        let ip = std::net::Ipv4Addr::new(slice[4], slice[5], slice[6], slice[7]);
+        let addr = std::net::SocketAddr::V4(std::net::SocketAddrV4::new(ip, port));
+        if let Ok(listener) = std::net::TcpListener::bind(addr) {
+            let _ = listener.set_nonblocking(true);
+            let mut guard = WASM_LISTENERS.lock().unwrap();
+            let map = guard.get_or_insert_with(HashMap::new);
+            map.insert(fd, listener);
+            0
+        } else {
+            -1
+        }
+    }
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_listen(_fd: i32, _backlog: i32) -> i32 {
+    0
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_accept(
+    fd: i32,
+    _addr_buf: *mut u8,
+    _addrlen_buf: *mut i32,
+) -> i32 {
+    let mut guard = WASM_LISTENERS.lock().unwrap();
+    if let Some(map) = guard.as_mut() {
+        if let Some(listener) = map.get_mut(&fd) {
+            // Poll for connection (up to 50ms)
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_millis(100) {
+                if let Ok((stream, _)) = listener.accept() {
+                    let new_fd = NEXT_WASM_FD
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let mut sock_guard = WASM_SOCKETS.lock().unwrap();
+                    let sock_map = sock_guard.get_or_insert_with(HashMap::new);
+                    sock_map.insert(new_fd, stream);
+                    return new_fd;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+        }
+    }
+    -1
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_setsockopt(
+    _fd: i32,
+    _level: i32,
+    _optname: i32,
+    _optval: *const u8,
+    _optlen: i32,
+) -> i32 {
+    0
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_shutdown(_fd: i32, _how: i32) -> i32 {
+    0
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_fcntl(_fd: i32, _cmd: i32, _arg: i32) -> i32 {
+    0
+}
+
+#[cfg(not(unix))]
+static WASM_UDP_SOCKETS: std::sync::Mutex<
+    Option<HashMap<i32, std::net::UdpSocket>>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(not(unix))]
+extern "C" fn wasm_sendto(
+    fd: i32,
+    buf: *const u8,
+    len: usize,
+    _flags: i32,
+    dest_addr: *const u8,
+    _addrlen: i32,
+) -> isize {
+    if buf.is_null() || dest_addr.is_null() {
+        return -1;
+    }
+    unsafe {
+        let slice = std::slice::from_raw_parts(dest_addr, 16);
+        let port = ((slice[2] as u16) << 8) | (slice[3] as u16);
+        let ip = std::net::Ipv4Addr::new(slice[4], slice[5], slice[6], slice[7]);
+        let addr = std::net::SocketAddr::V4(std::net::SocketAddrV4::new(ip, port));
+        let payload_slice = std::slice::from_raw_parts(buf, len);
+
+        let mut guard = WASM_UDP_SOCKETS.lock().unwrap();
+        let map = guard.get_or_insert_with(HashMap::new);
+        let sock = map.entry(fd).or_insert_with(|| {
+            std::net::UdpSocket::bind("0.0.0.0:0").expect("bind ephemeral udp")
+        });
+        if let Ok(n) = sock.send_to(payload_slice, addr) {
+            n as isize
+        } else {
+            -1
+        }
+    }
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_recvfrom(
+    fd: i32,
+    buf: *mut u8,
+    len: usize,
+    _flags: i32,
+    src_addr: *mut u8,
+    _addrlen_buf: *mut i32,
+) -> isize {
+    if buf.is_null() {
+        return -1;
+    }
+    let mut guard = WASM_UDP_SOCKETS.lock().unwrap();
+    if let Some(map) = guard.as_mut() {
+        if let Some(sock) = map.get_mut(&fd) {
+            let slice = unsafe { std::slice::from_raw_parts_mut(buf, len) };
+            let _ =
+                sock.set_read_timeout(Some(std::time::Duration::from_millis(50)));
+            if let Ok((n, sender)) = sock.recv_from(slice) {
+                if !src_addr.is_null() {
+                    if let std::net::SocketAddr::V4(v4) = sender {
+                        let octets = v4.ip().octets();
+                        let port = v4.port();
+                        unsafe {
+                            let out_sa =
+                                std::slice::from_raw_parts_mut(src_addr, 16);
+                            out_sa[0] = 2;
+                            out_sa[1] = 0;
+                            out_sa[2] = (port >> 8) as u8;
+                            out_sa[3] = (port & 0xFF) as u8;
+                            out_sa[4] = octets[0];
+                            out_sa[5] = octets[1];
+                            out_sa[6] = octets[2];
+                            out_sa[7] = octets[3];
+                        }
+                    }
+                }
+                return n as isize;
+            }
+        }
+    }
+    -1
+}
+
+#[cfg(not(unix))]
+extern "C" fn wasm_htons(port: i32) -> i32 {
+    (port as u16).to_be() as i32
+}
+
+#[cfg(not(unix))]
 extern "C" fn wasm_close(fd: i32) -> i32 {
     let mut guard = WASM_SOCKETS.lock().unwrap();
     if let Some(map) = guard.as_mut() {
         map.remove(&fd);
+    }
+    let mut lguard = WASM_LISTENERS.lock().unwrap();
+    if let Some(lmap) = lguard.as_mut() {
+        lmap.remove(&fd);
+    }
+    let mut uguard = WASM_UDP_SOCKETS.lock().unwrap();
+    if let Some(umap) = uguard.as_mut() {
+        umap.remove(&fd);
     }
     0
 }
@@ -520,6 +703,218 @@ pub unsafe fn invoke_foreign_symbol(
                 })
                 .unwrap_or(0);
             return Ok(Payload::Integer(wasm_socket(d, t, p) as i64));
+        } else if sym_ptr == (wasm_bind as RawHandle) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let sa_bytes: Vec<u8> =
+                if let Some(Payload::Array(elements)) = args.get(1) {
+                    elements
+                        .iter()
+                        .map(|el| match el {
+                            Payload::Integer(v) => *v as u8,
+                            _ => 0,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+            let buf_ptr = if !sa_bytes.is_empty() {
+                sa_bytes.as_ptr()
+            } else {
+                args.get(1)
+                    .and_then(|p| match p {
+                        Payload::Integer(i) => Some(*i as *const u8),
+                        _ => None,
+                    })
+                    .unwrap_or(std::ptr::null())
+            };
+            let len = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(16);
+            return Ok(Payload::Integer(wasm_bind(fd, buf_ptr, len) as i64));
+        } else if sym_ptr == (wasm_listen as RawHandle) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let backlog = args
+                .get(1)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(128);
+            return Ok(Payload::Integer(wasm_listen(fd, backlog) as i64));
+        } else if sym_ptr == (wasm_accept as RawHandle) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            return Ok(Payload::Integer(wasm_accept(
+                fd,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ) as i64));
+        } else if sym_ptr == (wasm_setsockopt as RawHandle) {
+            return Ok(Payload::Integer(0));
+        } else if sym_ptr == (wasm_shutdown as RawHandle) {
+            return Ok(Payload::Integer(0));
+        } else if sym_ptr == (wasm_fcntl as RawHandle) {
+            return Ok(Payload::Integer(0));
+        } else if sym_ptr == (wasm_htons as RawHandle) {
+            let port = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            return Ok(Payload::Integer(wasm_htons(port) as i64));
+        } else if sym_ptr == (wasm_sendto as RawHandle) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let send_bytes: Vec<u8> =
+                if let Some(Payload::Array(elements)) = args.get(1) {
+                    elements
+                        .iter()
+                        .map(|el| match el {
+                            Payload::Integer(v) => *v as u8,
+                            _ => 0,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+            let buf_ptr = if !send_bytes.is_empty() {
+                send_bytes.as_ptr()
+            } else {
+                args.get(1)
+                    .and_then(|p| match p {
+                        Payload::Integer(i) => Some(*i as *const u8),
+                        _ => None,
+                    })
+                    .unwrap_or(std::ptr::null())
+            };
+            let len = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as usize),
+                    _ => None,
+                })
+                .unwrap_or(send_bytes.len());
+            let flags = args
+                .get(3)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let dest_sa_bytes: Vec<u8> =
+                if let Some(Payload::Array(elements)) = args.get(4) {
+                    elements
+                        .iter()
+                        .map(|el| match el {
+                            Payload::Integer(v) => *v as u8,
+                            _ => 0,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+            let dest_ptr = if !dest_sa_bytes.is_empty() {
+                dest_sa_bytes.as_ptr()
+            } else {
+                args.get(4)
+                    .and_then(|p| match p {
+                        Payload::Integer(i) => Some(*i as *const u8),
+                        _ => None,
+                    })
+                    .unwrap_or(std::ptr::null())
+            };
+            let addrlen = args
+                .get(5)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(16);
+            return Ok(Payload::Integer(wasm_sendto(
+                fd, buf_ptr, len, flags, dest_ptr, addrlen,
+            ) as i64));
+        } else if sym_ptr == (wasm_recvfrom as RawHandle) {
+            let fd = args
+                .get(0)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(-1);
+            let len = args
+                .get(2)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as usize),
+                    _ => None,
+                })
+                .unwrap_or(512);
+            let flags = args
+                .get(3)
+                .and_then(|p| match p {
+                    Payload::Integer(i) => Some(*i as i32),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let mut recv_buf = vec![0u8; len];
+            let mut src_sa = vec![0u8; 16];
+            let res = wasm_recvfrom(
+                fd,
+                recv_buf.as_mut_ptr(),
+                len,
+                flags,
+                src_sa.as_mut_ptr(),
+                std::ptr::null_mut(),
+            );
+            if res > 0 {
+                let recvd_count = res as usize;
+                if let Some(Payload::Array(ref mut elements)) = args.get_mut(1) {
+                    for i in 0..recvd_count {
+                        if i < elements.len() {
+                            elements[i] = Payload::Integer(recv_buf[i] as i64);
+                        } else {
+                            elements.push(Payload::Integer(recv_buf[i] as i64));
+                        }
+                    }
+                }
+                if let Some(Payload::Array(ref mut sa_elements)) = args.get_mut(4) {
+                    for i in 0..16 {
+                        if i < sa_elements.len() {
+                            sa_elements[i] = Payload::Integer(src_sa[i] as i64);
+                        } else {
+                            sa_elements.push(Payload::Integer(src_sa[i] as i64));
+                        }
+                    }
+                }
+            }
+            return Ok(Payload::Integer(res as i64));
         } else if sym_ptr == (wasm_connect as RawHandle) {
             let fd = args
                 .get(0)

@@ -185,3 +185,42 @@ fn test_plugin_post_analysis_lifecycle_hook() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_plugin_file_scoping_include_filter() -> anyhow::Result<()> {
+    use std::collections::HashMap;
+
+    let source = r#"
+    @0ms: {
+        let val = 100
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+
+    let mut engine = PluginEngine::new();
+    let mut scope = causm_plugins::engine::PluginScope::default();
+    scope.include = vec!["special_module".to_string()];
+
+    // Minimal valid WASM binary header: \0asm\1\0\0\0
+    let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    let driver = PluginDriver::Wasm(WasmPluginDriver::new(wasm_bytes));
+
+    engine.register_plugin_with_scope(
+        "scoped_plugin",
+        driver,
+        HashMap::new(),
+        scope,
+    );
+
+    // Running on non-matching file: plugin is bypassed, program unchanged without errors
+    let (ast_unmatched, diags_unmatched) =
+        engine.run_ast_pipeline("net_collection.csm", program.clone())?;
+    assert_eq!(ast_unmatched, program);
+    assert!(diags_unmatched.is_empty());
+
+    // Matches file name
+    assert!(engine.plugins[0].scope.matches_file("special_module.csm"));
+    assert!(!engine.plugins[0].scope.matches_file("net_collection.csm"));
+
+    Ok(())
+}

@@ -4,6 +4,7 @@ version = "0.1.0"
 
 [plugins.seccomp_guard]
 path = "../target/wasm32-unknown-unknown/debug/seccomp_guard.wasm"
+include = ["plugin_seccomp"]
 
 [plugins.seccomp_guard.options]
 allow = "sys_read,sys_write,sys_exit"
@@ -11,6 +12,9 @@ strict_mode = true
 
 [plugins.python_linter]
 command = "python3 plugins/python_telemetry_linter.py"
+targets = ["native"]
+include = ["plugin_python_telemetry"]
 
 [plugins.python_linter.options]
 strict_naming = "true"
+

@@ -3,7 +3,7 @@ pub mod ipc;
 pub mod protocol;
 pub mod wasm;
 
-pub use engine::PluginEngine;
+pub use engine::{PluginDriver, PluginEngine, PluginScope, RegisteredPlugin};
 pub use ipc::StdioPluginDriver;
 pub use protocol::*;
 pub use wasm::WasmPluginDriver;
@@ -252,5 +252,28 @@ strict = true
             "Error was: {}",
             err_str
         );
+    }
+
+    #[test]
+    fn test_plugins_scope_file_matching() {
+        let mut scope = engine::PluginScope::default();
+        scope.include = vec!["telemetry".to_string()];
+        scope.exclude = vec!["mock".to_string()];
+
+        assert!(scope.matches_file("examples/telemetry_worker.csm"));
+        assert!(!scope.matches_file("examples/net_collection_showcase.csm"));
+        assert!(!scope.matches_file("examples/telemetry_mock.csm"));
+    }
+
+    #[test]
+    fn test_plugins_scope_platform_filtering() {
+        let mut scope = engine::PluginScope::default();
+        scope.targets = vec!["native".to_string()];
+
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(scope.is_platform_supported());
+
+        #[cfg(target_arch = "wasm32")]
+        assert!(!scope.is_platform_supported());
     }
 }

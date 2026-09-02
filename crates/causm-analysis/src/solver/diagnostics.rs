@@ -73,11 +73,11 @@ fn find_word_token(src: &str, tok: &str) -> Option<(usize, usize)> {
         let abs_pos = offset + idx;
         let before_ok = abs_pos == 0
             || !src[..abs_pos].chars().last().unwrap().is_alphanumeric()
-                && src[..abs_pos].chars().last().unwrap() != '_';
+                && !src[..abs_pos].ends_with('_');
         let after_pos = abs_pos + tok.len();
         let after_ok = after_pos >= src.len()
             || !src[after_pos..].chars().next().unwrap().is_alphanumeric()
-                && src[after_pos..].chars().next().unwrap() != '_';
+                && !src[after_pos..].starts_with('_');
         if before_ok && after_ok {
             return Some((abs_pos, tok.len()));
         }
