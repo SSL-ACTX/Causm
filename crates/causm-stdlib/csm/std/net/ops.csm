@@ -2,136 +2,249 @@
     from "std/net/types" import *
     from "std/net/ffi" import *
 
-    routine create_socket() -> i32 taking _ => socket(2, 1, 0)
+    routine create_socket() -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            socket(2, 1, 0)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine create_udp_socket() -> i32 taking _ => socket(2, 2, 0)
+    routine create_udp_socket() -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            socket(2, 2, 0)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine close_socket(peek fd: i32) -> i32 taking _ => close(fd)
+    routine close_socket(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            close(fd)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine shutdown_stream(peek stream: TcpStream, peek how: i32) -> i32 taking _ => shutdown(stream.fd, how)
+    routine shutdown_stream(&stream: TcpStream, &how: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            shutdown(stream.fd, how)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine addr(peek ip: string, peek port: i32) -> SocketAddr taking _ => struct { ip = ip, port = port }
+    routine addr(&ip: string, &port: i32) -> SocketAddr taking _ => struct { ip = ip, port = port }
 
-    routine make_sockaddr(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i64 taking _ {
+    routine make_sockaddr(&port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> i64 taking _ {
         let port_hi = (port / 256) % 256
         let port_lo = port % 256
         let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
         sa
     }
 
-    routine set_reuseaddr(peek fd: i32) -> i32 taking _ {
-        let mut opt = [1, 0, 0, 0]
-        setsockopt(fd, 1, 2, opt, 4)
-    }
-
-    routine tcp_bind(peek fd: i32, peek port: i32) -> i32 taking _ {
-        let mut sa = make_sockaddr(port, 0, 0, 0, 0)
-        bind(fd, sa, 16)
-    }
-
-    routine tcp_listen(peek fd: i32, peek backlog: i32) -> i32 taking _ => listen(fd, backlog)
-
-    routine tcp_accept(peek fd: i32) -> i32 taking _ {
-        let mut peer_sa = [0; 16]
-        let mut addrlen = [16, 0, 0, 0]
-        accept(fd, peer_sa, addrlen)
-    }
-
-    routine tcp_connect(peek fd: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
-        let mut sa = make_sockaddr(port, b0, b1, b2, b3)
-        connect(fd, sa, 16)
-    }
-
-    routine tcp_send(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => send(fd, buf, len, 0)
-
-    routine tcp_recv(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => recv(fd, buf, len, 0)
-
-    routine tcp_listener(peek port: i32) -> TcpListener taking _ {
-        let fd = create_socket()
-        let _reuse = set_reuseaddr(fd)
-        let _bind = tcp_bind(fd, port)
-        let _listen = tcp_listen(fd, 128)
-        struct { bind_port = port, fd = fd, is_listening = true }
-    }
-
-    routine TcpListener.bind(peek port: i32) -> TcpListener taking _ => tcp_listener(port)
-
-    routine TcpListener.accept(peek self) -> TcpStream taking _ {
-        let client_fd = tcp_accept(self.fd)
-        struct {
-            fd = client_fd,
-            is_connected = true,
-            peer_ip = "",
-            peer_port = self.bind_port
+    routine make_sockaddr_ip(&ip: string, &port: i32) -> array taking _ {
+        let raw_ip = if (capability(System.FFI) || capability(System.WASI)) {
+            inet_addr(ip)
+        } else {
+            0
         }
-    }
-
-    routine TcpListener.close(peek self) -> i32 taking _ => close_socket(self.fd)
-
-    routine tcp_stream_connect(peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> TcpStream taking _ {
-        let fd = create_socket()
-        let _rc = tcp_connect(fd, port, b0, b1, b2, b3)
-        struct {
-            fd = fd,
-            is_connected = true,
-            peer_ip = "",
-            peer_port = port
-        }
-    }
-
-    routine tcp_stream_connect_ip(peek ip: string, peek port: i32) -> TcpStream taking _ {
-        let fd = create_socket()
-        let raw_ip = inet_addr(ip)
         let port_hi = (port / 256) % 256
         let port_lo = port % 256
         let b0 = raw_ip % 256
         let b1 = (raw_ip / 256) % 256
         let b2 = (raw_ip / 65536) % 256
         let b3 = (raw_ip / 16777216) % 256
-        let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
-        let _rc = connect(fd, sa, 16)
-        struct {
-            fd = fd,
-            is_connected = true,
-            peer_ip = ip,
-            peer_port = port
-        }
+        [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
     }
 
-    routine TcpStream.connect(peek ip: string, peek port: i32) -> TcpStream taking _ => tcp_stream_connect_ip(ip, port)
-
-    routine TcpStream.send(peek self, peek buf: i64, peek len: i32) -> i32 taking _ => send(self.fd, buf, len, 0)
-
-    routine TcpStream.recv(peek self, peek buf: i64, peek len: i32) -> i32 taking _ => recv(self.fd, buf, len, 0)
-
-    routine TcpStream.close(peek self) -> i32 taking _ => close_socket(self.fd)
-
-    routine tcp_send_all(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => tcp_send(fd, buf, len)
-
-    routine tcp_recv_exact(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ => tcp_recv(fd, buf, len)
-
-    routine set_nonblocking(peek fd: i32) -> i32 taking _ {
-        let flags = fcntl(fd, 3, 0)
-        fcntl(fd, 4, flags + 2048)
+    routine set_reuseaddr(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut opt = [1, 0, 0, 0]
+            setsockopt(fd, 1, 2, opt, 4)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine set_blocking(peek fd: i32) -> i32 taking _ {
-        let flags = fcntl(fd, 3, 0)
-        fcntl(fd, 4, flags - 2048)
+    routine tcp_bind(&fd: i32, &port: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut sa = make_sockaddr(port, 0, 0, 0, 0)
+            bind(fd, sa, 16)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine set_recv_timeout(peek fd: i32, peek timeout_ms: i64) -> i32 taking _ {
-        let sec = timeout_ms / 1000
-        let usec = (timeout_ms % 1000) * 1000
-        let tv = struct { tv_sec = sec, tv_usec = usec }
-        setsockopt(fd, 1, 20, tv, 16)
+    routine tcp_listen(&fd: i32, &backlog: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            listen(fd, backlog)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine set_send_timeout(peek fd: i32, peek timeout_ms: i64) -> i32 taking _ {
-        let sec = timeout_ms / 1000
-        let usec = (timeout_ms % 1000) * 1000
-        let tv = struct { tv_sec = sec, tv_usec = usec }
-        setsockopt(fd, 1, 21, tv, 16)
+    routine tcp_accept(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut peer_sa = [0; 16]
+            let mut addrlen = [16, 0, 0, 0]
+            accept(fd, peer_sa, addrlen)
+        } else {
+            -1
+        } reconcile auto
+    }
+
+    routine tcp_connect(&fd: i32, &port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut sa = make_sockaddr(port, b0, b1, b2, b3)
+            connect(fd, sa, 16)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine tcp_send(&fd: i32, &buf: i64, &len: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            send(fd, buf, len, 0)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine tcp_recv(&fd: i32, &buf: i64, &len: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            recv(fd, buf, len, 0)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine tcp_listener(&port: i32) -> TcpListener taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let fd = create_socket()
+            let _reuse = set_reuseaddr(fd)
+            let _bind = tcp_bind(fd, port)
+            let _listen = tcp_listen(fd, 128)
+            struct { bind_port = port, fd = fd, is_listening = true }
+        } else {
+            struct { bind_port = port, fd = -1, is_listening = false }
+        } reconcile auto
+    }
+
+    routine TcpListener.bind(&port: i32) -> TcpListener taking _ => tcp_listener(port)
+
+    routine TcpListener.accept(&self) -> TcpStream taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let client_fd = tcp_accept(self.fd)
+            struct {
+                fd = client_fd,
+                is_connected = true,
+                peer_ip = "",
+                peer_port = self.bind_port
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_connected = false,
+                peer_ip = "",
+                peer_port = self.bind_port
+            }
+        } reconcile auto
+    }
+
+    routine TcpListener.close(&self) -> i32 taking _ => close_socket(self.fd)
+
+    routine tcp_stream_connect(&port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> TcpStream taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let fd = create_socket()
+            let _rc = tcp_connect(fd, port, b0, b1, b2, b3)
+            struct {
+                fd = fd,
+                is_connected = true,
+                peer_ip = "",
+                peer_port = port
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_connected = false,
+                peer_ip = "",
+                peer_port = port
+            }
+        } reconcile auto
+    }
+
+    routine tcp_stream_connect_ip(&ip: string, &port: i32) -> TcpStream taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let fd = create_socket()
+            let mut sa = make_sockaddr_ip(ip, port)
+            let _rc = connect(fd, sa, 16)
+            struct {
+                fd = fd,
+                is_connected = true,
+                peer_ip = ip,
+                peer_port = port
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_connected = false,
+                peer_ip = ip,
+                peer_port = port
+            }
+        } reconcile auto
+    }
+
+    routine TcpStream.connect(&ip: string, &port: i32) -> TcpStream taking _ => tcp_stream_connect_ip(ip, port)
+
+    routine TcpStream.send(&self: TcpStream, &buf: i64, &len: i32) -> i32 taking _ => tcp_send(self.fd, buf, len)
+
+    routine TcpStream.recv(&self: TcpStream, &buf: i64, &len: i32) -> i32 taking _ => tcp_recv(self.fd, buf, len)
+
+    routine TcpStream.close(&self: TcpStream) -> i32 taking _ => close_socket(self.fd)
+
+    routine tcp_send_all(&fd: i32, &buf: i64, &len: i32) -> i32 taking _ => tcp_send(fd, buf, len)
+
+    routine tcp_recv_exact(&fd: i32, &buf: i64, &len: i32) -> i32 taking _ => tcp_recv(fd, buf, len)
+
+    routine set_nonblocking(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            let flags = fcntl(fd, 3, 0)
+            fcntl(fd, 4, flags + 2048)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine set_blocking(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            let flags = fcntl(fd, 3, 0)
+            fcntl(fd, 4, flags - 2048)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine set_recv_timeout(&fd: i32, &timeout_ms: i64) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            let sec = timeout_ms / 1000
+            let usec = (timeout_ms % 1000) * 1000
+            let tv = struct { tv_sec = sec, tv_usec = usec }
+            setsockopt(fd, 1, 20, tv, 16)
+        } else {
+            0
+        } reconcile auto
+    }
+
+    routine set_send_timeout(&fd: i32, &timeout_ms: i64) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            let sec = timeout_ms / 1000
+            let usec = (timeout_ms % 1000) * 1000
+            let tv = struct { tv_sec = sec, tv_usec = usec }
+            setsockopt(fd, 1, 21, tv, 16)
+        } else {
+            0
+        } reconcile auto
     }
 
     routine udp_socket() -> UdpSocket taking _ {
@@ -144,53 +257,66 @@
         struct { fd = fd, is_bound = false, port = 0 }
     }
 
-    routine udp_bind(peek port: i32) -> UdpSocket taking _ {
-        let fd = create_udp_socket()
-        let _reuse = set_reuseaddr(fd)
-        let mut sa = make_sockaddr(port, 0, 0, 0, 0)
-        let _bind_rc = bind(fd, sa, 16)
-        struct { fd = fd, is_bound = true, port = port }
+    routine udp_bind(&port: i32) -> UdpSocket taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let fd = create_udp_socket()
+            let _reuse = set_reuseaddr(fd)
+            let mut sa = make_sockaddr(port, 0, 0, 0, 0)
+            let _bind_rc = bind(fd, sa, 16)
+            struct { fd = fd, is_bound = true, port = port }
+        } else {
+            struct { fd = -1, is_bound = false, port = port }
+        } reconcile auto
     }
 
-    routine make_sockaddr_ip(peek ip: string, peek port: i32) -> array taking _ {
-        let raw_ip = inet_addr(ip)
-        let port_hi = (port / 256) % 256
-        let port_lo = port % 256
-        let b0 = raw_ip % 256
-        let b1 = (raw_ip / 256) % 256
-        let b2 = (raw_ip / 65536) % 256
-        let b3 = (raw_ip / 16777216) % 256
-        [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]
+    routine UdpSocket.send_to_ip(&self, &buf: i64, &len: i32, &ip: string, &port: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut dest_sa = make_sockaddr_ip(ip, port)
+            sendto(self.fd, buf, len, 0, dest_sa, 16)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine UdpSocket.send_to_ip(peek self, peek buf: i64, peek len: i32, peek ip: string, peek port: i32) -> i32 taking _ {
-        let mut dest_sa = make_sockaddr_ip(ip, port)
-        sendto(self.fd, buf, len, 0, dest_sa, 16)
+    routine UdpSocket.send_to_addr(&self, &buf: i64, &len: i32, &addr: SocketAddr) -> i32 taking _ => UdpSocket.send_to_ip(self, buf, len, addr.ip, addr.port)
+
+    routine UdpSocket.send_to(&self, &buf: i64, &len: i32, &port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
+            sendto(self.fd, buf, len, 0, dest_sa, 16)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine UdpSocket.send_to_addr(peek self, peek buf: i64, peek len: i32, peek addr: SocketAddr) -> i32 taking _ => UdpSocket.send_to_ip(self, buf, len, addr.ip, addr.port)
-
-    routine UdpSocket.send_to(peek self, peek buf: i64, peek len: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
-        let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
-        sendto(self.fd, buf, len, 0, dest_sa, 16)
+    routine UdpSocket.recv_from(&self, &buf: i64, &len: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut src_sa = [0; 16]
+            let mut addrlen = [16, 0, 0, 0]
+            recvfrom(self.fd, buf, len, 0, src_sa, addrlen)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine UdpSocket.recv_from(peek self, peek buf: i64, peek len: i32) -> i32 taking _ {
-        let mut src_sa = [0; 16]
-        let mut addrlen = [16, 0, 0, 0]
-        recvfrom(self.fd, buf, len, 0, src_sa, addrlen)
+    routine UdpSocket.close(&self) -> i32 taking _ => close_socket(self.fd)
+
+    routine udp_send_to(&fd: i32, &buf: i64, &len: i32, &port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
+            sendto(fd, buf, len, 0, dest_sa, 16)
+        } else {
+            0
+        } reconcile auto
     }
 
-    routine UdpSocket.close(peek self) -> i32 taking _ => close_socket(self.fd)
-
-    routine udp_send_to(peek fd: i32, peek buf: i64, peek len: i32, peek port: i32, peek b0: i32, peek b1: i32, peek b2: i32, peek b3: i32) -> i32 taking _ {
-        let mut dest_sa = make_sockaddr(port, b0, b1, b2, b3)
-        sendto(fd, buf, len, 0, dest_sa, 16)
-    }
-
-    routine udp_recv_from(peek fd: i32, peek buf: i64, peek len: i32) -> i32 taking _ {
-        let mut src_sa = [0; 16]
-        let mut addrlen = [16, 0, 0, 0]
-        recvfrom(fd, buf, len, 0, src_sa, addrlen)
+    routine udp_recv_from(&fd: i32, &buf: i64, &len: i32) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let mut src_sa = [0; 16]
+            let mut addrlen = [16, 0, 0, 0]
+            recvfrom(fd, buf, len, 0, src_sa, addrlen)
+        } else {
+            0
+        } reconcile auto
     }
 }

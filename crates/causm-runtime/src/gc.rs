@@ -23,7 +23,7 @@ impl GarbageCollector {
 
     /// Reclaim a branch from the VM and remove it from active set.
     pub fn collect_branch_by_id(vm: &mut crate::vm::Vm, branch_id: &str) {
-        if let Some(branch) = vm.active_branches.remove(branch_id) {
+        if let Some(branch) = vm.active_branches.shift_remove(branch_id) {
             Self::collect_branch(branch);
         }
     }

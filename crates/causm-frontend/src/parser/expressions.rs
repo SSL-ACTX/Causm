@@ -41,6 +41,7 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             left
         }
         Rule::expression
+        | Rule::lvalue
         | Rule::logical_or_expr
         | Rule::logical_and_expr
         | Rule::relational_expr
@@ -55,14 +56,20 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             let mut left = first.unwrap();
             while let Some(op_pair) = inner.next() {
                 let op = match op_pair.as_str() {
+                    "??" => causm_core::BinaryOperator::NullCoalesce,
                     "||" => causm_core::BinaryOperator::LogicalOr,
                     "&&" => causm_core::BinaryOperator::LogicalAnd,
+                    "|" => causm_core::BinaryOperator::BitwiseOr,
+                    "^" => causm_core::BinaryOperator::BitwiseXor,
+                    "&" => causm_core::BinaryOperator::BitwiseAnd,
+                    "<<" => causm_core::BinaryOperator::Shl,
+                    ">>" => causm_core::BinaryOperator::Shr,
                     "+" => causm_core::BinaryOperator::Add,
                     "-" => causm_core::BinaryOperator::Sub,
                     "*" => causm_core::BinaryOperator::Mul,
                     "/" => causm_core::BinaryOperator::Div,
                     "%" => causm_core::BinaryOperator::Rem,
-                    "^" => causm_core::BinaryOperator::Pow,
+                    "**" => causm_core::BinaryOperator::Pow,
                     "==" => causm_core::BinaryOperator::Eq,
                     "!=" => causm_core::BinaryOperator::Neq,
                     "<" => causm_core::BinaryOperator::Lt,
@@ -83,6 +90,13 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             left
         }
         Rule::unary_expr => parse_expression(pair.into_inner().next().unwrap()),
+        Rule::bitwise_not_expr => {
+            let expr = parse_expression(pair.into_inner().next().unwrap());
+            Expression::UnaryOp {
+                op: causm_core::UnaryOperator::BitwiseNot,
+                expr: Box::new(expr),
+            }
+        }
         Rule::neg_expr => {
             let expr = parse_expression(pair.into_inner().next().unwrap());
             Expression::UnaryOp {
@@ -145,19 +159,35 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                             .next()
                             .map(|p| p.as_str().to_string())
                             .unwrap_or_default();
+                        let mut type_args = Vec::new();
+                        let mut next = call_inner.next();
+                        if let Some(ref p) = next {
+                            if p.as_rule() == Rule::type_param_list {
+                                type_args = crate::parser::statements::utils::parse_type_param_list(p.clone());
+                                next = call_inner.next();
+                            }
+                        }
                         let mut args = Vec::new();
-                        if let Some(arg_list_pair) = call_inner.next() {
+                        if let Some(arg_list_pair) = next {
                             for arg in arg_list_pair.into_inner() {
                                 args.push(parse_expression(arg));
                             }
                         }
-                        expr = Expression::MethodCall {
+                        let method_call = Expression::MethodCall {
                             target: Box::new(expr),
                             method,
                             args,
                             resolved_routine: std::cell::RefCell::new(None),
                             resolved_budget: std::cell::RefCell::new(None),
                         };
+                        if type_args.is_empty() {
+                            expr = method_call;
+                        } else {
+                            expr = Expression::Turbofish {
+                                expr: Box::new(method_call),
+                                type_args,
+                            };
+                        }
                     }
                     Rule::type_assertion_tail => {
                         let type_name_pair =
@@ -254,14 +284,57 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 deadline_ms,
             }
         }
-        Rule::call_expr | Rule::direct_call_expr => {
+        Rule::generic_static_call_expr => {
             let mut inner = pair.into_inner();
-            let routine = inner
+            let mut type_parts = Vec::new();
+            let mut type_args = Vec::new();
+            for p in inner.by_ref() {
+                if p.as_rule() == Rule::type_param_list {
+                    type_args =
+                        crate::parser::statements::utils::parse_type_param_list(p);
+                    break;
+                } else {
+                    type_parts.push(p.as_str().to_string());
+                }
+            }
+            let type_name = type_parts.join(".");
+            let method = inner
                 .next()
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default();
             let mut args = Vec::new();
             if let Some(expr_list) = inner.next() {
+                for e in expr_list.into_inner() {
+                    args.push(parse_expression(e));
+                }
+            }
+            Expression::GenericStaticCall {
+                type_name,
+                type_args,
+                method,
+                args,
+            }
+        }
+
+        Rule::direct_call_expr => {
+            let mut inner = pair.into_inner();
+            let routine = inner
+                .next()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            let mut type_args = Vec::new();
+            let mut next = inner.next();
+            if let Some(ref p) = next {
+                if p.as_rule() == Rule::type_param_list {
+                    type_args =
+                        crate::parser::statements::utils::parse_type_param_list(
+                            p.clone(),
+                        );
+                    next = inner.next();
+                }
+            }
+            let mut args = Vec::new();
+            if let Some(expr_list) = next {
                 for e in expr_list.into_inner() {
                     args.push(parse_expression(e));
                 }
@@ -275,7 +348,15 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     return Expression::ChannelReceive(name.clone());
                 }
             }
-            Expression::Call { routine, args }
+            let call = Expression::Call { routine, args };
+            if type_args.is_empty() {
+                call
+            } else {
+                Expression::Turbofish {
+                    expr: Box::new(call),
+                    type_args,
+                }
+            }
         }
         Rule::byte_string => parse_byte_string(pair.as_str()),
         Rule::hex_byte_string => parse_hex_byte_string(pair.as_str()),
@@ -395,6 +476,11 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             };
             Expression::ArenaIntrospect(kind)
         }
+        Rule::capability_expr => {
+            let inner = pair.into_inner().next().unwrap();
+            let cap = crate::parser::statements::utils::parse_capability(inner);
+            Expression::CapabilityCheck(cap)
+        }
         Rule::to_str_expr => {
             let inner = pair.into_inner().next().unwrap();
             Expression::ToStr(Box::new(parse_expression(inner)))
@@ -505,11 +591,30 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                 .map(|p| p.as_str().to_string())
                 .unwrap_or_default(),
         ),
-        Rule::struct_lit | Rule::topology_lit => {
+        Rule::struct_lit | Rule::named_struct_lit | Rule::topology_lit => {
             let rule = pair.as_rule();
             let mut inner = pair.into_inner();
 
-            let (type_name, params_pair) = (None, inner.next());
+            let (type_name, params_pair) = if rule == Rule::struct_lit {
+                if let Some(first) = inner.peek() {
+                    if first.as_rule() == Rule::named_struct_lit {
+                        let named_pair = inner.next().unwrap();
+                        let mut named_inner = named_pair.into_inner();
+                        let t_name =
+                            named_inner.next().map(|p| p.as_str().to_string());
+                        (t_name, named_inner.next())
+                    } else {
+                        (None, inner.next())
+                    }
+                } else {
+                    (None, inner.next())
+                }
+            } else if rule == Rule::named_struct_lit {
+                let t_name = inner.next().map(|p| p.as_str().to_string());
+                (t_name, inner.next())
+            } else {
+                (None, inner.next())
+            };
 
             let mut fields = HashMap::new();
             if let Some(params) = params_pair {
@@ -523,10 +628,10 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
                     }
                 }
             }
-            if rule == Rule::struct_lit {
-                Expression::StructLit(std::cell::RefCell::new(type_name), fields)
-            } else {
+            if rule == Rule::topology_lit {
                 Expression::TopologyLit(fields)
+            } else {
+                Expression::StructLit(std::cell::RefCell::new(type_name), fields)
             }
         }
         Rule::array_lit => {
@@ -583,6 +688,11 @@ pub(crate) fn parse_expression(pair: pest::iterators::Pair<Rule>) -> Expression 
             }
         }
         Rule::null => Expression::Null,
+        Rule::tuple_lit => {
+            let elems: Vec<Expression> =
+                pair.into_inner().map(parse_expression).collect();
+            Expression::Tuple(elems)
+        }
         _ => Expression::Literal(pair.as_str().to_string()),
     }
 }
@@ -666,6 +776,16 @@ pub(crate) fn parse_hex_byte_string(raw: &str) -> Expression {
 pub fn parse_pattern(pair: Pair<Rule>) -> Pattern {
     match pair.as_rule() {
         Rule::match_pattern => parse_pattern(pair.into_inner().next().unwrap()),
+        Rule::tuple_pattern => {
+            let inner: Vec<_> = pair.into_inner().collect();
+            if inner.is_empty() {
+                Pattern::Tuple(Vec::new())
+            } else {
+                let args_pair = inner.into_iter().next().unwrap();
+                let args = args_pair.into_inner().map(parse_pattern).collect();
+                Pattern::Tuple(args)
+            }
+        }
         Rule::wildcard_pattern => Pattern::Wildcard,
         Rule::ident_pattern => Pattern::Identifier(pair.as_str().trim().to_string()),
         Rule::literal_pattern => {

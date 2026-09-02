@@ -55,17 +55,8 @@ pub fn optimize_program(mut ir: IrProgram) -> IrProgram {
     manager.add_pass(Box::new(DeadCodeEliminationPass));
     manager.add_pass(Box::new(VerifierPass));
 
-    // 1. Optimize routines (routines are self-contained, no global usage tracking needed)
-    for routine in ir.routines.values_mut() {
-        if !routine.instructions.is_empty() {
-            let cfg = CFG::from_flat_instructions(&routine.instructions);
-            let ssa_transformer = SsaTransformer::new(cfg);
-            let ssa_cfg = ssa_transformer.transform();
-
-            let destructed_cfg = destruct_ssa(ssa_cfg);
-            routine.instructions = flatten_cfg(&destructed_cfg);
-        }
-    }
+    // 1. Routines currently maintain their original IR instructions
+    // (Routine-level SSA optimization will be enabled after full loop-destructuring verification)
 
     // 2. Scan all blocks to build a global set of registers that are read before being defined in their blocks.
     let mut global_preserved_regs = HashSet::new();
@@ -233,537 +224,331 @@ fn ssa_reg_to_reg(r: SsaReg) -> Reg {
     Reg(r.reg)
 }
 
-fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
-    match ssa_instr {
-        SsaInstruction::BinaryOp {
-            dest,
-            op,
-            left,
-            right,
-        } => Instruction::BinaryOp {
-            dest: ssa_reg_to_reg(*dest),
-            op: *op,
-            left: ssa_reg_to_reg(*left),
-            right: ssa_reg_to_reg(*right),
-        },
-        SsaInstruction::UnaryOp { dest, op, src } => Instruction::UnaryOp {
-            dest: ssa_reg_to_reg(*dest),
-            op: *op,
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::LoadInt { dest, value } => Instruction::LoadInt {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::LoadFloat { dest, value } => Instruction::LoadFloat {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::LoadBool { dest, value } => Instruction::LoadBool {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::LoadString { dest, value } => Instruction::LoadString {
-            dest: ssa_reg_to_reg(*dest),
-            value: value.clone(),
-        },
-        SsaInstruction::LoadNull { dest } => Instruction::LoadNull {
-            dest: ssa_reg_to_reg(*dest),
-        },
-        SsaInstruction::ConstInt { dest, value } => Instruction::ConstInt {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::ConstFloat { dest, value } => Instruction::ConstFloat {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::ConstBool { dest, value } => Instruction::ConstBool {
-            dest: ssa_reg_to_reg(*dest),
-            value: *value,
-        },
-        SsaInstruction::ConstString { dest, value } => Instruction::ConstString {
-            dest: ssa_reg_to_reg(*dest),
-            value: value.clone(),
-        },
-        SsaInstruction::ConstNull { dest } => Instruction::ConstNull {
-            dest: ssa_reg_to_reg(*dest),
-        },
-        SsaInstruction::Move { dest, src } => Instruction::Move {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::Consume { src } => Instruction::Consume {
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::ConsumeField { src, field } => Instruction::ConsumeField {
-            src: ssa_reg_to_reg(*src),
-            field: field.clone(),
-        },
-        SsaInstruction::ConsumeFieldDynamic { target, index } => {
-            Instruction::ConsumeFieldDynamic {
-                target: ssa_reg_to_reg(*target),
-                index: ssa_reg_to_reg(*index),
-            }
-        }
-        SsaInstruction::Clone { dest, src } => Instruction::Clone {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::StrBytes { dest, src } => Instruction::StrBytes {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::ToStr { dest, src } => Instruction::ToStr {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::ConditionalSelect {
-            dest,
-            cond,
-            true_val,
-            false_val,
-        } => Instruction::ConditionalSelect {
-            dest: ssa_reg_to_reg(*dest),
-            cond: ssa_reg_to_reg(*cond),
-            true_val: ssa_reg_to_reg(*true_val),
-            false_val: ssa_reg_to_reg(*false_val),
-        },
-        SsaInstruction::Call {
-            routine,
-            args,
-            dest,
-        } => Instruction::Call {
-            routine: routine.clone(),
-            args: args.iter().copied().map(ssa_reg_to_reg).collect(),
-            dest: ssa_reg_to_reg(*dest),
-        },
-        SsaInstruction::DynamicCall {
-            method,
-            args,
-            dest,
-            budget,
-        } => Instruction::DynamicCall {
-            method: method.clone(),
-            args: args.iter().copied().map(ssa_reg_to_reg).collect(),
-            dest: ssa_reg_to_reg(*dest),
-            budget: *budget,
-        },
-        SsaInstruction::TypeAssert {
-            dest,
-            src,
-            type_name,
-        } => Instruction::TypeAssert {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-            type_name: type_name.clone(),
-        },
-        SsaInstruction::AssertState { src, state } => Instruction::AssertState {
-            src: ssa_reg_to_reg(*src),
-            state: state.clone(),
-        },
-        SsaInstruction::TryTypeAssert {
-            dest,
-            src,
-            type_name,
-            success,
-        } => Instruction::TryTypeAssert {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-            type_name: type_name.clone(),
-            success: ssa_reg_to_reg(*success),
-        },
-        SsaInstruction::TryEnumVariant {
-            dest,
-            src,
-            enum_name,
-            variant_name,
-            success,
-        } => Instruction::TryEnumVariant {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-            enum_name: enum_name.clone(),
-            variant_name: variant_name.clone(),
-            success: ssa_reg_to_reg(*success),
-        },
-        SsaInstruction::StructLit {
-            dest,
-            fields,
-            type_name,
-        } => {
-            let mut fields_mapped = HashMap::new();
-            for (k, v) in fields {
-                fields_mapped.insert(k.clone(), ssa_reg_to_reg(*v));
-            }
-            Instruction::StructLit {
-                dest: ssa_reg_to_reg(*dest),
-                fields: fields_mapped,
-                type_name: type_name.clone(),
-            }
-        }
-        SsaInstruction::TopologyLit { dest, fields } => {
-            let mut fields_mapped = HashMap::new();
-            for (k, v) in fields {
-                fields_mapped.insert(k.clone(), ssa_reg_to_reg(*v));
-            }
-            Instruction::TopologyLit {
-                dest: ssa_reg_to_reg(*dest),
-                fields: fields_mapped,
-            }
-        }
-        SsaInstruction::ArrayLit { dest, elements } => Instruction::ArrayLit {
-            dest: ssa_reg_to_reg(*dest),
-            elements: elements.iter().copied().map(ssa_reg_to_reg).collect(),
-        },
-        SsaInstruction::ArrayRepeat { dest, value, count } => {
-            Instruction::ArrayRepeat {
-                dest: ssa_reg_to_reg(*dest),
-                value: ssa_reg_to_reg(*value),
-                count: ssa_reg_to_reg(*count),
-            }
-        }
-        SsaInstruction::ArraySlice {
-            dest,
-            target,
-            start,
-            end,
-            inclusive,
-        } => Instruction::ArraySlice {
-            dest: ssa_reg_to_reg(*dest),
-            target: ssa_reg_to_reg(*target),
-            start: start.as_ref().copied().map(ssa_reg_to_reg),
-            end: end.as_ref().copied().map(ssa_reg_to_reg),
-            inclusive: *inclusive,
-        },
-        SsaInstruction::FieldAccess {
-            dest,
-            target,
-            field,
-        } => Instruction::FieldAccess {
-            dest: ssa_reg_to_reg(*dest),
-            target: ssa_reg_to_reg(*target),
-            field: field.clone(),
-        },
-        SsaInstruction::FieldUpdate {
-            target, field, src, ..
-        } => Instruction::FieldUpdate {
-            target: ssa_reg_to_reg(*target),
-            field: field.clone(),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::IndexAccess {
-            dest,
-            target,
-            index,
-        } => Instruction::IndexAccess {
-            dest: ssa_reg_to_reg(*dest),
-            target: ssa_reg_to_reg(*target),
-            index: ssa_reg_to_reg(*index),
-        },
-        SsaInstruction::IndexFieldUpdate {
-            target,
-            index,
-            field,
-            src,
-            ..
-        } => Instruction::IndexFieldUpdate {
-            target: ssa_reg_to_reg(*target),
-            index: ssa_reg_to_reg(*index),
-            field: field.clone(),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::AssertTime { op, limit_ms } => Instruction::AssertTime {
-            op: *op,
-            limit_ms: *limit_ms,
-        },
-        SsaInstruction::Capability { cap } => {
-            Instruction::Capability { cap: cap.clone() }
-        }
-        SsaInstruction::For {
-            dest_cond,
-            item_reg,
-            item_name,
-            mode,
-            source,
-            pacing_ms,
-            max_ms,
-        } => Instruction::For {
-            dest_cond: ssa_reg_to_reg(*dest_cond),
-            item_reg: ssa_reg_to_reg(*item_reg),
-            item_name: item_name.clone(),
-            mode: mode.clone(),
-            source: ssa_reg_to_reg(*source),
-            pacing_ms: *pacing_ms,
-            max_ms: *max_ms,
-        },
-        SsaInstruction::EndFor => Instruction::EndFor,
-        SsaInstruction::SplitMap {
-            item_reg,
-            item_name,
-            mode,
-            source,
-            reconcile,
-        } => Instruction::SplitMap {
-            item_reg: ssa_reg_to_reg(*item_reg),
-            item_name: item_name.clone(),
-            mode: mode.clone(),
-            source: ssa_reg_to_reg(*source),
-            reconcile: reconcile.clone(),
-        },
-        SsaInstruction::EndSplitMap => Instruction::EndSplitMap,
-        SsaInstruction::Defer {
-            dest,
-            cap,
-            deadline_ms,
-        } => Instruction::Defer {
-            dest: ssa_reg_to_reg(*dest),
-            cap: cap.clone(),
-            deadline_ms: *deadline_ms,
-        },
-        SsaInstruction::Await { target } => Instruction::Await {
-            target: ssa_reg_to_reg(*target),
-        },
-        SsaInstruction::Loop { max_ms } => Instruction::Loop { max_ms: *max_ms },
-        SsaInstruction::EndLoop { max_ms } => {
-            Instruction::EndLoop { max_ms: *max_ms }
-        }
-        SsaInstruction::Break => Instruction::Break,
-        SsaInstruction::LoopTick => Instruction::LoopTick,
-        SsaInstruction::EndLoopTick => Instruction::EndLoopTick,
-        SsaInstruction::Print { src } => Instruction::Print {
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::Debug { src } => Instruction::Debug {
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::Slice { ms } => Instruction::Slice { ms: *ms },
-        SsaInstruction::Isolate { name, manifest } => Instruction::Isolate {
-            name: name.clone(),
-            manifest: manifest.clone(),
-        },
-        SsaInstruction::EndIsolate => Instruction::EndIsolate,
-        SsaInstruction::Lease {
-            target_reg,
-            source_reg,
-            duration_ms,
-        } => Instruction::Lease {
-            target_reg: ssa_reg_to_reg(*target_reg),
-            source_reg: ssa_reg_to_reg(*source_reg),
-            duration_ms: *duration_ms,
-        },
-        SsaInstruction::EndLease {
-            source_reg,
-            duration_ms,
-        } => Instruction::EndLease {
-            source_reg: ssa_reg_to_reg(*source_reg),
-            duration_ms: *duration_ms,
-        },
-        SsaInstruction::Split { parent, branches } => Instruction::Split {
-            parent: parent.clone(),
-            branches: branches.clone(),
-        },
-        SsaInstruction::Merge {
-            branches,
-            target,
-            resolution,
-        } => Instruction::Merge {
-            branches: branches.clone(),
-            target: target.clone(),
-            resolution: resolution.clone(),
-        },
-        SsaInstruction::SetEntropyMode { mode } => {
-            Instruction::SetEntropyMode { mode: *mode }
-        }
-        SsaInstruction::Anchor { name } => {
-            Instruction::Anchor { name: name.clone() }
-        }
-        SsaInstruction::Rewind { target, anchor } => Instruction::Rewind {
-            target: target.clone(),
-            anchor: anchor.clone(),
-        },
-        SsaInstruction::Commit { vars } => {
-            Instruction::Commit { vars: vars.clone() }
-        }
-        SsaInstruction::Watchdog {
-            target,
-            timeout_ms,
-            recovery_jump,
-        } => Instruction::Watchdog {
-            target: target.clone(),
-            timeout_ms: *timeout_ms,
-            recovery_jump: *recovery_jump,
-        },
-        SsaInstruction::Speculate {
-            max_ms,
-            fallback_target,
-        } => Instruction::Speculate {
-            max_ms: *max_ms,
-            fallback_target: *fallback_target,
-        },
-        SsaInstruction::EndSpeculate {
-            max_ms,
-            fallback_target,
-        } => Instruction::EndSpeculate {
-            max_ms: *max_ms,
-            fallback_target: *fallback_target,
-        },
-        SsaInstruction::Collapse => Instruction::Collapse,
-        SsaInstruction::RelativisticBlock {
-            target,
-            block_pc,
-            block_len,
-        } => Instruction::RelativisticBlock {
-            target: target.clone(),
-            block_pc: *block_pc,
-            block_len: *block_len,
-        },
-        SsaInstruction::SpeculationMode { mode } => {
-            Instruction::SpeculationMode { mode: *mode }
-        }
-        SsaInstruction::OpenChan {
-            name,
-            capacity,
-            decay_after_ms,
-        } => Instruction::OpenChan {
-            name: name.clone(),
-            capacity: *capacity,
-            decay_after_ms: *decay_after_ms,
-        },
-        SsaInstruction::ChanSend { chan_id, src } => Instruction::ChanSend {
-            chan_id: chan_id.clone(),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::ChanRecv { dest, chan_id } => Instruction::ChanRecv {
-            dest: ssa_reg_to_reg(*dest),
-            chan_id: chan_id.clone(),
-        },
-        SsaInstruction::Entangle { regs } => Instruction::Entangle {
-            regs: regs.iter().copied().map(ssa_reg_to_reg).collect(),
-        },
-        SsaInstruction::MatchEntropy {
-            target,
-            valid_target,
-            decayed_target,
-            pending_target,
-            consumed_target,
-        } => Instruction::MatchEntropy {
-            target: ssa_reg_to_reg(*target),
-            valid_target: *valid_target,
-            decayed_target: *decayed_target,
-            pending_target: *pending_target,
-            consumed_target: *consumed_target,
-        },
-        SsaInstruction::Select {
-            max_ms,
-            cases,
-            timeout_target,
-        } => {
-            let cases_mapped = cases
-                .iter()
-                .map(|c| crate::IrSelectCase {
-                    chan_id: c.chan_id.clone(),
-                    dest: ssa_reg_to_reg(c.dest),
-                    target: c.target,
-                })
-                .collect();
-            Instruction::Select {
-                max_ms: *max_ms,
-                cases: cases_mapped,
-                timeout_target: *timeout_target,
-            }
-        }
-        SsaInstruction::AwaitChan { chan_id } => Instruction::AwaitChan {
-            chan_id: chan_id.clone(),
-        },
-        SsaInstruction::Jump { target } => Instruction::Jump { target: *target },
-        SsaInstruction::JumpIf { cond, target } => Instruction::JumpIf {
-            cond: ssa_reg_to_reg(*cond),
-            target: *target,
-        },
-        SsaInstruction::JumpIfNot { cond, target } => Instruction::JumpIfNot {
-            cond: ssa_reg_to_reg(*cond),
-            target: *target,
-        },
-        SsaInstruction::While { max_ms } => Instruction::While { max_ms: *max_ms },
-        SsaInstruction::EndWhile { max_ms } => {
-            Instruction::EndWhile { max_ms: *max_ms }
-        }
-        SsaInstruction::ForStep {
-            dest_cond,
-            item_reg,
-            item_name,
-            source,
-            step_ms,
-        } => Instruction::ForStep {
-            dest_cond: ssa_reg_to_reg(*dest_cond),
-            item_reg: ssa_reg_to_reg(*item_reg),
-            item_name: item_name.clone(),
-            source: ssa_reg_to_reg(*source),
-            step_ms: *step_ms,
-        },
-        SsaInstruction::EndForStep => Instruction::EndForStep,
-        SsaInstruction::ArrayLen { dest, src } => Instruction::ArrayLen {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-        },
-        SsaInstruction::LoopTickOn { chan_id } => Instruction::LoopTickOn {
-            chan_id: chan_id.clone(),
-        },
-        SsaInstruction::TypeCast {
-            dest,
-            src,
-            target_type,
-        } => Instruction::TypeCast {
-            dest: ssa_reg_to_reg(*dest),
-            src: ssa_reg_to_reg(*src),
-            target_type: target_type.clone(),
-        },
-        SsaInstruction::Syscall {
-            dest,
-            target,
-            args,
-            duration_ms,
-        } => Instruction::Syscall {
-            dest: ssa_reg_to_reg(*dest),
-            target: target.clone(),
-            args: args.iter().map(|r| ssa_reg_to_reg(*r)).collect(),
-            duration_ms: *duration_ms,
-        },
-        SsaInstruction::AutoDrop { target, spec } => Instruction::AutoDrop {
-            target: ssa_reg_to_reg(*target),
-            spec: spec.clone(),
-        },
-        SsaInstruction::SetSaturationPolicy { target, policy } => {
-            Instruction::SetSaturationPolicy {
-                target: *target,
-                policy: *policy,
-            }
-        }
-        SsaInstruction::PeriodicEpoch {
-            interval_ms,
-            block_pc,
-            block_len,
-        } => Instruction::PeriodicEpoch {
-            interval_ms: *interval_ms,
-            block_pc: *block_pc,
-            block_len: *block_len,
-        },
-        SsaInstruction::EndPeriodicEpoch { interval_ms } => {
-            Instruction::EndPeriodicEpoch {
-                interval_ms: *interval_ms,
-            }
-        }
-        SsaInstruction::FreezeBaseWatermark => Instruction::FreezeBaseWatermark,
-        SsaInstruction::ResetBaseWatermark => Instruction::ResetBaseWatermark,
-        SsaInstruction::ArenaIntrospect { dest, kind } => {
-            Instruction::ArenaIntrospect {
-                dest: ssa_reg_to_reg(*dest),
-                kind: *kind,
-            }
-        }
-        SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
+pub(crate) trait IntoFlat<T> {
+    fn into_flat(self) -> T;
+}
+
+impl IntoFlat<Reg> for SsaReg {
+    #[inline]
+    fn into_flat(self) -> Reg {
+        Reg(self.reg)
     }
 }
+
+impl<T, U: IntoFlat<T>> IntoFlat<Option<T>> for Option<U> {
+    #[inline]
+    fn into_flat(self) -> Option<T> {
+        self.map(|x| x.into_flat())
+    }
+}
+
+impl<T, U: IntoFlat<T>> IntoFlat<Vec<T>> for Vec<U> {
+    #[inline]
+    fn into_flat(self) -> Vec<T> {
+        self.into_iter().map(|x| x.into_flat()).collect()
+    }
+}
+
+impl<T, U: IntoFlat<T>> IntoFlat<HashMap<String, T>> for HashMap<String, U> {
+    #[inline]
+    fn into_flat(self) -> HashMap<String, T> {
+        self.into_iter().map(|(k, v)| (k, v.into_flat())).collect()
+    }
+}
+
+impl IntoFlat<crate::IrSelectCase> for crate::ssa::SsaSelectCase {
+    #[inline]
+    fn into_flat(self) -> crate::IrSelectCase {
+        crate::IrSelectCase {
+            chan_id: self.chan_id,
+            dest: Reg(self.dest.reg),
+            target: self.target,
+        }
+    }
+}
+
+macro_rules! impl_into_flat_identity {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl IntoFlat<$t> for $t {
+                #[inline]
+                fn into_flat(self) -> $t {
+                    self
+                }
+            }
+        )*
+    };
+}
+
+impl_into_flat_identity!(
+    i64,
+    u64,
+    usize,
+    bool,
+    String,
+    causm_core::BinaryOperator,
+    causm_core::UnaryOperator,
+    causm_core::Manifest,
+    causm_core::MergeResolution,
+    causm_core::EntropyMode,
+    causm_core::PolicyTarget,
+    causm_core::SaturationPolicy,
+    causm_core::ArenaIntrospect,
+    causm_core::Capability,
+    causm_core::SpeculationCommitMode,
+    causm_core::SyscallTarget,
+    causm_core::types::AutoDropSpec,
+    causm_core::TypeName,
+    causm_core::ParamMode
+);
+
+macro_rules! ssa_to_flat_match {
+    ($( $variant:ident $({ $($field:ident),* $(,)? })? ),* $(,)?) => {
+        fn ssa_instr_to_instr(ssa_instr: &SsaInstruction) -> Instruction {
+            match ssa_instr.clone() {
+                $(
+                    SsaInstruction::$variant $({ $($field,)* .. })? => {
+                        Instruction::$variant $({
+                            $($field: $field.into_flat()),*
+                        })?
+                    }
+                )*
+                SsaInstruction::Other(s) => panic!("Cannot lower Other instruction: {}", s),
+            }
+        }
+    };
+}
+
+ssa_to_flat_match!(
+    BinaryOp {
+        dest,
+        op,
+        left,
+        right
+    },
+    UnaryOp { dest, op, src },
+    LoadInt { dest, value },
+    LoadFloat { dest, value },
+    LoadBool { dest, value },
+    LoadString { dest, value },
+    LoadNull { dest },
+    ConstInt { dest, value },
+    ConstFloat { dest, value },
+    ConstBool { dest, value },
+    ConstString { dest, value },
+    ConstNull { dest },
+    Move { dest, src },
+    Consume { src },
+    ConsumeField { src, field },
+    ConsumeFieldDynamic { target, index },
+    Clone { dest, src },
+    StrBytes { dest, src },
+    ToStr { dest, src },
+    ConditionalSelect {
+        dest,
+        cond,
+        true_val,
+        false_val
+    },
+    Call {
+        routine,
+        args,
+        dest
+    },
+    DynamicCall {
+        method,
+        args,
+        dest,
+        budget
+    },
+    TypeAssert {
+        dest,
+        src,
+        type_name
+    },
+    AssertState { src, state },
+    TryTypeAssert {
+        dest,
+        src,
+        type_name,
+        success
+    },
+    TryEnumVariant {
+        dest,
+        src,
+        enum_name,
+        variant_name,
+        success
+    },
+    StructLit {
+        dest,
+        fields,
+        type_name
+    },
+    TopologyLit { dest, fields },
+    ArrayLit { dest, elements },
+    ArrayRepeat { dest, value, count },
+    ArraySlice {
+        dest,
+        target,
+        start,
+        end,
+        inclusive
+    },
+    FieldAccess {
+        dest,
+        target,
+        field
+    },
+    FieldUpdate { target, field, src },
+    IndexAccess {
+        dest,
+        target,
+        index
+    },
+    IndexFieldUpdate {
+        target,
+        index,
+        field,
+        src
+    },
+    AssertTime { op, limit_ms },
+    Capability { cap },
+    For {
+        dest_cond,
+        item_reg,
+        item_name,
+        mode,
+        source,
+        pacing_ms,
+        max_ms
+    },
+    EndFor,
+    SplitMap {
+        item_reg,
+        item_name,
+        mode,
+        source,
+        reconcile
+    },
+    EndSplitMap,
+    Defer {
+        dest,
+        cap,
+        deadline_ms
+    },
+    Await { target },
+    Loop { max_ms },
+    EndLoop { max_ms },
+    Break,
+    LoopTick,
+    EndLoopTick,
+    Print { src },
+    Debug { src },
+    Slice { ms },
+    Isolate { name, manifest },
+    EndIsolate,
+    Lease {
+        target_reg,
+        source_reg,
+        duration_ms
+    },
+    EndLease {
+        source_reg,
+        duration_ms
+    },
+    Split { parent, branches },
+    Merge {
+        branches,
+        target,
+        resolution
+    },
+    SetEntropyMode { mode },
+    Anchor { name },
+    Rewind { target, anchor },
+    Commit { vars },
+    Watchdog {
+        target,
+        timeout_ms,
+        recovery_jump
+    },
+    Speculate {
+        max_ms,
+        fallback_target
+    },
+    EndSpeculate {
+        max_ms,
+        fallback_target
+    },
+    Collapse,
+    RelativisticBlock {
+        target,
+        block_pc,
+        block_len
+    },
+    SpeculationMode { mode },
+    OpenChan {
+        name,
+        capacity,
+        decay_after_ms
+    },
+    ChanSend { chan_id, src },
+    ChanRecv { dest, chan_id },
+    Entangle { regs },
+    MatchEntropy {
+        target,
+        valid_target,
+        decayed_target,
+        pending_target,
+        consumed_target
+    },
+    Select {
+        max_ms,
+        cases,
+        timeout_target
+    },
+    AwaitChan { chan_id },
+    Jump { target },
+    JumpIf { cond, target },
+    JumpIfNot { cond, target },
+    While { max_ms },
+    EndWhile { max_ms },
+    ForStep {
+        dest_cond,
+        item_reg,
+        item_name,
+        source,
+        step_ms
+    },
+    EndForStep,
+    ArrayLen { dest, src },
+    LoopTickOn { chan_id },
+    TypeCast {
+        dest,
+        src,
+        target_type
+    },
+    Syscall {
+        dest,
+        target,
+        args,
+        duration_ms
+    },
+    AutoDrop { target, spec },
+    SetSaturationPolicy { target, policy },
+    PeriodicEpoch {
+        interval_ms,
+        block_pc,
+        block_len
+    },
+    EndPeriodicEpoch { interval_ms },
+    FreezeBaseWatermark,
+    ResetBaseWatermark,
+    ArenaIntrospect { dest, kind },
+    CapabilityCheck { dest, capability },
+    TupleLit { dest, elems },
+    TupleAccess { dest, tuple, index }
+);
 
 pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {
     let mut blocks = HashMap::new();

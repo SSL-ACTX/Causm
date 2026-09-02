@@ -159,6 +159,7 @@ impl EntropicAnalyzer {
                     return_type: ret,
                     taking_ms: 1,
                     state_constraint: None,
+                    required_capabilities: Vec::new(),
                 },
             );
         }
@@ -199,6 +200,59 @@ impl EntropicAnalyzer {
                 vec![Type::String, Type::Integer, Type::Integer],
                 Type::String,
             ),
+            ("json_parse", vec![Type::String], Type::Unknown),
+            ("json_stringify", vec![Type::Unknown], Type::String),
+            // sync intrinsics — private names, delegated from std/sync CSM routines
+            ("__sync_atomic_new_int", vec![Type::Integer], Type::Unknown),
+            ("__sync_atomic_load_int", vec![Type::Unknown], Type::Integer),
+            (
+                "__sync_atomic_store_int",
+                vec![Type::Unknown, Type::Integer],
+                Type::Unknown,
+            ),
+            (
+                "__sync_atomic_fetch_add",
+                vec![Type::Unknown, Type::Integer],
+                Type::Unknown,
+            ),
+            (
+                "__sync_atomic_cas_int",
+                vec![Type::Unknown, Type::Integer, Type::Integer],
+                Type::Unknown,
+            ),
+            ("__sync_atomic_new_bool", vec![Type::Bool], Type::Unknown),
+            ("__sync_atomic_load_bool", vec![Type::Unknown], Type::Bool),
+            (
+                "__sync_atomic_store_bool",
+                vec![Type::Unknown, Type::Bool],
+                Type::Unknown,
+            ),
+            (
+                "__sync_atomic_cas_bool",
+                vec![Type::Unknown, Type::Bool, Type::Bool],
+                Type::Unknown,
+            ),
+            ("__sync_mutex_new", vec![], Type::Unknown),
+            (
+                "__sync_mutex_try_lock",
+                vec![Type::Unknown, Type::String],
+                Type::Unknown,
+            ),
+            ("__sync_mutex_unlock", vec![Type::Unknown], Type::Unknown),
+            ("__sync_mutex_is_locked", vec![Type::Unknown], Type::Bool),
+            ("__sync_mutex_owner", vec![Type::Unknown], Type::String),
+            ("__sync_channel_new", vec![Type::Integer], Type::Unknown),
+            (
+                "__sync_channel_send",
+                vec![Type::Unknown, Type::Integer],
+                Type::Unknown,
+            ),
+            ("__sync_channel_recv", vec![Type::Unknown], Type::Unknown),
+            ("__sync_channel_close", vec![Type::Unknown], Type::Unknown),
+            ("__sync_channel_is_closed", vec![Type::Unknown], Type::Bool),
+            ("__sync_channel_len", vec![Type::Unknown], Type::Integer),
+            ("__sync_channel_is_full", vec![Type::Unknown], Type::Bool),
+            ("__sync_channel_is_empty", vec![Type::Unknown], Type::Bool),
         ];
 
         for (name, params, ret) in collection_intrinsics {
@@ -212,124 +266,9 @@ impl EntropicAnalyzer {
                     return_type: ret,
                     taking_ms: 1,
                     state_constraint: None,
+                    required_capabilities: Vec::new(),
                 },
             );
-        }
-    }
-
-    pub(crate) fn pre_register_program_declarations(&mut self, program: &Program) {
-        fn visit_stmts(analyzer: &mut EntropicAnalyzer, stmts: &[SpannedStatement]) {
-            for stmt in stmts {
-                match &stmt.stmt {
-                    Statement::TypeDecl {
-                        name,
-                        extends,
-                        fields,
-                        decay_after_ms,
-                        auto_drop,
-                        scoped_branch,
-                    } => {
-                        let _ = analyzer.TypeDecl(
-                            name,
-                            extends,
-                            fields,
-                            decay_after_ms,
-                            auto_drop,
-                            scoped_branch,
-                        );
-                    }
-                    Statement::InterfaceDecl {
-                        name,
-                        extends,
-                        methods,
-                    } => {
-                        let _ = analyzer.InterfaceDecl(name, extends, methods);
-                    }
-                    Statement::RoutineDef {
-                        name,
-                        params,
-                        return_type,
-                        taking_ms,
-                        state_constraint,
-                        ..
-                    } => {
-                        let preliminary_params = params
-                            .iter()
-                            .map(|p| {
-                                let mut param_type = p
-                                    .typ
-                                    .as_ref()
-                                    .map(causm_core::types::Type::from_typename)
-                                    .unwrap_or(causm_core::types::Type::Unknown);
-                                if p.name == "self" && p.typ.is_none() {
-                                    if let Some(dot_idx) = name.find('.') {
-                                        let struct_name = &name[..dot_idx];
-                                        param_type = causm_core::types::Type::Custom(
-                                            struct_name.to_string(),
-                                        );
-                                    }
-                                }
-                                (p.mode.clone(), p.name.clone(), param_type)
-                            })
-                            .collect();
-                        let r_info = RoutineInfo {
-                            params: preliminary_params,
-                            return_type: return_type
-                                .as_ref()
-                                .map(causm_core::types::Type::from_typename)
-                                .unwrap_or(causm_core::types::Type::Unknown),
-                            taking_ms: taking_ms.unwrap_or(0),
-                            state_constraint: state_constraint.clone(),
-                        };
-                        analyzer.routines.insert(name.clone(), r_info.clone());
-                        let base_name = if let Some(angle_idx) = name.find('<') {
-                            if let Some(dot_idx) = name.find('.') {
-                                let struct_part = &name[..angle_idx];
-                                let method_part = &name[dot_idx..];
-                                format!("{}{}", struct_part, method_part)
-                            } else {
-                                name.clone()
-                            }
-                        } else {
-                            name.clone()
-                        };
-                        if base_name != *name {
-                            analyzer.routines.insert(base_name, r_info);
-                        }
-                    }
-                    Statement::Isolate(iso) => {
-                        visit_stmts(analyzer, &iso.body);
-                    }
-                    Statement::StateDecl {
-                        target,
-                        var_type,
-                        expr,
-                    } => {
-                        let typ = if let Some(explicit) = var_type {
-                            causm_core::types::Type::from_typename(explicit)
-                        } else if let Ok(inferred) =
-                            crate::expression::infer_expression_type(analyzer, expr)
-                        {
-                            inferred
-                        } else {
-                            causm_core::types::Type::Unknown
-                        };
-                        let branch =
-                            analyzer.branch_contexts.get_mut("main").unwrap();
-                        branch.mutables.insert(target.clone());
-                        branch.types.insert(target.clone(), typ);
-                        branch.produced.insert(target.clone());
-                    }
-                    Statement::RelativisticBlock { body, .. } => {
-                        visit_stmts(analyzer, body);
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        for block in &program.timelines {
-            visit_stmts(self, &block.statements);
         }
     }
 
@@ -348,104 +287,8 @@ impl EntropicAnalyzer {
         self.routines.clear();
         self.struct_extends.clear();
         self.analyzed_routines.clear();
-        self.register_intrinsics();
-        self.pre_register_program_declarations(program);
 
-        for block in &program.timelines {
-            let old_branch = self.current_branch.clone();
-            let old_entropy_mode = self.entropy_mode;
-            if let Some(mode) = block.entropy_mode {
-                self.entropy_mode = mode;
-            }
-            match &block.time {
-                TimeCoordinate::Branch(id) => {
-                    if id != "main" && !self.branch_contexts.contains_key(id) {
-                        return Err(self.annotate(
-                            SemanticErrorKind::InactiveTimeline(id.clone()),
-                        ));
-                    }
-                    if self.merged_branches.contains(id) {
-                        return Err(self.annotate(
-                            SemanticErrorKind::InactiveTimeline(id.clone()),
-                        ));
-                    }
-                    self.current_branch = id.clone();
-                }
-                TimeCoordinate::Global(t) => {
-                    let state =
-                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
-                    if *t > state.accumulated_cost {
-                        state.accumulated_cost = *t;
-                    }
-                }
-                TimeCoordinate::Relative(t) => {
-                    let state =
-                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
-                    state.accumulated_cost += *t;
-                }
-                TimeCoordinate::Periodic(interval_ms) => {
-                    let block_cost = crate::statement::estimate_block_cost(
-                        self,
-                        &block.statements,
-                    );
-                    if block_cost > *interval_ms {
-                        return Err(self.annotate(
-                            SemanticErrorKind::PeriodicDeadlineUnachievable(
-                                block_cost,
-                                *interval_ms,
-                            ),
-                        ));
-                    }
-                    let state =
-                        self.branch_contexts.get_mut(&self.current_branch).unwrap();
-                    state.accumulated_cost += *interval_ms;
-                }
-            }
-
-            for stmt in &block.statements {
-                let old_stmt = self.current_statement.clone();
-                let old_span = self.current_span.clone();
-                self.current_statement = Some(self.statement_snippet(stmt));
-                self.current_span = Some(stmt.span.clone());
-                self.analyze_statement(stmt)?;
-                self.current_statement = old_stmt;
-                self.current_span = old_span;
-            }
-
-            if matches!(&block.time, TimeCoordinate::Periodic(_)) {
-                // Reset transient local variables at epoch boundary
-                let state =
-                    self.branch_contexts.get_mut(&self.current_branch).unwrap();
-                state.consumed.clear();
-            }
-
-            self.current_branch = old_branch;
-            self.entropy_mode = old_entropy_mode;
-        }
-
-        if self.enforce_egc {
-            for state in self.branch_contexts.values() {
-                for var in &state.produced {
-                    if var != "_"
-                        && !var.starts_with('_')
-                        && !state.consumed.contains(var)
-                    {
-                        return Err(self.annotate(
-                            SemanticErrorKind::UnconsumedVariable(var.clone()),
-                        ));
-                    }
-                }
-            }
-        }
-
-        if self.use_z3 {
-            let mut verifier = crate::verifier::FormalVerifier::<
-                crate::oxiz::OxiZBackend,
-            >::new(self);
-            verifier.verify(program)?;
-        }
-
-        Ok(())
+        crate::pipeline::AnalysisPipeline::new(self).run(program)
     }
 
     pub(crate) fn check_available(&self, name: &str) -> Result<(), SemanticError> {
@@ -638,9 +481,10 @@ impl EntropicAnalyzer {
             .and_then(|state| state.types.get(name).cloned())
     }
 
-    pub(crate) fn set_custom_type(&mut self, name: &str, ctype: Type) {
-        let state = self.branch_contexts.get_mut(&self.current_branch).unwrap();
-        state.custom_types.insert(name.to_string(), ctype);
+    pub(crate) fn set_custom_type(&mut self, name: &str, typ: Type) {
+        for state in self.branch_contexts.values_mut() {
+            state.custom_types.insert(name.to_string(), typ.clone());
+        }
     }
 
     pub(crate) fn get_custom_type(&self, name: &str) -> Option<Type> {
@@ -653,27 +497,32 @@ impl EntropicAnalyzer {
         match typ {
             Type::Custom(name) => {
                 let base_name = name.split('<').next().unwrap_or(name).trim();
+                let bare_base = if let Some(dot) = base_name.rfind('.') {
+                    &base_name[dot + 1..]
+                } else {
+                    base_name
+                };
+                if let Some(fields_map) = self
+                    .type_decls
+                    .get(base_name)
+                    .or_else(|| self.type_decls.get(bare_base))
+                    .or_else(|| self.type_decls.get(name))
+                {
+                    let schema: std::collections::HashMap<String, Type> = fields_map
+                        .iter()
+                        .filter(|(_, fd)| !fd.is_const)
+                        .map(|(k, fd)| (k.clone(), Type::from_typename(&fd.typ)))
+                        .collect();
+                    return Type::Struct(causm_core::types::StructType {
+                        fields: schema,
+                        decay_after_ms: None,
+                        auto_drop: None,
+                        scoped_branch: None,
+                    });
+                }
                 self.get_custom_type(base_name)
+                    .or_else(|| self.get_custom_type(bare_base))
                     .or_else(|| self.get_custom_type(name))
-                    .or_else(|| {
-                        // Fall back: reconstruct struct from type_decls for imported types
-                        self.type_decls.get(base_name).map(|fields_map| {
-                            let schema: std::collections::HashMap<String, Type> =
-                                fields_map
-                                    .iter()
-                                    .filter(|(_, fd)| !fd.is_const)
-                                    .map(|(k, fd)| {
-                                        (k.clone(), Type::from_typename(&fd.typ))
-                                    })
-                                    .collect();
-                            Type::Struct(causm_core::types::StructType {
-                                fields: schema,
-                                decay_after_ms: None,
-                                auto_drop: None,
-                                scoped_branch: None,
-                            })
-                        })
-                    })
                     .unwrap_or_else(|| Type::Custom(name.clone()))
             }
             Type::Struct(s) => {
@@ -717,6 +566,9 @@ impl EntropicAnalyzer {
 
     #[allow(dead_code)]
     pub fn format_semantic_error(&self, err: &SemanticError) -> String {
+        if let SemanticErrorKind::EntropiusDiagnostic(ref rich) = *err.kind {
+            return rich.clone();
+        }
         let mut message = format!("{}", err.kind);
         if let Some(line) = err.line {
             message.push_str(&format!(" at {}:{}", line, err.column.unwrap_or(0)));
@@ -781,6 +633,32 @@ impl EntropicAnalyzer {
                 return true;
             }
         }
+        if let (Type::Custom(exp_name), Type::Custom(act_name)) = (expected, actual)
+        {
+            if exp_name == act_name || exp_name == "any" || act_name == "any" {
+                return true;
+            }
+            if exp_name.contains('<')
+                && act_name.contains('<')
+                && exp_name.split('<').next().unwrap_or(exp_name).trim()
+                    == act_name.split('<').next().unwrap_or(act_name).trim()
+            {
+                return true;
+            }
+            let mut current = act_name.as_str();
+            while let Some(parent) = self.struct_extends.get(current) {
+                if parent == exp_name {
+                    return true;
+                }
+                current = parent.as_str();
+            }
+            if self.interfaces.contains_key(exp_name.as_str()) {
+                return self
+                    .implements_interface(act_name.as_str(), exp_name.as_str());
+            }
+            return false;
+        }
+
         if let Type::Custom(name) = expected {
             if let Type::Struct(act_struct) = actual {
                 if self.custom_struct_compatible(name, act_struct) {
@@ -897,10 +775,12 @@ impl EntropicAnalyzer {
                 if exp_name == act_name
                     || exp_name == "any"
                     || act_name == "any"
-                    || exp_name.split('<').next().unwrap_or(exp_name).trim()
-                        == act_name.split('<').next().unwrap_or(act_name).trim()
                     || act_name.starts_with(&format!("{}::", exp_name))
                     || exp_name.starts_with(&format!("{}::", act_name))
+                    || (exp_name.contains('<')
+                        && act_name.contains('<')
+                        && exp_name.split('<').next().unwrap_or(exp_name).trim()
+                            == act_name.split('<').next().unwrap_or(act_name).trim())
                 {
                     true
                 } else if self.interfaces.contains_key(exp_name.as_str()) {
@@ -999,6 +879,7 @@ impl EntropicAnalyzer {
                         &im.return_type,
                         &im.taking_ms,
                         &im.state_constraint,
+                        &im.required_capabilities,
                         default_body,
                     )
                     .is_err()
@@ -1047,7 +928,7 @@ impl EntropicAnalyzer {
         true
     }
 
-    fn statement_snippet(&self, stmt: &SpannedStatement) -> String {
+    pub(crate) fn statement_snippet(&self, stmt: &SpannedStatement) -> String {
         match &stmt.stmt {
             Statement::Assignment { target, expr, .. } => {
                 format!("let {} = {}", target, self.expr_snippet(expr))
@@ -1222,6 +1103,12 @@ impl EntropicAnalyzer {
                     BinaryOperator::Ge => ">=",
                     BinaryOperator::LogicalAnd => "&&",
                     BinaryOperator::LogicalOr => "||",
+                    BinaryOperator::BitwiseAnd => "&",
+                    BinaryOperator::BitwiseOr => "|",
+                    BinaryOperator::BitwiseXor => "^",
+                    BinaryOperator::Shl => "<<",
+                    BinaryOperator::Shr => ">>",
+                    BinaryOperator::NullCoalesce => "??",
                 };
                 format!(
                     "({} {} {})",
@@ -1234,6 +1121,7 @@ impl EntropicAnalyzer {
                 let op_str = match op {
                     causm_core::UnaryOperator::Neg => "-",
                     causm_core::UnaryOperator::Not => "!",
+                    causm_core::UnaryOperator::BitwiseNot => "~",
                 };
                 format!("{}{}", op_str, self.expr_snippet(expr))
             }
@@ -1296,6 +1184,20 @@ impl EntropicAnalyzer {
                     "arena.capacity()".to_string()
                 }
             },
+            Expression::CapabilityCheck(cap) => {
+                format!("capability({})", cap.path)
+            }
+            Expression::Turbofish { expr, .. } => self.expr_snippet(expr),
+            Expression::GenericStaticCall {
+                type_name, method, ..
+            } => {
+                format!("{}::{}()", type_name, method)
+            }
+            Expression::Tuple(elems) => {
+                let parts: Vec<String> =
+                    elems.iter().map(|e| self.expr_snippet(e)).collect();
+                format!("({})", parts.join(", "))
+            }
         }
     }
 

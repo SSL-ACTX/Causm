@@ -40,7 +40,6 @@ fn test_collection_array_operations() -> anyhow::Result<()> {
     }
 
     let mut vm = Vm::new();
-    vm.trace_entropy = true;
     let tracer = causm_devtools::Tracer::new(true);
     tracer.emit(
         0,

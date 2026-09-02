@@ -1,10 +1,10 @@
-# Specification: Z3 Formal Verification Guard (Correctness Kernel)
+# Specification: SMT Formal Verification Guard (Correctness Kernel)
 
 ## 1. Introduction
-The Causm Correctness Kernel is a formal verification pass that utilizes the Z3 SMT solver to rigorously prove temporal and entropic safety. Unlike the standard analyzer which uses forward-simulation, the Formal Verification Guard performs symbolic execution to ensure that invariants hold across all possible execution paths.
+The Causm Correctness Kernel is a formal verification pass that utilizes an SMT solver backend (featuring pure-Rust **OxiZ** as the default lightweight solver and optional **Z3** integration) to rigorously prove temporal and entropic safety. Unlike the standard analyzer which uses forward-simulation, the Formal Verification Guard performs symbolic execution to ensure that invariants hold across all possible execution paths.
 
 ## 2. Symbolic Temporal Enforcement
-The kernel models the `local_clock` as a Z3 integer variable.
+The kernel models the `local_clock` as a symbolic integer variable in the solver.
 
 ### 2.1 Worst-Case Execution Time (WCET)
 For every isolated block or routine, the kernel proves that:
@@ -12,8 +12,8 @@ For every isolated block or routine, the kernel proves that:
 Where `Budget` is defined in the manifest or routine contract.
 
 ### 2.2 WCET Bound Extraction
-Beyond proving that a WCET budget is *not violated*, the kernel also computes and reports the **concrete upper bound** of each routine or global timeline using a Z3 binary search (`find_max_value`):
-1. The kernel queries Z3 for the maximum satisfiable clock value under path constraints.
+Beyond proving that a WCET budget is *not violated*, the kernel also computes and reports the **concrete upper bound** of each routine or global timeline using an SMT binary search (`find_max_value`):
+1. The kernel queries the solver for the maximum satisfiable clock value under path constraints.
 2. The extracted bound is stored per-routine and per-timeline.
 3. The bound is printed in the CLI output when running with `-v` (verbose mode).
 
@@ -36,7 +36,7 @@ This proves that entropic operations (like `yield` or `move`) do not result in d
 Causal consistency is enforced through symbolic tracking of the **Causal Horizon**.
 
 ### 4.1 Commitment Logic
-A "Causal Commitment" is any operation with irreversible external side effects (e.g., `chan_send`). When a commitment occurs at `Time(T)`, the symbolic `causal_horizon` is updated:
+A "Causal Commitment" is any operation with irreversible external side effects (e.g., cross-branch state synchronizations, hardware I/O). When a commitment occurs at `Time(T)`, the symbolic `causal_horizon` is updated:
 `New_Horizon = ite(Path_Taken, T, Old_Horizon)`
 
 ### 4.2 Paradox Invariant

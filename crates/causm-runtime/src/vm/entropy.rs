@@ -90,15 +90,11 @@ impl Vm {
 
     pub fn trigger_auto_drop(&mut self, branch_id: &str, reg: u32) {
         let (type_name_opt, payload_opt) = {
-            if let Ok(branch) = self.get_branch_mut(branch_id) {
-                let idx = reg as usize;
-                let t_name = if idx < branch.arena.metadata.len() {
-                    branch.arena.metadata[idx]
-                        .as_ref()
-                        .and_then(|m| m.type_name.clone())
-                } else {
-                    None
-                };
+            if let Ok(branch) = self.get_branch(branch_id) {
+                let t_name = branch
+                    .arena
+                    .get_metadata(reg)
+                    .and_then(|m| m.type_name.clone());
                 let payload = branch.arena.peek(reg);
                 (t_name, payload)
             } else {
@@ -119,7 +115,7 @@ impl Vm {
                     {
                         unsafe {
                             let mut args = [field_val.clone()];
-                            let _ = crate::vm::ffi::invoke_foreign_symbol(
+                            let _ = crate::vm::handlers::ffi::invoke_foreign_symbol(
                                 sym_ptr,
                                 &mut args,
                                 &causm_core::types::Type::I32,

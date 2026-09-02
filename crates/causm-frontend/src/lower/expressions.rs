@@ -38,7 +38,25 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             ctx.push(causm_ir::Instruction::ArenaIntrospect { dest, kind: *kind });
             dest
         }
+        Expression::CapabilityCheck(capability) => {
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::CapabilityCheck {
+                dest,
+                capability: capability.clone(),
+            });
+            dest
+        }
         Expression::Identifier(name) => ctx.get_reg(name),
+        Expression::Tuple(elems) => {
+            let elem_regs: Vec<causm_ir::Reg> =
+                elems.iter().map(|e| lower_expression(ctx, e)).collect();
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::TupleLit {
+                dest,
+                elems: elem_regs,
+            });
+            dest
+        }
         Expression::BinaryOp { left, op, right } => {
             let l = lower_expression(ctx, left);
             let r = lower_expression(ctx, right);
@@ -209,7 +227,12 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         Expression::FieldAccess { target, field } => {
             let mut const_expr = None;
             if let Expression::Identifier(ref name) = &**target {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
+                let type_name_opt =
+                    ctx.symbols.get(name).and_then(|r| ctx.reg_types.get(&r.0));
+                let lookup_name = type_name_opt
+                    .map(|s| s.split('<').next().unwrap_or(s).trim())
+                    .unwrap_or(name.as_str());
+                if let Some(fields_map) = ctx.type_decls.get(lookup_name) {
                     if let Some(field_def) = fields_map.get(field) {
                         if field_def.is_const {
                             if let Some(ref val_expr) = field_def.default_value {
@@ -253,19 +276,48 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let type_name_opt = type_name.borrow().clone();
             let mut defaults_to_lower = Vec::new();
             if let Some(ref name) = type_name_opt {
-                if let Some(fields_map) = ctx.type_decls.get(name) {
+                let base_name = name.split('<').next().unwrap_or(name).trim();
+                let const_arg: Option<i64> = if let Some(start) = name.find('<') {
+                    if let Some(end) = name.rfind('>') {
+                        name[start + 1..end].trim().parse::<i64>().ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                fn subst_const(e: &Expression, const_val: i64) -> Expression {
+                    match e {
+                        Expression::Identifier(_) => Expression::Integer(const_val),
+                        Expression::BinaryOp { left, op, right } => {
+                            Expression::BinaryOp {
+                                left: Box::new(subst_const(left, const_val)),
+                                op: *op,
+                                right: Box::new(subst_const(right, const_val)),
+                            }
+                        }
+                        Expression::UnaryOp { op, expr } => Expression::UnaryOp {
+                            op: *op,
+                            expr: Box::new(subst_const(expr, const_val)),
+                        },
+                        _ => e.clone(),
+                    }
+                }
+
+                if let Some(fields_map) = ctx.type_decls.get(base_name) {
                     let mut sorted_fields_map: Vec<(&String, &TypeFieldDef)> =
                         fields_map.iter().collect();
                     sorted_fields_map.sort_by_key(|(name, _)| *name);
                     for (field_name, field_def) in sorted_fields_map {
-                        if !field_def.is_const
-                            && !field_regs.contains_key(field_name)
-                        {
+                        if !field_regs.contains_key(field_name) {
                             if let Some(ref default_expr) = field_def.default_value {
-                                defaults_to_lower.push((
-                                    field_name.clone(),
-                                    default_expr.clone(),
-                                ));
+                                let expr = if let Some(val) = const_arg {
+                                    subst_const(default_expr, val)
+                                } else {
+                                    default_expr.clone()
+                                };
+                                defaults_to_lower.push((field_name.clone(), expr));
                             }
                         }
                     }
@@ -433,6 +485,47 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let src = lower_expression(ctx, expr);
             let dest = ctx.alloc_reg();
             ctx.push(causm_ir::Instruction::Move { dest, src });
+            let is_null_reg = ctx.alloc_reg();
+            let null_val_reg = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::LoadNull { dest: null_val_reg });
+            ctx.push(causm_ir::Instruction::BinaryOp {
+                dest: is_null_reg,
+                op: causm_core::BinaryOperator::Eq,
+                left: src,
+                right: null_val_reg,
+            });
+            let jump_idx = ctx.instructions.len();
+            ctx.push(causm_ir::Instruction::JumpIfNot {
+                cond: is_null_reg,
+                target: 0,
+            });
+            ctx.push(causm_ir::Instruction::Return {
+                src: Some(null_val_reg),
+            });
+            let resume_target = ctx.instructions.len();
+            if let Some(causm_ir::Instruction::JumpIfNot { target, .. }) =
+                ctx.instructions.get_mut(jump_idx)
+            {
+                *target = resume_target;
+            }
+            dest
+        }
+        Expression::Turbofish { expr, .. } => lower_expression(ctx, expr),
+        Expression::GenericStaticCall {
+            type_name,
+            method,
+            args,
+            ..
+        } => {
+            let routine = format!("{}.{}", type_name, method);
+            let lowered_args: Vec<_> =
+                args.iter().map(|a| lower_expression(ctx, a)).collect();
+            let dest = ctx.alloc_reg();
+            ctx.push(causm_ir::Instruction::Call {
+                dest,
+                routine,
+                args: lowered_args,
+            });
             dest
         }
         Expression::RefOp(expr) => lower_expression(ctx, expr),
@@ -616,6 +709,17 @@ pub(crate) fn lower_pattern_test(
         Pattern::Identifier(name) => {
             let old = ctx.symbols.insert(name.clone(), target_reg);
             bound_symbols.push((name.clone(), old));
+        }
+        Pattern::Tuple(subpatterns) => {
+            for (idx, subpat) in subpatterns.iter().enumerate() {
+                let elem_reg = ctx.alloc_reg();
+                ctx.push(causm_ir::Instruction::TupleAccess {
+                    dest: elem_reg,
+                    tuple: target_reg,
+                    index: idx,
+                });
+                lower_pattern_test(ctx, elem_reg, subpat, fail_jumps, bound_symbols);
+            }
         }
         Pattern::Literal(lit_expr) => {
             let lit_reg = lower_expression(ctx, lit_expr);

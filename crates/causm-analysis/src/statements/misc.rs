@@ -21,6 +21,15 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    pub(crate) fn MacroDef(
+        &mut self,
+        _name: &str,
+        _params: &[MacroParam],
+        _body_template: &str,
+    ) -> Result<(), SemanticError> {
+        Ok(())
+    }
+
     pub(crate) fn ForeignBlock(
         &mut self,
         lib_name: &str,
@@ -29,6 +38,7 @@ impl EntropicAnalyzer {
     ) -> Result<(), SemanticError> {
         if !self.capability_stack.is_empty()
             && !self.is_capability_allowed("System.FFI")
+            && !self.is_capability_allowed("System.WASI")
         {
             return Err(self.annotate(SemanticErrorKind::MissingCapability(
                 "System.FFI".to_string(),

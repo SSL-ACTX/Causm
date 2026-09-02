@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use crate::expression::analyze_expression;
 use causm_core::*;
@@ -61,8 +63,21 @@ impl EntropicAnalyzer {
                 .insert(binding_name.clone(), branch.accumulated_cost);
         }
 
+        // If the condition is `capability(X)`, the true branch runs only when X is
+        // active — push it so nested call-site checks see X as granted.
+        let cap_pushed = if let Expression::CapabilityCheck(cap) = condition {
+            let mut cap_map = HashMap::new();
+            cap_map.insert(cap.path.clone(), cap.clone());
+            self.capability_stack.push(cap_map);
+            true
+        } else {
+            false
+        };
         for inner_stmt in then_branch {
             self.analyze_statement(inner_stmt)?;
+        }
+        if cap_pushed {
+            self.capability_stack.pop();
         }
 
         let mut then_end_state = self
@@ -187,9 +202,46 @@ impl EntropicAnalyzer {
             return Err(self.annotate(SemanticErrorKind::InvalidLoopBudget));
         }
 
-        crate::expression::analyze_expression_nonconsuming(self, condition)?;
-
-        if !*is_valid_check {
+        if *is_valid_check {
+            match condition {
+                Expression::Identifier(var_name) => {
+                    let branch =
+                        self.branch_contexts.get(&self.current_branch).unwrap();
+                    if branch.consumed.contains(var_name) {
+                        return Err(self.annotate(
+                            SemanticErrorKind::UseAfterConsume(var_name.clone()),
+                        ));
+                    }
+                }
+                Expression::Call { args, .. } if !args.is_empty() => {
+                    for arg in args {
+                        if let Expression::Identifier(var_name) = arg {
+                            let branch = self
+                                .branch_contexts
+                                .get(&self.current_branch)
+                                .unwrap();
+                            if branch.consumed.contains(var_name) {
+                                return Err(self.annotate(
+                                    SemanticErrorKind::UseAfterConsume(
+                                        var_name.clone(),
+                                    ),
+                                ));
+                            }
+                        } else {
+                            crate::expression::analyze_expression_nonconsuming(
+                                self, arg,
+                            )?;
+                        }
+                    }
+                }
+                _ => {
+                    crate::expression::analyze_expression_nonconsuming(
+                        self, condition,
+                    )?;
+                }
+            }
+        } else {
+            crate::expression::analyze_expression_nonconsuming(self, condition)?;
             let cond_type =
                 crate::expression::infer_expression_type(self, condition)?;
             if cond_type != causm_core::types::Type::Bool {
@@ -395,6 +447,44 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    fn analyze_entropy_branch(
+        &mut self,
+        target: &Expression,
+        pattern: Option<&DecayedPattern>,
+        guard: &Option<Expression>,
+        branch_body: &[SpannedStatement],
+        original_state: &crate::analyzer::types::BranchState,
+    ) -> Result<crate::analyzer::types::BranchState, SemanticError> {
+        let saved_contexts = self.branch_contexts.clone();
+        self.branch_contexts
+            .insert(self.current_branch.clone(), original_state.clone());
+
+        if let Some(pat) = pattern {
+            self.apply_pattern(pat, target)?;
+            self.in_entropy_match = true;
+            let res =
+                crate::expression::analyze_expression_nonconsuming(self, target);
+            self.in_entropy_match = false;
+            res?;
+        }
+
+        if let Some(guard_expr) = guard {
+            crate::expression::analyze_expression(self, guard_expr)?;
+        }
+
+        for stmt in branch_body {
+            self.analyze_statement(stmt)?;
+        }
+
+        let branch_end_state = self
+            .branch_contexts
+            .get(&self.current_branch)
+            .cloned()
+            .unwrap_or_default();
+        self.branch_contexts = saved_contexts;
+        Ok(branch_end_state)
+    }
+
     pub(crate) fn MatchEntropy(
         &mut self,
         target: &Expression,
@@ -423,108 +513,43 @@ impl EntropicAnalyzer {
         let mut context_candidates = Vec::new();
 
         if let Some((pattern, guard, branch_body)) = valid_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((pattern, guard, branch_body)) = decayed_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((pattern, guard, branch_body)) = pending_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-            self.apply_pattern(pattern, target)?;
-
-            self.in_entropy_match = true;
-            let res =
-                crate::expression::analyze_expression_nonconsuming(self, target);
-            self.in_entropy_match = false;
-            res?;
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                Some(pattern),
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if let Some((guard, branch_body)) = consumed_branch {
-            let saved_contexts = self.branch_contexts.clone();
-            self.branch_contexts
-                .insert(self.current_branch.clone(), original_state.clone());
-
-            if let Some(guard_expr) = guard {
-                crate::expression::analyze_expression(self, guard_expr)?;
-            }
-
-            for stmt in branch_body {
-                self.analyze_statement(stmt)?;
-            }
-            context_candidates.push(
-                self.branch_contexts
-                    .get(&self.current_branch)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-            self.branch_contexts = saved_contexts;
+            context_candidates.push(self.analyze_entropy_branch(
+                target,
+                None,
+                guard,
+                branch_body,
+                &original_state,
+            )?);
         }
 
         if context_candidates.is_empty() {
@@ -551,6 +576,7 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn RoutineDef(
         &mut self,
         name: &String,
@@ -558,16 +584,11 @@ impl EntropicAnalyzer {
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
         state_constraint: &Option<(String, String)>,
+        required_capabilities: &[Capability],
         body: &[SpannedStatement],
     ) -> Result<(), SemanticError> {
         if self.analyzed_routines.contains(name) {
-            if body.is_empty() {
-                return Ok(());
-            }
-            return Err(self.annotate(SemanticErrorKind::EntropyMismatch(format!(
-                "duplicate routine {}",
-                name
-            ))));
+            return Ok(());
         }
         self.analyzed_routines.insert(name.clone());
 
@@ -622,10 +643,12 @@ impl EntropicAnalyzer {
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: taking_ms.unwrap_or(0),
             state_constraint: state_constraint.clone(),
+            required_capabilities: required_capabilities.to_vec(),
         };
 
         let mut routine_analyzer = EntropicAnalyzer::new();
         routine_analyzer.routines = self.routines.clone();
+        routine_analyzer.analyzed_routines = self.analyzed_routines.clone();
         routine_analyzer
             .routines
             .insert(name.clone(), preliminary_routine_info.clone());
@@ -637,6 +660,18 @@ impl EntropicAnalyzer {
         routine_analyzer.type_decls = self.type_decls.clone();
         routine_analyzer.interfaces = self.interfaces.clone();
         routine_analyzer.current_routine = Some(name.clone());
+        if !required_capabilities.is_empty() {
+            let mut cap_map = HashMap::new();
+            for cap in required_capabilities {
+                let key = if let Some(id) = cap.parameters.get("id") {
+                    format!("{}[id={}]", cap.path, id)
+                } else {
+                    cap.path.clone()
+                };
+                cap_map.insert(key, cap.clone());
+            }
+            routine_analyzer.capability_stack.push(cap_map);
+        }
         if let Some(main_state) = self.branch_contexts.get("main") {
             let routine_main =
                 routine_analyzer.branch_contexts.get_mut("main").unwrap();
@@ -741,6 +776,7 @@ impl EntropicAnalyzer {
                 .unwrap_or(causm_core::types::Type::Unknown),
             taking_ms: final_taking_ms,
             state_constraint: state_constraint.clone(),
+            required_capabilities: required_capabilities.to_vec(),
         };
 
         self.routines.insert(name.clone(), routine_info.clone());
@@ -752,10 +788,10 @@ impl EntropicAnalyzer {
 
     pub(crate) fn Return(
         &mut self,
-        src: &Option<String>,
+        src: &Option<Expression>,
     ) -> Result<(), SemanticError> {
-        if let Some(name) = src {
-            self.check_available(name)?;
+        if let Some(expr) = src {
+            crate::expression::analyze_expression(self, expr)?;
         }
         Ok(())
     }
@@ -882,8 +918,14 @@ impl EntropicAnalyzer {
         Ok(())
     }
 
-    pub(crate) fn Yield(&mut self, name: &str) -> Result<(), SemanticError> {
-        self.mark_consumed(name)
+    pub(crate) fn Yield(
+        &mut self,
+        expr_opt: &Option<Expression>,
+    ) -> Result<(), SemanticError> {
+        if let Some(expr) = expr_opt {
+            crate::expression::analyze_expression(self, expr)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn Commit(
@@ -1065,6 +1107,11 @@ pub(crate) fn bind_pattern_variables(
                 .insert(name.clone(), branch.accumulated_cost);
         }
         Pattern::Literal(_) => {}
+        Pattern::Tuple(subpatterns) => {
+            for sub in subpatterns {
+                bind_pattern_variables(analyzer, sub);
+            }
+        }
         Pattern::EnumVariant { args, .. } => {
             for arg in args {
                 bind_pattern_variables(analyzer, arg);
@@ -1093,6 +1140,11 @@ pub(crate) fn collect_pattern_bound_names(pattern: &Pattern) -> Vec<String> {
     match pattern {
         Pattern::Wildcard | Pattern::Literal(_) => {}
         Pattern::Identifier(name) => vars.push(name.clone()),
+        Pattern::Tuple(subpatterns) => {
+            for sub in subpatterns {
+                vars.extend(collect_pattern_bound_names(sub));
+            }
+        }
         Pattern::EnumVariant { args, .. } => {
             for arg in args {
                 vars.extend(collect_pattern_bound_names(arg));

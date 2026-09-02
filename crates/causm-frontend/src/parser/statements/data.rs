@@ -205,6 +205,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             Statement::EnumDecl { name, variants }
         }
         Rule::type_decl => {
+            let is_distinct = pair.as_str().contains("distinct");
             let mut inner = pair.into_inner().peekable();
             let mut name_pair = inner.next().unwrap();
             if name_pair.as_rule() == Rule::pub_opt {
@@ -215,6 +216,32 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             if let Some(p) = inner.peek() {
                 if p.as_rule() == Rule::generic_param_list {
                     inner.next(); // Consume generic_param_list
+                }
+            }
+
+            // Check if this is a distinct newtype declaration: type UserId = distinct int
+            if is_distinct {
+                if let Some(p) = inner.peek() {
+                    if p.as_rule() == Rule::type_name {
+                        let underlying_type = parse_type_name(inner.next().unwrap());
+                        let mut fields = HashMap::new();
+                        fields.insert(
+                            "value".to_string(),
+                            TypeFieldDef {
+                                typ: underlying_type,
+                                is_const: false,
+                                default_value: None,
+                            },
+                        );
+                        return Statement::TypeDecl {
+                            name,
+                            extends: None,
+                            fields,
+                            decay_after_ms: None,
+                            auto_drop: None,
+                            scoped_branch: None,
+                        };
+                    }
                 }
             }
 
@@ -333,7 +360,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
         Rule::field_update_stmt => {
             let mut inner = pair.clone().into_inner();
             let target_pair = inner.next().unwrap();
-            let value_pair = inner.next().unwrap();
+            let second_pair = inner.next().unwrap();
+            let (op_str, value_pair) =
+                if second_pair.as_rule() == Rule::assignment_op {
+                    (second_pair.as_str(), inner.next().unwrap())
+                } else {
+                    ("=", second_pair)
+                };
 
             // Descend through expression wrapper rules to find the actual inner rule.
             // Grammar: expression -> relational_expr -> ... -> primary_expr -> base_expr -> match_entropy_expr
@@ -381,16 +414,16 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                 if let Statement::Expression(expr) =
                                     body[0].stmt.clone()
                                 {
-                                    *body = vec![SpannedStatement {
-                                        stmt: Statement::Assignment {
+                                    *body = vec![SpannedStatement::new(
+                                        Statement::Assignment {
                                             target: lhs_name.clone(),
                                             mutable: false,
                                             var_type: None,
                                             lifetime: None,
                                             expr,
                                         },
-                                        span: body[0].span.clone(),
-                                    }];
+                                        body[0].span.clone(),
+                                    )];
                                 }
                             }
                         }
@@ -404,16 +437,16 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                                 if let Statement::Expression(expr) =
                                     body[0].stmt.clone()
                                 {
-                                    *body = vec![SpannedStatement {
-                                        stmt: Statement::Assignment {
+                                    *body = vec![SpannedStatement::new(
+                                        Statement::Assignment {
                                             target: lhs_name.clone(),
                                             mutable: false,
                                             var_type: None,
                                             lifetime: None,
                                             expr,
                                         },
-                                        span: body[0].span.clone(),
-                                    }];
+                                        body[0].span.clone(),
+                                    )];
                                 }
                             }
                         }
@@ -427,7 +460,29 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
             }
 
             let target_expr = parse_expression(target_pair);
-            let value = parse_expression(value_pair);
+            let mut value = parse_expression(value_pair);
+
+            if op_str != "=" {
+                let bin_op = match op_str {
+                    "+=" => BinaryOperator::Add,
+                    "-=" => BinaryOperator::Sub,
+                    "*=" => BinaryOperator::Mul,
+                    "/=" => BinaryOperator::Div,
+                    "%=" => BinaryOperator::Rem,
+                    "&=" => BinaryOperator::BitwiseAnd,
+                    "|=" => BinaryOperator::BitwiseOr,
+                    "^=" => BinaryOperator::BitwiseXor,
+                    "<<=" => BinaryOperator::Shl,
+                    ">>=" => BinaryOperator::Shr,
+                    _ => BinaryOperator::Add,
+                };
+                value = Expression::BinaryOp {
+                    left: Box::new(target_expr.clone()),
+                    op: bin_op,
+                    right: Box::new(value),
+                };
+            }
+
             if let Expression::FieldAccess { target, field } = target_expr {
                 Statement::FieldUpdate {
                     target: *target,
@@ -479,8 +534,13 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                 let mut taking_ms = None;
                 let mut default_body = None;
                 let mut state_constraint = None;
+                let mut required_capabilities = Vec::new();
                 for opt in m_inner {
                     match opt.as_rule() {
+                        Rule::requires_clause => {
+                            required_capabilities
+                                .extend(super::utils::parse_requires_clause(opt));
+                        }
                         Rule::method_receiver => {
                             let decl = opt.into_inner();
                             let mut mode = ParamMode::Peek;
@@ -600,6 +660,7 @@ pub fn parse_data_stmt(pair: Pair<Rule>) -> Statement {
                     taking_ms,
                     default_body,
                     state_constraint,
+                    required_capabilities,
                 }
             };
 

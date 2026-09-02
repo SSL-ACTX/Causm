@@ -1,0 +1,62 @@
+@0ms: {
+    routine lookup_sensor(&id: int) -> int taking _ {
+        if (id == 1) {
+            let v = 480
+            yield v
+        } else if (id == 2) {
+            let v = 310
+            yield v
+        } else if (id == 3) {
+            let v = 250
+            yield v
+        } else {
+            let n = null
+            yield n
+        }
+    }
+
+    routine validate_reading(&raw: int) -> int taking _ {
+        if (raw > 400) {
+            let n = null
+            yield n
+        } else {
+            yield raw
+        }
+    }
+
+    routine celsius_to_kelvin(&c: int) -> int taking _ => c + 273
+
+    routine process_sensor(&id: int) -> int taking _ {
+        let raw = lookup_sensor(id)?
+        let validated = validate_reading(raw)?
+        let kelvin = celsius_to_kelvin(validated)
+        yield kelvin
+    }
+}
+
+@0ms: {
+    isolate pipeline {
+        enable cpu(2000ms)
+        enable memory(32768bytes)
+        require System.Log
+        let k1 = process_sensor(1)
+        let k2 = process_sensor(2)
+        let k3 = process_sensor(3)
+        let k_invalid = process_sensor(99)
+        print(k1)
+        print(k2)
+        print(k3)
+        print(k_invalid)
+        let mut processed_count = 0
+        let mut kelvin_accumulator = 0
+        for id in [1, 2, 99, 3] step 50ms {
+            let res = process_sensor(id)
+            if (res != null) {
+                processed_count = processed_count + 1
+                kelvin_accumulator = kelvin_accumulator + res
+            }
+        }
+        print(processed_count)
+        print(kelvin_accumulator)
+    }
+}

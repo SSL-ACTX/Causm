@@ -56,9 +56,9 @@ Standard library modules are embedded directly into the compiler binary and can 
 
         from "std/fs" import *
 
-        let file = call create_file("/tmp/log.txt")
-        let written = call write_all(file, "Hello, Causm!", 13)
-        let flushed = call flush_file(file)
+        let file = create_file("/tmp/log.txt")
+        let written = write_all(file, "Hello, Causm!", 13)
+        flush_file(file)
     }
 }
 ```
@@ -69,7 +69,19 @@ Or with namespace aliasing:
     isolate fs_worker {
         import "std/fs" as fs
 
-        let file = call fs.create_file("/tmp/log.txt")
+        let file = fs.create_file("/tmp/log.txt")
     }
 }
 ```
+
+---
+
+## 3. Extended Standard Library Modules
+
+- **`std/json`**: Native high-performance JSON decoder, encoder, object manipulation, and ADT enum representations.
+- **`std/time`**: High-precision monotonic timestamps (`Instant`, `Duration`), POSIX epoch clocks, and precision sleeping.
+- **`std/net`**: Socket networking, `SocketAddr`, `TcpStream`, and `TcpListener`.
+- **`std/http`**: HTTP/1.1 request formatting, client networking, and response parsing.
+- **`std/encoding`**: Base64 encoding/decoding, binary serialization, and bitwise stream operations.
+- **`std/collection`**: Array utilities, `RingBuffer`, `Stack`, `Queue`, and `BitSet`.
+- **`std/process`**: Process spawning, execution, pipe control, and status checking.

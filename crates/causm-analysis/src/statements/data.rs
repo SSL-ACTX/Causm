@@ -50,8 +50,30 @@ impl EntropicAnalyzer {
             }
             if let Expression::StructLit(ref type_name, _) = expr {
                 if type_name.borrow().is_none() {
-                    if let TypeName::Custom(ref name) = explicit_type_name {
-                        *type_name.borrow_mut() = Some(name.clone());
+                    match explicit_type_name {
+                        TypeName::Custom(ref name) => {
+                            *type_name.borrow_mut() = Some(name.clone());
+                        }
+                        TypeName::Generic(ref name, ref params) => {
+                            let params_str = params
+                                .iter()
+                                .map(|p| match p {
+                                    causm_core::TypeParam::Type(t) => {
+                                        format!("{:?}", t)
+                                    }
+                                    causm_core::TypeParam::Amount(a) => {
+                                        a.to_string()
+                                    }
+                                    causm_core::TypeParam::Duration(d) => {
+                                        format!("{}ms", d)
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            *type_name.borrow_mut() =
+                                Some(format!("{}<{}>", name, params_str));
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -172,11 +194,18 @@ impl EntropicAnalyzer {
             causm_core::types::Type::Custom(name.to_string()),
         );
         for variant in variants {
+            let qualified = format!("{}::{}", name, variant.name);
+            branch.types.insert(
+                qualified.clone(),
+                causm_core::types::Type::Custom(name.to_string()),
+            );
             branch.types.insert(
                 variant.name.clone(),
                 causm_core::types::Type::Custom(name.to_string()),
             );
         }
+        self.type_decls
+            .insert(name.to_string(), std::collections::HashMap::new());
         Ok(())
     }
 

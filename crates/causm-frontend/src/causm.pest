@@ -5,24 +5,33 @@ COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "#" ~ (!"\n" ~ ANY)* }
 program = { SOI ~ (timeline_block | statement)* ~ EOI }
 
 timeline_block = { ("@every" ~ duration_literal | "@" ~ time_coord) ~ timeline_directive* ~ ":" ~ statement_block }
-timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") }
+timeline_directive = { "@" ~ ("no_z3" | "chaos" | "deterministic") ~ !(ASCII_ALPHANUMERIC | "_") }
 directive_stmt = { timeline_directive+ ~ ":" ~ statement_block }
 
 time_coord     = { relative_time | absolute_time | branch_name }
 absolute_time  = @{ ASCII_DIGIT+ ~ "ms" }
 relative_time  = @{ "+" ~ ASCII_DIGIT+ ~ "ms" }
-branch_name    = { identifier }
+branch_name    = @{ !(("no_z3" | "chaos" | "deterministic") ~ !(ASCII_ALPHANUMERIC | "_")) ~ identifier }
 
 statement_block = { "{" ~ statement* ~ "}" | statement }
 
+attribute = { "@" ~ !("every" | "no_z3" | "chaos" | "deterministic" | ASCII_DIGIT | "+" | identifier ~ ":") ~ attribute_name ~ ("(" ~ attribute_args? ~ ")")? }
+attribute_name = { "derive" | "must_use" | "inline" | "test" | "doc" | "repr" | identifier }
+attribute_args = { attribute_arg ~ ("," ~ attribute_arg)* ~ ","? }
+attribute_arg = { string_literal | identifier }
+
 statement = {
-    directive_stmt
-    | isolate_stmt
-    | using_stmt
-    | split_stmt
-    | routine_stmt
+    attribute* ~ (
+        macro_def_stmt
+        | macro_call_stmt
+        | directive_stmt
+        | isolate_stmt
+        | actor_stmt
+        | send_stmt
+        | using_stmt
+        | split_stmt
+        | routine_stmt
     | merge_stmt
-    | split_map_stmt
     | for_stmt
     | lease_stmt
     | print_stmt
@@ -32,7 +41,6 @@ statement = {
     | commit_stmt
     | speculate_stmt
     | collapse_stmt
-    | speculation_mode_stmt
     | select_stmt
     | match_entropy_stmt
     | match_stmt
@@ -43,6 +51,7 @@ statement = {
     | loop_stmt
     | while_stmt
     | for_step_stmt
+    | return_stmt
     | yield_stmt
     | type_decl
     | enum_decl
@@ -61,10 +70,11 @@ statement = {
     | from_import_stmt
     | foreign_block_stmt
     | expression_stmt
+    )
 }
 
 foreign_block_stmt = { "foreign" ~ string_literal ~ "abi" ~ "(" ~ string_literal ~ ")" ~ "{" ~ foreign_routine* ~ "}" }
-foreign_routine = { pub_opt ~ "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit }
+foreign_routine = { pub_opt ~ "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ (return_annotation | requires_clause | duration_limit)* }
 
 import_stmt = { "import" ~ string_literal ~ ("as" ~ identifier)? }
 from_import_stmt = { "from" ~ string_literal ~ "import" ~ import_symbol_list }
@@ -72,11 +82,25 @@ import_symbol_list = { wildcard_symbol | import_symbol ~ ("," ~ import_symbol)* 
 wildcard_symbol = { "*" }
 import_symbol = { identifier ~ ("as" ~ identifier)? }
 
+// Macro definition: macro name!( $p1:kind, $p2:kind => { body } )
+macro_def_stmt = { "macro" ~ identifier ~ "!" ~ "(" ~ macro_param_list ~ "=>" ~ macro_body ~ ")" }
+macro_param_list = { macro_param ~ ("," ~ macro_param)* }
+macro_param = { "$" ~ identifier ~ ":" ~ macro_param_kind }
+macro_param_kind = { "ident" | "expr" | "type" | "literal" }
+// body is captured as raw braced text for later re-parsing
+macro_body = { "{" ~ macro_body_content ~ "}" }
+macro_body_content = @{ (!"}" ~ ANY)* }
+
+// Macro invocation: name!(arg1, arg2, ...)
+macro_call_stmt = { identifier ~ "!" ~ "(" ~ macro_call_args? ~ ")" }
+macro_call_args = { macro_call_arg ~ ("," ~ macro_call_arg)* ~ ","? }
+macro_call_arg = @{ (!"," ~ !")" ~ ANY)+ }
+
 expression_stmt = { expression }
 
 entangle_stmt = { "entangle" ~ "(" ~ identifier_list ~ ")" }
 
-decay_handler_stmt = { ("decay_handler" ~ "for" | "on_decay" ~ "(") ~ identifier ~ ")"? ~ "{" ~ statement* ~ "}" }
+decay_handler_stmt = { "on_decay" ~ "(" ~ identifier ~ ")" ~ "{" ~ statement* ~ "}" }
 
 assert_time_stmt = { "assert_time" ~ "(" ~ "elapsed" ~ relop ~ amount ~ "ms" ~ ")" ~ ("else" ~ statement_block)? }
 
@@ -86,17 +110,15 @@ print_arg_list = { expression ~ ("," ~ expression)* }
 speculate_stmt = { "speculate" ~ duration_limit ~ "{" ~ statement* ~ "}" ~ fallback_stmt? }
 fallback_stmt = { "fallback" ~ "{" ~ statement* ~ "}" }
 collapse_stmt = { "collapse" }
-speculation_mode_stmt = { "speculation_mode" ~ "(" ~ speculation_mode_value ~ ")" }
-speculation_mode_value = { "selective" | "full" }
 pub_keyword = @{ "pub" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 pub_opt = { pub_keyword? }
 concise_body = { "=>" ~ expression }
-routine_stmt = { pub_opt ~ "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ return_annotation? ~ duration_limit ~ state_constraint? ~ (concise_body | "{" ~ statement* ~ "}") }
+routine_stmt = { pub_opt ~ "routine" ~ method_name ~ "(" ~ (method_receiver ~ ("," ~ param_decl)* | param_decl_list)? ~ ")" ~ (return_annotation | requires_clause | duration_limit)* ~ state_constraint? ~ (concise_body | "{" ~ statement* ~ "}") }
 method_receiver = { param_mode? ~ "self" ~ type_annotation? ~ ("for" ~ amount ~ "ms")? }
 method_name = { identifier ~ ("<" ~ type_param_list ~ ">")? ~ ("." ~ identifier)? }
 param_decl_list = { param_decl ~ ("," ~ param_decl)* }
 param_decl = { param_mode? ~ identifier ~ type_annotation? }
-param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" }
+param_mode = { "consume" | "clone" | "decay" | "peek" | "lease" | "&" }
 return_annotation = { "->" ~ type_name }
 
 select_stmt = { "select" ~ duration_limit ~ "{" ~ select_case* ~ timeout_clause? ~ "}" ~ reconcile_clause? }
@@ -118,15 +140,15 @@ break_stmt = { "break" }
 
 for_stmt = { "for" ~ identifier ~ param_mode ~ identifier ~ pacing_opt? ~ duration_limit? ~ "{" ~ statement* ~ "}" }
 lease_stmt = { "lease" ~ identifier ~ "=" ~ identifier ~ duration_limit ~ statement_block ~ reconcile_clause? }
-split_map_stmt = { "split_map" ~ identifier ~ param_mode ~ identifier ~ "{" ~ statement* ~ "}" ~ reconcile_clause }
 
 pacing_opt = { "pacing" ~ duration_limit }
 
 debug_stmt = { ("debug" | "log") ~ "(" ~ expression ~ ")" }
 
-if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ statement_block ~ ("else" ~ statement_block)? ~ reconcile_clause? }
+if_stmt = { "if" ~ !("let" ~ !(ASCII_ALPHANUMERIC | "_")) ~ "("? ~ expression ~ ")"? ~ statement_block ~ ("else" ~ (if_stmt | statement_block))? ~ reconcile_clause? }
 loop_stmt = { "loop" ~ "on" ~ expression ~ statement_block | "loop" ~ duration_limit ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "on" ~ identifier ~ "{" ~ statement* ~ "}" | "loop" ~ "tick" ~ "{" ~ statement* ~ "}" }
-while_stmt = { "while" ~ "valid" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" | "while" ~ "(" ~ expression ~ ")" ~ duration_limit ~ "{" ~ statement* ~ "}" }
+while_valid_condition = { "valid" ~ "("? ~ identifier ~ ")"? }
+while_stmt = { "while" ~ (while_valid_condition | "("? ~ expression ~ ")"? ) ~ duration_limit ~ "{" ~ statement* ~ "}" }
 step_spec = { duration_wildcard | duration_literal }
 for_step_stmt = { "for" ~ identifier ~ "in" ~ range_expr ~ "step" ~ step_spec ~ "{" ~ statement* ~ "}" }
 range_expr = { (duration_literal | expression) ~ ".." ~ (duration_literal | expression) | expression }
@@ -139,14 +161,23 @@ policy_stmt = { "policy" ~ policy_target ~ "=" ~ policy_kind }
 slice_stmt = { "slice" ~ amount ~ "ms" }
 
 isolate_stmt = { "isolate" ~ identifier? ~ "{" ~ manifest ~ statement* ~ "}" }
+actor_stmt = { "actor" ~ identifier? ~ "{" ~ manifest ~ actor_handler* ~ "}" }
+actor_handler = { "on" ~ actor_pattern ~ ("taking" ~ amount ~ "ms")? ~ statement_block }
+actor_pattern = { identifier ~ ("::" ~ identifier)? }
+send_stmt = { "send" ~ "(" ~ param_mode? ~ expression ~ ")" ~ "to" ~ identifier }
 manifest     = { (resource_decl | require_decl | slice_decl)* }
 slice_decl   = { "slice" ~ amount ~ "ms" }
 resource_decl = { "enable" ~ identifier ~ "(" ~ amount ~ unit? ~ ")" }
 amount       = @{ ASCII_DIGIT+ }
 unit         = { "ms" | "KB" | "MB" | "bytes" }
 
-require_decl  = { "require" ~ capability_path ~ ("(" ~ param_list ~ ")")? }
+require_decl    = { "require" ~ capability_decl }
+capability_decl = { capability_path ~ ("(" ~ param_list ~ ")")? }
+requires_clause = { ("with" | "requires" | "require") ~ ("[" ~ capability_decl ~ ("," ~ capability_decl)* ~ "]" | capability_decl ~ ("," ~ capability_decl)*) }
+capability_expr = { "capability" ~ "(" ~ capability_decl ~ ")" }
 capability_path = @{ identifier ~ ("." ~ identifier)* }
+struct_param = { (identifier | string_literal) ~ ":" ~ expression }
+struct_param_list = { struct_param ~ ("," ~ struct_param)* }
 param_list      = { param ~ ("," ~ param)* }
 param           = { (identifier | string_literal) ~ ("=" | ":") ~ expression }
 
@@ -180,7 +211,9 @@ destructure_field = { identifier ~ (as_keyword ~ identifier)? }
 destructure_pattern = { "{" ~ destructure_field ~ ("," ~ destructure_field)* ~ ","? ~ "}" }
 mut_keyword = @{ "mut" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 mut_opt = { mut_keyword? }
-assignment_target = { destructure_pattern | primary_expr }
+lvalue_tail = { index_access | field_access_tail }
+lvalue = { identifier ~ lvalue_tail* }
+assignment_target = { destructure_pattern | lvalue }
 assignment_stmt = { "let" ~ mut_opt ~ lifetime_annotation? ~ assignment_target ~ type_annotation? ~ ("=" ~ expression)? }
 
 type_annotation = { ":" ~ type_name }
@@ -188,7 +221,7 @@ type_name = { union_type }
 union_type = { optional_type ~ ("|" ~ optional_type)* }
 optional_type = { base_type ~ "?"? }
 array_bracket_type = { "[" ~ type_name ~ "]" }
-base_type = { array_bracket_type | "i8" | "i16" | "i32" | "i64" | "int" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "float" | "bool" | "string" | "struct" | "topology" | "array" | identifier ~ ("<" ~ type_param_list ~ ">")? }
+base_type = { array_bracket_type | "()" | "i8" | "i16" | "i32" | "i64" | "int" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "float" | "bool" | "string" | "struct" | "topology" | "array" | identifier ~ ("<" ~ type_param_list ~ ">")? }
 type_param_list = { type_param ~ ("," ~ type_param)* }
 type_param = { amount ~ "ms" | amount | type_name }
 
@@ -197,53 +230,60 @@ await_expr = { "await" ~ "(" ~ expression ~ ")" }
 
 defer_expr = { "defer" ~ capability_path ~ "(" ~ param_list? ~ ")" ~ duration_limit }
 
-yield_stmt = { "yield" ~ identifier }
+return_stmt = { "return" ~ expression? }
+yield_stmt = { "yield" ~ expression? }
 
 expression = { pipeline_expr }
 pipeline_expr = { logical_or_expr ~ ("|>" ~ logical_or_expr)* }
 logical_or_expr = { logical_and_expr ~ (logor ~ logical_and_expr)* }
+logor = { "||" | "??" }
 logical_and_expr = { relational_expr ~ (logand ~ relational_expr)* }
-logor = { "||" }
 logand = { "&&" }
 relational_expr = {
     additive_expr ~ (relop ~ additive_expr)*
 }
-relop = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
+relop = { "==" | "!=" | "<=" | ">=" | "<<" | ">>" | "<" | ">" }
 additive_expr = { multiplicative_expr ~ (addop ~ multiplicative_expr)* }
-addop = { "+" | "-" }
+addop = { "+" | "-" | bitor | "^" }
+bitor = @{ "|" ~ !"|" }
 multiplicative_expr = { power_expr ~ (mulop ~ power_expr)* }
-mulop = { "*" | "/" | "%" }
+mulop = { "*" | "/" | "%" | bitand }
+bitand = @{ "&" ~ !"&" }
 power_expr = { unary_expr ~ (powop ~ unary_expr)* }
-powop = { "^" }
-unary_expr = { neg_expr | not_expr | primary_expr }
+powop = { "**" }
+unary_expr = { bitwise_not_expr | neg_expr | not_expr | primary_expr }
+bitwise_not_expr = { "~" ~ unary_expr }
 neg_expr = { "-" ~ unary_expr }
 not_expr = { "!" ~ unary_expr }
 primary_expr = { base_expr ~ (try_tail | index_access | method_call_tail | type_assertion_tail | type_cast_tail | field_access_tail)* }
-try_tail = { "?" }
-method_call_tail = { "." ~ identifier ~ "(" ~ expression_list? ~ ")" }
+try_tail = @{ "?" ~ !"?" }
+method_call_tail = { "." ~ identifier ~ ("::<" ~ type_param_list ~ ">")? ~ "(" ~ expression_list? ~ ")" }
 type_assertion_tail = { "." ~ "(" ~ type_name ~ ")" }
 as_keyword = @{ "as" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 type_cast_tail = { as_keyword ~ type_name }
 field_access_tail = { "." ~ identifier }
-field_update_stmt = { primary_expr ~ "=" ~ expression }
+compound_assign_op = { "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" }
+assignment_op = { compound_assign_op | "=" }
+field_update_stmt = { primary_expr ~ assignment_op ~ expression }
 null = @{ "null" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 time_unit = { "ns" | "us" | "ms" | "s" }
 duration_literal = @{ ASCII_DIGIT+ ~ time_unit }
-if_expr = { "if" ~ "(" ~ expression ~ ")" ~ ("{" ~ expression ~ "}" | primary_expr) ~ "else" ~ ("{" ~ expression ~ "}" | if_expr | primary_expr) }
+if_expr = { "if" ~ !("let" ~ !(ASCII_ALPHANUMERIC | "_")) ~ "("? ~ expression ~ ")"? ~ ("{" ~ expression ~ "}" | primary_expr) ~ "else" ~ ("{" ~ expression ~ "}" | if_expr | primary_expr) }
 match_entropy_expr = { "match" ~ "entropy" ~ "(" ~ expression ~ ")" ~ "{" ~ entropy_branch* ~ "}" }
 match_expr = { "match" ~ expression ~ "{" ~ match_expr_arm* ~ "}" }
 match_expr_arm = { match_pattern ~ guard_clause? ~ "=>" ~ expression ~ ","? }
 syscall_expr = { "syscall" ~ "(" ~ (string_literal | integer_literal) ~ ("," ~ expression)* ~ ")" ~ duration_limit? }
+generic_static_call_expr = { (identifier ~ ".")* ~ identifier ~ "<" ~ type_param_list ~ ">::" ~ identifier ~ "(" ~ expression_list? ~ ")" }
 path_expr = { identifier ~ "::" ~ identifier ~ ("(" ~ expression_list? ~ ")")? }
 arena_introspect_kind = { "remaining" | "used_bytes" | "capacity" }
 arena_expr = { "arena" ~ "." ~ arena_introspect_kind ~ "(" ~ ")" }
-base_expr = { null | if_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | call_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | struct_lit | topology_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | "(" ~ expression ~ ")" }
+base_expr = { null | if_expr | generic_static_call_expr | path_expr | match_entropy_expr | match_expr | syscall_expr | await_expr | defer_expr | arena_expr | capability_expr | chan_recv_expr | str_bytes_expr | to_str_expr | len_expr | clone_op | ref_op | topology_lit | struct_lit | array_lit | byte_string | hex_byte_string | float_literal | duration_literal | integer_literal | bool_literal | fstring_literal | string_literal | direct_call_expr | identifier_expr | tuple_lit | "(" ~ expression ~ ")" }
+tuple_lit = { "(" ~ expression ~ "," ~ (expression ~ ",")* ~ expression? ~ ")" }
 ref_op = { "&" ~ base_expr }
 index_access = { "[" ~ slice_range ~ "]" | "[" ~ expression ~ "]" }
 slice_range = { expression? ~ ".." ~ "="? ~ expression? }
 bool_literal = { "true" | "false" }
-call_expr = { "call" ~ method_name ~ "(" ~ expression_list? ~ ")" }
-direct_call_expr = { identifier ~ "(" ~ expression_list? ~ ")" }
+direct_call_expr = { identifier ~ ("::<" ~ type_param_list ~ ">")? ~ "(" ~ expression_list? ~ ")" }
 expression_list = { expression ~ ("," ~ expression)* }
 
 array_lit = { array_repeat | array_elements }
@@ -255,7 +295,8 @@ integer_literal = @{ hex_integer_literal | "-"? ~ ASCII_DIGIT+ }
 byte_string = @{ "b\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 hex_byte_string = @{ "hex\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
-struct_lit = { "struct" ~ "{" ~ param_list? ~ "}" }
+named_struct_lit = { !("topology" | "struct") ~ identifier ~ "{" ~ struct_param_list ~ ","? ~ "}" }
+struct_lit = { ("struct" ~ "{" ~ param_list? ~ "}") | named_struct_lit }
 topology_lit = { "topology" ~ "{" ~ param_list? ~ "}" }
 clone_op   = { "clone" ~ "(" ~ identifier ~ ")" }
 str_bytes_expr = { "str_bytes" ~ "(" ~ expression ~ ")" }
@@ -269,15 +310,18 @@ type_field_list = { type_field ~ ("," ~ type_field)* }
 decay_opt = { "decay_after" ~ amount ~ "ms" }
 auto_drop_opt = { "auto_drop" ~ "(" ~ string_literal ~ "," ~ string_literal ~ "," ~ identifier ~ ")" }
 scoped_opt = { "scoped" ~ "(" ~ "@" ~ identifier ~ ")" }
-generic_param = { identifier ~ (":" ~ identifier)? }
+generic_param = { "const"? ~ identifier ~ (":" ~ identifier)? }
 generic_param_list = { "<" ~ generic_param ~ ("," ~ generic_param)* ~ ">" }
-type_decl = { pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? }
+type_decl = {
+    pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ "distinct" ~ type_name
+    | pub_opt ~ "type" ~ identifier ~ generic_param_list? ~ "=" ~ (base_type ~ "+")? ~ "struct" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt? ~ "{" ~ type_field_list? ~ "}" ~ decay_opt? ~ auto_drop_opt? ~ scoped_opt?
+}
 assoc_type_decl = { "type" ~ identifier ~ (":" ~ identifier)? }
 interface_item = { assoc_type_decl | interface_method }
 interface_decl = { pub_opt ~ "interface" ~ identifier ~ generic_param_list? ~ ("=" ~ interface_sum)? ~ decay_opt? ~ ("{" ~ interface_item* ~ "}")? }
 interface_sum = { interface_term ~ ("+" ~ interface_term)* }
 interface_term = { identifier ~ decay_opt? | "interface" ~ decay_opt? ~ "{" ~ interface_item* ~ "}" }
-interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ return_annotation? ~ duration_limit? ~ state_constraint? ~ ("{" ~ statement* ~ "}" | ";")? }
+interface_method = { "routine" ~ identifier ~ "(" ~ param_decl_list? ~ ")" ~ (return_annotation | requires_clause | duration_limit)* ~ state_constraint? ~ ("{" ~ statement* ~ "}" | ";")? }
 state_constraint = { "where" ~ identifier ~ "." ~ "state" ~ "==" ~ identifier }
 
 enum_decl = { pub_opt ~ "enum" ~ identifier ~ generic_param_list? ~ "{" ~ enum_variant_list? ~ "}" }
@@ -286,11 +330,13 @@ enum_variant = { identifier ~ ("(" ~ type_name_list ~ ")")? }
 type_name_list = { type_name ~ ("," ~ type_name)* }
 
 match_pattern = {
-    enum_pattern
+    tuple_pattern
+    | enum_pattern
     | literal_pattern
     | wildcard_pattern
     | ident_pattern
 }
+tuple_pattern = { "(" ~ pattern_arg_list? ~ ")" }
 enum_pattern = {
     (identifier ~ "::" ~ identifier ~ ("(" ~ pattern_arg_list? ~ ")")?)
     | (identifier ~ "(" ~ pattern_arg_list? ~ ")")

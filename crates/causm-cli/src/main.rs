@@ -54,6 +54,10 @@ struct Cli {
     /// Print detailed entropic state reconciliation diffs when timeline branches merge
     #[arg(long)]
     explain_merge: bool,
+
+    /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+    #[arg(long = "plugin", value_name = "SPEC")]
+    plugins: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -91,6 +95,10 @@ enum Commands {
         /// Print detailed entropic state reconciliation diffs when timeline branches merge
         #[arg(long)]
         explain_merge: bool,
+
+        /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+        #[arg(long = "plugin", value_name = "SPEC")]
+        plugins: Vec<String>,
     },
 
     /// Perform semantic & entropic analysis without execution
@@ -106,6 +114,10 @@ enum Commands {
         /// Bypass Z3 formal verification
         #[arg(long)]
         no_z3: bool,
+
+        /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
+        #[arg(long = "plugin", value_name = "SPEC")]
+        plugins: Vec<String>,
     },
 
     /// Print compiler intermediate representations
@@ -158,6 +170,26 @@ enum Commands {
         /// Input source file(s)
         #[arg(required = true, value_name = "FILES")]
         files: Vec<PathBuf>,
+    },
+
+    /// Manage and build compiler plugins
+    Plugin {
+        #[command(subcommand)]
+        subcommand: PluginSubcommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum PluginSubcommands {
+    /// Scaffold a new compiler plugin project
+    New {
+        /// Name of the new plugin
+        #[arg(required = true, value_name = "NAME")]
+        name: String,
+
+        /// Plugin type (rust or python)
+        #[arg(long, default_value = "rust")]
+        template: String,
     },
 }
 
@@ -243,6 +275,7 @@ struct RunConfig {
     no_z3: bool,
     chaos: bool,
     explain_merge: bool,
+    plugins: Vec<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -258,6 +291,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            plugins,
         }) => RunConfig {
             files,
             check_only: false,
@@ -268,11 +302,13 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos,
             explain_merge,
+            plugins,
         },
         Some(Commands::Check {
             files,
             verbose,
             no_z3,
+            plugins,
         }) => RunConfig {
             files,
             check_only: true,
@@ -283,6 +319,7 @@ fn main() -> anyhow::Result<()> {
             no_z3,
             chaos: false,
             explain_merge: false,
+            plugins,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
             files,
@@ -294,6 +331,7 @@ fn main() -> anyhow::Result<()> {
             no_z3: false,
             chaos: false,
             explain_merge: false,
+            plugins: Vec::new(),
         },
         Some(Commands::Tune {
             files,
@@ -525,6 +563,43 @@ fn main() -> anyhow::Result<()> {
             }
             return Ok(());
         }
+        Some(Commands::Plugin { subcommand }) => {
+            match subcommand {
+                PluginSubcommands::New { name, template } => {
+                    let parsed_template =
+                        match causm_devtools::scaffold::PluginTemplate::parse(
+                            &template,
+                        ) {
+                            Some(t) => t,
+                            None => {
+                                eprintln!("\x1b[1;31merror: unknown plugin template '{}' (valid: rust, python)\x1b[0m", template);
+                                std::process::exit(1);
+                            }
+                        };
+
+                    match causm_devtools::scaffold::scaffold_plugin_project(
+                        &name,
+                        parsed_template,
+                        &std::env::current_dir()?,
+                    ) {
+                        Ok(target_path) => {
+                            println!(
+                                "\x1b[1;32mCreated plugin in\x1b[0m {}",
+                                target_path.display()
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "\x1b[1;31merror scaffolding plugin:\x1b[0m {}",
+                                e
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
         None => {
             if cli.files.is_empty() {
                 use clap::CommandFactory;
@@ -542,6 +617,7 @@ fn main() -> anyhow::Result<()> {
                 no_z3: cli.no_z3,
                 chaos: cli.chaos,
                 explain_merge: cli.explain_merge,
+                plugins: cli.plugins,
             }
         }
     };
@@ -562,8 +638,11 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
-        let program = match parser::parse_causm_with_imports(&source, path.parent())
-        {
+        #[allow(unused_mut)]
+        let mut program = match parser::parse_causm_with_imports(
+            &source,
+            path.parent(),
+        ) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!(
@@ -576,6 +655,99 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
         };
+
+        #[cfg(feature = "plugins")]
+        let mut plugin_engine = causm_plugins::PluginEngine::new();
+
+        #[cfg(feature = "plugins")]
+        {
+            // Auto-discover causm.toml in file path ancestors or current working directory
+            let target_abs = path.canonicalize().unwrap_or_else(|_| path.clone());
+            let mut search_dirs = Vec::new();
+            if let Some(parent) = target_abs.parent() {
+                search_dirs.push(parent.to_path_buf());
+            }
+            if let Ok(cwd) = std::env::current_dir() {
+                search_dirs.push(cwd);
+            }
+
+            for start_dir in search_dirs {
+                let mut curr_dir = Some(start_dir.as_path());
+                while let Some(dir) = curr_dir {
+                    let manifest_candidate = dir.join("causm.toml");
+                    if manifest_candidate.exists() {
+                        if let Err(e) =
+                            plugin_engine.load_from_causm_toml(&manifest_candidate)
+                        {
+                            eprintln!("\x1b[1;33mwarning: failed to load causm.toml at '{}':\x1b[0m {}", manifest_candidate.display(), e);
+                        }
+                        break;
+                    }
+                    curr_dir = dir.parent();
+                }
+                if !plugin_engine.plugins.is_empty() {
+                    break;
+                }
+            }
+
+            // Register explicit CLI --plugin specs
+            for plugin_spec in &config.plugins {
+                if let Err(err) = plugin_engine.register_from_spec(plugin_spec) {
+                    eprintln!(
+                        "\x1b[1;31merror: failed to load plugin '{}':\x1b[0m {}",
+                        plugin_spec, err
+                    );
+                    had_error = true;
+                    break;
+                }
+            }
+            if had_error {
+                continue;
+            }
+
+            match plugin_engine
+                .run_ast_pipeline(&path.display().to_string(), program)
+            {
+                Ok((transformed_ast, diagnostics)) => {
+                    program = transformed_ast;
+                    for diag in diagnostics {
+                        let level_str = match diag.level {
+                            causm_plugins::DiagnosticLevel::Error => {
+                                "\x1b[1;31mplugin error:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Warning => {
+                                "\x1b[1;33mplugin warning:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Note => {
+                                "\x1b[1;36mplugin note:\x1b[0m"
+                            }
+                        };
+                        eprintln!("{} {}", level_str, diag.message);
+                        if matches!(
+                            diag.level,
+                            causm_plugins::DiagnosticLevel::Error
+                        ) {
+                            had_error = true;
+                        }
+                    }
+                    if had_error {
+                        continue;
+                    }
+                }
+                Err(err) => {
+                    eprintln!("\x1b[1;31mplugin execution error:\x1b[0m {:#}", err);
+                    had_error = true;
+                    continue;
+                }
+            }
+        }
+
+        #[cfg(not(feature = "plugins"))]
+        if !config.plugins.is_empty() {
+            eprintln!(
+                "\x1b[1;33mwarning: plugin flags specified, but causm-cli was built without 'plugins' feature\x1b[0m"
+            );
+        }
 
         if config.emit == Some(DumpFormat::Ast) {
             println!(
@@ -594,8 +766,14 @@ fn main() -> anyhow::Result<()> {
             &source,
             &path.display().to_string(),
         ) {
-            let formatted = analyzer.format_semantic_error(&err);
-            eprintln!("\x1b[1;31merror:\x1b[0m {}", formatted);
+            use causm_analysis::analyzer::SemanticErrorKind;
+            if matches!(*err.kind, SemanticErrorKind::EntropiusDiagnostic(_)) {
+                let formatted = analyzer.format_semantic_error(&err);
+                eprint!("{}", formatted);
+            } else {
+                let formatted = analyzer.format_semantic_error(&err);
+                eprintln!("\x1b[1;31merror:\x1b[0m {}", formatted);
+            }
             had_error = true;
             continue;
         }
@@ -644,6 +822,52 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
+        #[cfg(feature = "plugins")]
+        {
+            let artifacts = causm_plugins::AnalysisArtifacts {
+                verification_passed: true,
+                timeline_count: program.timelines.len(),
+                total_estimated_cost: 0,
+            };
+
+            match plugin_engine.run_post_analysis_pipeline(
+                &path.display().to_string(),
+                &program,
+                artifacts,
+            ) {
+                Ok(diagnostics) => {
+                    for diag in diagnostics {
+                        let level_str = match diag.level {
+                            causm_plugins::DiagnosticLevel::Error => {
+                                "\x1b[1;31mplugin error:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Warning => {
+                                "\x1b[1;33mplugin warning:\x1b[0m"
+                            }
+                            causm_plugins::DiagnosticLevel::Note => {
+                                "\x1b[1;36mplugin note:\x1b[0m"
+                            }
+                        };
+                        eprintln!("{} {}", level_str, diag.message);
+                        if matches!(
+                            diag.level,
+                            causm_plugins::DiagnosticLevel::Error
+                        ) {
+                            had_error = true;
+                        }
+                    }
+                    if had_error {
+                        continue;
+                    }
+                }
+                Err(err) => {
+                    eprintln!("\x1b[1;31mplugin execution error:\x1b[0m {:#}", err);
+                    had_error = true;
+                    continue;
+                }
+            }
+        }
+
         if let Some(fmt) = config.emit {
             emit_format(fmt, &program, path)?;
         }
@@ -653,7 +877,7 @@ fn main() -> anyhow::Result<()> {
             causm_ir::optimize::prune_unreachable_routines(&mut ir_program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
-            vm.debug_mode = true;
+            vm.debug_mode = config.verbose;
             if config.chaos {
                 vm.root_timeline.entropy_mode = causm_core::EntropyMode::Chaos;
             }

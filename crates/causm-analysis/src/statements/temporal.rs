@@ -31,6 +31,31 @@ impl EntropicAnalyzer {
         &mut self,
         block: &IsolateBlock,
     ) -> Result<(), SemanticError> {
+        if let Some(slice_ms) = block.manifest.slice_ms {
+            for stmt in &block.body {
+                if let Statement::RoutineDef {
+                    name,
+                    taking_ms,
+                    body,
+                    ..
+                } = &stmt.stmt
+                {
+                    let body_cost =
+                        crate::statement::estimate_block_cost(self, body);
+                    let declared_budget = taking_ms.unwrap_or(body_cost);
+                    if declared_budget > slice_ms || body_cost > slice_ms {
+                        return Err(self.annotate(
+                            SemanticErrorKind::RoutineBudgetExceeded(
+                                name.clone(),
+                                slice_ms,
+                                body_cost.max(declared_budget),
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+
         let mut cap_set = std::collections::HashMap::new();
         for cap in &block.manifest.capabilities {
             let key = if let Some(id) = cap.parameters.get("id") {

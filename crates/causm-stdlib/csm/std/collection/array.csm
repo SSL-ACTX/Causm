@@ -1,5 +1,5 @@
 @0ms: {
-    routine Array.concat(peek a: array, peek b: array) -> array taking _ {
+    routine Array.concat(&a: array, &b: array) -> array taking _ {
         let len_a = len(a)
         let len_b = len(b)
         let total = len_a + len_b
@@ -16,7 +16,7 @@
         result
     }
 
-    routine Array.copy(peek src: array, peek src_pos: i32, peek dst: array, peek dst_pos: i32, peek count: i32) -> array taking _ {
+    routine Array.copy(&src: array, &src_pos: i32, &dst: array, &dst_pos: i32, &count: i32) -> array taking _ {
         let mut target = clone(dst)
         let mut i = 0
         while (i < count) taking _ {
@@ -26,7 +26,7 @@
         target
     }
 
-    routine Array.fill(peek arr: array, peek value: i64) -> array taking _ {
+    routine Array.fill(&arr: array, &value: i64) -> array taking _ {
         let mut target = clone(arr)
         let mut idx = 0
         for _elem in target step _ {
@@ -36,9 +36,9 @@
         target
     }
 
-    routine Array.clone(peek arr: array) -> array taking _ => arr[0..len(arr)]
+    routine Array.clone(&arr: array) -> array taking _ => arr[0..len(arr)]
 
-    routine Array.contains(peek arr: array, peek target: i64) -> bool taking _ {
+    routine Array.contains(&arr: array, &target: i64) -> bool taking _ {
         let mut found = false
         for elem in arr step _ {
             if (elem == target) {
@@ -49,7 +49,7 @@
         found
     }
 
-    routine Array.find(peek arr: array, peek target: i64) -> i32 taking _ {
+    routine Array.find(&arr: array, &target: i64) -> i32 taking _ {
         let mut found_idx = -1
         let mut idx = 0
         for elem in arr step _ {
@@ -62,7 +62,7 @@
         found_idx
     }
 
-    routine Array.reverse(peek arr: array) -> array taking _ {
+    routine Array.reverse(&arr: array) -> array taking _ {
         let rev_len = len(arr)
         let mut result = [0; clone(rev_len)]
         let mut write_idx = rev_len - 1

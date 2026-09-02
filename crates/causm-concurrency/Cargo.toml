@@ -1,0 +1,15 @@
+[package]
+name = "causm-concurrency"
+version = "0.1.0-alpha.2"
+edition = "2021"
+license = "AGPL-3.0-only"
+authors = ["Seuriin (SSL-ACTX) <seuriin@gmail.com>", "Iris-Seravelle (Iris's GPG) <iris.seravelle@gmail.com>"]
+description = "Pure Rust, lock-free concurrency, lock-free ring-buffer mailboxes, and time-sliced actor scheduling for Causm"
+
+[dependencies]
+causm-core = { path = "../causm-core" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+serde_json = "1.0"

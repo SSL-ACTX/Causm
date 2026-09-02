@@ -1,0 +1,74 @@
+type SensorReading = struct {
+    id: int,
+    value: int,
+    units: str,
+    status: str
+}
+
+@0ms: {
+    print("Global t=0ms: Initializing root control timeline")
+    
+    let baseline = SensorReading {
+        id: 100,
+        value: 42,
+        units: "psi",
+        status: "nominal"
+    }
+    print(f"Global t=0ms: Baseline initialized -> id={baseline.id}, val={baseline.value} {baseline.units}")
+}
+
+@20ms: {
+    print("Global t=20ms: Forking main into concurrent telemetry and telemetry monitor branches")
+    split main into [telemetry_pipeline, anomaly_monitor]
+}
+
+@telemetry_pipeline: {
+    @+10ms: {
+        let sample_a = SensorReading {
+            id: 101,
+            value: 88,
+            units: "psi",
+            status: "active"
+        }
+        print(f"telemetry_pipeline relative @+10ms (Global 30ms): Sample A acquired -> {sample_a.value} {sample_a.units}")
+    }
+
+    @+25ms: {
+        let sample_b = SensorReading {
+            id: 102,
+            value: 124,
+            units: "psi",
+            status: "alert"
+        }
+        print(f"telemetry_pipeline relative @+25ms (Global 45ms): Sample B acquired -> {sample_b.value} {sample_b.units}")
+    }
+
+    @+40ms: {
+        let max_val = 124
+        let avg_val = (88 + 124) / 2
+        print(f"telemetry_pipeline relative @+40ms (Global 60ms): Aggregated telemetry -> avg={avg_val} psi, max={max_val} psi")
+    }
+}
+
+@anomaly_monitor: {
+    @+15ms: {
+        print("anomaly_monitor relative @+15ms (Global 35ms): Initial health-check passed")
+    }
+
+    @+35ms: {
+        print("anomaly_monitor relative @+35ms (Global 55ms): Pressure threshold check -> within tolerance")
+    }
+
+    @+50ms: {
+        print("anomaly_monitor relative @+50ms (Global 70ms): Watchdog verification cycle completed without anomaly")
+    }
+}
+
+@80ms: {
+    merge [telemetry_pipeline, anomaly_monitor] into main
+    print("Global t=80ms: Telemetry pipeline and anomaly monitor synchronized back to main")
+}
+
+@100ms: {
+    print("Global t=100ms: Final system health report confirmed")
+}

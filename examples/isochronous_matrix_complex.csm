@@ -1,5 +1,5 @@
 @0ms: {
-    routine compute_ema(peek current: int, peek prev: int) -> int taking 20ms {
+    routine compute_ema(&current: int, &prev: int) -> int taking 20ms {
         let weight = 2
         let p1 = current * weight
         let p2 = prev * 8

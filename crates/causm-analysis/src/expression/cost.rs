@@ -125,6 +125,7 @@ pub fn estimate_expression_cost(
         | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArenaIntrospect(_)
+        | Expression::CapabilityCheck(_)
         | Expression::Null
         | Expression::Deferred { .. } => 1,
         Expression::TypeAssertion { target, .. }
@@ -175,6 +176,21 @@ pub fn estimate_expression_cost(
                 .max()
                 .unwrap_or(0);
             1 + estimate_expression_cost(analyzer, target) + max_arm_cost
+        }
+        Expression::Turbofish { expr, .. } => {
+            estimate_expression_cost(analyzer, expr)
+        }
+        Expression::GenericStaticCall { args, .. } => {
+            1 + args
+                .iter()
+                .map(|a| estimate_expression_cost(analyzer, a))
+                .sum::<u64>()
+        }
+        Expression::Tuple(elems) => {
+            1 + elems
+                .iter()
+                .map(|e| estimate_expression_cost(analyzer, e))
+                .sum::<u64>()
         }
     }
 }

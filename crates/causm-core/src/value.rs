@@ -69,6 +69,8 @@ pub enum Payload {
     Struct(HashMap<String, EntropicState>),
     Topology(HashMap<String, EntropicState>),
     Array(Vec<Payload>),
+    Tuple(Vec<Payload>),
+    Range(i64, i64),
     Null,
 }
 
@@ -119,10 +121,27 @@ impl std::fmt::Display for Payload {
                 write!(f, "topology {{ {} }}", pairs.join(", "))
             }
             Payload::Array(elems) => {
+                if elems.len() > 8 {
+                    if let Some(first) = elems.first() {
+                        if elems.iter().all(|e| e == first) {
+                            return write!(f, "[{}; {}]", first, elems.len());
+                        }
+                    }
+                    let head: Vec<String> =
+                        elems.iter().take(8).map(|e| format!("{}", e)).collect();
+                    write!(f, "[{}, ... ({} items)]", head.join(", "), elems.len())
+                } else {
+                    let strings: Vec<String> =
+                        elems.iter().map(|e| format!("{}", e)).collect();
+                    write!(f, "[{}]", strings.join(", "))
+                }
+            }
+            Payload::Tuple(elems) => {
                 let strings: Vec<String> =
                     elems.iter().map(|e| format!("{}", e)).collect();
-                write!(f, "[{}]", strings.join(", "))
+                write!(f, "({})", strings.join(", "))
             }
+            Payload::Range(start, end) => write!(f, "{}..{}", start, end),
             Payload::Null => write!(f, "null"),
         }
     }
@@ -197,6 +216,11 @@ impl Payload {
                 let total: u64 = elems.iter().map(|p| p.weight()).sum();
                 total + 24 // Vec overhead
             }
+            Payload::Tuple(elems) => {
+                let total: u64 = elems.iter().map(|p| p.weight()).sum();
+                total + 24 // Vec overhead
+            }
+            Payload::Range(_, _) => 16,
             Payload::Null => 8,
         }
     }
@@ -317,8 +341,8 @@ impl Arena {
             used: 0,
             base_watermark_used: 0,
             base_watermark_regs: 0,
-            registers: Vec::new(),
-            metadata: Vec::new(),
+            registers: vec![EntropicState::Consumed; 256],
+            metadata: vec![None; 256],
             is_persistent_partition: false,
         }
     }
@@ -363,7 +387,7 @@ impl Arena {
         }
     }
 
-    fn ensure_register(&mut self, reg: u32) {
+    pub fn ensure_register(&mut self, reg: u32) {
         let idx = reg as usize;
         if idx >= self.registers.len() {
             self.registers.resize(idx + 1, EntropicState::Consumed);
@@ -408,6 +432,15 @@ impl Arena {
         Ok(())
     }
 
+    pub fn get_metadata(&self, reg: u32) -> Option<&ValueMetadata> {
+        self.metadata.get(reg as usize).and_then(|m| m.as_ref())
+    }
+
+    pub fn set_metadata(&mut self, reg: u32, meta: Option<ValueMetadata>) {
+        self.ensure_register(reg);
+        self.metadata[reg as usize] = meta;
+    }
+
     /// Drop all arena state immediately for deterministic bulk deallocation.
     pub fn clear(&mut self) {
         self.registers.clear();
@@ -444,6 +477,7 @@ impl Arena {
                     .saturating_sub(old_weight)
                     .saturating_add(new_weight);
                 self.registers[idx] = new_state;
+                self.metadata[idx] = None;
                 Ok(payload)
             }
             EntropicState::Decayed(_) => Err(MemoryError::StructurallyDecayed),
@@ -479,6 +513,7 @@ impl Arena {
             .used
             .saturating_sub(old_weight)
             .saturating_add(new_weight);
+        self.metadata[idx] = None;
         Ok(state)
     }
 
@@ -543,17 +578,47 @@ impl Arena {
         let old_parent_weight = state.weight();
 
         match state {
-            EntropicState::Valid(Payload::Struct(mut fields))
-            | EntropicState::Valid(Payload::Topology(mut fields))
-            | EntropicState::Decayed(mut fields) => {
-                let field_state = fields
-                    .remove(field)
-                    .ok_or(MemoryError::KeyNotFound(field.to_string()))?;
-
-                // Mark specifically this field as consumed
+            EntropicState::Valid(Payload::Struct(mut fields)) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Struct(fields));
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
                 fields.insert(field.to_string(), EntropicState::Consumed);
-
-                // Re-insert the parent as Decayed
+                let new_state = EntropicState::Decayed(fields);
+                let new_parent_weight = new_state.weight();
+                self.used = self
+                    .used
+                    .saturating_sub(old_parent_weight)
+                    .saturating_add(new_parent_weight);
+                self.registers[idx] = new_state;
+                Ok(field_state)
+            }
+            EntropicState::Valid(Payload::Topology(mut fields)) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] =
+                        EntropicState::Valid(Payload::Topology(fields));
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
+                fields.insert(field.to_string(), EntropicState::Consumed);
+                let new_state = EntropicState::Decayed(fields);
+                let new_parent_weight = new_state.weight();
+                self.used = self
+                    .used
+                    .saturating_sub(old_parent_weight)
+                    .saturating_add(new_parent_weight);
+                self.registers[idx] = new_state;
+                Ok(field_state)
+            }
+            EntropicState::Decayed(mut fields) => {
+                if !fields.contains_key(field) {
+                    self.registers[idx] = EntropicState::Decayed(fields);
+                    return Err(MemoryError::KeyNotFound(field.to_string()));
+                }
+                let field_state = fields.remove(field).unwrap();
+                fields.insert(field.to_string(), EntropicState::Consumed);
                 let new_state = EntropicState::Decayed(fields);
                 let new_parent_weight = new_state.weight();
                 self.used = self
@@ -564,9 +629,31 @@ impl Arena {
                 Ok(field_state)
             }
             _ => {
-                // Re-insert non-struct state
                 self.registers[idx] = state;
                 Err(MemoryError::NotAStruct)
+            }
+        }
+    }
+
+    pub fn get_payload(&self, reg: u32) -> Result<Payload, MemoryError> {
+        let idx = reg as usize;
+        if idx >= self.registers.len() {
+            return Ok(Payload::Null);
+        }
+        match &self.registers[idx] {
+            EntropicState::Valid(payload) => Ok(payload.clone()),
+            EntropicState::Decayed(fields) => Ok(Payload::Struct(fields.clone())),
+            EntropicState::Leased { original, .. } => match &**original {
+                EntropicState::Valid(p) => Ok(p.clone()),
+                EntropicState::Decayed(f) => Ok(Payload::Struct(f.clone())),
+                _ => Ok(Payload::Null),
+            },
+            _ => {
+                if let Some(p) = self.peek(reg) {
+                    Ok(p)
+                } else {
+                    Ok(Payload::Null)
+                }
             }
         }
     }
@@ -611,6 +698,7 @@ impl Arena {
             .saturating_sub(old_weight)
             .saturating_add(new_weight);
         self.registers[idx] = new_state;
+        self.metadata[idx] = None;
         Ok(())
     }
 

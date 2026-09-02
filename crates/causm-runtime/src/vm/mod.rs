@@ -1,13 +1,13 @@
 #![allow(unused_imports)]
 
 pub mod branching;
+pub mod context;
 pub mod core;
 pub mod cost;
 pub mod entropy;
 pub mod error;
-pub mod eval;
-pub mod ffi;
-pub mod instructions;
+pub mod handlers;
+pub mod intrinsics;
 pub mod state;
 
 #[cfg(test)]

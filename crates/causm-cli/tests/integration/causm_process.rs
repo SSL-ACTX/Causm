@@ -7,8 +7,8 @@ fn test_stdlib_process_pid_and_parent_pid() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let my_pid = call Process.pid()
-        let my_ppid = call Process.parent_pid()
+        let my_pid = Process.pid()
+        let my_ppid = Process.parent_pid()
     }
     "#;
 
@@ -47,7 +47,7 @@ fn test_stdlib_process_info_struct() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let proc_info = call Process.info()
+        let proc_info = Process.info()
         let info_pid = proc_info.pid
         let is_active = proc_info.is_running
     }
@@ -85,8 +85,8 @@ fn test_stdlib_process_is_alive_and_signal() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let curr_pid = call Process.pid()
-        let alive = call Process.is_alive(curr_pid)
+        let curr_pid = Process.pid()
+        let alive = Process.is_alive(curr_pid)
     }
     "#;
 
@@ -113,7 +113,7 @@ fn test_stdlib_process_create_pipe() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let p = call Process.create_pipe()
+        let p = Process.create_pipe()
         let rfd = p.read_fd
         let wfd = p.write_fd
     }
@@ -153,11 +153,11 @@ fn test_stdlib_process_run_command_exit_status() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let res_ok = call Process.run_command("true")
+        let res_ok = Process.run_command("true")
         let ok_code = res_ok.code
         let ok_success = res_ok.success
 
-        let res_err = call Process.run_command("false")
+        let res_err = Process.run_command("false")
         let err_code = res_err.code
         let err_success = res_err.success
     }
@@ -206,10 +206,10 @@ fn test_stdlib_process_pipe_endpoints_and_child_handle_auto_drop(
     let source = r#"
     @0ms: {
         import "std/process" as Process
-        let endpoints = call Process.pipe_endpoints()
+        let endpoints = Process.pipe_endpoints()
         let r = endpoints.reader
         let w = endpoints.writer
-        let child = call Process.child_handle(99999)
+        let child = Process.child_handle(99999)
     }
     "#;
 

@@ -1,19 +1,19 @@
 @0ms: {
     foreign "libc.so.6" abi("C") {
-        routine open(peek path: string, peek flags: i32, peek mode: i32) -> i32 taking 2ms
-        routine creat(peek path: string, peek mode: i32) -> i32 taking 2ms
-        routine read(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 3ms
-        routine write(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 2ms
+        routine open(&path: string, &flags: i32, &mode: i32) -> i32 taking 2ms
+        routine creat(&path: string, &mode: i32) -> i32 taking 2ms
+        routine read(&fd: i32, &buf: i64, &count: u64) -> i64 taking 3ms
+        routine write(&fd: i32, &buf: i64, &count: u64) -> i64 taking 2ms
         routine close(consume fd: i32) -> i32 taking 1ms
-        routine unlink(peek path: string) -> i32 taking 2ms
-        routine rename(peek oldpath: string, peek newpath: string) -> i32 taking 2ms
-        routine access(peek path: string, peek mode: i32) -> i32 taking 1ms
-        routine lseek(peek fd: i32, peek offset: i64, peek whence: i32) -> i64 taking 1ms
-        routine fsync(peek fd: i32) -> i32 taking 3ms
-        routine ftruncate(peek fd: i32, peek length: i64) -> i32 taking 2ms
-        routine mkdir(peek pathname: string, peek mode: i32) -> i32 taking 2ms
-        routine rmdir(peek pathname: string) -> i32 taking 2ms
-        routine fopen(peek path: string, peek mode: string) -> i64 taking 2ms
-        routine fclose(peek stream: i64) -> i32 taking 1ms
+        routine unlink(&path: string) -> i32 taking 2ms
+        routine rename(&oldpath: string, &newpath: string) -> i32 taking 2ms
+        routine access(&path: string, &mode: i32) -> i32 taking 1ms
+        routine lseek(&fd: i32, &offset: i64, &whence: i32) -> i64 taking 1ms
+        routine fsync(&fd: i32) -> i32 taking 3ms
+        routine ftruncate(&fd: i32, &length: i64) -> i32 taking 2ms
+        routine mkdir(&pathname: string, &mode: i32) -> i32 taking 2ms
+        routine rmdir(&pathname: string) -> i32 taking 2ms
+        routine fopen(&path: string, &mode: string) -> i64 taking 2ms
+        routine fclose(&stream: i64) -> i32 taking 1ms
     }
 }

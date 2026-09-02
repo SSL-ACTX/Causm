@@ -132,4 +132,26 @@ let s3 = NodeStatus::Offline
 
 Variants can carry any Causm types (scalars, structs, arrays) and are fully tracked under the entropic lifecycle and match expressions.
 
+## 8. Tuples and Fixed-Size Arrays
 
+### 8.1 Tuple Types
+Tuples group heterogeneous values without named fields:
+```causm
+let pair: (int, string) = (42, "status")
+let triple = (1, 2.5, true)
+```
+
+### 8.2 Fixed-Size Array Repeat Syntax
+Fixed-size arrays can be initialized using repeat syntax `[element; count]`:
+```causm
+let zeros: [int; 16] = [0; 16]
+let flags = [false; 8]
+```
+
+### 8.3 Hexadecimal & Byte String Literals
+Causm supports byte sequences and hex literal forms:
+```causm
+let hex_val = 0xFF00AA
+let bytes = b"raw payload \x00\xFF"
+let hex_bytes = hex"48656C6C6F" // decodes "Hello"
+```

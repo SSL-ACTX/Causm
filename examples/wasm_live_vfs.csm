@@ -1,0 +1,30 @@
+@0ms: {
+    from "std/fs" import *
+}
+
+@0ms: {
+    isolate virtual_sandbox {
+        enable cpu(500ms)
+        enable memory(65536bytes)
+        require System.WASI
+        require System.Log
+        print("Testing Sandboxed In-Memory Virtual FS under WebAssembly (Zero System.FFI)...")
+        let path = "/sandbox/app.txt"
+        let f = create_file(path)
+        let written = write_all(f, "CAUSM_VFS_PAYLOAD", 17)
+        print("Wrote bytes:")
+        print(written)
+        let exists = file_exists(path)
+        print("File exists in RAM:")
+        print(exists)
+        let size = file_size(path)
+        print("Virtual file size:")
+        print(size)
+        let removed = remove_file(path)
+        print("Removed status:")
+        print(removed)
+        let exists_after = file_exists(path)
+        print("Exists after deletion:")
+        print(exists_after)
+    }
+}

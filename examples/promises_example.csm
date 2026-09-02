@@ -11,7 +11,7 @@
         debug("Initialization complete. Promises are Pending.")
     }
 
-    routine process_payload(peek payload) taking 10ms {
+    routine process_payload(&payload) taking 10ms {
         let processed = "Processed: " + payload
         yield processed
     }

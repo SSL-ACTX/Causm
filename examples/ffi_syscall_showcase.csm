@@ -13,7 +13,7 @@
             routine getppid() -> i32 taking 1ms
             routine getuid() -> i32 taking 1ms
             routine getcwd() -> string taking 1ms
-            routine write(peek fd: i32, peek buf: string, peek count: u64) -> i64 taking 2ms
+            routine write(&fd: i32, &buf: string, &count: u64) -> i64 taking 2ms
             routine close(consume fd: i32) -> i32 taking 1ms
         }
         let pid_val = getpid()

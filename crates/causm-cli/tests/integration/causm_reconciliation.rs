@@ -110,9 +110,18 @@ fn test_split_map_reconcile_auto() -> anyhow::Result<()> {
     @0ms: {
         let items = [1, 2, 3]
         let result = 0
-        split_map item consume items {
-            result = item * 2
-        } reconcile auto
+        split main into [b1, b2]
+    }
+    @10ms: {
+        @b1: {
+            result = 10
+        }
+        @b2: {
+            result = 20
+        }
+    }
+    @20ms: {
+        merge [b1, b2] into main reconcile auto
     }
     "#;
 

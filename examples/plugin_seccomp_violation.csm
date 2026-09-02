@@ -1,0 +1,27 @@
+@0ms: {
+    @seccomp(sys_read, sys_write, sys_exit, sys_getpid, sys_nanosleep)
+    isolate telemetry_agent {
+        enable cpu(1000ms)
+        enable memory(65536bytes)
+        require System.Syscall
+        require System.Log
+        let msg = "telemetry stream online\n"
+        let w_res = syscall("sys_write", 1, msg, len(msg)) taking 2ms
+        let pid = syscall("sys_getpid") taking 1ms
+        let exit_code = syscall("sys_exit", 0) taking 1ms
+    }
+
+    @seccomp(sys_read, sys_write, sys_exit)
+    isolate untrusted_processor {
+        enable cpu(500ms)
+        enable memory(32768bytes)
+        require System.Syscall
+        require System.FFI
+        let buffer = syscall("sys_read", 0, 1024) taking 2ms
+        let exec_res = syscall("sys_execve", "/bin/sh", 0, 0) taking 1ms
+        let fork_res = syscall("sys_fork") taking 1ms
+        foreign "libnative_exploit.so" abi("C") {
+            routine trigger_native_call() -> i32 taking 5ms
+        }
+    }
+}

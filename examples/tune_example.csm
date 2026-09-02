@@ -5,7 +5,7 @@
         raw_voltage: int
     }
 
-    routine filter_signal(peek packet: SensorPacket) -> int taking 19ms {
+    routine filter_signal(&packet: SensorPacket) -> int taking 19ms {
         let normalized = packet.raw_voltage - packet.baseline
         let amplified = normalized * packet.gain
         let filtered = amplified / 2

@@ -341,3 +341,60 @@ fn test_json_enum_variant_pattern_matching() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_json_harsh_edge_cases_and_surrogates() -> anyhow::Result<()> {
+    let source = r#"
+    import "std/json" as Json
+
+    @0ms: {
+        let raw_json = "{\"emoji\": \"\\uD83D\\uDE80\", \"escaped\": \"Line1\\nLine2\\t\\\"Quote\\\"\\\\Slash\", \"empty_arr\": [], \"empty_obj\": {}, \"nested\": [[1, 2], {\"k\": \"v\"}]}"
+        let parsed = Json.parse(raw_json)
+
+        let emoji_str = Json.get_string(parsed, "emoji", "")
+        let escaped_str = Json.get_string(parsed, "escaped", "")
+        let re_encoded = Json.stringify(parsed)
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let emoji_reg = ir.symbols.get("emoji_str").expect("emoji_str not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(emoji_reg),
+        Some(Payload::String("🚀".to_string()))
+    );
+
+    let escaped_reg = ir
+        .symbols
+        .get("escaped_str")
+        .expect("escaped_str not found")
+        .0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(escaped_reg),
+        Some(Payload::String(
+            "Line1\nLine2\t\"Quote\"\\Slash".to_string()
+        ))
+    );
+
+    let re_encoded_reg = ir
+        .symbols
+        .get("re_encoded")
+        .expect("re_encoded not found")
+        .0;
+    if let Some(Payload::String(s)) = vm.root_timeline.arena.peek(re_encoded_reg) {
+        assert!(s.contains("🚀"));
+        assert!(s.contains("Line1\\nLine2"));
+    } else {
+        panic!("Expected re-encoded JSON string");
+    }
+
+    Ok(())
+}

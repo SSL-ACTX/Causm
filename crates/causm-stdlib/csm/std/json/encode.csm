@@ -1,85 +1,13 @@
 @0ms: {
     from "std/json/types" import *
 
-    routine Json.escape_string(peek s: string) -> string taking _ {
-        let bytes = str_bytes(s)
-        let mut buf = [34]
-        for b in bytes step _ {
-            match b {
-                34 => {
-                    buf = push(buf, 92)
-                    buf = push(buf, 34)
-                }
-                92 => {
-                    buf = push(buf, 92)
-                    buf = push(buf, 92)
-                }
-                10 => {
-                    buf = push(buf, 92)
-                    buf = push(buf, 110)
-                }
-                13 => {
-                    buf = push(buf, 92)
-                    buf = push(buf, 114)
-                }
-                9 => {
-                    buf = push(buf, 92)
-                    buf = push(buf, 116)
-                }
-                _ => {
-                    buf = push(buf, b)
-                }
-            }
-        }
-        buf = push(buf, 34)
-        string_from_bytes(buf)
-    }
+    routine Json.stringify(&val: JsonValue) -> string taking _ => json_stringify(val)
 
-    routine Json.stringify_array(peek items: array) -> string taking _ {
-        let n = len(items)
-        let mut res = "["
-        let mut first = true
-        for it in items step _ {
-            if (!first) {
-                res = res + ","
-            }
-            res = res + Json.stringify(it)
-            first = false
-        }
-        res + "]"
-    }
+    routine Json.encode(&val: JsonValue) -> string taking _ => json_stringify(val)
 
-    routine Json.stringify_object(peek members: array) -> string taking _ {
-        let mut res = "{"
-        let mut first = true
-        for m in members step _ {
-            if (!first) {
-                res = res + ","
-            }
-            let k_str = m.key
-            let esc_k = Json.escape_string(k_str)
-            let val_s = Json.stringify(m.val)
-            res = res + esc_k + ":" + val_s
-            first = false
-        }
-        res + "}"
-    }
+    routine Json.from_int(&n: i64) -> string taking _ => f"{n}"
 
-    routine Json.stringify(peek val: JsonValue) -> string taking _ => match val {
-        JsonValue::Null => "null",
-        JsonValue::Bool(b) => if (b) { "true" } else { "false" },
-        JsonValue::Number(n) => f"{n}",
-        JsonValue::String(s) => Json.escape_string(s),
-        JsonValue::Array(items) => Json.stringify_array(items),
-        JsonValue::Object(members) => Json.stringify_object(members),
-        _ => "null",
-    }
+    routine Json.from_bool(&b: bool) -> string taking _ => if (b) { "true" } else { "false" }
 
-    routine Json.encode(peek val: JsonValue) -> string taking _ => Json.stringify(val)
-
-    routine Json.from_int(peek n: i64) -> string taking _ => f"{n}"
-
-    routine Json.from_bool(peek b: bool) -> string taking _ => if (b) { "true" } else { "false" }
-
-    routine Json.from_string(peek s: string) -> string taking _ => Json.escape_string(s)
+    routine Json.from_string(&s: string) -> string taking _ => json_stringify(JsonValue::String(s))
 }

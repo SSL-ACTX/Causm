@@ -74,7 +74,7 @@ fn test_import_wildcard_symbol_import() -> anyhow::Result<()> {
             from "math_lib.csm" import *
 
             let base_val = 100
-            let res = call compute_bonus(base_val)
+            let res = compute_bonus(base_val)
         }
     }
     "#;
@@ -102,9 +102,9 @@ fn test_import_std_time_monotonic_telemetry() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/time" as Time
-        let ts = call Time.unix_timestamp()
-        let start = call Time.now()
-        let dur = call Time.from_millis(100)
+        let ts = Time.unix_timestamp()
+        let start = Time.now()
+        let dur = Time.from_millis(100)
         let total_nanos = dur.nanos_total
     }
     "#;
@@ -141,11 +141,11 @@ fn test_import_std_net_tcp_bind_and_sockaddr() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/net" as Net
-        let fd = call Net.create_socket()
-        let _reuse = call Net.set_reuseaddr(fd)
-        let sa = call Net.make_sockaddr(19234, 127, 0, 0, 1)
+        let fd = Net.create_socket()
+        let _reuse = Net.set_reuseaddr(fd)
+        let sa = Net.make_sockaddr(19234, 127, 0, 0, 1)
         let sa_len = 16
-        let _close = call Net.close_socket(fd)
+        let _close = Net.close_socket(fd)
     }
     "#;
 
@@ -172,10 +172,10 @@ fn test_import_std_net_socket_creation() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/net" as Net
-        let saddr = call Net.addr("127.0.0.1", 9090)
+        let saddr = Net.addr("127.0.0.1", 9090)
         let port = saddr.port
-        let fd = call Net.create_socket()
-        let close_res = call Net.close_socket(fd)
+        let fd = Net.create_socket()
+        let close_res = Net.close_socket(fd)
     }
     "#;
 
@@ -208,18 +208,18 @@ fn test_import_std_net_udp_datagram_transmission() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/net" as Net
-        let server = call Net.udp_bind(19899)
+        let server = Net.udp_bind(19899)
         let s_fd = server.fd
-        let client_fd = call Net.create_udp_socket()
+        let client_fd = Net.create_udp_socket()
 
         let payload = [85, 68, 80]
-        let sent = call Net.udp_send_to(client_fd, payload, 3, 19899, 127, 0, 0, 1)
+        let sent = Net.udp_send_to(client_fd, payload, 3, 19899, 127, 0, 0, 1)
 
         let mut buf = [0, 0, 0]
-        let recvd = call Net.udp_recv_from(s_fd, buf, 3)
+        let recvd = Net.udp_recv_from(s_fd, buf, 3)
 
-        let _close_c = call Net.close_socket(client_fd)
-        let _close_s = call Net.close_socket(s_fd)
+        let _close_c = Net.close_socket(client_fd)
+        let _close_s = Net.close_socket(s_fd)
     }
     "#;
 
@@ -262,10 +262,10 @@ fn test_import_std_net_nonblocking_socket_configuration() -> anyhow::Result<()> 
     let source = r#"
     @0ms: {
         import "std/net" as Net
-        let fd = call Net.create_socket()
-        let nonblock_res = call Net.set_nonblocking(fd)
-        let block_res = call Net.set_blocking(fd)
-        let _close = call Net.close_socket(fd)
+        let fd = Net.create_socket()
+        let nonblock_res = Net.set_nonblocking(fd)
+        let block_res = Net.set_blocking(fd)
+        let _close = Net.close_socket(fd)
     }
     "#;
 
@@ -298,26 +298,26 @@ fn test_import_std_net_connect_ip_and_timeouts() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
         import "std/net" as Net
-        let listener = call Net.tcp_listener(19912)
+        let listener = Net.tcp_listener(19912)
         let l_fd = listener.fd
 
-        let stream = call Net.tcp_stream_connect_ip("127.0.0.1", 19912)
+        let stream = Net.tcp_stream_connect_ip("127.0.0.1", 19912)
         let s_fd = stream.fd
 
-        let rcv_to_res = call Net.set_recv_timeout(s_fd, 500)
-        let snd_to_res = call Net.set_send_timeout(s_fd, 500)
+        let rcv_to_res = Net.set_recv_timeout(s_fd, 500)
+        let snd_to_res = Net.set_send_timeout(s_fd, 500)
 
-        let client_fd = call Net.tcp_accept(l_fd)
+        let client_fd = Net.tcp_accept(l_fd)
 
         let payload = [65, 66, 67]
-        let sent = call Net.tcp_send_all(s_fd, payload, 3)
+        let sent = Net.tcp_send_all(s_fd, payload, 3)
 
         let mut buf = [0, 0, 0]
-        let recvd = call Net.tcp_recv_exact(client_fd, buf, 3)
+        let recvd = Net.tcp_recv_exact(client_fd, buf, 3)
 
-        let _c1 = call Net.close_socket(client_fd)
-        let _c2 = call Net.close_socket(s_fd)
-        let _c3 = call Net.close_socket(l_fd)
+        let _c1 = Net.close_socket(client_fd)
+        let _c2 = Net.close_socket(s_fd)
+        let _c3 = Net.close_socket(l_fd)
     }
     "#;
 

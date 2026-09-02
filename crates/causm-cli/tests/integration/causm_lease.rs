@@ -244,3 +244,44 @@ fn causm_lease_scoping_isolation() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_entropy_lease_preserves_metadata_for_interface_dynamic_dispatch(
+) -> anyhow::Result<()> {
+    let source = r#"
+    interface Worker {
+        routine compute(peek self, x: int) -> int taking 6ms
+    }
+
+    type MathEngine = struct {
+        multiplier: int
+    }
+
+    routine MathEngine.compute(peek self, x: int) -> int taking 6ms {
+        let res = x * self.multiplier
+        yield res
+    }
+
+    @0ms: {
+        let mut engine: MathEngine = struct { multiplier = 3 }
+        lease borrow = engine taking 10ms {
+            let m = borrow.multiplier
+            let _m = m
+        } reconcile auto
+
+        let w: Worker = engine
+        let ans = w.compute(7)
+        let _ans = ans
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    Ok(())
+}

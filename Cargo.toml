@@ -1,9 +1,31 @@
 [workspace]
 members = [
     "crates/*",
+    "plugins/*",
    # "lsp"
 ]
+default-members = [
+    "crates/causm-core",
+    "crates/causm-concurrency",
+    "crates/causm-ir",
+    "crates/causm-frontend",
+    "crates/causm-analysis",
+    "crates/causm-runtime",
+    "crates/causm-stdlib",
+    "crates/causm-devtools",
+    "crates/causm-cli",
+]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0-alpha.2"
+edition = "2021"
+authors = [
+    "Seuriin (SSL-ACTX) <seuriin@gmail.com>",
+    "Iris-Seravelle (Iris's GPG) <iris.seravelle@gmail.com>",
+]
+license = "AGPL-3.0-only"
+repository = "https://github.com/SSL-ACTX/Causm"
 
 [profile.release]
 opt-level = 3

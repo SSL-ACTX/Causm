@@ -3,6 +3,8 @@ target/
 bak/
 
 .env
+.synapse/
+.causm_cache/
 
 .causm_cache/
 
@@ -11,3 +13,5 @@ node_modules/
 *.vsix
 *.exe
 *.csa
+*.swt_env
+*.bin

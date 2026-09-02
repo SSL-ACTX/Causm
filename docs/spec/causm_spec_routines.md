@@ -35,19 +35,20 @@ The `taking` clause specifies the **Worst-Case Execution Time (WCET)** for the r
 
 ---
 
-## 3. Invocation Protocol (`call`)
+## 3. Invocation Protocol
 
-Routines are invoked utilizing the `call` primitive.
+Routines can be invoked directly by name or utilizing the `call` primitive.
 
 ### Formal Syntax
 ```causm
+let <result> = <name>(<arguments>)
 let <result> = call <name>(<arguments>)
 ```
 
 ### Execution Semantics
-1. Arguments undergo evaluation and are moved or cloned according to the routine's formal declaration.
+1. Arguments undergo evaluation and are moved, borrowed, or cloned according to the routine's formal declaration.
 2. The caller's `local_clock` is advanced by the routine's `taking_ms` contract.
-3. The initial `yield` value, if present, is returned to the caller's context.
+3. The `return` or `yield` value, if present, is returned to the caller's context.
 
 ---
 

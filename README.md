@@ -13,7 +13,7 @@
 
 Causm is a domain-specific research language designed to address inherent non-determinism in concurrent systems. By treating time as a first-class execution primitive and implementing an entropic memory model, Causm provides a framework where race conditions are eliminated through the mathematical enforcement of temporal invariants.
 
-This repository contains the reference implementation of the Causm toolchain, including the compiler, entropic analyzer, and Z3-governed Register-based Temporal Virtual Machine (TVM).
+This repository contains the reference implementation of the Causm toolchain, including the compiler, entropic analyzer, and formal SMT-governed Register-based Temporal Virtual Machine (TVM).
 
 ---
 
@@ -21,8 +21,8 @@ This repository contains the reference implementation of the Causm toolchain, in
 
 1. **Temporal Execution Primitives**: Eliminating race conditions via Isochronous Scheduling.
 2. **Entropic Memory Model**: Modeling memory safety through state decay (`Valid`, `Leased`, `Decayed`, `Consumed`, `Pending`).
-3. **Causal Synchronization**: Synchronizing cross-timeline state transitions without lock contention.
-4. **SMT-Based Temporal Correctness**: Formally proving Worst-Case Execution Time (WCET) bounds using a Z3 correctness kernel.
+3. **The Entropius Relational Model**: Declarative Datalog fact extraction and SMT-backed safety verification for linear ownership, active lease safety, causal horizons, and entanglement decay.
+4. **SMT-Based Temporal Correctness**: Formally proving Worst-Case Execution Time (WCET) bounds and temporal assertions using a pluggable SMT Correctness Kernel (featuring pure-Rust **OxiZ** as default and optional **Z3** integration).
 
 ---
 
@@ -33,19 +33,19 @@ graph TD
     Source[".csm Source Code"] --> Parser["Causm Parser (Pest)"]
     Parser --> AST["Abstract Syntax Tree"]
 
-    subgraph "Correctness Kernel"
-        AST --> Analyzer["Entropic Analyzer"]
-        Analyzer --> Z3Guard["Formal Verification Guard (Z3)"]
-        Z3Guard --> Proofs{{"Symbolic Proofs + WCET Bounds"}}
+    subgraph "The 4-Stage Decoupled Pipeline"
+        AST --> Stage1["Stage 1: ResolveStage (HIR Types & Routines)"]
+        Stage1 --> Stage2a["Stage 2a: Entropius Relational Invariant Solver"]
+        Stage2a --> Stage2b["Stage 2b: SsaStage (CFG & Phi Renaming)"]
+        Stage2b --> Stage2c["Stage 2c: WcetSolver & EGC Check (OxiZ / Z3)"]
     end
 
-    Proofs -- "UNSAT (Violation)" --> Error["Semantic Error"]
-    Proofs -- "SAT (Safe)" --> Lowering["IR Lowering"]
+    Stage2c -- "UNSAT (Violation)" --> Error["Rich Multi-Span Diagnostic"]
+    Stage2c -- "SAT (Safe)" --> Lowering["IR Lowering & Codegen"]
 
     subgraph "IR Optimization Pipeline"
         Lowering --> CfgSimp["CfgSimplificationPass"]
-        CfgSimp --> ChanLive["ChannelLivenessPass"]
-        ChanLive --> LeaseOpt["LeaseOptimizationPass"]
+        CfgSimp --> LeaseOpt["LeaseOptimizationPass"]
         LeaseOpt --> ConcurAn["ConcurrencyAnalysisPass"]
         ConcurAn --> Verifier["VerifierPass (SSA Phi)"]
     end
@@ -68,7 +68,7 @@ graph TD
         let raw_reading = 150
         let ref_reading = &raw_reading
 
-        let digest = call compute_telemetry_digest(raw_reading)
+        let digest = compute_telemetry_digest(raw_reading)
         let sensor_pack = struct { status = "active", level = digest }
 
         lease current_pack = sensor_pack 30ms {
@@ -92,7 +92,7 @@ See the [Full Documentation Hub](docs/causm_index.md) for complete specification
 
 - **Specifications (`docs/spec/`)**: [Syntax](docs/spec/causm_spec_syntax.md), [Semantics](docs/spec/causm_spec_semantics.md), [Types](docs/spec/causm_spec_types.md), [Modules & Imports](docs/spec/causm_spec_modules.md), [OOP](docs/spec/causm_spec_oop.md), [Leases](docs/spec/causm_spec_leases.md), [Verification Guard](docs/spec/causm_spec_formal_verification.md)
 - **TVM Internals (`docs/tvm/`)**: [TVM Optimizations](docs/tvm/causm_tvm_optimizations.md), [Acausal Debugging](docs/tvm/causm_tvm_debugging.md), [Memory Reclamation](docs/tvm/causm_tvm_memory_reclamation.md)
-- **Proposals & RFCs (`docs/proposals/`)**: [Module System Proposal](docs/proposals/causm_prop_import_system.md)
+- **Proposals & RFCs (`docs/proposals/`)**: [The Entropius Model & Decoupled Pipeline](docs/proposals/causm_prop_entropius_relational_model_and_pipeline.md), [Module System Proposal](docs/proposals/causm_prop_import_system.md)
 
 ---
 
@@ -105,8 +105,11 @@ causm run examples/module_import_showcase.csm
 # Run with timeline merge diagnostics
 causm run --explain-merge examples/module_import_showcase.csm
 
-# Perform formal Z3 verification check only
+# Perform formal SMT verification check (OxiZ / Z3)
 causm check examples/module_import_showcase.csm
+
+# Run with explicit Z3 solver backend
+causm check --z3 examples/module_import_showcase.csm
 
 # Emit intermediate representations (AST, IR, CFG, SSA)
 causm emit examples/module_import_showcase.csm --emit cfg-dot

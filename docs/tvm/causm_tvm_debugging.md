@@ -1,7 +1,7 @@
 # Developer Guide: Acausal Debugging Protocols
 
 ## 1. Overview
-Leveraging the Register-based TVM's `anchor` and `reset` primitives, the **Acausal Debugger** provides a unique environment for "time-travel" diagnostics. It allows developers to step backward through execution history and visualize the entropic decay graph of the memory arena.
+Leveraging the Register-based TVM's `anchor` and `rewind_to` primitives, the **Acausal Debugger** provides a unique environment for "time-travel" diagnostics. It allows developers to step backward through execution history and visualize the entropic decay graph of the memory arena.
 
 ## 2. Trace Retention
 In debug mode (invoked via `--trace-causal`), the TVM maintains a **Causal Trace Log**—a compressed history of arena snapshots and temporal transitions.
@@ -17,7 +17,7 @@ The debugger supports restoring the VM state to previous coordinates.
 
 ### 3.1 `step_back`
 Restores the VM to the state immediately preceding the current instruction or temporal anchor.
-- **Integrity**: Backward stepping is a read-only operation. The debugger preserves the original side effects (like `chan_send`) to prevent causal paradoxes during inspection.
+- **Integrity**: Backward stepping is a read-only operation. The debugger preserves the original side effects to prevent causal paradoxes during inspection.
 
 ## 4. Visualizing Entropic Decay
 The CLI and LSP provide real-time visualization of how variables transition from `Valid` to `Consumed`.

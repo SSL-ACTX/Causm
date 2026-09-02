@@ -1,15 +1,21 @@
 [package]
 name = "causm-runtime"
-version = "0.1.0"
+version = "0.1.0-alpha.2"
 edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
+causm-concurrency = { path = "../causm-concurrency" }
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
 thiserror = "2.0.18"
 anyhow = "1.0"
 dashmap = "6.1.0"
+indexmap = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+causm-frontend = { path = "../causm-frontend" }
+causm-analysis = { path = "../causm-analysis" }

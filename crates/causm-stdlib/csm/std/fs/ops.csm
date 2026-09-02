@@ -2,58 +2,168 @@
     from "std/fs/types" import *
     from "std/fs/ffi" import *
 
-    routine open_readonly(peek path: string) -> File taking _ {
-        let raw_fd = open(path, 0, 0)
-        struct { fd = raw_fd, is_open = true, path = path }
+    routine open_readonly(&path: string) -> File taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let raw_fd = open(path, 0, 0)
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
+        } reconcile auto
     }
 
-    routine create_file(peek path: string) -> File taking _ {
-        let raw_fd = open(path, 577, 420)
-        struct { fd = raw_fd, is_open = true, path = path }
+    routine create_file(&path: string) -> File taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let raw_fd = open(path, 577, 420)
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
+        } reconcile auto
     }
 
-    routine open_append(peek path: string) -> File taking _ {
-        let raw_fd = open(path, 1089, 420)
-        struct { fd = raw_fd, is_open = true, path = path }
+    routine open_append(&path: string) -> File taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            let raw_fd = open(path, 1089, 420)
+            struct {
+                fd = raw_fd,
+                is_open = true,
+                is_virtual = false,
+                path = path
+            }
+        } else {
+            struct {
+                fd = -1,
+                is_open = false,
+                is_virtual = true,
+                path = path
+            }
+        } reconcile auto
     }
 
-    routine write_all(peek file: File, peek content: string, peek len: u64) -> i64 taking _ => write(file.fd, content, len)
+    routine write_all(&file: File, &content: string, &len: u64) -> i64 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            write(file.fd, content, len)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine flush_file(peek file: File) -> i32 taking _ => fsync(file.fd)
+    routine read_exact(&file: File, &buf: i64, &count: u64) -> i64 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            read(file.fd, buf, count)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine truncate_file(peek file: File, peek length: i64) -> i32 taking _ => ftruncate(file.fd, length)
+    routine flush_file(&file: File) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            fsync(file.fd)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine seek_start(peek file: File, peek offset: i64) -> i64 taking _ => lseek(file.fd, offset, 0)
+    routine truncate_file(&file: File, &length: i64) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            ftruncate(file.fd, length)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine seek_end(peek file: File, peek offset: i64) -> i64 taking _ => lseek(file.fd, offset, 2)
+    routine seek_start(&file: File, &offset: i64) -> i64 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            lseek(file.fd, offset, 0)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine file_exists(peek path: string) -> bool taking _ => access(path, 0) == 0
+    routine seek_end(&file: File, &offset: i64) -> i64 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            lseek(file.fd, offset, 2)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine remove_file(peek path: string) -> i32 taking _ => unlink(path)
+    routine file_exists(&path: string) -> bool taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            access(path, 0) == 0
+        } else {
+            false
+        } reconcile auto
+    }
 
-    routine rename_file(peek old_path: string, peek new_path: string) -> i32 taking _ => rename(old_path, new_path)
+    routine remove_file(&path: string) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            unlink(path)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine create_dir(peek path: string) -> i32 taking _ => mkdir(path, 493)
+    routine rename_file(&old_path: string, &new_path: string) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            rename(old_path, new_path)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine read_to_string(peek path: string) -> string taking _ {
+    routine create_dir(&path: string) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            mkdir(path, 493)
+        } else {
+            -1
+        } reconcile auto
+    }
+
+    routine read_to_string(&path: string) -> string taking _ {
         let file = open_readonly(path)
         let size = seek_end(file, 0)
         let reset_pos = seek_start(file, 0)
         file.path
     }
 
-    routine file_size(peek path: string) -> i64 taking _ {
+    routine file_size(&path: string) -> i64 taking _ {
         let file = open_readonly(path)
         seek_end(file, 0)
     }
 
-    routine remove_dir(peek path: string) -> i32 taking _ => rmdir(path)
+    routine remove_dir(&path: string) -> i32 taking _ {
+        if (capability(System.FFI) || capability(System.WASI)) {
+            rmdir(path)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine File.write(peek self: File, peek content: string, peek len: u64) -> i64 taking _ => write_all(self, content, len)
+    routine File.write(&self: File, &content: string, &len: u64) -> i64 taking _ => write_all(self, content, len)
 
-    routine File.flush(peek self: File) -> i32 taking _ => flush_file(self)
+    routine File.flush(&self: File) -> i32 taking _ => flush_file(self)
 
-    routine File.seek_start(peek self: File, peek offset: i64) -> i64 taking _ => seek_start(self, offset)
+    routine File.seek_start(&self: File, &offset: i64) -> i64 taking _ => seek_start(self, offset)
 
-    routine File.seek_end(peek self: File, peek offset: i64) -> i64 taking _ => seek_end(self, offset)
+    routine File.seek_end(&self: File, &offset: i64) -> i64 taking _ => seek_end(self, offset)
 }

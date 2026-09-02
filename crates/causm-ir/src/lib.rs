@@ -78,6 +78,15 @@ macro_rules! instructions {
                 dest: $crate::Reg,
                 src: $crate::Reg
             },
+            TupleLit {
+                dest: $crate::Reg,
+                elems: Vec<$crate::Reg>
+            },
+            TupleAccess {
+                dest: $crate::Reg,
+                tuple: $crate::Reg,
+                index: usize
+            },
 
             // Entropic Operations
             Consume {
@@ -225,6 +234,10 @@ macro_rules! instructions {
             ArenaIntrospect {
                 dest: $crate::Reg,
                 kind: causm_core::ArenaIntrospect
+            },
+            CapabilityCheck {
+                dest: $crate::Reg,
+                capability: causm_core::Capability
             },
             SpeculationMode {
                 mode: causm_core::SpeculationCommitMode

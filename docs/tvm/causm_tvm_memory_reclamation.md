@@ -61,6 +61,39 @@ The TVM provides a `compact_consumed()` utility that may be invoked manually or 
 
 ---
 
-## 5. Temporal Cost of Memory Management
+## 5. Dual-Partitioned Epoch Arenas & Saturation Policies
+
+For continuous periodic programs (`@every`) and long-running services (`loop on`), the TVM utilizes a **Dual-Partitioned Epoch Arena**:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               Isolate Arena Memory Capacity (e.g. 64 KB)               │
+├───────────────────────────────────┬────────────────────────────────────┤
+│    Persistent Partition (state)   │   Transient Partition (let)        │
+│    (Sockets, Counters, Tables)    │   (Per-Request Buffers, Scratch)   │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ ▲                                 │ ▲                                ▲ │
+│ 0 KB (Base)                       │ Base Watermark     Alloc Watermark │
+│                                   │ (RESET TARGET PER TICK)            │
+└───────────────────────────────────┴────────────────────────────────────┘
+```
+
+### 5.1 Epoch Compaction Algorithm
+- **Persistent State**: Variables declared with `state` are allocated below the `BaseWatermark` and persist across ticks.
+- **Transient Ephemeral Memory**: Variables declared with `let` are allocated above the watermark.
+- **O(1) Watermark Snapback**: At the conclusion of each tick, active transient handles execute `AutoDrop`, and the allocation pointer snaps back instantly to `BaseWatermark` with zero heap fragmentation.
+
+### 5.2 Declarative Saturation Policies (`policy on_full`)
+When high-throughput bursts threaten to exceed transient arena capacity:
+- **`EvictDecayed`**: Compacts memory by purging all decayed entries across registers (Default).
+- **`RingBuffer`**: Wraps the transient offset back to `BaseWatermark`, overwriting oldest data.
+- **`Throttle`**: Applies upstream backpressure until the next tick cycle.
+- **`FailFast`**: Aborts the active tick with an immediate temporal memory breach error.
+
+
+---
+
+## 6. Temporal Cost of Memory Management
 
 In contrast to traditional languages, garbage collection in Causm is not an asynchronous background process. Memory operations—both allocation and reclamation—are integrated into the execution cost of individual statements. This ensures that memory management never introduces jitter or hidden temporal costs into the `local_clock`.
+

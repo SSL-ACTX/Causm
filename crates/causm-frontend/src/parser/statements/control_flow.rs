@@ -134,6 +134,16 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                             reconcile_rules = Some(parse_reconcile_clause(rec_pair));
                         }
                     }
+                    Rule::if_stmt => {
+                        let parsed_else_if = parse_control_flow_stmt(next_pair);
+                        else_branch = Some(vec![SpannedStatement::new(
+                            parsed_else_if,
+                            Span { start: 0, end: 0 },
+                        )]);
+                        if let Some(rec_pair) = inner.next() {
+                            reconcile_rules = Some(parse_reconcile_clause(rec_pair));
+                        }
+                    }
                     Rule::reconcile_clause => {
                         reconcile_rules = Some(parse_reconcile_clause(next_pair));
                     }
@@ -206,10 +216,19 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
             }
         }
         Rule::while_stmt => {
-            let is_valid_check =
-                pair.as_str().trim_start().starts_with("while valid");
             let mut inner = pair.into_inner();
-            let condition = parse_expression(inner.next().unwrap());
+            let first_pair = inner.next().unwrap();
+            let (condition, is_valid_check) = if first_pair.as_rule()
+                == Rule::while_valid_condition
+            {
+                let id =
+                    first_pair.into_inner().next().unwrap().as_str().to_string();
+                (Expression::Identifier(id), true)
+            } else {
+                let cond_expr = parse_expression(first_pair);
+                let is_valid = matches!(&cond_expr, Expression::Call { routine, .. } if routine == "valid");
+                (cond_expr, is_valid)
+            };
             let max_ms = parse_duration_limit(inner.next().unwrap());
             let mut body = Vec::new();
             for stmt_pair in inner {
@@ -452,56 +471,13 @@ pub fn parse_control_flow_stmt(pair: Pair<Rule>) -> Statement {
                 reconcile,
             }
         }
-        Rule::split_map_stmt => {
-            let mut inner = pair.into_inner();
-            let item_name = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let mode = inner.next().map(|p| p.as_str()).unwrap_or("consume");
-            let source = inner
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            let mode_enum = match mode {
-                "consume" => ParamMode::Consume,
-                "clone" => ParamMode::Clone,
-                "decay" => ParamMode::Decay,
-                _ => ParamMode::Peek,
-            };
-
-            let mut body = Vec::new();
-            let mut reconcile = None;
-
-            for next in inner {
-                match next.as_rule() {
-                    Rule::statement => {
-                        if let Some(actual_stmt) = next.into_inner().next() {
-                            body.push(parse_statement(actual_stmt));
-                        }
-                    }
-                    Rule::reconcile_clause => {
-                        reconcile = Some(parse_reconcile_clause(next));
-                    }
-                    _ => {}
-                }
-            }
-
-            Statement::SplitMap {
-                item_name,
-                mode: mode_enum,
-                source,
-                body,
-                reconcile,
-            }
-        }
         Rule::yield_stmt => {
-            let item = pair
-                .into_inner()
-                .next()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_default();
-            Statement::Yield(item)
+            let expr = pair.into_inner().next().map(parse_expression);
+            Statement::Yield(expr)
+        }
+        Rule::return_stmt => {
+            let expr = pair.into_inner().next().map(parse_expression);
+            Statement::Return(expr)
         }
         Rule::break_stmt => Statement::Break,
         Rule::using_stmt => {

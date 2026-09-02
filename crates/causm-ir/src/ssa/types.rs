@@ -295,6 +295,15 @@ pub enum SsaInstruction {
         dest: SsaReg,
         elements: Vec<SsaReg>,
     },
+    TupleLit {
+        dest: SsaReg,
+        elems: Vec<SsaReg>,
+    },
+    TupleAccess {
+        dest: SsaReg,
+        tuple: SsaReg,
+        index: usize,
+    },
     ArrayRepeat {
         dest: SsaReg,
         value: SsaReg,
@@ -431,6 +440,10 @@ pub enum SsaInstruction {
     ArenaIntrospect {
         dest: SsaReg,
         kind: causm_core::ArenaIntrospect,
+    },
+    CapabilityCheck {
+        dest: SsaReg,
+        capability: causm_core::Capability,
     },
     Other(String),
 }

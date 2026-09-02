@@ -1,0 +1,31 @@
+@0ms: {
+    import "std/net" as Net
+    import "std/encoding/utf8" as Utf8
+}
+
+@0ms: {
+    print("Testing real HTTP request from Causm under WASM...")
+    let fd = Net.create_socket()
+    print("Socket fd:")
+    print(fd)
+    let connected = Net.tcp_connect(fd, 80, 34, 232, 180, 84)
+    print("Connected status:")
+    print(connected)
+    let req = "GET / HTTP/1.1\r\nHost: postman-echo.com\r\nConnection: close\r\n\r\n"
+    let req_bytes = Utf8.encode(req)
+    let req_len = len(req_bytes)
+    let sent = Net.tcp_send(fd, req_bytes, req_len)
+    print("Sent bytes:")
+    print(sent)
+    let mut buf = [0; 512]
+    let recvd = Net.tcp_recv(fd, buf, 512)
+    print("Received bytes:")
+    print(recvd)
+    if (recvd > 0) {
+        let slice = buf[0..recvd]
+        let decoded = Utf8.decode(slice)
+        print("Response header snippet from real server:")
+        print(decoded)
+    }
+    let _cl = Net.close_socket(fd)
+}

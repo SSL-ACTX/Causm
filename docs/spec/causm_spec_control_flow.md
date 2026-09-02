@@ -41,14 +41,12 @@ if let robot = worker.(Robot) {
 }
 ```
 
-### 1.3 Scoped Non-Destructive Inspection (`inspect`)
+### 1.3 Scoped Non-Destructive Borrowing (`&` / `peek`)
 
-Accessing fields of a struct normally triggers structural decay of the parent container. The `inspect` block overrides this behavior by providing a scoped, read-only, non-decaying context:
+Accessing fields of a struct normally triggers structural decay of the parent container. The `&` reference operator provides a read-only, non-decaying context:
 ```causm
-inspect temp = robot {
-    let m = temp.model // Read-only access; 'robot' does not transition to Decayed state
-}
-// 'robot' remains in its Valid state outside this block
+let ref_robot = &robot
+let m = ref_robot.model // Read-only borrow; 'robot' remains in Valid state
 ```
 
 ---
@@ -87,6 +85,36 @@ match entropy(<expression>) {
         Consumed:
             System.Log(message="State terminal")
     }
+}
+```
+
+### 2.2 Standard Expression & Pattern Matching (`match`)
+
+Causm supports algebraic pattern matching with guard clauses, enum variant unpacking, and wildcard branches.
+
+**Syntax:**
+```causm
+match <expression> {
+    <pattern> [if <guard_condition>] => <statement_block | statement>,
+    ...
+}
+```
+
+**Patterns Supported:**
+- **Enum Variants**: `Option::Some(val) => { ... }`, `Color::Rgb(r, g, b) => { ... }`
+- **Tuples**: `(x, y) => { ... }`
+- **Literals**: `200 => { print("OK") }`, `"active" => { ... }`
+- **Wildcard**: `_ => { ... }`
+
+**Example:**
+```causm
+let status = PacketStatus::Retrying(3)
+
+match status {
+    PacketStatus::Delivered => print("Delivered!"),
+    PacketStatus::Retrying(count) if count > 5 => print("Max retries exceeded"),
+    PacketStatus::Retrying(count) => print(f"Retry attempt: {count}"),
+    _ => print("Unknown packet state"),
 }
 ```
 

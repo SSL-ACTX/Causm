@@ -14,6 +14,162 @@ pub fn lower_spanned(ctx: &mut LoweringContext, spanned: &SpannedStatement) {
     ctx.current_span = old_span;
 }
 
+pub fn lower_routine_body(sub_ctx: &mut LoweringContext, body: &[SpannedStatement]) {
+    for (i, s) in body.iter().enumerate() {
+        if i == body.len() - 1 {
+            if let Statement::Expression(ref expr) = s.stmt {
+                let ret_reg = lower_expression(sub_ctx, expr);
+                sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                continue;
+            } else if let Statement::If {
+                ref binding,
+                ref condition,
+                ref then_branch,
+                ref else_branch,
+                ..
+            } = s.stmt
+            {
+                if binding.is_none() && else_branch.is_some() {
+                    let else_branch_stmts = else_branch.as_ref().unwrap();
+                    let cond_reg = lower_expression(sub_ctx, condition);
+                    let ret_reg = sub_ctx.alloc_reg();
+
+                    let jump_to_else_idx = sub_ctx.instructions.len();
+                    sub_ctx.push(Instruction::JumpIfNot {
+                        cond: cond_reg,
+                        target: 0,
+                    });
+
+                    fn lower_branch_tail(
+                        ctx: &mut LoweringContext,
+                        stmts: &[SpannedStatement],
+                        ret_reg: Reg,
+                    ) {
+                        for (i, s) in stmts.iter().enumerate() {
+                            if i == stmts.len() - 1 {
+                                match &s.stmt {
+                                    Statement::Expression(e) => {
+                                        let res = lower_expression(ctx, e);
+                                        ctx.push(Instruction::Move {
+                                            dest: ret_reg,
+                                            src: res,
+                                        });
+                                    }
+                                    Statement::If {
+                                        condition,
+                                        then_branch,
+                                        else_branch,
+                                        ..
+                                    } => {
+                                        let cond_reg =
+                                            lower_expression(ctx, condition);
+                                        let jump_to_else = ctx.instructions.len();
+                                        ctx.push(Instruction::JumpIfNot {
+                                            cond: cond_reg,
+                                            target: 0,
+                                        });
+                                        lower_branch_tail(ctx, then_branch, ret_reg);
+                                        let jump_to_end = ctx.instructions.len();
+                                        ctx.push(Instruction::Jump { target: 0 });
+                                        let else_start = ctx.instructions.len();
+                                        if let Instruction::JumpIfNot {
+                                            ref mut target,
+                                            ..
+                                        } = ctx.instructions[jump_to_else]
+                                        {
+                                            *target = else_start;
+                                        }
+                                        if let Some(eb) = else_branch {
+                                            lower_branch_tail(ctx, eb, ret_reg);
+                                        }
+                                        let end_pc = ctx.instructions.len();
+                                        if let Instruction::Jump {
+                                            ref mut target,
+                                            ..
+                                        } = ctx.instructions[jump_to_end]
+                                        {
+                                            *target = end_pc;
+                                        }
+                                    }
+                                    _ => lower_spanned(ctx, s),
+                                }
+                            } else {
+                                lower_spanned(ctx, s);
+                            }
+                        }
+                    }
+
+                    lower_branch_tail(sub_ctx, then_branch, ret_reg);
+
+                    let jump_to_end_idx = sub_ctx.instructions.len();
+                    sub_ctx.push(Instruction::Jump { target: 0 });
+
+                    let else_start_idx = sub_ctx.instructions.len();
+                    if let Instruction::JumpIfNot { ref mut target, .. } =
+                        sub_ctx.instructions[jump_to_else_idx]
+                    {
+                        *target = else_start_idx;
+                    }
+
+                    lower_branch_tail(sub_ctx, else_branch_stmts, ret_reg);
+
+                    let end_idx = sub_ctx.instructions.len();
+                    if let Instruction::Jump { ref mut target, .. } =
+                        sub_ctx.instructions[jump_to_end_idx]
+                    {
+                        *target = end_idx;
+                    }
+
+                    sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                    continue;
+                }
+            } else if let Statement::Match {
+                ref target,
+                ref arms,
+            } = s.stmt
+            {
+                let all_exprs = arms.iter().all(|a| {
+                    a.body.len() == 1
+                        && matches!(a.body[0].stmt, Statement::Expression(_))
+                });
+                if all_exprs {
+                    let expr_arms = arms
+                        .iter()
+                        .map(|a| {
+                            if let Statement::Expression(ref e) = a.body[0].stmt {
+                                causm_core::MatchExprArm {
+                                    pattern: a.pattern.clone(),
+                                    guard: a.guard.clone(),
+                                    body: e.clone(),
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        })
+                        .collect();
+                    let match_expr = Expression::Match {
+                        target: Box::new(target.clone()),
+                        arms: expr_arms,
+                    };
+                    let ret_reg = lower_expression(sub_ctx, &match_expr);
+                    sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
+                    continue;
+                }
+            }
+        }
+        lower_spanned(sub_ctx, s);
+    }
+
+    if !sub_ctx
+        .instructions
+        .last()
+        .map(|instr| matches!(instr, Instruction::Return { .. }))
+        .unwrap_or(false)
+    {
+        sub_ctx.push(Instruction::Return { src: None });
+    }
+}
+
 pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
     match stmt {
         Statement::RoutineDef {
@@ -22,11 +178,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             return_type,
             taking_ms,
             state_constraint,
+            required_capabilities,
             body,
         } => {
             let mut sub_ctx = LoweringContext::new();
             sub_ctx.type_decls = ctx.type_decls.clone();
             sub_ctx.type_decay_limits = ctx.type_decay_limits.clone();
+            sub_ctx.routines = ctx.routines.clone();
 
             for (i, param) in params.iter().enumerate() {
                 let p_reg = Reg(i as u32);
@@ -43,51 +201,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 }
             }
 
-            for (i, s) in body.iter().enumerate() {
-                if i == body.len() - 1 {
-                    if let Statement::Expression(ref expr) = s.stmt {
-                        let ret_reg = lower_expression(&mut sub_ctx, expr);
-                        sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
-                        continue;
-                    } else if let Statement::Match {
-                        ref target,
-                        ref arms,
-                    } = s.stmt
-                    {
-                        let all_exprs = arms.iter().all(|a| {
-                            a.body.len() == 1
-                                && matches!(a.body[0].stmt, Statement::Expression(_))
-                        });
-                        if all_exprs {
-                            let expr_arms = arms
-                                .iter()
-                                .map(|a| {
-                                    if let Statement::Expression(ref e) =
-                                        a.body[0].stmt
-                                    {
-                                        causm_core::MatchExprArm {
-                                            pattern: a.pattern.clone(),
-                                            guard: a.guard.clone(),
-                                            body: e.clone(),
-                                        }
-                                    } else {
-                                        unreachable!()
-                                    }
-                                })
-                                .collect();
-                            let match_expr = Expression::Match {
-                                target: Box::new(target.clone()),
-                                arms: expr_arms,
-                            };
-                            let ret_reg =
-                                lower_expression(&mut sub_ctx, &match_expr);
-                            sub_ctx.push(Instruction::Return { src: Some(ret_reg) });
-                            continue;
-                        }
-                    }
-                }
-                lower_spanned(&mut sub_ctx, s);
-            }
+            lower_routine_body(&mut sub_ctx, body);
 
             let routine = IrRoutine {
                 params: params
@@ -114,6 +228,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         return_type: return_type.clone(),
                         taking_ms: None,
                         state_constraint: state_constraint.clone(),
+                        required_capabilities: required_capabilities.clone(),
                         body: body.clone(),
                     }
                     .estimate_cost(|b| {
@@ -146,10 +261,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 ctx.routines.insert(base_name, routine);
             }
         }
-        Statement::Yield(name) => {
-            let src = ctx.get_reg(name);
-            ctx.push(Instruction::Move { dest: Reg(0), src });
-            ctx.push(Instruction::Return { src: Some(Reg(0)) });
+        Statement::Yield(expr_opt) | Statement::Return(expr_opt) => {
+            if let Some(expr) = expr_opt {
+                let src = lower_expression(ctx, expr);
+                ctx.push(Instruction::Return { src: Some(src) });
+            } else {
+                ctx.push(Instruction::Return { src: None });
+            }
         }
         Statement::Speculate {
             max_ms,
@@ -289,7 +407,10 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             } else {
                 let target = match time {
                     causm_core::TimeCoordinate::Branch(b) => b.clone(),
-                    _ => "main".to_string(),
+                    _ => ctx
+                        .current_branch
+                        .clone()
+                        .unwrap_or_else(|| "main".to_string()),
                 };
 
                 let rb_instr_idx = ctx.instructions.len();
@@ -649,6 +770,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
         } => {
             let src = lower_expression(ctx, expr);
             let dest = ctx.get_reg(target);
+            ctx.symbols.insert(target.clone(), dest);
             ctx.push(Instruction::Move { dest, src });
             if let Some(causm_core::LifetimeAnnotation::Decayed(ms)) = lifetime {
                 ctx.push(Instruction::Lease {
@@ -658,30 +780,10 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                 });
             }
 
-            match expr {
-                Expression::Identifier(_) => {
+            if let Expression::Identifier(_) = expr {
+                if src != dest {
                     ctx.push(Instruction::Consume { src });
                 }
-                Expression::IndexAccess { target, index } => {
-                    if let Expression::Identifier(name) = &**target {
-                        let target_reg = ctx.get_reg(name);
-                        let index_reg = lower_expression(ctx, index);
-                        ctx.push(Instruction::ConsumeFieldDynamic {
-                            target: target_reg,
-                            index: index_reg,
-                        });
-                    }
-                }
-                Expression::FieldAccess { target, field } => {
-                    if let Expression::Identifier(name) = &**target {
-                        let target_reg = ctx.get_reg(name);
-                        ctx.push(Instruction::ConsumeField {
-                            src: target_reg,
-                            field: field.clone(),
-                        });
-                    }
-                }
-                _ => {}
             }
         }
         Statement::Print(args) => {
@@ -871,6 +973,8 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     ..
                 } = &r.stmt
                 {
+                    let bare_symbol =
+                        name.rsplit('.').next().unwrap_or(name).to_string();
                     let routine = IrRoutine {
                         params: params
                             .iter()
@@ -893,7 +997,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                         foreign_binding: Some(causm_ir::ForeignBinding {
                             lib_name: lib_name.clone(),
                             abi: abi.clone(),
-                            symbol: name.clone(),
+                            symbol: bare_symbol,
                         }),
                         instructions: Vec::new(),
                         spans: Vec::new(),
@@ -982,9 +1086,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             ctx.push(Instruction::While {
                 max_ms: while_limit,
             });
-            let start_pc = ctx.instructions.len();
 
             if *is_valid_check {
+                let start_pc = ctx.instructions.len();
                 let cond_reg = lower_expression(ctx, condition);
                 let match_entropy_idx = ctx.instructions.len();
                 ctx.push(Instruction::MatchEntropy {
@@ -1020,6 +1124,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     *consumed_target = Some(end_while_idx);
                 }
             } else {
+                let start_pc = ctx.instructions.len();
                 let cond_reg = lower_expression(ctx, condition);
                 let jump_to_end_idx = ctx.instructions.len();
                 ctx.push(Instruction::JumpIfNot {
@@ -1378,7 +1483,12 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             if let Some(ref spec) = auto_drop {
                 ctx.auto_drop_specs.insert(name.clone(), spec.clone());
             }
-            ctx.type_decls.insert(name.clone(), resolved_fields);
+            let base_name =
+                name.split('<').next().unwrap_or(name).trim().to_string();
+            ctx.type_decls.insert(name.clone(), resolved_fields.clone());
+            if base_name != *name {
+                ctx.type_decls.insert(base_name, resolved_fields);
+            }
         }
         Statement::InterfaceDecl {
             name,

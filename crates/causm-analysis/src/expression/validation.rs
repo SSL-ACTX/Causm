@@ -3,6 +3,137 @@ use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::types::Type;
 use causm_core::*;
 
+pub(crate) fn check_required_capabilities(
+    analyzer: &EntropicAnalyzer,
+    required: &[Capability],
+) -> Result<(), SemanticError> {
+    if required.is_empty() || analyzer.capability_stack.is_empty() {
+        return Ok(());
+    }
+
+    let all_satisfied = required.iter().all(|cap| {
+        let key = if let Some(id) = cap.parameters.get("id") {
+            format!("{}[id={}]", cap.path, id)
+        } else {
+            cap.path.clone()
+        };
+        analyzer.is_capability_allowed(&cap.path)
+            || analyzer.is_capability_allowed(&key)
+    });
+
+    if !all_satisfied {
+        let is_foreign_or_alt = required
+            .iter()
+            .any(|c| c.path == "System.FFI" || c.path == "System.WASI");
+        if is_foreign_or_alt {
+            let any_allowed = required.iter().any(|cap| {
+                let key = if let Some(id) = cap.parameters.get("id") {
+                    format!("{}[id={}]", cap.path, id)
+                } else {
+                    cap.path.clone()
+                };
+                analyzer.is_capability_allowed(&cap.path)
+                    || analyzer.is_capability_allowed(&key)
+            });
+            if !any_allowed {
+                return Err(analyzer.annotate(
+                    SemanticErrorKind::MissingCapability(required[0].path.clone()),
+                ));
+            }
+        } else {
+            let missing = required
+                .iter()
+                .find(|cap| {
+                    let key = if let Some(id) = cap.parameters.get("id") {
+                        format!("{}[id={}]", cap.path, id)
+                    } else {
+                        cap.path.clone()
+                    };
+                    !analyzer.is_capability_allowed(&cap.path)
+                        && !analyzer.is_capability_allowed(&key)
+                })
+                .unwrap();
+            return Err(analyzer.annotate(SemanticErrorKind::MissingCapability(
+                missing.path.clone(),
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_call_arguments(
+    analyzer: &mut EntropicAnalyzer,
+    call_name: &str,
+    params: &[(ParamMode, String, Type)],
+    args: &[Expression],
+) -> Result<(), SemanticError> {
+    if args.len() != params.len() {
+        return Err(analyzer.annotate(SemanticErrorKind::ArgumentCountMismatch(
+            format!(
+                "{} expects {} args, got {}",
+                call_name,
+                params.len(),
+                args.len()
+            ),
+        )));
+    }
+
+    for (arg_expr, (mode, _param_name, expected_type)) in
+        args.iter().zip(params.iter())
+    {
+        let arg_type = infer_expression_type(analyzer, arg_expr)?;
+        let is_ffi_ptr_pass = matches!(
+            (expected_type, &arg_type),
+            (
+                Type::I64 | Type::I32 | Type::U64 | Type::Integer,
+                Type::Array(_) | Type::Struct(_) | Type::Custom(_) | Type::String
+            )
+        );
+
+        if !is_ffi_ptr_pass && !analyzer.types_compatible(expected_type, &arg_type) {
+            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                format!(
+                    "{} arg type mismatch: expected {:?}, got {:?}",
+                    call_name, expected_type, arg_type
+                ),
+            )));
+        }
+
+        if let Expression::StructLit(ref type_name, _) = arg_expr {
+            if type_name.borrow().is_none() {
+                if let Type::Custom(ref name) = expected_type {
+                    *type_name.borrow_mut() = Some(name.clone());
+                }
+            }
+        }
+
+        analyze_expression_nonconsuming(analyzer, arg_expr)?;
+
+        match mode {
+            ParamMode::Consume | ParamMode::Decay => {
+                if let Expression::Identifier(name) = arg_expr {
+                    analyzer.mark_consumed(name)?;
+                }
+            }
+            ParamMode::Clone => {
+                if let Expression::Identifier(name) = arg_expr {
+                    let state = analyzer
+                        .branch_contexts
+                        .get(&analyzer.current_branch)
+                        .unwrap();
+                    if state.consumed.contains(name) {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::UseAfterConsume(name.clone()),
+                        ));
+                    }
+                }
+            }
+            ParamMode::Peek | ParamMode::Lease => {}
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn analyze_expression(
     analyzer: &mut EntropicAnalyzer,
     expr: &Expression,
@@ -17,441 +148,302 @@ pub(crate) fn analyze_expression(
             resolved_routine,
             resolved_budget,
         } => {
-            if let Expression::Identifier(ref name) = **target {
-                let is_enum_type = analyzer
-                    .branch_contexts
-                    .get(&analyzer.current_branch)
-                    .map(|st| st.custom_types.contains_key(name))
-                    .unwrap_or(false);
-                if is_enum_type {
+            let resolution =
+                crate::resolve::resolve_method_call(analyzer, target, method)?;
+            match resolution {
+                crate::resolve::MethodTargetResolution::EnumConstructor => {
                     for arg in args {
                         analyze_expression_nonconsuming(analyzer, arg)?;
                     }
                     *resolved_routine.borrow_mut() =
                         Some("<enum_constructor>".to_string());
-                    return Ok(());
+                    Ok(())
                 }
-            }
-            if let Some(ns) = super::inference::get_static_target_path(target) {
-                let static_routine_name = format!("{}.{}", ns, method);
-                let is_local_var = analyzer
-                    .branch_contexts
-                    .get(&analyzer.current_branch)
-                    .map(|st| st.types.contains_key(&ns))
-                    .unwrap_or(false);
-                if !is_local_var
-                    && analyzer.routines.contains_key(&static_routine_name)
-                {
-                    let info =
-                        analyzer.routines.get(&static_routine_name).unwrap().clone();
-                    if args.len() != info.params.len() {
-                        return Err(analyzer.annotate(
-                            SemanticErrorKind::ArgumentCountMismatch(format!(
-                                "routine {} expects {} args, got {}",
-                                static_routine_name,
-                                info.params.len(),
-                                args.len()
-                            )),
-                        ));
-                    }
-                    for (arg_expr, (mode, _param_name, expected_type)) in
-                        args.iter().zip(info.params.iter())
-                    {
-                        let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                        let is_ffi_ptr_pass = matches!(
-                            (&expected_type, &arg_type),
-                            (
-                                Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                                Type::Array(_) | Type::Struct(_) | Type::Custom(_)
-                            )
-                        );
-                        if !is_ffi_ptr_pass
-                            && !analyzer.types_compatible(expected_type, &arg_type)
-                        {
-                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                                format!(
-                                    "routine {} arg type mismatch: expected {:?}, got {:?}",
-                                    static_routine_name, expected_type, arg_type
-                                ),
-                            )));
-                        }
-
-                        if let Expression::StructLit(ref type_name, _) = arg_expr {
-                            if type_name.borrow().is_none() {
-                                if let Type::Custom(ref name) = expected_type {
-                                    *type_name.borrow_mut() = Some(name.clone());
-                                }
-                            }
-                        }
-
-                        analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                        match mode {
-                            ParamMode::Consume => {
-                                if let Expression::Identifier(name) = arg_expr {
-                                    analyzer.mark_consumed(name)?;
-                                }
-                            }
-                            ParamMode::Clone => {
-                                if let Expression::Identifier(name) = arg_expr {
-                                    let state = analyzer
-                                        .branch_contexts
-                                        .get(&analyzer.current_branch)
-                                        .unwrap();
-                                    if state.consumed.contains(name) {
-                                        return Err(analyzer.annotate(
-                                            SemanticErrorKind::UseAfterConsume(
-                                                name.clone(),
-                                            ),
-                                        ));
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                crate::resolve::MethodTargetResolution::StaticRoutine(
+                    static_name,
+                    info,
+                ) => {
+                    validate_call_arguments(
+                        analyzer,
+                        &static_name,
+                        &info.params,
+                        args,
+                    )?;
                     *resolved_routine.borrow_mut() =
-                        Some(format!("<static>{}", static_routine_name));
+                        Some(format!("<static>{}", static_name));
                     let cost = info.taking_ms;
                     let branch = analyzer
                         .branch_contexts
                         .get_mut(&analyzer.current_branch)
                         .unwrap();
                     branch.accumulated_cost += cost;
-                    return Ok(());
+                    Ok(())
                 }
-            }
-            analyze_expression_nonconsuming(analyzer, target)?;
-            let target_type = infer_expression_type(analyzer, target)?;
-            let struct_name = match &target_type {
-                Type::Custom(name) => name.clone(),
-                _ => {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        "method call target must be a custom type instance".into(),
-                    )));
-                }
-            };
+                crate::resolve::MethodTargetResolution::InterfaceMethod(
+                    _struct_name,
+                    interface_method,
+                ) => {
+                    if args.len() + 1 != interface_method.params.len() {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::ArgumentCountMismatch(format!(
+                                "method {} expects {} arguments (excluding self), got {}",
+                                method,
+                                interface_method.params.len() - 1,
+                                args.len()
+                            )),
+                        ));
+                    }
 
-            if analyzer.interfaces.contains_key(&struct_name) {
-                let methods = &analyzer.interfaces[&struct_name];
-                let interface_method = methods
-                    .iter()
-                    .find(|m| &m.name == method)
-                    .ok_or_else(|| {
-                        analyzer.annotate(SemanticErrorKind::TypeMismatch(format!(
-                            "unknown method {} on interface {}",
-                            method, struct_name
-                        )))
-                    })?
-                    .clone();
+                    let first_param = &interface_method.params[0];
+                    let self_mode = first_param.mode.clone();
+                    *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
+                    *resolved_budget.borrow_mut() = interface_method.taking_ms;
 
-                if args.len() + 1 != interface_method.params.len() {
-                    return Err(analyzer.annotate(
-                        SemanticErrorKind::ArgumentCountMismatch(format!(
-                            "method {} expects {} arguments (excluding self), got {}",
-                            method,
-                            interface_method.params.len() - 1,
-                            args.len()
-                        )),
-                    ));
-                }
+                    if let Some((ref param_name, ref expected_state)) =
+                        interface_method.state_constraint
+                    {
+                        if param_name == "self" {
+                            if let Expression::Identifier(ref name) = &**target {
+                                let state = analyzer
+                                    .branch_contexts
+                                    .get(&analyzer.current_branch)
+                                    .unwrap();
+                                let actual_state = if state.consumed.contains(name) {
+                                    "Consumed"
+                                } else if state.decayed.contains(name) {
+                                    "Decayed"
+                                } else {
+                                    "Valid"
+                                };
+                                if actual_state != expected_state {
+                                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                        format!(
+                                            "State constraint violated: receiver '{}' is in state '{}', but interface method '{}' expects state '{}'",
+                                            name, actual_state, method, expected_state
+                                        )
+                                    )));
+                                }
+                            }
+                        }
+                    }
 
-                let first_param = &interface_method.params[0];
-                let self_mode = first_param.mode.clone();
-                *resolved_routine.borrow_mut() = Some("<dynamic>".to_string());
-                *resolved_budget.borrow_mut() = interface_method.taking_ms;
+                    for (i, arg) in args.iter().enumerate() {
+                        let param_decl = &interface_method.params[i + 1];
+                        let param_type = param_decl
+                            .typ
+                            .as_ref()
+                            .map(Type::from_typename)
+                            .unwrap_or(Type::Unknown);
+                        let arg_type = infer_expression_type(analyzer, arg)?;
+                        if !analyzer.types_compatible(&param_type, &arg_type) {
+                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                format!(
+                                    "interface method {} param {} type mismatch: expected {:?}, got {:?}",
+                                    method, param_decl.name, param_type, arg_type
+                                ),
+                            )));
+                        }
+                        if let Expression::StructLit(ref type_name, _) = arg {
+                            if type_name.borrow().is_none() {
+                                if let Type::Custom(ref name) = param_type {
+                                    *type_name.borrow_mut() = Some(name.clone());
+                                }
+                            }
+                        }
+                        analyze_expression_nonconsuming(analyzer, arg)?;
+                        if let ParamMode::Consume = param_decl.mode {
+                            if let Expression::Identifier(ref name) = arg {
+                                analyzer.mark_consumed(name)?;
+                            }
+                        } else if let ParamMode::Clone = param_decl.mode {
+                            if let Expression::Identifier(name) = arg {
+                                let state = analyzer
+                                    .branch_contexts
+                                    .get(&analyzer.current_branch)
+                                    .unwrap();
+                                if state.consumed.contains(name) {
+                                    return Err(analyzer.annotate(
+                                        SemanticErrorKind::UseAfterConsume(
+                                            name.clone(),
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                    }
 
-                if let Some((ref param_name, ref expected_state)) =
-                    interface_method.state_constraint
-                {
-                    if param_name == "self" {
-                        if let Expression::Identifier(ref name) = &**target {
+                    if let ParamMode::Consume = self_mode {
+                        if let Expression::Identifier(name) = &**target {
+                            analyzer.mark_consumed(name)?;
+                        }
+                    } else if let ParamMode::Clone = self_mode {
+                        if let Expression::Identifier(name) = &**target {
                             let state = analyzer
                                 .branch_contexts
                                 .get(&analyzer.current_branch)
                                 .unwrap();
-                            let actual_state = if state.consumed.contains(name) {
-                                "Consumed"
-                            } else if state.decayed.contains(name) {
-                                "Decayed"
-                            } else {
-                                "Valid"
-                            };
-                            if actual_state != expected_state {
-                                return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                                    format!(
-                                        "State constraint violated: receiver '{}' is in state '{}', but interface method '{}' expects state '{}'",
-                                        name, actual_state, method, expected_state
-                                    )
-                                )));
+                            if state.consumed.contains(name) {
+                                return Err(analyzer.annotate(
+                                    SemanticErrorKind::UseAfterConsume(name.clone()),
+                                ));
                             }
                         }
                     }
-                }
 
-                for (i, arg) in args.iter().enumerate() {
-                    let param_decl = &interface_method.params[i + 1];
-                    let param_type = param_decl
-                        .typ
-                        .as_ref()
-                        .map(Type::from_typename)
-                        .unwrap_or(Type::Unknown);
-                    let arg_type = infer_expression_type(analyzer, arg)?;
-                    if !analyzer.types_compatible(&param_type, &arg_type) {
+                    let cost = interface_method.taking_ms.unwrap_or(0);
+                    let branch = analyzer
+                        .branch_contexts
+                        .get_mut(&analyzer.current_branch)
+                        .unwrap();
+                    branch.accumulated_cost += cost;
+
+                    Ok(())
+                }
+                crate::resolve::MethodTargetResolution::StructMethod(
+                    resolved_name,
+                    info,
+                ) => {
+                    let target_type = infer_expression_type(analyzer, target)?;
+                    let struct_name = match &target_type {
+                        Type::Custom(name) => name.clone(),
+                        _ => {
+                            resolved_name.split('.').next().unwrap_or("").to_string()
+                        }
+                    };
+
+                    if method.starts_with('_') {
+                        let mut is_allowed = false;
+                        if let Some(ref cur_routine) = analyzer.current_routine {
+                            if let Some(dot_idx) = cur_routine.find('.') {
+                                let struct_prefix = &cur_routine[..dot_idx];
+                                if struct_prefix == struct_name {
+                                    is_allowed = true;
+                                }
+                            }
+                        }
+                        if !is_allowed {
+                            return Err(analyzer.annotate(
+                                SemanticErrorKind::TypeMismatch(format!(
+                                    "Method '{}' is private to type '{}'",
+                                    method, struct_name
+                                )),
+                            ));
+                        }
+                    }
+
+                    *resolved_routine.borrow_mut() = Some(resolved_name);
+
+                    check_required_capabilities(
+                        analyzer,
+                        &info.required_capabilities,
+                    )?;
+
+                    if let Some((ref param_name, ref expected_state)) =
+                        info.state_constraint
+                    {
+                        if param_name == "self" {
+                            if let Expression::Identifier(ref name) = &**target {
+                                let state = analyzer
+                                    .branch_contexts
+                                    .get(&analyzer.current_branch)
+                                    .unwrap();
+                                let actual_state = if state.consumed.contains(name) {
+                                    "Consumed"
+                                } else if state.decayed.contains(name) {
+                                    "Decayed"
+                                } else {
+                                    "Valid"
+                                };
+                                if actual_state != expected_state {
+                                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                                        format!(
+                                            "State constraint violated: receiver '{}' is in state '{}', but method '{}' expects state '{}'",
+                                            name, actual_state, method, expected_state
+                                        )
+                                    )));
+                                }
+                            }
+                        }
+                    }
+
+                    if args.len() + 1 != info.params.len() {
+                        return Err(analyzer.annotate(
+                            SemanticErrorKind::ArgumentCountMismatch(format!(
+                                "method {} expects {} arguments (excluding self), got {}",
+                                method,
+                                info.params.len() - 1,
+                                args.len()
+                            )),
+                        ));
+                    }
+
+                    let (self_mode, _self_name, self_type) = &info.params[0];
+                    let self_type_normalized = match self_type {
+                        Type::Custom(name) => Type::Custom(
+                            name.split('<')
+                                .next()
+                                .unwrap_or(name)
+                                .trim()
+                                .to_string(),
+                        ),
+                        other => other.clone(),
+                    };
+                    let target_type_normalized = match &target_type {
+                        Type::Custom(name) => Type::Custom(
+                            name.split('<')
+                                .next()
+                                .unwrap_or(name)
+                                .trim()
+                                .to_string(),
+                        ),
+                        other => other.clone(),
+                    };
+                    if !analyzer.types_compatible(
+                        &self_type_normalized,
+                        &target_type_normalized,
+                    ) {
                         return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                             format!(
-                                "interface method {} param {} type mismatch: expected {:?}, got {:?}",
-                                method, param_decl.name, param_type, arg_type
+                                "method {} self type mismatch: expected {:?}, got {:?}",
+                                method, self_type, target_type
                             ),
                         )));
                     }
-                    if let Expression::StructLit(ref type_name, _) = arg {
-                        if type_name.borrow().is_none() {
-                            if let Type::Custom(ref name) = param_type {
-                                *type_name.borrow_mut() = Some(name.clone());
+
+                    match self_mode {
+                        ParamMode::Consume => {
+                            if let Expression::Identifier(name) = &**target {
+                                analyzer.mark_consumed(name)?;
                             }
                         }
-                    }
-                    analyze_expression_nonconsuming(analyzer, arg)?;
-                    if let ParamMode::Consume = param_decl.mode {
-                        if let Expression::Identifier(ref name) = arg {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    } else if let ParamMode::Clone = param_decl.mode {
-                        if let Expression::Identifier(name) = arg {
-                            let state = analyzer
-                                .branch_contexts
-                                .get(&analyzer.current_branch)
-                                .unwrap();
-                            if state.consumed.contains(name) {
-                                return Err(analyzer.annotate(
-                                    SemanticErrorKind::UseAfterConsume(name.clone()),
-                                ));
+                        ParamMode::Clone => {
+                            if let Expression::Identifier(name) = &**target {
+                                let state = analyzer
+                                    .branch_contexts
+                                    .get(&analyzer.current_branch)
+                                    .unwrap();
+                                if state.consumed.contains(name) {
+                                    return Err(analyzer.annotate(
+                                        SemanticErrorKind::UseAfterConsume(
+                                            name.clone(),
+                                        ),
+                                    ));
+                                }
                             }
                         }
+                        _ => {}
                     }
-                }
 
-                if let ParamMode::Consume = self_mode {
-                    if let Expression::Identifier(name) = &**target {
-                        analyzer.mark_consumed(name)?;
-                    }
-                } else if let ParamMode::Clone = self_mode {
-                    if let Expression::Identifier(name) = &**target {
-                        let state = analyzer
-                            .branch_contexts
-                            .get(&analyzer.current_branch)
-                            .unwrap();
-                        if state.consumed.contains(name) {
-                            return Err(analyzer.annotate(
-                                SemanticErrorKind::UseAfterConsume(name.clone()),
-                            ));
-                        }
-                    }
-                }
-
-                let cost = interface_method.taking_ms.unwrap_or(0);
-                let branch = analyzer
-                    .branch_contexts
-                    .get_mut(&analyzer.current_branch)
-                    .unwrap();
-                branch.accumulated_cost += cost;
-
-                return Ok(());
-            }
-
-            if method.starts_with('_') {
-                let mut is_allowed = false;
-                if let Some(ref cur_routine) = analyzer.current_routine {
-                    if let Some(dot_idx) = cur_routine.find('.') {
-                        let struct_prefix = &cur_routine[..dot_idx];
-                        if struct_prefix == struct_name {
-                            is_allowed = true;
-                        }
-                    }
-                }
-                if !is_allowed {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        format!(
-                            "Method '{}' is private to type '{}'",
-                            method, struct_name
-                        ),
-                    )));
-                }
-            }
-
-            let mut current_struct = struct_name
-                .split('<')
-                .next()
-                .unwrap_or(&struct_name)
-                .split("::")
-                .next()
-                .unwrap_or(&struct_name)
-                .trim()
-                .to_string();
-            let mut resolved = None;
-            loop {
-                let routine_name = format!("{}.{}", current_struct, method);
-                if let Some(info) = analyzer.routines.get(&routine_name) {
-                    resolved = Some((routine_name, info.clone()));
-                    break;
-                }
-                if let Some(parent) = analyzer.struct_extends.get(&current_struct) {
-                    current_struct = parent.clone();
-                } else {
-                    break;
-                }
-            }
-
-            let (resolved_name, info) = resolved.ok_or_else(|| {
-                analyzer.annotate(SemanticErrorKind::EntropyMismatch(format!(
-                    "unknown method {} on type {}",
-                    method, struct_name
-                )))
-            })?;
-            *resolved_routine.borrow_mut() = Some(resolved_name);
-
-            if let Some((ref param_name, ref expected_state)) = info.state_constraint
-            {
-                if param_name == "self" {
-                    if let Expression::Identifier(ref name) = &**target {
-                        let state = analyzer
-                            .branch_contexts
-                            .get(&analyzer.current_branch)
-                            .unwrap();
-                        let actual_state = if state.consumed.contains(name) {
-                            "Consumed"
-                        } else if state.decayed.contains(name) {
-                            "Decayed"
-                        } else {
-                            "Valid"
-                        };
-                        if actual_state != expected_state {
-                            return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                                format!(
-                                    "State constraint violated: receiver '{}' is in state '{}', but method '{}' expects state '{}'",
-                                    name, actual_state, method, expected_state
-                                )
-                            )));
-                        }
-                    }
-                }
-            }
-
-            if args.len() + 1 != info.params.len() {
-                return Err(analyzer.annotate(
-                    SemanticErrorKind::ArgumentCountMismatch(format!(
-                        "method {} expects {} arguments (excluding self), got {}",
+                    validate_call_arguments(
+                        analyzer,
                         method,
-                        info.params.len() - 1,
-                        args.len()
-                    )),
-                ));
-            }
+                        &info.params[1..],
+                        args,
+                    )?;
 
-            let (self_mode, _self_name, self_type) = &info.params[0];
-            let self_type_normalized = match self_type {
-                Type::Custom(name) => Type::Custom(
-                    name.split('<').next().unwrap_or(name).trim().to_string(),
-                ),
-                other => other.clone(),
-            };
-            let target_type_normalized = match &target_type {
-                Type::Custom(name) => Type::Custom(
-                    name.split('<').next().unwrap_or(name).trim().to_string(),
-                ),
-                other => other.clone(),
-            };
-            if !analyzer
-                .types_compatible(&self_type_normalized, &target_type_normalized)
-            {
-                return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                    format!(
-                        "method {} self type mismatch: expected {:?}, got {:?}",
-                        method, self_type, target_type
-                    ),
-                )));
-            }
-
-            match self_mode {
-                ParamMode::Consume => {
-                    if let Expression::Identifier(name) = &**target {
-                        analyzer.mark_consumed(name)?;
-                    }
-                }
-                ParamMode::Clone => {
-                    if let Expression::Identifier(name) = &**target {
-                        let state = analyzer
-                            .branch_contexts
-                            .get(&analyzer.current_branch)
-                            .unwrap();
-                        if state.consumed.contains(name) {
-                            return Err(analyzer.annotate(
-                                SemanticErrorKind::UseAfterConsume(name.clone()),
-                            ));
-                        }
-                    }
-                }
-                _ => {}
-            }
-
-            for (arg_expr, (mode, _param_name, expected_type)) in
-                args.iter().zip(info.params.iter().skip(1))
-            {
-                let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                let is_ffi_ptr_pass = matches!(
-                    (&expected_type, &arg_type),
-                    (
-                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
-                    )
-                );
-
-                if !is_ffi_ptr_pass
-                    && !analyzer.types_compatible(expected_type, &arg_type)
-                {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        format!(
-                            "method {} arg type mismatch: expected {:?}, got {:?}",
-                            method, expected_type, arg_type
-                        ),
-                    )));
-                }
-
-                if let Expression::StructLit(ref type_name, _) = arg_expr {
-                    if type_name.borrow().is_none() {
-                        if let Type::Custom(ref name) = expected_type {
-                            *type_name.borrow_mut() = Some(name.clone());
-                        }
-                    }
-                }
-
-                analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                match mode {
-                    ParamMode::Consume => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Clone => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            let state = analyzer
-                                .branch_contexts
-                                .get(&analyzer.current_branch)
-                                .unwrap();
-                            if state.consumed.contains(name) {
-                                return Err(analyzer.annotate(
-                                    SemanticErrorKind::UseAfterConsume(name.clone()),
-                                ));
-                            }
-                        }
-                    }
-                    _ => {}
+                    Ok(())
                 }
             }
-
-            Ok(())
         }
         Expression::Call { routine, args } => {
             let info = analyzer.routines.get(routine).cloned().ok_or_else(|| {
@@ -461,76 +453,8 @@ pub(crate) fn analyze_expression(
                 )))
             })?;
 
-            if args.len() != info.params.len() {
-                return Err(analyzer.annotate(
-                    SemanticErrorKind::ArgumentCountMismatch(format!(
-                        "routine {} expects {} args, got {}",
-                        routine,
-                        info.params.len(),
-                        args.len()
-                    )),
-                ));
-            }
-
-            for (arg_expr, (mode, _param_name, expected_type)) in
-                args.iter().zip(info.params.iter())
-            {
-                let arg_type = infer_expression_type(analyzer, arg_expr)?;
-                let is_ffi_ptr_pass = matches!(
-                    (&expected_type, &arg_type),
-                    (
-                        Type::I64 | Type::I32 | Type::U64 | Type::Integer,
-                        Type::Array(_) | Type::Struct(_) | Type::Custom(_)
-                    )
-                );
-                if !is_ffi_ptr_pass
-                    && !analyzer.types_compatible(expected_type, &arg_type)
-                {
-                    return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
-                        format!(
-                            "routine {} arg type mismatch: expected {:?}, got {:?}",
-                            routine, expected_type, arg_type
-                        ),
-                    )));
-                }
-
-                if let Expression::StructLit(ref type_name, _) = arg_expr {
-                    if type_name.borrow().is_none() {
-                        if let Type::Custom(ref name) = expected_type {
-                            *type_name.borrow_mut() = Some(name.clone());
-                        }
-                    }
-                }
-
-                analyze_expression_nonconsuming(analyzer, arg_expr)?;
-
-                match mode {
-                    ParamMode::Consume => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Clone => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            let state = analyzer
-                                .branch_contexts
-                                .get(&analyzer.current_branch)
-                                .unwrap();
-                            if state.consumed.contains(name) {
-                                return Err(analyzer.annotate(
-                                    SemanticErrorKind::UseAfterConsume(name.clone()),
-                                ));
-                            }
-                        }
-                    }
-                    ParamMode::Decay => {
-                        if let Expression::Identifier(name) = arg_expr {
-                            analyzer.mark_consumed(name)?;
-                        }
-                    }
-                    ParamMode::Peek | ParamMode::Lease => {}
-                }
-            }
+            check_required_capabilities(analyzer, &info.required_capabilities)?;
+            validate_call_arguments(analyzer, routine, &info.params, args)?;
             Ok(())
         }
         Expression::Identifier(name) => analyzer.mark_consumed(name),
@@ -770,7 +694,20 @@ pub(crate) fn analyze_expression(
             }
             Ok(())
         }
-        Expression::ArenaIntrospect(_) => Ok(()),
+        Expression::ArenaIntrospect(_) | Expression::CapabilityCheck(_) => Ok(()),
+        Expression::Turbofish { expr, .. } => analyze_expression(analyzer, expr),
+        Expression::GenericStaticCall { args, .. } => {
+            for arg in args {
+                analyze_expression(analyzer, arg)?;
+            }
+            Ok(())
+        }
+        Expression::Tuple(elems) => {
+            for elem in elems {
+                analyze_expression(analyzer, elem)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -906,6 +843,7 @@ pub(crate) fn analyze_expression_nonconsuming(
         | Expression::Float(_)
         | Expression::Boolean(_)
         | Expression::ArenaIntrospect(_)
+        | Expression::CapabilityCheck(_)
         | Expression::Null => Ok(()),
         Expression::BinaryOp { left, right, .. } => {
             analyze_expression_nonconsuming(analyzer, left)?;
@@ -969,6 +907,21 @@ pub(crate) fn analyze_expression_nonconsuming(
                 }
                 analyze_expression_nonconsuming(analyzer, &arm.body)?;
                 analyzer.branch_contexts = previous;
+            }
+            Ok(())
+        }
+        Expression::Turbofish { expr, .. } => {
+            analyze_expression_nonconsuming(analyzer, expr)
+        }
+        Expression::GenericStaticCall { args, .. } => {
+            for arg in args {
+                analyze_expression_nonconsuming(analyzer, arg)?;
+            }
+            Ok(())
+        }
+        Expression::Tuple(elems) => {
+            for elem in elems {
+                analyze_expression_nonconsuming(analyzer, elem)?;
             }
             Ok(())
         }

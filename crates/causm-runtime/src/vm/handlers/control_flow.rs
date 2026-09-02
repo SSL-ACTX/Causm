@@ -1,0 +1,562 @@
+use crate::vm::error::TemporalError;
+use crate::vm::state::Vm;
+use causm_ir::Reg;
+
+#[allow(non_snake_case)]
+impl Vm {
+    pub(crate) fn Jump(
+        &mut self,
+        branch_id: &str,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        branch.pc = target;
+        Ok(())
+    }
+
+    pub(crate) fn JumpIf(
+        &mut self,
+        branch_id: &str,
+        cond: Reg,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, cond.0)?;
+        if let causm_core::value::Payload::Bool(true) = val {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn JumpIfNot(
+        &mut self,
+        branch_id: &str,
+        cond: Reg,
+        target: usize,
+    ) -> Result<(), TemporalError> {
+        let val = self.peek_reg(branch_id, cond.0)?;
+        if let causm_core::value::Payload::Bool(false) = val {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn DynamicCall(
+        &mut self,
+        branch_id: &str,
+        method: String,
+        args: Vec<Reg>,
+        dest: Reg,
+        budget: Option<u64>,
+    ) -> Result<(), TemporalError> {
+        if args.is_empty() {
+            return Err(TemporalError::EvalError(
+                "DynamicCall requires at least one argument (the receiver)"
+                    .to_string(),
+            ));
+        }
+        let receiver_reg = args[0];
+        let type_name = {
+            let branch = self.get_branch(branch_id)?;
+            let meta_type = branch
+                .arena
+                .metadata
+                .get(receiver_reg.0 as usize)
+                .and_then(|m| m.as_ref())
+                .and_then(|m| m.type_name.clone());
+            meta_type.ok_or_else(|| {
+                TemporalError::EvalError("receiver has no metadata".to_string())
+            })?
+        };
+
+        let routine_name = format!("{}.{}", type_name, method);
+        self.execute_call(branch_id, routine_name, args, dest, budget)
+    }
+
+    pub(crate) fn Call(
+        &mut self,
+        branch_id: &str,
+        routine: String,
+        args: Vec<Reg>,
+        dest: Reg,
+    ) -> Result<(), TemporalError> {
+        self.execute_call(branch_id, routine, args, dest, None)
+    }
+
+    fn execute_call(
+        &mut self,
+        branch_id: &str,
+        routine: String,
+        args: Vec<Reg>,
+        dest: Reg,
+        budget: Option<u64>,
+    ) -> Result<(), TemporalError> {
+        let mut resolved_routine = routine.clone();
+        if !self.routines.contains_key(&resolved_routine)
+            && !self.is_intrinsic(&resolved_routine)
+        {
+            if let Some(angle_idx) = routine.find('<') {
+                if let Some(dot_idx) = routine.find('.') {
+                    let base_struct = &routine[..angle_idx];
+                    let method_name = &routine[dot_idx..];
+                    let base_routine = format!("{}{}", base_struct, method_name);
+                    if self.routines.contains_key(&base_routine) {
+                        resolved_routine = base_routine;
+                    }
+                }
+            }
+
+            if !self.routines.contains_key(&resolved_routine) {
+                if let Some(dot_idx) = routine.find('.') {
+                    let struct_name = &routine[..dot_idx];
+                    let method_name = &routine[dot_idx + 1..];
+                    let mut current = struct_name.to_string();
+                    while let Some(parent) = self.struct_extends.get(&current) {
+                        let parent_routine = format!("{}.{}", parent, method_name);
+                        if self.routines.contains_key(&parent_routine) {
+                            resolved_routine = parent_routine;
+                            break;
+                        }
+                        current = parent.clone();
+                    }
+                }
+            }
+        }
+        let routine = resolved_routine;
+
+        if self.is_intrinsic(&routine) {
+            let mut arg_values = Vec::new();
+            for reg in &args {
+                arg_values.push(self.peek_reg(branch_id, reg.0)?);
+            }
+            let res = self.call_intrinsic(&routine, arg_values)?;
+            return self.insert_reg(
+                branch_id,
+                dest.0,
+                causm_core::value::EntropicState::Valid(res),
+            );
+        }
+
+        let routine_def = self
+            .routines
+            .get(&routine)
+            .ok_or_else(|| {
+                TemporalError::EvalError(format!("unknown routine {}", routine))
+            })?
+            .clone();
+        let params = routine_def.params.clone();
+
+        if args.len() != params.len() {
+            return Err(TemporalError::EvalError(format!(
+                "routine call expects {} args, got {}",
+                params.len(),
+                args.len()
+            )));
+        }
+
+        let mut arg_values = Vec::new();
+        let mut arg_metas = Vec::new();
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            for reg in &args {
+                let val =
+                    branch.arena.peek(reg.0).ok_or(TemporalError::MemoryFault(
+                        causm_core::value::MemoryError::AlreadyConsumed,
+                    ))?;
+                let meta = branch
+                    .arena
+                    .metadata
+                    .get(reg.0 as usize)
+                    .and_then(|m| m.clone());
+                arg_values.push(val);
+                arg_metas.push(meta);
+            }
+        }
+
+        // Check if this routine is a dynamic foreign FFI binding
+        if let Some(ref binding) = routine_def.foreign_binding {
+            let sym_ptr = self
+                .foreign_manager
+                .get_or_load_symbol(&binding.lib_name, &binding.symbol)?;
+            let result_payload = unsafe {
+                crate::vm::handlers::ffi::invoke_foreign_symbol(
+                    sym_ptr,
+                    &mut arg_values,
+                    &routine_def.return_type,
+                )?
+            };
+
+            // Write back any modified struct or array argument payloads into registers
+            for (i, reg) in args.iter().enumerate() {
+                if matches!(
+                    &arg_values[i],
+                    causm_core::value::Payload::Struct(_)
+                        | causm_core::value::Payload::Array(_)
+                ) {
+                    self.insert_reg(
+                        branch_id,
+                        reg.0,
+                        causm_core::value::EntropicState::Valid(
+                            arg_values[i].clone(),
+                        ),
+                    )?;
+                }
+            }
+
+            // Consume arguments if needed
+            for (i, reg) in args.iter().enumerate() {
+                let (mode, _, _) = &params[i];
+                if let causm_core::ParamMode::Consume = mode {
+                    self.consume_reg(branch_id, reg.0)?;
+                }
+            }
+
+            if let Some(cost) = routine_def.taking_ms {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock = branch.local_clock.saturating_add(cost);
+                branch.consume_budget(cost)?;
+            }
+
+            return self.insert_reg(
+                branch_id,
+                dest.0,
+                causm_core::value::EntropicState::Valid(result_payload),
+            );
+        }
+
+        let max_depth = self.max_call_depth as usize;
+        let branch = self.get_branch_mut(branch_id)?;
+        if branch.call_stack.len() >= max_depth {
+            return Err(TemporalError::EvalError(format!(
+                "Call stack overflow: maximum recursion depth {} exceeded in routine '{}'",
+                max_depth, routine
+            )));
+        }
+
+        // Consume arguments if needed on caller
+        for (i, reg) in args.iter().enumerate() {
+            let (mode, _, _) = &params[i];
+            if let causm_core::ParamMode::Consume = mode {
+                if let Some(state) = branch.arena.registers.get_mut(reg.0 as usize) {
+                    *state = causm_core::value::EntropicState::Consumed;
+                }
+            }
+        }
+
+        // Save caller state into CallFrame
+        let caller_frame = crate::vm::state::CallFrame {
+            return_dest: dest,
+            return_pc: branch.pc,
+            saved_instructions: std::mem::take(&mut branch.instructions),
+            saved_spans: std::mem::take(&mut branch.spans),
+            saved_manifest_stack: branch.manifest_stack.clone(),
+            caller_start_clock: branch.local_clock,
+            budget,
+            routine_name: routine,
+            params: params.clone(),
+            args: args.clone(),
+            caller_arena_regs: std::mem::take(&mut branch.arena.registers),
+            caller_arena_meta: std::mem::take(&mut branch.arena.metadata),
+            caller_arena_used: branch.arena.used,
+            caller_loop_depth: branch.loop_depth,
+            caller_loop_stack: std::mem::take(&mut branch.loop_stack),
+            caller_flat_loops: std::mem::take(&mut branch.flat_loops),
+            caller_break_requested: branch.break_requested,
+        };
+        branch.call_stack.push(caller_frame);
+
+        // Initialize child frame registers and instructions
+        branch.instructions = routine_def.instructions.clone();
+        branch.spans = routine_def.instructions.iter().map(|_| None).collect();
+        branch.pc = 0;
+        branch.arena.used = 0;
+        branch.loop_depth = 0;
+        branch.loop_stack = Vec::new();
+        branch.flat_loops = Vec::new();
+        branch.break_requested = false;
+
+        for (i, (mode, _name, _)) in params.iter().enumerate() {
+            let val = arg_values[i].clone();
+            let meta = arg_metas.get(i).and_then(|m| m.clone());
+            match mode {
+                causm_core::ParamMode::Consume
+                | causm_core::ParamMode::Clone
+                | causm_core::ParamMode::Peek
+                | causm_core::ParamMode::Lease => {
+                    if let Some(m) = meta {
+                        branch.arena.insert_with_metadata(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                            m,
+                        )?;
+                    } else {
+                        branch.arena.insert(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                        )?;
+                    }
+                }
+                causm_core::ParamMode::Decay => {
+                    if let Some(m) = meta {
+                        branch.arena.insert_with_metadata(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                            m,
+                        )?;
+                    } else {
+                        branch.arena.insert(
+                            i as u32,
+                            causm_core::value::EntropicState::Valid(val),
+                        )?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn Return(
+        &mut self,
+        branch_id: &str,
+        src: Option<Reg>,
+    ) -> Result<(), TemporalError> {
+        let branch = self.get_branch_mut(branch_id)?;
+        let (return_val, return_meta) = if let Some(reg) = src {
+            let val = branch
+                .arena
+                .get_payload(reg.0)
+                .unwrap_or(causm_core::value::Payload::String("void".to_string()));
+            let meta = branch
+                .arena
+                .metadata
+                .get(reg.0 as usize)
+                .and_then(|m| m.as_ref())
+                .cloned();
+            (val, meta)
+        } else {
+            (causm_core::value::Payload::String("void".to_string()), None)
+        };
+
+        if let Some(frame) = branch.call_stack.pop() {
+            // Restore caller instructions, spans, and manifest stack
+            branch.instructions = frame.saved_instructions;
+            branch.spans = frame.saved_spans;
+            branch.pc = frame.return_pc;
+            branch.manifest_stack = frame.saved_manifest_stack;
+            branch.loop_depth = frame.caller_loop_depth;
+            branch.loop_stack = frame.caller_loop_stack;
+            branch.flat_loops = frame.caller_flat_loops;
+            branch.break_requested = frame.caller_break_requested;
+
+            // Capture child registers and metadata before restoring caller frame
+            let child_regs = std::mem::replace(
+                &mut branch.arena.registers,
+                frame.caller_arena_regs,
+            );
+            let child_meta = std::mem::replace(
+                &mut branch.arena.metadata,
+                frame.caller_arena_meta,
+            );
+            branch.arena.used = frame.caller_arena_used;
+
+            let elapsed = branch
+                .local_clock
+                .saturating_sub(frame.caller_start_clock)
+                .max(1);
+            if let Some(limit) = frame.budget {
+                if elapsed > limit {
+                    return Err(TemporalError::EvalError(format!(
+                        "temporal contract violated: concrete implementation of method '{}' took {}ms, exceeding the interface's budget of {}ms",
+                        frame.routine_name, elapsed, limit
+                    )));
+                }
+            }
+
+            // Write back any modified lease, struct, array, or FFI pointer buffer argument payloads from child to caller registers
+            for (i, (mode, _, expected_type)) in frame.params.iter().enumerate() {
+                let is_ffi_buf = matches!(mode, causm_core::ParamMode::Peek)
+                    && matches!(
+                        expected_type,
+                        causm_core::types::Type::I64
+                            | causm_core::types::Type::I32
+                            | causm_core::types::Type::U64
+                            | causm_core::types::Type::Integer
+                    );
+                if matches!(mode, causm_core::ParamMode::Lease) || is_ffi_buf {
+                    if let Some(child_state) = child_regs.get(i) {
+                        let caller_reg = frame.args[i].0;
+                        branch.arena.insert(caller_reg, child_state.clone())?;
+                        if let Some(Some(m)) = child_meta.get(i) {
+                            branch.arena.set_metadata(caller_reg, Some(m.clone()));
+                        }
+                    }
+                } else if matches!(
+                    mode,
+                    causm_core::ParamMode::Peek | causm_core::ParamMode::Clone
+                ) {
+                    if let Some(causm_core::value::EntropicState::Valid(
+                        ref child_val,
+                    )) = child_regs.get(i)
+                    {
+                        let caller_reg = frame.args[i].0;
+                        if let Some(causm_core::value::EntropicState::Valid(
+                            ref mut caller_val,
+                        )) = branch.arena.registers.get_mut(caller_reg as usize)
+                        {
+                            if matches!(
+                                (&*caller_val, child_val),
+                                (
+                                    causm_core::value::Payload::Struct(_),
+                                    causm_core::value::Payload::Struct(_)
+                                ) | (
+                                    causm_core::value::Payload::Array(_),
+                                    causm_core::value::Payload::Array(_)
+                                )
+                            ) {
+                                let caller_meta =
+                                    branch.arena.get_metadata(caller_reg).cloned();
+                                branch.arena.insert(
+                                    caller_reg,
+                                    causm_core::value::EntropicState::Valid(
+                                        child_val.clone(),
+                                    ),
+                                )?;
+                                if let Some(m) = caller_meta {
+                                    branch.arena.set_metadata(caller_reg, Some(m));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Place return value in caller destination register with metadata
+            if let Some(m) = return_meta {
+                branch.arena.insert_with_metadata(
+                    frame.return_dest.0,
+                    causm_core::value::EntropicState::Valid(return_val),
+                    m,
+                )?;
+            } else {
+                branch.arena.insert(
+                    frame.return_dest.0,
+                    causm_core::value::EntropicState::Valid(return_val),
+                )?;
+            }
+        } else {
+            // Root return
+            branch.return_value = Some(return_val.clone());
+            branch
+                .arena
+                .insert(0, causm_core::value::EntropicState::Valid(return_val))?;
+            branch.pc = branch.instructions.len();
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn Select(
+        &mut self,
+        branch_id: &str,
+        max_ms: u64,
+        cases: Vec<causm_ir::IrSelectCase>,
+        timeout_target: Option<usize>,
+    ) -> Result<(), TemporalError> {
+        let mut found_case = None;
+        for case in &cases {
+            let message = {
+                if let Some(chan) = self.channels.get_mut(&case.chan_id) {
+                    chan.pop_front()
+                } else {
+                    None
+                }
+            };
+
+            if let Some(msg) = message {
+                found_case = Some((case.clone(), msg));
+                break;
+            }
+        }
+
+        // Apply deterministic temporal padding
+        {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock += max_ms;
+            branch.consume_budget(max_ms)?;
+        }
+
+        if let Some((case, msg)) = found_case {
+            self.insert_reg(
+                branch_id,
+                case.dest.0,
+                causm_core::value::EntropicState::Valid(msg.payload),
+            )?;
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = case.target;
+        } else if let Some(target) = timeout_target {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target;
+        }
+        Ok(())
+    }
+
+    // DEV NOTE (Causal History & Entropy Pattern Matching):
+    // `MatchEntropy` determines runtime control flow based on entropic state (`Valid`, `Decayed`, `Pending`, `Consumed`).
+    // In addition to inspecting direct register state, when a register is `Valid`, we query `causal_history`
+    // for local `CausalEvent::Decay` records. If individual fields were accessed destructively, the struct
+    // pattern matcher accurately routes execution to the `Decayed` branch without requiring destructive parent truncation.
+    pub(crate) fn MatchEntropy(
+        &mut self,
+        branch_id: &str,
+        target: Reg,
+        valid_target: Option<usize>,
+        decayed_target: Option<usize>,
+        pending_target: Option<usize>,
+        consumed_target: Option<usize>,
+    ) -> Result<(), TemporalError> {
+        let state = self.peek_state(branch_id, target.0)?;
+        let maybe_jump = match &state {
+            causm_core::value::EntropicState::Valid(_) => {
+                // Check causal history: if any field decay was recorded for this register
+                // in this branch, treat it as Decayed.
+                let has_field_decay = self.causal_history.iter().any(|ev| {
+                    if let crate::vm::state::CausalEvent::Decay {
+                        branch_id: b,
+                        reg,
+                        ..
+                    } = ev
+                    {
+                        b == branch_id && *reg == target.0
+                    } else {
+                        false
+                    }
+                });
+                if has_field_decay {
+                    decayed_target
+                } else {
+                    valid_target
+                }
+            }
+            causm_core::value::EntropicState::Leased { original, .. } => {
+                match &**original {
+                    causm_core::value::EntropicState::Valid(_) => valid_target,
+                    causm_core::value::EntropicState::Decayed(_) => decayed_target,
+                    causm_core::value::EntropicState::Pending(_) => pending_target,
+                    causm_core::value::EntropicState::Consumed => consumed_target,
+                    causm_core::value::EntropicState::Leased { .. } => valid_target,
+                }
+            }
+            causm_core::value::EntropicState::Decayed(_) => decayed_target,
+            causm_core::value::EntropicState::Pending(_) => pending_target,
+            causm_core::value::EntropicState::Consumed => consumed_target,
+        };
+
+        if let Some(target_pc) = maybe_jump {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.pc = target_pc;
+        }
+        Ok(())
+    }
+}

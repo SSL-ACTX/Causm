@@ -1,5 +1,6 @@
 pub mod fmt;
 pub mod profiler;
+pub mod scaffold;
 pub mod telemetry;
 pub mod tuner;
 

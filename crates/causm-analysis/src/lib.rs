@@ -1,9 +1,12 @@
 pub mod analyzer;
+pub mod codegen;
 pub mod expression;
 pub mod oxiz;
+pub mod pipeline;
+pub mod resolve;
 pub mod solver;
+pub mod ssa;
 pub mod statement;
 pub mod statements;
-pub mod verifier;
 #[cfg(feature = "z3")]
 pub mod z3;

@@ -4,14 +4,14 @@
     import "std/encoding/utf8" as Utf8
     import "std/collection" as Collection
 
-    routine Http.format_get(peek host: string, peek path: string) -> string taking _ => "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
+    routine Http.format_get(&host: string, &path: string) -> string taking _ => "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
 
-    routine Http.format_post(peek host: string, peek path: string, peek body: string) -> string taking _ {
+    routine Http.format_post(&host: string, &path: string, &body: string) -> string taking _ {
         let body_len = len(body)
         f"POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Length: {body_len}\r\nConnection: close\r\n\r\n{body}"
     }
 
-    routine Http.parse_status_code(peek response_text: string) -> i32 taking _ {
+    routine Http.parse_status_code(&response_text: string) -> i32 taking _ {
         let bytes = str_bytes(response_text)
         let n = len(bytes)
         let mut code = 0
@@ -25,7 +25,7 @@
         code
     }
 
-    routine Http.parse_status_text(peek code: i32) -> string taking _ => match code {
+    routine Http.parse_status_text(&code: i32) -> string taking _ => match code {
         200 => "OK",
         201 => "Created",
         204 => "No Content",
@@ -37,7 +37,7 @@
         _ => "Status",
     }
 
-    routine Http.get(peek host: string, peek port: i32, peek path: string) -> HttpResponse taking _ {
+    routine Http.get(&host: string, &port: i32, &path: string) -> HttpResponse taking _ {
         let req_text = Http.format_get(host, path)
         let req_bytes = Utf8.encode(req_text)
         let req_len = len(req_bytes)
@@ -64,7 +64,7 @@
         }
     }
 
-    routine Http.post(peek host: string, peek port: i32, peek path: string, peek body: string) -> HttpResponse taking _ {
+    routine Http.post(&host: string, &port: i32, &path: string, &body: string) -> HttpResponse taking _ {
         let req_text = Http.format_post(host, path, body)
         let req_bytes = Utf8.encode(req_text)
         let req_len = len(req_bytes)
@@ -91,11 +91,11 @@
         }
     }
 
-    routine HttpResponse.is_success(peek self: HttpResponse) -> bool taking _ => if (self.status_code >= 200) {
+    routine HttpResponse.is_success(&self: HttpResponse) -> bool taking _ => if (self.status_code >= 200) {
         if (self.status_code < 300) { true } else { false }
     } else {
         false
     }
 
-    routine HttpResponse.body_str(peek self: HttpResponse) -> string taking _ => self.body
+    routine HttpResponse.body_str(&self: HttpResponse) -> string taking _ => self.body
 }

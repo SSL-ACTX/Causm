@@ -11,6 +11,7 @@ pub(crate) fn infer_expression_type(
         Expression::Boolean(_) => Ok(Type::Bool),
         Expression::Integer(_) => Ok(Type::Integer),
         Expression::ArenaIntrospect(_) => Ok(Type::Integer),
+        Expression::CapabilityCheck(_) => Ok(Type::Bool),
         Expression::Float(_) => Ok(Type::Float),
         Expression::Literal(_) => Ok(Type::String),
         Expression::Identifier(name) => match analyzer.get_variable_type(name) {
@@ -45,12 +46,14 @@ pub(crate) fn infer_expression_type(
                 .annotate(SemanticErrorKind::UndefinedVariable(name.to_string()))),
         },
         Expression::StructLit(type_name, fields) => {
-            if let Some(ref name) = *type_name.borrow() {
-                return Ok(Type::Custom(name.clone()));
-            }
             let mut schema = std::collections::HashMap::new();
             for (k, v) in fields {
                 schema.insert(k.clone(), infer_expression_type(analyzer, v)?);
+            }
+            if let Some(ref name) = *type_name.borrow() {
+                if analyzer.type_decls.contains_key(name) {
+                    return Ok(Type::Custom(name.clone()));
+                }
             }
             Ok(Type::Struct(causm_core::types::StructType {
                 fields: schema,
@@ -136,6 +139,23 @@ pub(crate) fn infer_expression_type(
             let target_type = infer_expression_type(analyzer, target)?;
             let struct_name = match &target_type {
                 Type::Custom(name) => name.clone(),
+                Type::Struct(s) => {
+                    let mut matched = None;
+                    for (tname, fields) in &analyzer.type_decls {
+                        if fields.len() == s.fields.len()
+                            && fields.keys().all(|k| s.fields.contains_key(k))
+                        {
+                            matched = Some(tname.clone());
+                            break;
+                        }
+                    }
+                    matched.ok_or_else(|| {
+                        analyzer.annotate(SemanticErrorKind::TypeMismatch(
+                            "method call target must be a custom type instance"
+                                .into(),
+                        ))
+                    })?
+                }
                 _ => {
                     return Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                         "method call target must be a custom type instance".into(),
@@ -271,6 +291,19 @@ pub(crate) fn infer_expression_type(
                         )))
                     })
                 }
+                Type::Custom(custom_name) => {
+                    let base_name =
+                        custom_name.split('<').next().unwrap_or(&custom_name).trim();
+                    if let Some(fields_map) = analyzer.type_decls.get(base_name) {
+                        if let Some(fd) = fields_map.get(field) {
+                            return Ok(Type::from_typename(&fd.typ));
+                        }
+                    }
+                    Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(format!(
+                        "field '{}' not found on type '{}'",
+                        field, custom_name
+                    ))))
+                }
                 _ => Err(analyzer.annotate(SemanticErrorKind::TypeMismatch(
                     "field access on non-struct/topology".into(),
                 ))),
@@ -302,6 +335,26 @@ pub(crate) fn infer_expression_type(
                 | BinaryOperator::Ge
                 | BinaryOperator::LogicalAnd
                 | BinaryOperator::LogicalOr => Ok(Type::Bool),
+                BinaryOperator::BitwiseAnd
+                | BinaryOperator::BitwiseOr
+                | BinaryOperator::BitwiseXor
+                | BinaryOperator::Shl
+                | BinaryOperator::Shr => {
+                    if left_type == Type::Bool && right_type == Type::Bool {
+                        Ok(Type::Bool)
+                    } else {
+                        Ok(left_type)
+                    }
+                }
+                BinaryOperator::NullCoalesce => {
+                    if let Type::Optional(inner) = left_type {
+                        Ok(*inner)
+                    } else if left_type == Type::Unknown {
+                        Ok(right_type)
+                    } else {
+                        Ok(left_type)
+                    }
+                }
                 BinaryOperator::Add
                 | BinaryOperator::Sub
                 | BinaryOperator::Mul
@@ -322,7 +375,9 @@ pub(crate) fn infer_expression_type(
         }
         Expression::UnaryOp { op, expr } => match op {
             UnaryOperator::Not => Ok(Type::Bool),
-            UnaryOperator::Neg => infer_expression_type(analyzer, expr),
+            UnaryOperator::Neg | UnaryOperator::BitwiseNot => {
+                infer_expression_type(analyzer, expr)
+            }
         },
         Expression::TypeAssertion { cast_type, .. } => {
             Ok(Type::from_typename(cast_type))
@@ -370,6 +425,23 @@ pub(crate) fn infer_expression_type(
             } else {
                 Ok(Type::Unknown)
             }
+        }
+        Expression::Turbofish { expr, .. } => infer_expression_type(analyzer, expr),
+        Expression::GenericStaticCall {
+            type_name, method, ..
+        } => {
+            let qualified = format!("{}.{}", type_name, method);
+            if let Some(info) = analyzer.routines.get(&qualified) {
+                return Ok(info.return_type.clone());
+            }
+            Ok(Type::Unknown)
+        }
+        Expression::Tuple(elems) => {
+            let types: Result<Vec<Type>, _> = elems
+                .iter()
+                .map(|e| infer_expression_type(analyzer, e))
+                .collect();
+            Ok(Type::Tuple(types?))
         }
     }
 }

@@ -17,6 +17,7 @@ pub struct LoweringContext {
     pub(crate) decay_handlers: HashMap<String, Vec<Instruction>>,
     pub current_span: Option<Span>,
     pub entropy_modes: Vec<causm_core::EntropyMode>,
+    pub current_branch: Option<String>,
 }
 
 impl Default for LoweringContext {
@@ -42,6 +43,7 @@ impl LoweringContext {
             decay_handlers: HashMap::new(),
             current_span: None,
             entropy_modes: vec![causm_core::EntropyMode::Deterministic],
+            current_branch: None,
         }
     }
 

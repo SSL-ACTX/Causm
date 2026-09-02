@@ -1,6 +1,8 @@
-use causm_core::value::{Arena, Payload};
+use causm_concurrency::mailbox::BoundedMailbox;
+use causm_core::value::{Arena, EntropicState, Payload, ValueMetadata};
 use causm_core::{Manifest, ParamMode, SpeculationCommitMode};
-use std::collections::{HashMap, VecDeque};
+use indexmap::IndexMap;
+use std::collections::HashMap;
 
 pub type CapHandler =
     Box<dyn Fn(&HashMap<String, String>) -> Result<Payload, String>>;
@@ -82,10 +84,11 @@ pub struct Vm {
     pub speculative_commit_mode: SpeculationCommitMode,
     pub global_clock: u64,
     pub root_timeline: Timeline,
-    pub active_branches: HashMap<String, Timeline>,
+    pub active_branches: IndexMap<String, Timeline>,
+
     pub capability_handlers: HashMap<String, CapHandler>,
-    pub channels: HashMap<String, VecDeque<Message>>,
-    pub pending_channels: HashMap<String, VecDeque<Message>>,
+    pub channels: HashMap<String, BoundedMailbox<Message>>,
+    pub pending_channels: HashMap<String, BoundedMailbox<Message>>,
     pub channel_decay_limits: HashMap<String, u64>,
     pub routines: HashMap<String, Routine>,
     pub decay_handlers: HashMap<String, Vec<causm_ir::Instruction>>,
@@ -100,9 +103,40 @@ pub struct Vm {
     pub next_payload_id: u64,
     pub next_call_id: u64,
     pub trace_entropy: bool,
+    pub trace_causal: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,
-    pub foreign_manager: std::sync::Arc<crate::vm::ffi::ForeignLibraryManager>,
+    pub call_depth: u32,
+    pub max_call_depth: u32,
+    pub foreign_manager:
+        std::sync::Arc<crate::vm::handlers::ffi::ForeignLibraryManager>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CallFrame {
+    pub return_dest: causm_ir::Reg,
+    pub return_pc: usize,
+    pub saved_instructions: Vec<causm_ir::Instruction>,
+    pub saved_spans: Vec<Option<causm_core::Span>>,
+    pub saved_manifest_stack: Vec<Manifest>,
+    pub caller_start_clock: u64,
+    pub budget: Option<u64>,
+    pub routine_name: String,
+    pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
+    pub args: Vec<causm_ir::Reg>,
+    pub caller_arena_regs: Vec<EntropicState>,
+    pub caller_arena_meta: Vec<Option<ValueMetadata>>,
+    pub caller_arena_used: u64,
+    pub caller_loop_depth: u32,
+    pub caller_loop_stack: Vec<(u64, u64)>,
+    pub caller_flat_loops: Vec<FlatLoopState>,
+    pub caller_break_requested: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum FlatLoopSource {
+    Array(Vec<Payload>),
+    Range { current: i64, end: i64 },
 }
 
 #[derive(Clone, Debug)]
@@ -110,7 +144,7 @@ pub struct FlatLoopState {
     pub header_pc: usize,
     pub end_pc: usize,
     pub item_name: String,
-    pub elements: Vec<Payload>,
+    pub source: FlatLoopSource,
     pub index: usize,
     pub pacing_ms: Option<u64>,
     pub max_ms: Option<u64>,
@@ -136,12 +170,16 @@ pub struct Timeline {
     pub loop_depth: u32,
     pub loop_stack: Vec<(u64, u64)>, // (start_clock, max_ms)
     pub flat_loops: Vec<FlatLoopState>,
+    pub total_executed_cycles: u64,
+    pub max_cycles_watchdog: u64,
+    pub call_depth: u32,
     pub saturation_policies:
         HashMap<causm_core::PolicyTarget, causm_core::SaturationPolicy>,
     pub pc: usize,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
     pub return_value: Option<Payload>,
+    pub call_stack: Vec<CallFrame>,
 }
 
 impl Timeline {

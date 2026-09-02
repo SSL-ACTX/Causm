@@ -184,3 +184,66 @@ fn test_match_literal_and_wildcard_patterns() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_pattern_matching_tuple_decomposition() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let pair = (10, 20)
+        let sum = match pair {
+            (0, 0) => 0,
+            (x, 20) => x + 20,
+            (x, y) => x + y,
+            _ => -1,
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let sum_reg = ir.symbols.get("sum").unwrap().0;
+    let sum_payload = vm.root_timeline.arena.peek(sum_reg).unwrap();
+    assert_eq!(sum_payload, Payload::Integer(30));
+
+    Ok(())
+}
+
+#[test]
+fn test_pattern_matching_nested_tuple_and_enum() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        enum Command {
+            Move(int, int),
+            Stop,
+        }
+
+        let cmd = Command::Move(5, 12)
+        let description = match cmd {
+            Command::Stop => "halted",
+            Command::Move(0, 0) => "stationary",
+            Command::Move(x, y) => f"moving to {x},{y}",
+            _ => "unknown",
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let desc_reg = ir.symbols.get("description").unwrap().0;
+    let desc_payload = vm.root_timeline.arena.peek(desc_reg).unwrap();
+    assert_eq!(desc_payload, Payload::String("moving to 5,12".to_string()));
+
+    Ok(())
+}

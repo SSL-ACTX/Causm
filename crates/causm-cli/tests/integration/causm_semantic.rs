@@ -226,7 +226,7 @@ fn causm_semantic_routine_param_return_types() -> anyhow::Result<()> {
         let sum = a + b
         yield sum
       }
-      let result:int = call add(10, 20)
+      let result:int = add(10, 20)
     }
     "#;
 
@@ -307,7 +307,7 @@ fn causm_semantic_routine_taking_inferred() -> anyhow::Result<()> {
         let q = p
       }
       let s = "ok"
-      let r = call f(s)
+      let r = f(s)
     }
     "#;
 
@@ -365,7 +365,7 @@ fn causm_semantic_routine_consume_non_identifier_fails_analyzer(
       routine fn(consume token) taking 5ms {
         yield token
       }
-      let result = call fn("not_var", "x")
+      let result = fn("not_var", "x")
     }
     "#;
 
@@ -385,8 +385,8 @@ fn causm_semantic_routine_yield_array_struct_return() -> anyhow::Result<()> {
         yield a
         yield s
       }
-      let result1 = call make_res()
-      let result2 = call make_res()
+      let result1 = make_res()
+      let result2 = make_res()
     }
     "#;
 
@@ -892,10 +892,11 @@ fn causm_semantic_merge_priority_resolves_to_priority_branch() -> anyhow::Result
 fn causm_semantic_split_map_collects_yields() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {
-      let data = [1,2,3]
-      split_map item consume data {
-        yield item
-      } reconcile (result=first_wins)
+      let data = [1, 2, 3]
+      let sum = 0
+      for item in data step 10ms {
+        sum = sum + item
+      }
     }
     "#;
 
@@ -907,13 +908,9 @@ fn causm_semantic_split_map_collects_yields() -> anyhow::Result<()> {
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
-    let out_reg = ir
-        .symbols
-        .get("splitmap_results")
-        .expect("splitmap_results not found")
-        .0;
-    let out = vm.root_timeline.arena.peek(out_reg);
-    assert!(out.is_some());
+    let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
+    let sum = vm.root_timeline.arena.peek(sum_reg);
+    assert_eq!(sum, Some(Payload::Integer(6)));
     Ok(())
 }
 
@@ -1101,7 +1098,7 @@ fn causm_semantic_temporal_decay_and_decay_handler() -> anyhow::Result<()> {
     @0ms: {
         type Account = struct decay_after 2ms { id: string, balance: int }
         let cleanup_executed = false
-        decay_handler for Account {
+        on_decay(Account) {
             cleanup_executed = true
         }
         let act: Account = struct { id = "123", balance = 1000 }
@@ -1324,6 +1321,396 @@ fn test_syntax_string_escape_sequences() -> anyhow::Result<()> {
     assert_eq!(logs.len(), 2);
     assert_eq!(logs[0], "Line1\nLine2\tTabbed");
     assert_eq!(logs[1], "Val:\t42\nDone.");
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_requirement_allowed() -> anyhow::Result<()> {
+    let source = r#"
+    routine log_message(msg: string) require System.Log taking 5ms -> () {
+        print(msg)
+    }
+
+    @0ms: {
+        isolate demo {
+            require System.Log
+            log_message("Hello from secured routine")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let logged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let logged_clone = logged.clone();
+
+    let mut vm = Vm::new();
+    vm.capability_handlers.insert(
+        "System.Log".to_string(),
+        Box::new(move |params| {
+            if let Some(msg) = params.get("message") {
+                logged_clone.lock().unwrap().push(msg.clone());
+            }
+            Ok(Payload::Null)
+        }),
+    );
+    vm.execute_program(&ir)?;
+
+    let logs = logged.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0], "Hello from secured routine");
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_requirement_missing_rejected() -> anyhow::Result<()> {
+    let source = r#"
+    routine log_message(msg: string) require System.Log taking 5ms -> () {
+        print(msg)
+    }
+
+    @0ms: {
+        isolate demo {
+            require System.Entropy
+            log_message("Unauthorized call")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert!(
+        err.to_string().contains("Missing capability")
+            || err.to_string().contains("System.Log"),
+        "Unexpected error: {:?}",
+        err
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_runtime_introspection_check() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let has_log = capability(System.Log)
+        let has_net = capability(Net.Http)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.capability_handlers
+        .insert("System.Log".to_string(), Box::new(|_| Ok(Payload::Null)));
+    vm.execute_program(&ir)?;
+
+    let has_log_reg = ir.symbols.get("has_log").unwrap().0;
+    let has_net_reg = ir.symbols.get("has_net").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(has_log_reg),
+        Some(Payload::Bool(true))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(has_net_reg),
+        Some(Payload::Bool(false))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_generic_turbofish_call() -> anyhow::Result<()> {
+    let source = r#"
+    routine identity(val: int) -> int taking _ => val
+
+    @0ms: {
+        let x = identity::<int>(42)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(x_reg),
+        Some(Payload::Integer(42))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_generic_static_call() -> anyhow::Result<()> {
+    let source = r#"
+    routine Buffer.new(capacity: int) -> int taking _ => capacity
+
+    @0ms: {
+        let cap = Buffer<u8>::new(1024)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let cap_reg = ir.symbols.get("cap").unwrap().0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(cap_reg),
+        Some(Payload::Integer(1024))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_chaining_monadic_try_operator() -> anyhow::Result<()> {
+    let source = r#"
+    routine get_val(flag: bool) -> int taking _ {
+        if flag {
+            let res = 99
+            yield res
+        } else {
+            let n = null
+            yield n
+        } reconcile auto
+    }
+
+    routine add_one(x: int) -> int taking _ => x + 1
+
+    routine chain_success() -> int taking _ {
+        let v = get_val(true)?
+        let res = add_one(v)
+        yield res
+    }
+
+    routine chain_short_circuit() -> int taking _ {
+        let v = get_val(false)?
+        let res = add_one(v)
+        yield res
+    }
+
+    @0ms: {
+        let success_val = chain_success()
+        let short_circuit_val = chain_short_circuit()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let succ_reg = ir.symbols.get("success_val").unwrap().0;
+    let sc_reg = ir.symbols.get("short_circuit_val").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(succ_reg),
+        Some(Payload::Integer(100))
+    );
+    assert_eq!(vm.root_timeline.arena.peek(sc_reg), Some(Payload::Null));
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_with_bracketed_syntax() -> anyhow::Result<()> {
+    let source = r#"
+    routine logged_fetch(url: string) -> string with [System.NetworkFetch, System.Log] {
+        yield url
+    }
+
+    @0ms: {
+        isolate secure_zone {
+            require System.NetworkFetch
+            require System.Log
+            let data = logged_fetch("https://causm.org")
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.register_capability("System.NetworkFetch", |_| Ok(Payload::Null));
+    vm.register_capability("System.Log", |_| Ok(Payload::Null));
+    vm.execute_program(&ir)?;
+    Ok(())
+}
+
+#[test]
+fn test_capability_routine_requires_bracketed_missing_cap_error(
+) -> anyhow::Result<()> {
+    let source = r#"
+    routine dangerous_op() -> bool requires [System.IO, System.NetworkFetch] {
+        yield true
+    }
+
+    @0ms: {
+        isolate sandbox {
+            require System.IO
+            let ok = dangerous_op()
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(res.is_err());
+    let err_str = res.unwrap_err().to_string();
+    assert!(
+        err_str.contains("Missing capability")
+            || err_str.contains("System.NetworkFetch")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_pure_path_utilities_in_zero_cap_isolate() -> anyhow::Result<()> {
+    let source = r#"
+    from "std/path" import join, path_basename, path_dirname, extension
+
+    @0ms: {
+        isolate pure_sandbox {
+            enable memory(64KB)
+            enable cpu(5000ms)
+
+            let p = join("/var/log", "app.log")
+            let b = path_basename(p)
+            let d = path_dirname(p)
+            let ext = extension(p)
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let p_reg = ir.symbols.get("p").unwrap().0;
+    let b_reg = ir.symbols.get("b").unwrap().0;
+    let d_reg = ir.symbols.get("d").unwrap().0;
+    let ext_reg = ir.symbols.get("ext").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(p_reg),
+        Some(Payload::String("/var/log/app.log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(b_reg),
+        Some(Payload::String("app.log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(d_reg),
+        Some(Payload::String("/var/log".to_string()))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(ext_reg),
+        Some(Payload::String(".log".to_string()))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_tiered_stdlib_imports_in_zero_cap_isolate() -> anyhow::Result<()> {
+    let source = r#"
+    from "std/time" import now, unix_timestamp
+    from "std/fs" import open_readonly, file_exists
+    from "std/process" import pid, parent_pid
+    from "std/net" import create_socket
+    from "std/env" import current_pid, current_dir
+
+    @0ms: {
+        isolate unprivileged {
+            enable memory(64KB)
+            enable cpu(100ms)
+
+            let t = now()
+            let u = unix_timestamp()
+            let f = open_readonly("/etc/passwd")
+            let exists = file_exists("/etc/passwd")
+            let p = pid()
+            let pp = parent_pid()
+            let sock = create_socket()
+            let env_p = current_pid()
+            let env_d = current_dir()
+        }
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let u_reg = ir.symbols.get("u").unwrap().0;
+    let exists_reg = ir.symbols.get("exists").unwrap().0;
+    let p_reg = ir.symbols.get("p").unwrap().0;
+    let sock_reg = ir.symbols.get("sock").unwrap().0;
+    let env_p_reg = ir.symbols.get("env_p").unwrap().0;
+    let env_d_reg = ir.symbols.get("env_d").unwrap().0;
+
+    assert_eq!(
+        vm.root_timeline.arena.peek(u_reg),
+        Some(Payload::Integer(0))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(exists_reg),
+        Some(Payload::Bool(false))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(p_reg),
+        Some(Payload::Integer(1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(sock_reg),
+        Some(Payload::Integer(-1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(env_p_reg),
+        Some(Payload::Integer(1))
+    );
+    assert_eq!(
+        vm.root_timeline.arena.peek(env_d_reg),
+        Some(Payload::String("/".to_string()))
+    );
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use crate::gc::GarbageCollector;
 use crate::vm::error::TemporalError;
 use crate::vm::state::{Timeline, Vm};
-use causm_core::value::EntropicState;
+use causm_core::value::{EntropicState, ValueMetadata};
 use causm_core::{CausalReversion, MergeResolution, ResolutionStrategy};
 use std::collections::HashMap;
 
@@ -11,54 +11,18 @@ impl Vm {
         parent_id: &str,
         branches: Vec<&str>,
     ) -> Result<(), TemporalError> {
-        let (
-            base_arena,
-            cpu_budget_ms,
-            entropy_mode,
-            resource_budgets,
-            slice_ms,
-            parent_global_time,
-        ) = {
-            let parent_timeline = if parent_id == "main" {
-                &self.root_timeline
-            } else {
-                self.active_branches.get(parent_id).ok_or_else(|| {
-                    TemporalError::BranchNotFound(parent_id.to_string())
-                })?
-            };
-            (
-                parent_timeline.arena.clone(),
-                parent_timeline.cpu_budget_ms,
-                parent_timeline.entropy_mode,
-                parent_timeline.resource_budgets.clone(),
-                parent_timeline.slice_ms,
-                parent_timeline.birth_global_time + parent_timeline.local_clock,
-            )
+        let (parent_timeline, parent_global_time) = {
+            let parent = self.get_branch(parent_id)?;
+            let birth_time = parent.birth_global_time + parent.local_clock;
+            (parent.clone(), birth_time)
         };
 
         for branch_name in branches {
-            let new_branch = Timeline {
-                id: branch_name.to_string(),
-                birth_global_time: parent_global_time,
-                local_clock: 0,
-                arena: base_arena.clone(),
-                cpu_budget_ms,
-                slice_ms,
-                anchors: HashMap::new(),
-                commit_horizon_passed: false,
-                manifest_stack: Vec::new(),
-                resource_budgets: resource_budgets.clone(),
-                entropy_mode,
-                break_requested: false,
-                loop_depth: 0,
-                loop_stack: Vec::new(),
-                flat_loops: Vec::new(),
-                saturation_policies: HashMap::new(),
-                pc: 0,
-                instructions: Vec::new(),
-                spans: Vec::new(),
-                return_value: None,
-            };
+            let new_branch = Timeline::fork_from(
+                branch_name.to_string(),
+                &parent_timeline,
+                parent_global_time,
+            );
             self.active_branches
                 .insert(branch_name.to_string(), new_branch);
 
@@ -98,6 +62,7 @@ impl Vm {
         resolution: &MergeResolution,
     ) -> Result<(), TemporalError> {
         let mut merged_registers: Vec<Option<EntropicState>> = Vec::new();
+        let mut merged_metadata: Vec<Option<ValueMetadata>> = Vec::new();
         let mut pending_reversion = None;
 
         // Build a mapping from register ID to resolution strategy
@@ -108,14 +73,34 @@ impl Vm {
             }
         }
 
-        let base_arena_len = if target == "main" {
-            self.root_timeline.arena.registers.len()
-        } else {
-            self.active_branches
-                .get(target)
-                .map(|b| b.arena.registers.len())
-                .unwrap_or(0)
-        };
+        // Pre-seed merged_registers from the target arena so registers already
+        // written there (e.g. by RelativisticBlock sync) are not discarded by the merge.
+        {
+            let target_regs = if target == "main" {
+                self.root_timeline.arena.registers.clone()
+            } else {
+                self.active_branches
+                    .get(target)
+                    .map(|b| b.arena.registers.clone())
+                    .unwrap_or_default()
+            };
+            let target_meta = if target == "main" {
+                self.root_timeline.arena.metadata.clone()
+            } else {
+                self.active_branches
+                    .get(target)
+                    .map(|b| b.arena.metadata.clone())
+                    .unwrap_or_default()
+            };
+            merged_registers.resize(target_regs.len(), None);
+            merged_metadata.resize(target_meta.len(), None);
+            for (idx, state) in target_regs.iter().enumerate() {
+                merged_registers[idx] = Some(state.clone());
+            }
+            for (idx, meta) in target_meta.iter().enumerate() {
+                merged_metadata[idx] = meta.clone();
+            }
+        }
 
         for branch_name in &branches {
             let branch =
@@ -126,51 +111,46 @@ impl Vm {
             if merged_registers.len() < branch.arena.registers.len() {
                 merged_registers.resize(branch.arena.registers.len(), None);
             }
+            if merged_metadata.len() < branch.arena.metadata.len() {
+                merged_metadata.resize(branch.arena.metadata.len(), None);
+            }
 
             for (idx, state) in branch.arena.registers.iter().enumerate() {
+                let meta = branch.arena.metadata.get(idx).and_then(|m| m.clone());
                 if let Some(existing) = &merged_registers[idx] {
-                    let resolved = if idx >= base_arena_len {
-                        // Register was introduced inside a branch, not pre-existing in target.
-                        // Always prefer Valid/Decayed over Consumed when merging branch-local regs.
-                        match (existing, state) {
-                            (EntropicState::Consumed, other) => other.clone(),
-                            (other, EntropicState::Consumed) => other.clone(),
-                            (ext, incoming) => {
-                                let strategy = reg_resolutions
-                                    .get(&(idx as u32))
-                                    .unwrap_or(&ResolutionStrategy::Auto);
-                                let (resolved, rev) = self
-                                    .resolve_entropic_conflict(
-                                        &idx.to_string(),
-                                        ext,
-                                        incoming,
-                                        strategy,
-                                        branch_name,
-                                    );
-                                if pending_reversion.is_none() {
-                                    pending_reversion = rev;
-                                }
-                                resolved
+                    let resolved = match (existing, state) {
+                        (EntropicState::Consumed, other) => {
+                            if idx < merged_metadata.len() {
+                                merged_metadata[idx] = meta;
                             }
+                            other.clone()
                         }
-                    } else {
-                        let strategy = reg_resolutions
-                            .get(&(idx as u32))
-                            .unwrap_or(&ResolutionStrategy::Auto);
-                        let (resolved, rev) = self.resolve_entropic_conflict(
-                            &idx.to_string(),
-                            existing,
-                            state,
-                            strategy,
-                            branch_name,
-                        );
-                        if pending_reversion.is_none() {
-                            pending_reversion = rev;
+                        (other, EntropicState::Consumed) => other.clone(),
+                        (ext, incoming) => {
+                            let strategy = reg_resolutions
+                                .get(&(idx as u32))
+                                .unwrap_or(&ResolutionStrategy::Auto);
+                            let (resolved, rev) = self.resolve_entropic_conflict(
+                                &idx.to_string(),
+                                ext,
+                                incoming,
+                                strategy,
+                                branch_name,
+                            );
+                            if pending_reversion.is_none() {
+                                pending_reversion = rev;
+                            }
+                            if idx < merged_metadata.len() && meta.is_some() {
+                                merged_metadata[idx] = meta;
+                            }
+                            resolved
                         }
-                        resolved
                     };
                     merged_registers[idx] = Some(resolved);
                 } else {
+                    if idx < merged_metadata.len() {
+                        merged_metadata[idx] = meta;
+                    }
                     merged_registers[idx] = Some(state.clone());
                 }
             }
@@ -202,11 +182,19 @@ impl Vm {
         let target_branch = self.get_branch_mut(target)?;
         for (idx, v) in merged_registers.into_iter().enumerate() {
             if let Some(state) = v {
-                target_branch.arena.insert(idx as u32, state)?;
+                let meta = merged_metadata.get(idx).and_then(|m| m.clone());
+                target_branch.arena.ensure_register(idx as u32);
+                if let Some(m) = meta {
+                    target_branch
+                        .arena
+                        .insert_with_metadata(idx as u32, state, m)?;
+                } else {
+                    target_branch.arena.insert(idx as u32, state)?;
+                }
             }
         }
         for b in branches {
-            if let Some(branch) = self.active_branches.remove(b) {
+            if let Some(branch) = self.active_branches.shift_remove(b) {
                 GarbageCollector::collect_branch(branch);
             }
         }
@@ -373,7 +361,17 @@ impl Vm {
                 if existing == incoming {
                     (existing.clone(), None)
                 } else {
-                    (EntropicState::Consumed, None)
+                    match (existing, incoming) {
+                        (EntropicState::Consumed, other) => (other.clone(), None),
+                        (other, EntropicState::Consumed) => (other.clone(), None),
+                        (_, incoming_valid @ EntropicState::Valid(_)) => {
+                            (incoming_valid.clone(), None)
+                        }
+                        (existing_valid @ EntropicState::Valid(_), _) => {
+                            (existing_valid.clone(), None)
+                        }
+                        _ => (incoming.clone(), None),
+                    }
                 }
             }
             _ => (existing.clone(), None),

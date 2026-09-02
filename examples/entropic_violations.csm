@@ -1,0 +1,35 @@
+type SensorFrame = struct {
+    temperature: int,
+    pressure: int,
+    timestamp_ms: int
+}
+
+routine acquire_frame(&temp: int, &pressure: int, &ts: int) -> SensorFrame taking 3ms {
+    let frame = SensorFrame { temperature: temp, pressure: pressure, timestamp_ms: ts }
+    yield frame
+}
+
+routine checksum(&frame: SensorFrame) -> int taking 2ms {
+    let sum = frame.temperature + frame.pressure + frame.timestamp_ms
+    yield sum
+}
+
+routine transmit(frame: SensorFrame) -> int taking 5ms {
+    let sent = frame.temperature + frame.pressure
+    yield sent
+}
+
+@0ms: {
+    let temp     = 22
+    let pressure = 1013
+    let ts       = 0
+
+    let @decayed(30ms) readings = acquire_frame(&temp, &pressure, &ts)
+    let cksum = checksum(&readings)
+    print("checksum:", cksum)
+}
+
+@100ms: {
+    let sent = transmit(readings)
+    print("sent bytes:", sent)
+}

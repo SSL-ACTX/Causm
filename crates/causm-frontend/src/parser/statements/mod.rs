@@ -16,15 +16,33 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         end: pair.as_span().end(),
     };
 
-    let stmt = match pair.as_rule() {
+    let mut attributes = Vec::new();
+    let target_pair = if pair.as_rule() == Rule::statement {
+        let mut inner_pairs = pair.into_inner().peekable();
+        while let Some(p) = inner_pairs.peek() {
+            if p.as_rule() == Rule::attribute {
+                let attr_p = inner_pairs.next().unwrap();
+                attributes.push(parse_attribute(attr_p));
+            } else {
+                break;
+            }
+        }
+        inner_pairs.next().unwrap()
+    } else {
+        pair
+    };
+
+    let stmt = match target_pair.as_rule() {
         // Structural
         Rule::timeline_block
         | Rule::directive_stmt
         | Rule::isolate_stmt
+        | Rule::actor_stmt
+        | Rule::send_stmt
         | Rule::routine_stmt
         | Rule::require_decl
         | Rule::anchor_stmt
-        | Rule::rewind_stmt => structural::parse_structural_stmt(pair),
+        | Rule::rewind_stmt => structural::parse_structural_stmt(target_pair),
 
         // Data
         Rule::assignment_stmt
@@ -34,7 +52,7 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::enum_decl
         | Rule::interface_decl
         | Rule::decay_handler_stmt
-        | Rule::field_update_stmt => data::parse_data_stmt(pair),
+        | Rule::field_update_stmt => data::parse_data_stmt(target_pair),
 
         // Control Flow
         Rule::if_stmt
@@ -42,50 +60,81 @@ pub(crate) fn parse_statement(pair: Pair<Rule>) -> SpannedStatement {
         | Rule::match_stmt
         | Rule::using_stmt
         | Rule::loop_stmt
-        | Rule::for_stmt
         | Rule::while_stmt
+        | Rule::for_stmt
         | Rule::for_step_stmt
         | Rule::split_stmt
         | Rule::merge_stmt
         | Rule::select_stmt
-        | Rule::split_map_stmt
+        | Rule::return_stmt
         | Rule::yield_stmt
-        | Rule::break_stmt => control_flow::parse_control_flow_stmt(pair),
+        | Rule::break_stmt => control_flow::parse_control_flow_stmt(target_pair),
 
         // Temporal
         Rule::assert_time_stmt
         | Rule::slice_stmt
         | Rule::await_stmt
-        | Rule::lease_stmt => temporal::parse_temporal_stmt(pair),
+        | Rule::lease_stmt => temporal::parse_temporal_stmt(target_pair),
 
         // Entropic
         Rule::match_entropy_stmt | Rule::entangle_stmt => {
-            entropic::parse_entropic_stmt(pair)
+            entropic::parse_entropic_stmt(target_pair)
         }
 
         // Misc
         Rule::commit_stmt
         | Rule::speculate_stmt
         | Rule::collapse_stmt
-        | Rule::speculation_mode_stmt
         | Rule::import_stmt
         | Rule::from_import_stmt
         | Rule::foreign_block_stmt
         | Rule::print_stmt
-        | Rule::debug_stmt => misc::parse_misc_stmt(pair),
+        | Rule::debug_stmt => misc::parse_misc_stmt(target_pair),
 
         Rule::expression_stmt => {
-            let inner_expr = pair.into_inner().next().unwrap();
+            let inner_expr = target_pair.into_inner().next().unwrap();
             Statement::Expression(crate::parser::expressions::parse_expression(
                 inner_expr,
             ))
         }
-        _ => {
-            Statement::Expression(crate::parser::expressions::parse_expression(pair))
-        }
+        Rule::macro_def_stmt => misc::parse_macro_def(target_pair),
+        Rule::macro_call_stmt => misc::parse_macro_call(target_pair),
+        _ => Statement::Expression(crate::parser::expressions::parse_expression(
+            target_pair,
+        )),
     };
 
-    SpannedStatement { stmt, span }
+    SpannedStatement {
+        stmt,
+        span,
+        attributes,
+    }
+}
+
+fn parse_attribute(pair: Pair<Rule>) -> Attribute {
+    let span = Span {
+        start: pair.as_span().start(),
+        end: pair.as_span().end(),
+    };
+    let mut inner = pair.into_inner();
+    let name = inner.next().expect("attribute name").as_str().to_string();
+    let mut args = Vec::new();
+    if let Some(arg_list) = inner.next() {
+        for arg in arg_list.into_inner() {
+            let s = arg.as_str().trim().trim_matches('"').to_string();
+            args.push(s);
+        }
+    }
+
+    let kind = match name.as_str() {
+        "derive" => AttributeKind::Derive(args),
+        "must_use" => AttributeKind::MustUse(args.into_iter().next()),
+        "inline" => AttributeKind::Inline,
+        "test" => AttributeKind::Test,
+        _ => AttributeKind::Custom { name, args },
+    };
+
+    Attribute { kind, span }
 }
 
 pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
@@ -145,10 +194,8 @@ pub fn parse_timeline_block(pair: Pair<Rule>) -> TimelineBlock {
     let mut statements = Vec::new();
     if let Some(block_inner) = inner.next() {
         for stmt_pair in block_inner.into_inner() {
-            if let Some(actual_stmt) = stmt_pair.into_inner().next() {
-                let spanned = parse_statement(actual_stmt);
-                statements.push(spanned);
-            }
+            let spanned = parse_statement(stmt_pair);
+            statements.push(spanned);
         }
     }
     TimelineBlock {

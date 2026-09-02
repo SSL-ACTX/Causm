@@ -2,49 +2,100 @@
     from "std/process/types" import *
     from "std/process/ffi" import *
 
-    routine pid() -> i32 taking _ => getpid()
+    routine pid() -> i32 taking _ {
+        if (capability(System.FFI)) {
+            getpid()
+        } else {
+            1
+        } reconcile auto
+    }
 
-    routine parent_pid() -> i32 taking _ => getppid()
+    routine parent_pid() -> i32 taking _ {
+        if (capability(System.FFI)) {
+            getppid()
+        } else {
+            0
+        } reconcile auto
+    }
 
     routine info() -> ProcessInfo taking _ {
-        let { pid, ppid } = struct { pid = getpid(), ppid = getppid() }
-        struct { is_running = true, pid = pid, ppid = ppid }
+        if (capability(System.FFI)) {
+            let { pid, ppid } = struct { pid = getpid(), ppid = getppid() }
+            struct { is_running = true, pid = pid, ppid = ppid }
+        } else {
+            struct { is_running = true, pid = 1, ppid = 0 }
+        } reconcile auto
     }
 
-    routine send_signal(peek pid: i32, peek sig: i32) -> i32 taking _ => kill(pid, sig)
+    routine send_signal(&pid: i32, &sig: i32) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            kill(pid, sig)
+        } else {
+            -1
+        } reconcile auto
+    }
 
-    routine kill_process(peek pid: i32) -> i32 taking _ => kill(pid, 9)
+    routine kill_process(&pid: i32) -> i32 taking _ => send_signal(pid, 9)
 
-    routine terminate_process(peek pid: i32) -> i32 taking _ => kill(pid, 15)
+    routine terminate_process(&pid: i32) -> i32 taking _ => send_signal(pid, 15)
 
-    routine interrupt_process(peek pid: i32) -> i32 taking _ => kill(pid, 2)
+    routine interrupt_process(&pid: i32) -> i32 taking _ => send_signal(pid, 2)
 
-    routine is_alive(peek pid: i32) -> bool taking _ => kill(pid, 0) == 0
+    routine is_alive(&pid: i32) -> bool taking _ {
+        if (capability(System.FFI)) {
+            kill(pid, 0) == 0
+        } else {
+            false
+        } reconcile auto
+    }
 
     routine create_pipe() -> ProcessPipe taking _ {
-        let mut fds = [0; 8]
-        let rc = pipe(fds)
-        let read_fd = fds[0] + fds[1] * 256
-        let write_fd = fds[4] + fds[5] * 256
-        struct { read_fd = read_fd, write_fd = write_fd }
+        if (capability(System.FFI)) {
+            let mut fds = [0; 8]
+            let rc = pipe(fds)
+            let read_fd = fds[0] + fds[1] * 256
+            let write_fd = fds[4] + fds[5] * 256
+            struct { read_fd = read_fd, write_fd = write_fd }
+        } else {
+            struct { read_fd = -1, write_fd = -1 }
+        } reconcile auto
     }
 
-    routine run_command(peek cmd: string) -> ExitStatus taking _ {
-        let raw_status = system(cmd)
-        let exit_code = (raw_status / 256) % 256
-        let signaled = raw_status % 128 != 0
-        let is_ok = exit_code == 0
-        struct {
-            code = exit_code,
-            signaled = signaled,
-            success = is_ok
-        }
+    routine spawn(&cmd: string) -> ChildProcess taking _ {
+        if (capability(System.FFI)) {
+            let status = run_command(cmd)
+            struct { is_running = status.success, pid = 0 }
+        } else {
+            struct { is_running = false, pid = -1 }
+        } reconcile auto
     }
 
-    routine wait_for_pid(peek pid: i32, peek no_hang: bool) -> i32 taking _ {
-        let mut status = [0; 8]
-        let options = if (no_hang) { 1 } else { 0 }
-        waitpid(pid, status, options)
+    routine exec(&cmd: string) -> ExitStatus taking _ => run_command(cmd)
+
+    routine run_command(&cmd: string) -> ExitStatus taking _ {
+        if (capability(System.FFI)) {
+            let raw_status = system(cmd)
+            let exit_code = (raw_status / 256) % 256
+            let signaled = raw_status % 128 != 0
+            let is_ok = exit_code == 0
+            struct {
+                code = exit_code,
+                signaled = signaled,
+                success = is_ok
+            }
+        } else {
+            struct { code = 1, signaled = false, success = false }
+        } reconcile auto
+    }
+
+    routine wait_for_pid(&pid: i32, &no_hang: bool) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            let mut status = [0; 8]
+            let options = if (no_hang) { 1 } else { 0 }
+            waitpid(pid, status, options)
+        } else {
+            -1
+        } reconcile auto
     }
 
     routine pipe_endpoints() -> PipeEndpoints taking _ {
@@ -55,15 +106,33 @@
         }
     }
 
-    routine child_handle(peek pid: i32) -> ChildProcess taking _ => struct { is_running = true, pid = pid }
+    routine child_handle(&pid: i32) -> ChildProcess taking _ => struct { is_running = true, pid = pid }
 
-    routine pipe_write(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => write(fd, buf, len)
+    routine pipe_write(&fd: i32, &buf: i64, &len: i32) -> i64 taking _ {
+        if (capability(System.FFI)) {
+            write(fd, buf, len)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine pipe_read(peek fd: i32, peek buf: i64, peek len: i32) -> i64 taking _ => read(fd, buf, len)
+    routine pipe_read(&fd: i32, &buf: i64, &len: i32) -> i64 taking _ {
+        if (capability(System.FFI)) {
+            read(fd, buf, len)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine close_fd(peek fd: i32) -> i32 taking _ => close(fd)
+    routine close_fd(&fd: i32) -> i32 taking _ {
+        if (capability(System.FFI)) {
+            close(fd)
+        } else {
+            0
+        } reconcile auto
+    }
 
-    routine ExitStatus.is_success(peek self: ExitStatus) -> bool taking _ => self.success
+    routine ExitStatus.is_success(&self: ExitStatus) -> bool taking _ => self.success
 
-    routine ExitStatus.exit_code(peek self: ExitStatus) -> i32 taking _ => self.code
+    routine ExitStatus.exit_code(&self: ExitStatus) -> i32 taking _ => self.code
 }

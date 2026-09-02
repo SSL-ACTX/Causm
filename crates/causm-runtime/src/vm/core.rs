@@ -1,6 +1,7 @@
 use crate::gc::GarbageCollector;
 use crate::vm::error::TemporalError;
 use crate::vm::state::{AnchorPoint, Routine, SpeculationContext, Timeline, Vm};
+use causm_concurrency::mailbox::MailboxError;
 use causm_core::value::{Arena, EntropicState, MemoryError, Payload, ValueMetadata};
 use causm_core::{
     BinaryOperator, Capability, EntropyMode, Expression, MergeResolution, ParamMode,
@@ -21,7 +22,8 @@ impl Vm {
             symbols: HashMap::new(),
             global_clock: 0,
             root_timeline: Timeline::new("main".to_string(), 1024 * 1024, 0),
-            active_branches: HashMap::new(),
+            active_branches: indexmap::IndexMap::new(),
+
             capability_handlers: HashMap::new(),
             channels: HashMap::new(),
             pending_channels: HashMap::new(),
@@ -40,10 +42,13 @@ impl Vm {
             next_payload_id: 0,
             next_call_id: 0,
             trace_entropy: false,
+            trace_causal: false,
             _is_decaying: false,
             current_span: None,
+            call_depth: 0,
+            max_call_depth: 10_000,
             foreign_manager: std::sync::Arc::new(
-                crate::vm::ffi::ForeignLibraryManager::new(),
+                crate::vm::handlers::ffi::ForeignLibraryManager::new(),
             ),
         }
     }
@@ -84,7 +89,18 @@ impl Vm {
             let branch = self.get_branch_mut(branch_id)?;
             branch.pc < branch.instructions.len()
         } {
+            {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.total_executed_cycles += 1;
+                if branch.total_executed_cycles > branch.max_cycles_watchdog {
+                    return Err(TemporalError::WatchdogBite(
+                        branch_id.to_string(),
+                        branch.max_cycles_watchdog,
+                    ));
+                }
+            }
             self.execute_instruction(branch_id)?;
+            self.handle_break(branch_id)?;
         }
 
         {
@@ -107,23 +123,19 @@ impl Vm {
         }
 
         let has_decay = {
-            let branch = self.get_branch_mut(branch_id)?;
-            let idx = reg as usize;
-            if idx < branch.arena.registers.len() {
-                if let Some(meta) = &branch.arena.metadata[idx] {
-                    if let Some(decay_after_ms) = meta.decay_after_ms {
-                        let current_time =
-                            branch.birth_global_time + branch.local_clock;
-                        if current_time >= meta.instantiated_at {
-                            let elapsed = current_time - meta.instantiated_at;
-                            if elapsed >= decay_after_ms {
-                                matches!(
+            let branch = self.get_branch(branch_id)?;
+            if let Some(meta) = branch.arena.get_metadata(reg) {
+                if let Some(decay_after_ms) = meta.decay_after_ms {
+                    let current_time = branch.birth_global_time + branch.local_clock;
+                    if current_time >= meta.instantiated_at {
+                        let elapsed = current_time - meta.instantiated_at;
+                        if elapsed >= decay_after_ms {
+                            let idx = reg as usize;
+                            idx < branch.arena.registers.len()
+                                && matches!(
                                     branch.arena.registers[idx],
                                     EntropicState::Valid(_)
                                 )
-                            } else {
-                                false
-                            }
                         } else {
                             false
                         }
@@ -149,8 +161,9 @@ impl Vm {
                 let decayed_state = old_state.decay_recursive();
                 branch.arena.registers[idx] = decayed_state;
                 branch.arena.compact_consumed();
-                branch.arena.metadata[idx]
-                    .as_ref()
+                branch
+                    .arena
+                    .get_metadata(reg)
                     .and_then(|m| m.type_name.clone())
             };
 
@@ -174,7 +187,14 @@ impl Vm {
         branch_id: &str,
         reg: u32,
     ) -> Result<Payload, TemporalError> {
-        self.check_and_apply_decay(branch_id, reg)?;
+        let has_meta = {
+            let branch = self.get_branch(branch_id)?;
+            let idx = reg as usize;
+            idx < branch.arena.metadata.len() && branch.arena.metadata[idx].is_some()
+        };
+        if has_meta {
+            self.check_and_apply_decay(branch_id, reg)?;
+        }
         let branch = self.get_branch_mut(branch_id)?;
         branch
             .arena
@@ -187,7 +207,14 @@ impl Vm {
         branch_id: &str,
         reg: u32,
     ) -> Result<EntropicState, TemporalError> {
-        self.check_and_apply_decay(branch_id, reg)?;
+        let has_meta = {
+            let branch = self.get_branch(branch_id)?;
+            let idx = reg as usize;
+            idx < branch.arena.metadata.len() && branch.arena.metadata[idx].is_some()
+        };
+        if has_meta {
+            self.check_and_apply_decay(branch_id, reg)?;
+        }
         let branch = self.get_branch_mut(branch_id)?;
         Ok(branch
             .arena
@@ -204,7 +231,59 @@ impl Vm {
         state: EntropicState,
     ) -> Result<(), TemporalError> {
         let branch = self.get_branch_mut(branch_id)?;
-        branch.arena.insert(reg, state)?;
+        if let Err(e) = branch.arena.insert(reg, state.clone()) {
+            match e {
+                MemoryError::OutOfMemory(_, _) => {
+                    // Check if a saturation policy is configured for OnFull or OnOverflow
+                    let policy = branch
+                        .saturation_policies
+                        .get(&causm_core::PolicyTarget::OnFull)
+                        .or_else(|| {
+                            branch
+                                .saturation_policies
+                                .get(&causm_core::PolicyTarget::OnOverflow)
+                        })
+                        .copied();
+
+                    match policy {
+                        Some(causm_core::SaturationPolicy::EvictDecayed) => {
+                            branch.arena.evict_decayed();
+                            branch.arena.insert(reg, state)?;
+                        }
+                        Some(causm_core::SaturationPolicy::RingBuffer) => {
+                            // Reset transient partition to base watermark and insert
+                            branch.arena.reset_to_base_watermark();
+                            branch.arena.insert(reg, state)?;
+                        }
+                        Some(causm_core::SaturationPolicy::FailFast) | None => {
+                            return Err(TemporalError::MemoryFault(e));
+                        }
+                        Some(causm_core::SaturationPolicy::Throttle) => {
+                            // Add temporal latency penalty and try inserting
+                            branch.local_clock += 10;
+                            branch.arena.evict_decayed();
+                            branch.arena.insert(reg, state)?;
+                        }
+                    }
+                }
+                other => return Err(TemporalError::MemoryFault(other)),
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn insert_reg_with_metadata(
+        &mut self,
+        branch_id: &str,
+        reg: u32,
+        state: EntropicState,
+        meta: Option<ValueMetadata>,
+    ) -> Result<(), TemporalError> {
+        self.insert_reg(branch_id, reg, state)?;
+        if let Some(m) = meta {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.arena.set_metadata(reg, Some(m));
+        }
         Ok(())
     }
 
@@ -256,6 +335,13 @@ impl Vm {
             loop {
                 let (pc, len) = {
                     let branch = self.get_branch_mut(branch_id)?;
+                    branch.total_executed_cycles += 1;
+                    if branch.total_executed_cycles > branch.max_cycles_watchdog {
+                        return Err(TemporalError::WatchdogBite(
+                            branch_id.to_string(),
+                            branch.max_cycles_watchdog,
+                        ));
+                    }
                     (branch.pc, branch.instructions.len())
                 };
                 if pc >= len {
@@ -287,7 +373,7 @@ impl Vm {
         if !b.break_requested {
             return Ok(());
         }
-        let target_depth = b.loop_depth;
+        let target_depth = b.loop_depth.saturating_sub(1);
         b.break_requested = false;
 
         while {
@@ -310,10 +396,10 @@ impl Vm {
                 }
                 causm_ir::Instruction::EndFor => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
-                        self.EndFor(branch_id)?;
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         let b = self.get_branch_mut(branch_id)?;
+                        b.loop_depth = target_depth;
                         b.flat_loops.pop();
                         b.pc += 1;
                         if b.pc < b.instructions.len() {
@@ -323,14 +409,15 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndForStep => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         let b = self.get_branch_mut(branch_id)?;
+                        b.loop_depth = target_depth;
                         b.flat_loops.pop();
                         b.pc += 1;
                         if b.pc < b.instructions.len() {
@@ -340,13 +427,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndLoop { max_ms } => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         let max_ms_val = max_ms;
                         self.EndLoop(branch_id, max_ms_val)?;
                         let b = self.get_branch_mut(branch_id)?;
@@ -359,13 +446,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndWhile { max_ms } => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         let max_ms_val = max_ms;
                         self.EndWhile(branch_id, max_ms_val)?;
                         let b = self.get_branch_mut(branch_id)?;
@@ -378,13 +465,13 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 causm_ir::Instruction::EndLoopTick => {
                     let b = self.get_branch_mut(branch_id)?;
-                    b.loop_depth -= 1;
-                    if b.loop_depth < target_depth {
+                    b.loop_depth = b.loop_depth.saturating_sub(1);
+                    if b.loop_depth <= target_depth {
                         self.EndLoopTick(branch_id)?;
                         let b = self.get_branch_mut(branch_id)?;
                         b.pc += 1;
@@ -396,7 +483,7 @@ impl Vm {
                                 b.pc += 1;
                             }
                         }
-                        break;
+                        return Ok(());
                     }
                 }
                 _ => {}
@@ -411,7 +498,7 @@ impl Vm {
         &mut self,
         branch_id: &str,
     ) -> Result<(), TemporalError> {
-        if self.debug_mode {
+        if self.debug_mode || self.trace_causal {
             let branch = self.get_branch(branch_id)?;
             let snapshot = branch.clone();
             self.causal_trace.push((branch_id.to_string(), snapshot));
@@ -442,41 +529,31 @@ impl Vm {
             branch.pc += 1;
         }
 
-        #[allow(non_snake_case)]
-        macro_rules! dispatch_instruction {
-            ($($name:ident $({ $($field:ident: $type:ty),* })?),*) => {
-                match instr {
-                    $(
-                        causm_ir::Instruction::$name $({ $($field),* })? => {
-                            if let Err(e) = self.$name(branch_id, $($($field),*)?) {
-                                if self.debug_mode {
-                                    let span_str = self
-                                        .current_span
-                                        .as_ref()
-                                        .map(|s| format!("span {}-{}", s.start, s.end))
-                                        .unwrap_or_else(|| "unknown span".to_string());
-                                    let clock = self
-                                        .get_branch(branch_id)
-                                        .map(|b| b.local_clock)
-                                        .unwrap_or(0);
-                                    eprintln!(
-                                        "[TVM FAULT] [{}] @{}ms ({}) | instruction: {} -> {}",
-                                        branch_id,
-                                        clock,
-                                        span_str,
-                                        stringify!($name),
-                                        e
-                                    );
-                                }
-                                return Err(e);
-                            }
-                        },
-                    )*
-                }
+        {
+            let instr_debug = format!("{:?}", instr);
+            let dispatch_result = {
+                let mut ctx = crate::vm::context::VmContext::new(self, branch_id);
+                crate::vm::handlers::dispatch_instruction(&mut ctx, instr)
             };
+            if let Err(e) = dispatch_result {
+                if self.debug_mode {
+                    let span_str = self
+                        .current_span
+                        .as_ref()
+                        .map(|s| format!("span {}-{}", s.start, s.end))
+                        .unwrap_or_else(|| "unknown span".to_string());
+                    let clock = self
+                        .get_branch(branch_id)
+                        .map(|b| b.local_clock)
+                        .unwrap_or(0);
+                    eprintln!(
+                        "[TVM FAULT] [{}] @{}ms ({}) | instruction: {} -> {}",
+                        branch_id, clock, span_str, instr_debug, e
+                    );
+                }
+                return Err(e);
+            }
         }
-
-        causm_ir::instructions!(dispatch_instruction);
 
         if self.trace_entropy {
             println!("\x1b[1;30m--- Entropy Trace [{}] ---\x1b[0m", branch_id);
@@ -628,9 +705,8 @@ impl Vm {
 
                     let mut found = false;
                     if let Some(chan) = self.channels.get_mut(&channel_id_val) {
-                        if let Some(pos) =
-                            chan.iter().position(|m| m.id == payload_id_val)
-                        {
+                        let pos = chan.iter().position(|m| m.id == payload_id_val);
+                        if let Some(pos) = pos {
                             chan.remove(pos);
                             found = true;
                         }
@@ -639,9 +715,9 @@ impl Vm {
                         if let Some(pending) =
                             self.pending_channels.get_mut(&channel_id_val)
                         {
-                            if let Some(pos) =
-                                pending.iter().position(|m| m.id == payload_id_val)
-                            {
+                            let pos =
+                                pending.iter().position(|m| m.id == payload_id_val);
+                            if let Some(pos) = pos {
                                 pending.remove(pos);
                                 found = true;
                             }
@@ -658,7 +734,11 @@ impl Vm {
                     message,
                 } if b_id == branch_id => {
                     if let Some(chan) = self.channels.get_mut(&channel_id) {
-                        chan.push_front(message.clone());
+                        if let Err(MailboxError::Full(_)) =
+                            chan.push_front(message.clone())
+                        {
+                            return Err(TemporalError::Paradox);
+                        }
                     } else {
                         return Err(TemporalError::Paradox);
                     }
@@ -713,12 +793,26 @@ impl Timeline {
             loop_depth: 0,
             loop_stack: Vec::new(),
             flat_loops: Vec::new(),
+            total_executed_cycles: 0,
+            max_cycles_watchdog: 500_000, // 500,000 instruction cycle ceiling per branch segment
+            call_depth: 0,
             saturation_policies: HashMap::new(),
             pc: 0,
             instructions: Vec::new(),
             spans: Vec::new(),
             return_value: None,
+            call_stack: Vec::new(),
         }
+    }
+
+    pub fn fork_from(id: String, parent: &Timeline, birth_time: u64) -> Self {
+        let mut child = Self::new(id, parent.arena.capacity, birth_time);
+        child.arena = parent.arena.clone();
+        child.cpu_budget_ms = parent.cpu_budget_ms;
+        child.slice_ms = parent.slice_ms;
+        child.resource_budgets = parent.resource_budgets.clone();
+        child.entropy_mode = parent.entropy_mode;
+        child
     }
 
     pub fn consume_budget(&mut self, amount: u64) -> Result<(), TemporalError> {

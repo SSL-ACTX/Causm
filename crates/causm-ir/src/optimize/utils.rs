@@ -53,6 +53,8 @@ pub(crate) fn has_side_effects(instr: &SsaInstruction) -> bool {
             | SsaInstruction::StructLit { .. }
             | SsaInstruction::TopologyLit { .. }
             | SsaInstruction::ArrayLit { .. }
+            | SsaInstruction::TupleLit { .. }
+            | SsaInstruction::TupleAccess { .. }
             | SsaInstruction::FieldAccess { .. }
             | SsaInstruction::IndexAccess { .. }
             | SsaInstruction::FieldUpdate { .. }

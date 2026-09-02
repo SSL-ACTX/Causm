@@ -503,3 +503,532 @@ fn test_syntax_collection_and_string_primitives_execution() -> anyhow::Result<()
 
     Ok(())
 }
+
+#[test]
+fn test_syntax_compound_assignment_operators() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut x = 10
+        x += 5
+        x -= 3
+        x *= 4
+        x /= 2
+        x %= 7
+        let mut b = 1
+        b <<= 3
+        b >>= 1
+        b |= 0x04
+        b &= 0x06
+        b ^= 0x02
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").expect("x symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+
+    // x calculation:
+    // 10 + 5 = 15
+    // 15 - 3 = 12
+    // 12 * 4 = 48
+    // 48 / 2 = 24
+    // 24 % 7 = 3
+    assert_eq!(vm.peek_reg("main", x_reg)?, Payload::Integer(3));
+
+    // b calculation:
+    // 1 << 3 = 8
+    // 8 >> 1 = 4
+    // 4 | 4 = 4
+    // 4 & 6 = 4
+    // 4 ^ 2 = 6
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(6));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_bitwise_operators_and_shift() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let a = 0x0F & 0x07
+        let b = 0x08 | 0x02
+        let c = 0x0F ^ 0x03
+        let d = 1 << 4
+        let e = 64 >> 2
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+    let c_reg = ir.symbols.get("c").expect("c symbol").0;
+    let d_reg = ir.symbols.get("d").expect("d symbol").0;
+    let e_reg = ir.symbols.get("e").expect("e symbol").0;
+
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(0x07));
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(0x0A));
+    assert_eq!(vm.peek_reg("main", c_reg)?, Payload::Integer(0x0C));
+    assert_eq!(vm.peek_reg("main", d_reg)?, Payload::Integer(16));
+    assert_eq!(vm.peek_reg("main", e_reg)?, Payload::Integer(16));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_bitwise_not_operator() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let raw = 0
+        let inv = ~raw
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let inv_reg = ir.symbols.get("inv").expect("inv symbol").0;
+    assert_eq!(vm.peek_reg("main", inv_reg)?, Payload::Integer(-1));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_null_coalescing_operator() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let a = null ?? 8080
+        let b = 42 ?? 8080
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    let b_reg = ir.symbols.get("b").expect("b symbol").0;
+
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(8080));
+    assert_eq!(vm.peek_reg("main", b_reg)?, Payload::Integer(42));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_tuple_literal_creation() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let t = (10, 20, 30)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let t_reg = ir.symbols.get("t").expect("t symbol").0;
+    let t_val = vm.peek_reg("main", t_reg)?;
+    if let Payload::Tuple(elems) = t_val {
+        assert_eq!(elems.len(), 3);
+        assert_eq!(elems[0], Payload::Integer(10));
+        assert_eq!(elems[1], Payload::Integer(20));
+        assert_eq!(elems[2], Payload::Integer(30));
+    } else {
+        panic!("Expected Tuple payload, got {:?}", t_val);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_tuple_pair_literal() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let pair = (42, true)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let pair_reg = ir.symbols.get("pair").expect("pair symbol").0;
+    let pair_val = vm.peek_reg("main", pair_reg)?;
+    if let Payload::Tuple(elems) = pair_val {
+        assert_eq!(elems.len(), 2);
+        assert_eq!(elems[0], Payload::Integer(42));
+        assert_eq!(elems[1], Payload::Bool(true));
+    } else {
+        panic!("Expected Tuple payload, got {:?}", pair_val);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_tuple_nested_expression_elements() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let x = 5
+        let y = 3
+        let t = (x + y, x * y)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let t_reg = ir.symbols.get("t").expect("t symbol").0;
+    let t_val = vm.peek_reg("main", t_reg)?;
+    if let Payload::Tuple(elems) = t_val {
+        assert_eq!(elems.len(), 2);
+        assert_eq!(elems[0], Payload::Integer(8)); // 5 + 3
+        assert_eq!(elems[1], Payload::Integer(15)); // 5 * 3
+    } else {
+        panic!("Expected Tuple payload, got {:?}", t_val);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_declarative_macro_definition_and_expansion() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        macro add_assign!( $var:ident, $val:expr => {
+            $var = $var + $val
+        } )
+
+        let mut a = 10
+        add_assign!(a, 5)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let a_reg = ir.symbols.get("a").expect("a symbol").0;
+    assert_eq!(vm.peek_reg("main", a_reg)?, Payload::Integer(15));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_declarative_macro_multiple_expansions() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        macro set_double!( $dest:ident, $src:expr => {
+            let $dest = $src * 2
+        } )
+
+        set_double!(x, 21)
+        set_double!(y, 100)
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let x_reg = ir.symbols.get("x").expect("x symbol").0;
+    let y_reg = ir.symbols.get("y").expect("y symbol").0;
+    assert_eq!(vm.peek_reg("main", x_reg)?, Payload::Integer(42));
+    assert_eq!(vm.peek_reg("main", y_reg)?, Payload::Integer(200));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_compiler_attribute_derive_struct() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        @derive(Clone, Debug, PartialEq)
+        type Point = struct { x: int, y: int }
+
+        let p1 = struct { x = 10, y = 20 }
+        let p2 = p1.clone()
+        let is_eq = p1.equals(p2)
+        let str_rep = p1.to_string()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let eq_reg = ir.symbols.get("is_eq").expect("is_eq symbol").0;
+    assert_eq!(vm.peek_reg("main", eq_reg)?, Payload::Bool(true));
+
+    let str_reg = ir.symbols.get("str_rep").expect("str_rep symbol").0;
+    assert_eq!(
+        vm.peek_reg("main", str_reg)?,
+        Payload::String("Point { x: 10, y: 20 }".to_string())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_compiler_attribute_derive_enum() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        @derive(Clone, Debug)
+        enum Status {
+            Active,
+            Pending(int),
+        }
+
+        let s1 = Status::Pending(42)
+        let s2 = s1.clone()
+        let str_s1 = s1.to_string()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let str_reg = ir.symbols.get("str_s1").expect("str_s1 symbol").0;
+    assert_eq!(
+        vm.peek_reg("main", str_reg)?,
+        Payload::String("Status::Pending(42)".to_string())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_distinct_newtype_declaration() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type UserId = distinct int
+        type OrderId = distinct int
+
+        let uid: UserId = struct { value = 101 }
+        let oid: OrderId = struct { value = 5005 }
+
+        let u_val = uid.value
+        let o_val = oid.value
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let u_reg = ir.symbols.get("u_val").expect("u_val symbol").0;
+    let o_reg = ir.symbols.get("o_val").expect("o_val symbol").0;
+    assert_eq!(vm.peek_reg("main", u_reg)?, Payload::Integer(101));
+    assert_eq!(vm.peek_reg("main", o_reg)?, Payload::Integer(5005));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_distinct_newtype_type_mismatch_rejection() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type UserId = distinct int
+        type OrderId = distinct int
+
+        let uid: UserId = struct { value = 100 }
+        let oid: OrderId = uid
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    let res = analyzer.analyze_program(&program);
+    assert!(
+        res.is_err(),
+        "Distinct types must not be implicitly assignable"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_struct_declaration() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Buffer<const N: int> = struct {
+            capacity: int = N,
+            length: int = 0
+        }
+
+        let buf: Buffer<64> = struct {}
+        let cap = buf.capacity
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let cap_reg = ir.symbols.get("cap").expect("cap symbol").0;
+    assert_eq!(vm.peek_reg("main", cap_reg)?, Payload::Integer(64));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_multiple_instantiations() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type FixedRing<const SIZE: int> = struct {
+            limit: int = SIZE,
+            head: int = 0
+        }
+
+        let r1: FixedRing<16> = struct {}
+        let r2: FixedRing<1024> = struct {}
+
+        let lim1 = r1.limit
+        let lim2 = r2.limit
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let l1_reg = ir.symbols.get("lim1").expect("lim1 symbol").0;
+    let l2_reg = ir.symbols.get("lim2").expect("lim2 symbol").0;
+    assert_eq!(vm.peek_reg("main", l1_reg)?, Payload::Integer(16));
+    assert_eq!(vm.peek_reg("main", l2_reg)?, Payload::Integer(1024));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_distinct_newtype_methods_and_type_boundaries() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Nanoseconds = distinct int
+        type Microseconds = distinct int
+
+        routine Nanoseconds.to_micros(peek self) -> int (taking 5ms) {
+            let v = self.value
+            yield v / 1000
+        }
+
+        let raw_ns: Nanoseconds = struct { value = 5000000 }
+        let converted_us = raw_ns.to_micros()
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let res_reg = ir
+        .symbols
+        .get("converted_us")
+        .expect("converted_us symbol")
+        .0;
+    assert_eq!(vm.peek_reg("main", res_reg)?, Payload::Integer(5000));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_const_generic_deep_nested_matrix_stress() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        type Packet<const HEADER_LEN: int> = struct {
+            hdr_size: int = HEADER_LEN,
+            payload_size: int = 512,
+            total_size: int = HEADER_LEN + 512
+        }
+
+        let p1: Packet<32> = struct {}
+        let p2: Packet<128> = struct {}
+
+        let t1 = p1.total_size
+        let t2 = p2.total_size
+        let sum_total = t1 + t2
+    }
+    "#;
+
+    let program = parser::parse_causm(source)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let ir = causm_frontend::lower::lower_program(&program);
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let sum_reg = ir.symbols.get("sum_total").expect("sum_total symbol").0;
+    assert_eq!(vm.peek_reg("main", sum_reg)?, Payload::Integer(544 + 640));
+
+    Ok(())
+}

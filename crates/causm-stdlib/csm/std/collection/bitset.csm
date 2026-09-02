@@ -3,29 +3,29 @@
 }
 
 @0ms: {
-    routine BitSet.new(peek num_bits: i32) -> BitSet taking _ {
+    routine BitSet.new(&num_bits: i32) -> BitSet taking _ {
         let raw = [0; num_bits]
         struct { bits = raw, len = num_bits }
     }
 
-    routine BitSet.set(peek bs: BitSet, peek bit_index: i32) -> BitSet taking _ {
+    routine BitSet.set(&bs: BitSet, &bit_index: i32) -> BitSet taking _ {
         let mut bits = bs.bits
         bits[bit_index] = 1
         struct { bits = bits, len = bs.len }
     }
 
-    routine BitSet.clear(peek bs: BitSet, peek bit_index: i32) -> BitSet taking _ {
+    routine BitSet.clear(&bs: BitSet, &bit_index: i32) -> BitSet taking _ {
         let mut bits = bs.bits
         bits[bit_index] = 0
         struct { bits = bits, len = bs.len }
     }
 
-    routine BitSet.get(peek bs: BitSet, peek bit_index: i32) -> bool taking _ {
+    routine BitSet.get(&bs: BitSet, &bit_index: i32) -> bool taking _ {
         let bits = bs.bits
         bits[bit_index] != 0
     }
 
-    routine BitSet.count(peek bs: BitSet) -> i32 taking _ {
+    routine BitSet.count(&bs: BitSet) -> i32 taking _ {
         let mut total = 0
         let bits = bs.bits
         for b in bits step _ {
@@ -36,5 +36,5 @@
         total
     }
 
-    routine BitSet.len(peek bs: BitSet) -> i32 taking _ => bs.len
+    routine BitSet.len(&bs: BitSet) -> i32 taking _ => bs.len
 }

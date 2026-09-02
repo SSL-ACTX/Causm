@@ -73,29 +73,7 @@ pub fn parse_type_name(pair: Pair<Rule>) -> TypeName {
                     if let Some(first) = inner.next() {
                         let name = first.as_str().to_string();
                         if let Some(params_pair) = inner.next() {
-                            let params = params_pair
-                                .into_inner()
-                                .map(|p| {
-                                    let is_duration = p.as_str().contains("ms");
-                                    let inner_p = p.into_inner().next().unwrap();
-                                    match inner_p.as_rule() {
-                                        Rule::type_name => {
-                                            TypeParam::Type(parse_type_name(inner_p))
-                                        }
-                                        Rule::amount => {
-                                            let text = inner_p.as_str();
-                                            let val =
-                                                text.parse::<u64>().unwrap_or(0);
-                                            if is_duration {
-                                                TypeParam::Duration(val)
-                                            } else {
-                                                TypeParam::Amount(val)
-                                            }
-                                        }
-                                        _ => TypeParam::Amount(0),
-                                    }
-                                })
-                                .collect();
+                            let params = parse_type_param_list(params_pair);
                             TypeName::Generic(name, params)
                         } else {
                             TypeName::Custom(name)
@@ -109,6 +87,28 @@ pub fn parse_type_name(pair: Pair<Rule>) -> TypeName {
         Rule::identifier => TypeName::Custom(pair.as_str().to_string()),
         _ => TypeName::Custom(pair.as_str().to_string()),
     }
+}
+
+pub fn parse_type_param_list(pair: Pair<Rule>) -> Vec<TypeParam> {
+    pair.into_inner()
+        .map(|p| {
+            let is_duration = p.as_str().contains("ms");
+            let inner_p = p.into_inner().next().unwrap();
+            match inner_p.as_rule() {
+                Rule::type_name => TypeParam::Type(parse_type_name(inner_p)),
+                Rule::amount => {
+                    let text = inner_p.as_str();
+                    let val = text.parse::<u64>().unwrap_or(0);
+                    if is_duration {
+                        TypeParam::Duration(val)
+                    } else {
+                        TypeParam::Amount(val)
+                    }
+                }
+                _ => TypeParam::Amount(0),
+            }
+        })
+        .collect()
 }
 
 pub fn parse_manifest(pair: Pair<Rule>) -> Manifest {
@@ -164,7 +164,18 @@ pub fn parse_manifest(pair: Pair<Rule>) -> Manifest {
 }
 
 pub fn parse_capability(pair: Pair<Rule>) -> Capability {
-    let mut inner = pair.into_inner();
+    let target_pair = if pair.as_rule() == Rule::capability_decl {
+        pair
+    } else if let Some(inner) = pair
+        .clone()
+        .into_inner()
+        .find(|p| p.as_rule() == Rule::capability_decl)
+    {
+        inner
+    } else {
+        pair
+    };
+    let mut inner = target_pair.into_inner();
     let path = inner
         .next()
         .map(|p| p.as_str().to_string())
@@ -180,6 +191,16 @@ pub fn parse_capability(pair: Pair<Rule>) -> Capability {
         }
     }
     Capability { path, parameters }
+}
+
+pub fn parse_requires_clause(pair: Pair<Rule>) -> Vec<Capability> {
+    let mut caps = Vec::new();
+    for item in pair.into_inner() {
+        if item.as_rule() == Rule::capability_decl {
+            caps.push(parse_capability(item));
+        }
+    }
+    caps
 }
 
 pub fn parse_resolution_strategy(pair: Pair<Rule>) -> ResolutionStrategy {
