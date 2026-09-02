@@ -68,22 +68,37 @@ pub enum EntropicDiagnostic {
 ///
 /// If `highlight` is `Some(token)`, the underline (`^^^`) is placed under that
 /// token's position in the source line. Otherwise falls back to the statement start col.
+fn find_word_token(src: &str, tok: &str) -> Option<(usize, usize)> {
+    let mut offset = 0;
+    while let Some(idx) = src[offset..].find(tok) {
+        let abs_pos = offset + idx;
+        let before_ok = abs_pos == 0 || !src[..abs_pos].chars().last().unwrap().is_alphanumeric() && src[..abs_pos].chars().last().unwrap() != '_';
+        let after_pos = abs_pos + tok.len();
+        let after_ok = after_pos >= src.len() || !src[after_pos..].chars().next().unwrap().is_alphanumeric() && src[after_pos..].chars().next().unwrap() != '_';
+        if before_ok && after_ok {
+            return Some((abs_pos, tok.len()));
+        }
+        offset = abs_pos + 1;
+    }
+    None
+}
+
+/// Render a single source span annotation block with contextual styling.
 fn render_span(pt: &PointIndex, label: &str, highlight: Option<&str>) -> String {
     let mut out = String::new();
     if pt.line == 0 {
-        out.push_str(&format!("  --> {}:?:?\n   |\n   = {}\n", pt.file, label));
+        out.push_str(&format!("\x1b[1;34m  --> \x1b[0m{}:?:?\n\x1b[1;34m   |\x1b[0m\n   = {}\n", pt.file, label));
         return out;
     }
     let line_num_width = pt.line.to_string().len().max(2);
     let pad = " ".repeat(line_num_width);
-    out.push_str(&format!("  --> {}:{}:{}\n", pt.file, pt.line, pt.col));
-    out.push_str(&format!("{pad}   |\n"));
-
     let src = pt.source_text.trim_end();
 
-    // Prefer underlining the specific variable/keyword token if provided and found.
+    // Prefer exact word boundary token match
     let (ul_start, ul_len) = if let Some(tok) = highlight {
-        if let Some(pos) = src.find(tok) {
+        if let Some((pos, len)) = find_word_token(src, tok) {
+            (pos, len)
+        } else if let Some(pos) = src.find(tok) {
             (pos, tok.len())
         } else {
             let col0 = pt.col.saturating_sub(1);
@@ -95,11 +110,15 @@ fn render_span(pt: &PointIndex, label: &str, highlight: Option<&str>) -> String 
         let tlen = src[col0..].split_whitespace().next().map(|t| t.len()).unwrap_or(1);
         (col0, tlen)
     };
+    let display_col = ul_start + 1;
+
+    out.push_str(&format!("\x1b[1;34m  --> \x1b[0m{}:{}:{}\n", pt.file, pt.line, display_col));
+    out.push_str(&format!("\x1b[1;34m{pad} |\x1b[0m\n"));
     let underline = " ".repeat(ul_start) + &"^".repeat(ul_len.max(1));
 
-    out.push_str(&format!("{:>width$} | {}\n", pt.line, src, width = line_num_width));
-    out.push_str(&format!("{pad}   | {} {}\n", underline, label));
-    out.push_str(&format!("{pad}   |\n"));
+    out.push_str(&format!("\x1b[1;34m{:>width$} | \x1b[0m{}\n", pt.line, src, width = line_num_width));
+    out.push_str(&format!("\x1b[1;34m{pad} | \x1b[1;31m{}\x1b[0m {}\n", underline, label));
+    out.push_str(&format!("\x1b[1;34m{pad} |\x1b[0m\n"));
     out
 }
 
@@ -124,8 +143,8 @@ impl EntropicDiagnostic {
         }
     }
 
-    /// Formats the diagnostic in rustc-grade style: multi-span source annotations,
-    /// `^^^` underlines at each relevant point, and the formal SMT UNSAT constraint.
+    /// Formats the diagnostic with precise multi-span source annotations,
+    /// `^^^` token underlines at each relevant point, and the formal SMT UNSAT constraint.
     pub fn format_diagnostic(&self, include_smt_formula: bool) -> String {
         let mut out = String::new();
         match self {
@@ -137,7 +156,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0001]: use of consumed variable `{var}`\n"
+                    "[1;31merror[E0001][0m:[1m use of consumed variable `{var}`[0m\n"
                 ));
                 if let Some(orig) = origin_point {
                     out.push_str(&render_span(orig, &format!("`{var}` value introduced here"), Some(var)));
@@ -172,7 +191,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0002]: use of temporally decayed variable `{var}`\n"
+                    "[1;31merror[E0002][0m:[1m use of temporally decayed variable `{var}`[0m\n"
                 ));
                 out.push_str(&render_span(
                     decay_point,
@@ -205,7 +224,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0003]: use of structurally decayed struct `{var}` after field `{field}` was consumed\n"
+                    "[1;31merror[E0003][0m:[1m use of structurally decayed struct `{var}` after field `{field}` was consumed\n"
                 ));
                 let field_path = format!("{var}.{field}");
                 out.push_str(&render_span(
@@ -239,7 +258,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0004]: cannot consume `{source_var}` while active lease `{lease_id}` is held\n"
+                    "[1;31merror[E0004][0m:[1m cannot consume `{source_var}` while active lease `{lease_id}` is held\n"
                 ));
                 out.push_str(&render_span(
                     lease_point,
@@ -271,7 +290,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0005]: Causal Paradox — rewind to anchor `{anchor_name}` violates causal horizon\n"
+                    "[1;31merror[E0005][0m:[1m Causal Paradox — rewind to anchor `{anchor_name}` violates causal horizon\n"
                 ));
                 out.push_str(&render_span(
                     anchor_point,
@@ -304,7 +323,7 @@ impl EntropicDiagnostic {
                 smt_formula,
             } => {
                 out.push_str(&format!(
-                    "error[E0006]: use of entangled variable `{var}` decayed after partner `{partner_var}` was consumed\n"
+                    "[1;31merror[E0006][0m:[1m use of entangled variable `{var}` decayed after partner `{partner_var}` was consumed\n"
                 ));
                 out.push_str(&render_span(
                     partner_consume_point,

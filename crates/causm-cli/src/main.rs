@@ -768,10 +768,8 @@ fn main() -> anyhow::Result<()> {
         ) {
             use causm_analysis::analyzer::SemanticErrorKind;
             if matches!(*err.kind, SemanticErrorKind::EntropiusDiagnostic(_)) {
-                // Rich multi-span diagnostic — already contains its own `error[E...]` header
-                // and source annotations. Print as-is with bold red code only.
                 let formatted = analyzer.format_semantic_error(&err);
-                eprint!("\x1b[1;31m{}\x1b[0m", formatted);
+                eprint!("{}", formatted);
             } else {
                 let formatted = analyzer.format_semantic_error(&err);
                 eprintln!("\x1b[1;31merror:\x1b[0m {}", formatted);

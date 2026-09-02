@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 
 /// Location of an instruction within the Control Flow Graph / Timeline structure.
 ///
-/// Carries source location metadata so diagnostics can render rustc-grade
-/// multi-span output with actual source lines and `^^^` underlines.
+/// Carries source location metadata so diagnostics can render rich multi-span
+/// source context annotations with exact token underlines.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PointIndex {
     pub timeline_idx: usize,
