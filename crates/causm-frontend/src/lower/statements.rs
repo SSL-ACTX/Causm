@@ -188,6 +188,26 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             for (i, param) in params.iter().enumerate() {
                 let p_reg = Reg(i as u32);
+                if matches!(
+                    param.typ,
+                    Some(causm_core::TypeName::Builtin(
+                        causm_core::BuiltinType::Integer
+                            | causm_core::BuiltinType::Float
+                            | causm_core::BuiltinType::Bool
+                            | causm_core::BuiltinType::I8
+                            | causm_core::BuiltinType::I16
+                            | causm_core::BuiltinType::I32
+                            | causm_core::BuiltinType::I64
+                            | causm_core::BuiltinType::U8
+                            | causm_core::BuiltinType::U16
+                            | causm_core::BuiltinType::U32
+                            | causm_core::BuiltinType::U64
+                            | causm_core::BuiltinType::F32
+                            | causm_core::BuiltinType::F64
+                    ))
+                ) {
+                    sub_ctx.copy_regs.insert(p_reg.0);
+                }
                 sub_ctx.symbols.insert(param.name.clone(), p_reg);
             }
             sub_ctx.next_reg = params.len() as u32;
@@ -771,6 +791,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let src = lower_expression(ctx, expr);
             let dest = ctx.get_reg(target);
             ctx.symbols.insert(target.clone(), dest);
+            if ctx.copy_regs.contains(&src.0) {
+                ctx.copy_regs.insert(dest.0);
+            }
             ctx.push(Instruction::Move { dest, src });
             if let Some(causm_core::LifetimeAnnotation::Decayed(ms)) = lifetime {
                 ctx.push(Instruction::Lease {
@@ -781,7 +804,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
 
             if let Expression::Identifier(_) = expr {
-                if src != dest {
+                if src != dest && !ctx.copy_regs.contains(&src.0) {
                     ctx.push(Instruction::Consume { src });
                 }
             }

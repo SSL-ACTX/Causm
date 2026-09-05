@@ -1266,6 +1266,9 @@ fn format_param(param: &ParamDecl) -> String {
         ParamMode::Decay => "decay ",
         ParamMode::Lease => "lease ",
     };
+    if param.name == "self" {
+        return format!("{}{}", mode, param.name);
+    }
     let type_str = if let Some(ref t) = param.typ {
         format!(": {}", format_type(t))
     } else {

@@ -2,6 +2,8 @@
 
 use crate::types::AutoDropSpec;
 use serde::{Deserialize, Serialize};
+pub mod arena;
+pub mod symbol;
 pub mod types;
 pub mod value;
 
@@ -1015,6 +1017,31 @@ pub enum TypeName {
     Generic(String, Vec<TypeParam>),
     Optional(Box<TypeName>),
     Union(Vec<TypeName>),
+}
+
+impl TypeName {
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "int" | "integer" => TypeName::Builtin(BuiltinType::Integer),
+            "i32" => TypeName::Builtin(BuiltinType::I32),
+            "i64" => TypeName::Builtin(BuiltinType::I64),
+            "i16" => TypeName::Builtin(BuiltinType::I16),
+            "i8" => TypeName::Builtin(BuiltinType::I8),
+            "u8" => TypeName::Builtin(BuiltinType::U8),
+            "u16" => TypeName::Builtin(BuiltinType::U16),
+            "u32" => TypeName::Builtin(BuiltinType::U32),
+            "u64" => TypeName::Builtin(BuiltinType::U64),
+            "bool" | "boolean" => TypeName::Builtin(BuiltinType::Bool),
+            "float" => TypeName::Builtin(BuiltinType::Float),
+            "f32" => TypeName::Builtin(BuiltinType::F32),
+            "f64" => TypeName::Builtin(BuiltinType::F64),
+            "string" => TypeName::Builtin(BuiltinType::String),
+            "array" => TypeName::Builtin(BuiltinType::Array),
+            "struct" => TypeName::Builtin(BuiltinType::Struct),
+            "topology" => TypeName::Builtin(BuiltinType::Topology),
+            other => TypeName::Custom(other.to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

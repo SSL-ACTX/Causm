@@ -638,6 +638,11 @@ impl EntropicAnalyzer {
             if exp_name == act_name || exp_name == "any" || act_name == "any" {
                 return true;
             }
+            if act_name.ends_with(&format!(".{}", exp_name))
+                || exp_name.ends_with(&format!(".{}", act_name))
+            {
+                return true;
+            }
             if exp_name.contains('<')
                 && act_name.contains('<')
                 && exp_name.split('<').next().unwrap_or(exp_name).trim()

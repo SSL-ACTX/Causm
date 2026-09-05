@@ -5,7 +5,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+pub mod arena_parser;
 pub mod expressions;
+pub mod lexer;
+pub mod pratt;
+pub mod registry;
 pub mod statements;
 
 #[derive(Parser)]
@@ -29,12 +33,18 @@ fn get_or_parse_stdlib_program(
     if let Some(prog) = cache.get(path) {
         return Ok(prog.clone());
     }
-    let prog = parse_causm(embedded)?;
+    let prog = parse_causm(embedded)
+        .map_err(|e| anyhow::anyhow!("failed parsing stdlib '{}': {:?}", path, e))?;
     cache.insert(path.to_string(), prog.clone());
     Ok(prog)
 }
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
+    arena_parser::parse_arena_program_to_ast(source).map_err(|e| anyhow::anyhow!(e))
+}
+
+#[allow(dead_code)]
+fn parse_causm_legacy(source: &str) -> anyhow::Result<Program> {
     let mut pairs = CausmParser::parse(Rule::program, source)?;
     let mut timelines = Vec::new();
     let mut standalone_stmts = Vec::new();

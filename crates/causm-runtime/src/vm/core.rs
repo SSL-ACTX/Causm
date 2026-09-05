@@ -533,7 +533,7 @@ impl Vm {
             let instr_debug = format!("{:?}", instr);
             let dispatch_result = {
                 let mut ctx = crate::vm::context::VmContext::new(self, branch_id);
-                crate::vm::handlers::dispatch_instruction(&mut ctx, instr)
+                crate::vm::handlers::dispatch_instruction(&mut ctx, instr.clone())
             };
             if let Err(e) = dispatch_result {
                 if self.debug_mode {

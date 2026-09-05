@@ -3,16 +3,16 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [alias]
 # Fast compilation of compiler and CLI only (excludes WASM plugins)
-check-core = "check -j 3"
-build-core = "build -j 3"
+check-core = "check -j 4"
+build-core = "build -j 4"
 
 # WASM Plugin compilation
-build-plugins = "build --package seccomp_guard --target wasm32-unknown-unknown -j 3"
+build-plugins = "build --package seccomp_guard --target wasm32-unknown-unknown -j 4"
 
 # Full workspace build including plugins
-build-all = "build --workspace -j 3"
-check-all = "check --workspace -j 3"
+build-all = "build --workspace -j 4"
+check-all = "check --workspace -j 4"
 
 # Fast integration testing (limits jobs to 3 on constrained hosts)
-test-fast = "test -j 3"
-test-all = "test --workspace -j 3"
+test-fast = "test -j 4"
+test-all = "test --workspace -j 4"
