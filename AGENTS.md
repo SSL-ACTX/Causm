@@ -71,6 +71,13 @@ When adding new syntax, instructions, or VM capabilities:
 *   **Formatter vs Compiler Isolation:** When working on developer tooling (such as `causm fmt` or `crates/causm-devtools`), NEVER modify the compiler, parser, AST types, analysis, IR lowering, or runtime crates (`causm-core`, `causm-frontend`, `causm-analysis`, `causm-ir`, `causm-runtime`) unless explicitly ordered by the user. Formatter modifications MUST remain strictly isolated within `crates/causm-devtools`.
 *   **Preserve Working Systems:** Never destabilize or rewrite working compiler subsystems to suit peripheral tooling. Tooling must adapt to the compiler architecture, never the other way around.
 
+### 3.4 Fast Paced Mode (Trigger: "pace" or "fast paced")
+*   **Trigger Keywords:** Whenever the user explicitly says `"pace"` or `"fast paced"`, the agent immediately enters **Fast Paced Mode**.
+*   **15-Second Time-Boxed Read Window:** In this mode, whenever the agent needs to read files, it MUST use the `schedule` tool to set an exact 15-second timer (`DurationSeconds=15`) before or at the start of the reading session.
+*   **Strict Activity Constraint:** The agent must dedicate those 15 seconds exclusively to reading files. No code edits or non-read actions are allowed during this window.
+*   **Decision Fork:** Immediately after the 15-second timer completes, the agent must make a definitive choice: either provide a concise technical explanation of the findings, or proceed directly to code edits. No lingering, stalling, or open-ended reading loops.
+
+
 ---
 
 ## 4. Git Commit Standards
