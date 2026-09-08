@@ -205,7 +205,7 @@ impl<'a> TokenStream<'a> {
                 if let Some((_, '/')) = clone.peek() {
                     self.chars.next();
                     self.chars.next();
-                    while let Some((_, ch2)) = self.chars.next() {
+                    for (_, ch2) in self.chars.by_ref() {
                         if ch2 == '\n' {
                             break;
                         }
@@ -620,7 +620,7 @@ impl<'a> TokenStream<'a> {
                     if let Some(&(_, '"')) | Some(&(_, '\'')) = self.chars.peek() {
                         let (_, quote) = self.chars.next().unwrap();
                         let mut string_val = String::new();
-                        while let Some((_, f_ch)) = self.chars.next() {
+                        for (_, f_ch) in self.chars.by_ref() {
                             if f_ch == quote {
                                 break;
                             } else {
@@ -656,7 +656,7 @@ impl<'a> TokenStream<'a> {
                     if let Some(&(_, '"')) | Some(&(_, '\'')) = self.chars.peek() {
                         let (_, quote) = self.chars.next().unwrap();
                         let mut hex_content = String::new();
-                        while let Some((_, h_c)) = self.chars.next() {
+                        for (_, h_c) in self.chars.by_ref() {
                             if h_c == quote {
                                 break;
                             } else if !h_c.is_whitespace() {

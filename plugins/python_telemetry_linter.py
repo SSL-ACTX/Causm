@@ -181,7 +181,7 @@ def main() -> None:
         response = analyzer.execute()
         sys.stdout.write(json.dumps(response))
         sys.stdout.flush()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         err_response = {
             "status": {"Error": f"Plugin failed: {e!s}"},
             "modified_ast": None,

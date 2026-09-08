@@ -105,7 +105,7 @@ impl<'a> ArenaParser<'a> {
                     self.bump();
                     coord_prefix.push('-');
                 }
-                
+
                 let is_attr = match self.peek() {
                     TokenKind::Ident(sym) => {
                         let name = causm_core::symbol::resolve(*sym);
@@ -171,7 +171,9 @@ impl<'a> ArenaParser<'a> {
                     match self.peek() {
                         TokenKind::Int(ms) => {
                             coord = if is_relative {
-                                Some(causm_core::TimeCoordinate::Relative(*ms as u64))
+                                Some(causm_core::TimeCoordinate::Relative(
+                                    *ms as u64,
+                                ))
                             } else {
                                 Some(causm_core::TimeCoordinate::Global(*ms as u64))
                             };
@@ -191,10 +193,18 @@ impl<'a> ArenaParser<'a> {
                                 "every" => {
                                     self.bump();
                                     if let TokenKind::Duration(ms) = self.peek() {
-                                        coord = Some(causm_core::TimeCoordinate::Periodic(*ms));
+                                        coord = Some(
+                                            causm_core::TimeCoordinate::Periodic(
+                                                *ms,
+                                            ),
+                                        );
                                         self.bump();
                                     } else if let TokenKind::Int(ms) = self.peek() {
-                                        coord = Some(causm_core::TimeCoordinate::Periodic(*ms as u64));
+                                        coord = Some(
+                                            causm_core::TimeCoordinate::Periodic(
+                                                *ms as u64,
+                                            ),
+                                        );
                                         self.bump();
                                     }
                                     continue;
@@ -362,13 +372,14 @@ impl<'a> ArenaParser<'a> {
                         && self.peek() != &TokenKind::RBrace
                         && self.peek() != &TokenKind::Eof
                     {
-                        if angle_depth == 0 && !t_str.is_empty() {
-                            if !matches!(
+                        if angle_depth == 0
+                            && !t_str.is_empty()
+                            && !matches!(
                                 self.peek(),
                                 TokenKind::Lt | TokenKind::LBracket
-                            ) {
-                                break;
-                            }
+                            )
+                        {
+                            break;
                         }
                         match self.peek() {
                             TokenKind::Ident(s) => {
@@ -470,7 +481,8 @@ impl<'a> ArenaParser<'a> {
                                 name_str.push('>');
                             }
                             TokenKind::Ident(sym) => {
-                                name_str.push_str(&causm_core::symbol::resolve(*sym));
+                                name_str
+                                    .push_str(&causm_core::symbol::resolve(*sym));
                             }
                             TokenKind::Comma => {
                                 name_str.push_str(", ");
@@ -557,7 +569,9 @@ impl<'a> ArenaParser<'a> {
                             let mut full_type = String::new();
                             match self.peek() {
                                 TokenKind::Ident(typ_sym) => {
-                                    full_type.push_str(&causm_core::symbol::resolve(*typ_sym));
+                                    full_type.push_str(
+                                        &causm_core::symbol::resolve(*typ_sym),
+                                    );
                                     self.bump();
                                 }
                                 TokenKind::Struct => {
@@ -583,7 +597,9 @@ impl<'a> ArenaParser<'a> {
                                             self.bump();
                                         }
                                         TokenKind::Ident(s) => {
-                                            full_type.push_str(&causm_core::symbol::resolve(*s));
+                                            full_type.push_str(
+                                                &causm_core::symbol::resolve(*s),
+                                            );
                                             self.bump();
                                         }
                                         TokenKind::Int(n) => {
@@ -1046,7 +1062,9 @@ impl<'a> ArenaParser<'a> {
                     let mut stmts = Vec::new();
                     if self.peek() == &TokenKind::LBrace {
                         self.bump();
-                        while self.peek() != &TokenKind::RBrace && self.peek() != &TokenKind::Eof {
+                        while self.peek() != &TokenKind::RBrace
+                            && self.peek() != &TokenKind::Eof
+                        {
                             if self.peek() == &TokenKind::On {
                                 let on_tok = self.bump();
                                 let mut pat_parts = Vec::new();
@@ -1055,8 +1073,11 @@ impl<'a> ArenaParser<'a> {
                                     self.bump();
                                     while self.peek() == &TokenKind::DoubleColon {
                                         self.bump();
-                                        if let TokenKind::Ident(next_s) = self.peek() {
-                                            pat_parts.push(causm_core::symbol::resolve(*next_s));
+                                        if let TokenKind::Ident(next_s) = self.peek()
+                                        {
+                                            pat_parts.push(
+                                                causm_core::symbol::resolve(*next_s),
+                                            );
                                             self.bump();
                                         }
                                     }
@@ -1067,14 +1088,21 @@ impl<'a> ArenaParser<'a> {
                                     if let TokenKind::Int(ms) = self.peek() {
                                         taking_ms = Some(*ms as u64);
                                         self.bump();
-                                    } else if let TokenKind::Duration(ms) = self.peek() {
+                                    } else if let TokenKind::Duration(ms) =
+                                        self.peek()
+                                    {
                                         taking_ms = Some(*ms);
                                         self.bump();
                                     }
                                 }
                                 let handler_body = self.parse_block()?;
-                                let full_handler_name = format!("{}::{}", actor_name, pat_parts.join("::"));
-                                let handler_sym = causm_core::symbol::intern(&full_handler_name);
+                                let full_handler_name = format!(
+                                    "{}::{}",
+                                    actor_name,
+                                    pat_parts.join("::")
+                                );
+                                let handler_sym =
+                                    causm_core::symbol::intern(&full_handler_name);
                                 let h_id = self.arena.alloc_stmt(
                                     StmtNode::RoutineDef {
                                         name: handler_sym,
@@ -1104,7 +1132,9 @@ impl<'a> ArenaParser<'a> {
                                 }
                                 let s_id = self.arena.alloc_stmt(
                                     StmtNode::EnableResource {
-                                        resource: causm_core::symbol::intern("slice"),
+                                        resource: causm_core::symbol::intern(
+                                            "slice",
+                                        ),
                                         amount: duration_ms,
                                         unit: Some(causm_core::symbol::intern("ms")),
                                     },
@@ -1258,12 +1288,17 @@ impl<'a> ArenaParser<'a> {
                 let mut auto_reconcile = false;
                 let mut res_rules = std::collections::HashMap::new();
                 let mut taking_ms = None;
-                if self.peek() == &TokenKind::Taking || self.peek() == &TokenKind::For {
+                if self.peek() == &TokenKind::Taking
+                    || self.peek() == &TokenKind::For
+                {
                     self.bump();
                     if let Some(ms) = self.parse_optional_duration_limit() {
                         taking_ms = Some(ms);
                     }
-                } else if matches!(self.peek(), TokenKind::Duration(_) | TokenKind::Int(_)) {
+                } else if matches!(
+                    self.peek(),
+                    TokenKind::Duration(_) | TokenKind::Int(_)
+                ) {
                     taking_ms = self.parse_optional_duration_limit();
                 }
 
@@ -1290,7 +1325,9 @@ impl<'a> ArenaParser<'a> {
                             }
 
                             if let Some(key) = key_opt {
-                                if self.peek() == &TokenKind::Colon || self.peek() == &TokenKind::Eq {
+                                if self.peek() == &TokenKind::Colon
+                                    || self.peek() == &TokenKind::Eq
+                                {
                                     self.bump();
                                     let strat = self.parse_resolution_strategy()?;
                                     res_rules.insert(key, strat);
@@ -1366,7 +1403,10 @@ impl<'a> ArenaParser<'a> {
                     self.bump();
                     if let TokenKind::Ident(s) = self.peek() {
                         let name = causm_core::symbol::resolve(*s);
-                        if matches!(name.as_str(), "consume" | "clone" | "decay" | "peek") {
+                        if matches!(
+                            name.as_str(),
+                            "consume" | "clone" | "decay" | "peek"
+                        ) {
                             self.bump();
                         }
                     }
@@ -1411,9 +1451,7 @@ impl<'a> ArenaParser<'a> {
                                 pat_str.push('(');
                             }
                             TokenKind::RParen => {
-                                if paren_depth > 0 {
-                                    paren_depth -= 1;
-                                }
+                                paren_depth = paren_depth.saturating_sub(1);
                                 pat_str.push(')');
                             }
                             TokenKind::Comma => pat_str.push(','),
@@ -1607,10 +1645,7 @@ impl<'a> ArenaParser<'a> {
                     let target = self.parse_expression(0)?;
                     let body = self.parse_block()?;
                     let id = self.arena.alloc_stmt(
-                        StmtNode::LoopOn {
-                            target,
-                            body,
-                        },
+                        StmtNode::LoopOn { target, body },
                         loop_tok.span,
                     );
                     return Ok(Some(id));
@@ -1618,7 +1653,8 @@ impl<'a> ArenaParser<'a> {
                 let (max_ms, step_ms, _has_step, explicit_tick) =
                     self.parse_optional_loop_modifiers();
                 let body = self.parse_block()?;
-                let is_tick = explicit_tick || (max_ms.is_none() && step_ms.is_none());
+                let is_tick =
+                    explicit_tick || (max_ms.is_none() && step_ms.is_none());
                 let id = self.arena.alloc_stmt(
                     StmtNode::Loop {
                         max_ms,
@@ -1653,7 +1689,7 @@ impl<'a> ArenaParser<'a> {
                 let id = self
                     .arena
                     .alloc_stmt(StmtNode::Expr(expr), self.current.span.clone());
-                return Ok(Some(id));
+                Ok(Some(id))
             }
             TokenKind::Interface => {
                 let iface_tok = self.bump();
@@ -1680,7 +1716,10 @@ impl<'a> ArenaParser<'a> {
                 if let TokenKind::Ident(sym) = self.peek() {
                     if causm_core::symbol::resolve(*sym) == "decay_after" {
                         self.bump();
-                        if matches!(self.peek(), TokenKind::Duration(_) | TokenKind::Int(_)) {
+                        if matches!(
+                            self.peek(),
+                            TokenKind::Duration(_) | TokenKind::Int(_)
+                        ) {
                             self.bump();
                         }
                     }
@@ -1745,7 +1784,7 @@ impl<'a> ArenaParser<'a> {
                     },
                     iface_tok.span,
                 );
-                return Ok(Some(id));
+                Ok(Some(id))
             }
             TokenKind::Type | TokenKind::Struct => {
                 let type_tok = self.bump();
@@ -1769,7 +1808,8 @@ impl<'a> ArenaParser<'a> {
                         self.bump();
                     }
                 }
-                if self.peek() == &TokenKind::Eq || self.peek() == &TokenKind::Colon {
+                if self.peek() == &TokenKind::Eq || self.peek() == &TokenKind::Colon
+                {
                     self.bump();
                 }
                 if self.peek() == &TokenKind::Distinct {
@@ -2327,7 +2367,11 @@ impl<'a> ArenaParser<'a> {
                             if self.peek() == &TokenKind::As {
                                 self.bump();
                                 if let TokenKind::Ident(alias_s) = self.peek() {
-                                    item_name = format!("{} as {}", item_name, causm_core::symbol::resolve(*alias_s));
+                                    item_name = format!(
+                                        "{} as {}",
+                                        item_name,
+                                        causm_core::symbol::resolve(*alias_s)
+                                    );
                                     self.bump();
                                 }
                             }
@@ -2396,9 +2440,7 @@ impl<'a> ArenaParser<'a> {
                                     pat_str.push('(');
                                 }
                                 TokenKind::RParen => {
-                                    if paren_depth > 0 {
-                                        paren_depth -= 1;
-                                    }
+                                    paren_depth = paren_depth.saturating_sub(1);
                                     pat_str.push(')');
                                 }
                                 TokenKind::LBrace => {
@@ -2406,9 +2448,7 @@ impl<'a> ArenaParser<'a> {
                                     pat_str.push('{');
                                 }
                                 TokenKind::RBrace => {
-                                    if brace_depth > 0 {
-                                        brace_depth -= 1;
-                                    }
+                                    brace_depth = brace_depth.saturating_sub(1);
                                     pat_str.push('}');
                                 }
                                 TokenKind::LBracket => {
@@ -2416,9 +2456,7 @@ impl<'a> ArenaParser<'a> {
                                     pat_str.push('[');
                                 }
                                 TokenKind::RBracket => {
-                                    if bracket_depth > 0 {
-                                        bracket_depth -= 1;
-                                    }
+                                    bracket_depth = bracket_depth.saturating_sub(1);
                                     pat_str.push(']');
                                 }
                                 TokenKind::Eq => {
@@ -2810,7 +2848,9 @@ impl<'a> ArenaParser<'a> {
                         self.bump();
                     } else if self.peek() == &TokenKind::LParen {
                         self.bump();
-                        while self.peek() != &TokenKind::RParen && self.peek() != &TokenKind::Eof {
+                        while self.peek() != &TokenKind::RParen
+                            && self.peek() != &TokenKind::Eof
+                        {
                             self.bump();
                         }
                         if self.peek() == &TokenKind::RParen {
@@ -2893,7 +2933,9 @@ impl<'a> ArenaParser<'a> {
                 let id = self.arena.alloc_stmt(StmtNode::Slice(expr), s_tok.span);
                 Ok(Some(id))
             }
-            TokenKind::Ident(sym) if sym.0 == causm_core::symbol::intern("slice").0 => {
+            TokenKind::Ident(sym)
+                if sym.0 == causm_core::symbol::intern("slice").0 =>
+            {
                 let s_tok = self.bump();
                 let expr = self.parse_expression(0)?;
                 let id = self.arena.alloc_stmt(StmtNode::Slice(expr), s_tok.span);
@@ -2967,7 +3009,9 @@ impl<'a> ArenaParser<'a> {
                 let start_span = self.current.span.clone();
                 let next_tok = self.stream.peek_token();
                 if let TokenKind::Ident(s) = self.peek() {
-                    if causm_core::symbol::resolve(*s) == "state" && matches!(next_tok.kind, TokenKind::Ident(_)) {
+                    if causm_core::symbol::resolve(*s) == "state"
+                        && matches!(next_tok.kind, TokenKind::Ident(_))
+                    {
                         let s_tok = self.bump();
                         let name = match self.peek() {
                             TokenKind::Ident(s) => *s,
@@ -2991,20 +3035,20 @@ impl<'a> ArenaParser<'a> {
                     }
                 }
                 if let TokenKind::Ident(target_sym) = self.peek() {
-                    let is_assign = match next_tok.kind {
+                    let is_assign = matches!(
+                        next_tok.kind,
                         TokenKind::Eq
-                        | TokenKind::PlusEq
-                        | TokenKind::MinusEq
-                        | TokenKind::StarEq
-                        | TokenKind::SlashEq
-                        | TokenKind::PercentEq
-                        | TokenKind::ShlEq
-                        | TokenKind::ShrEq
-                        | TokenKind::AmpEq
-                        | TokenKind::PipeEq
-                        | TokenKind::CaretEq => true,
-                        _ => false,
-                    };
+                            | TokenKind::PlusEq
+                            | TokenKind::MinusEq
+                            | TokenKind::StarEq
+                            | TokenKind::SlashEq
+                            | TokenKind::PercentEq
+                            | TokenKind::ShlEq
+                            | TokenKind::ShrEq
+                            | TokenKind::AmpEq
+                            | TokenKind::PipeEq
+                            | TokenKind::CaretEq
+                    );
 
                     if is_assign {
                         let target = *target_sym;
@@ -3088,16 +3132,17 @@ impl<'a> ArenaParser<'a> {
                                 start_span,
                             )
                         }
-                        causm_core::arena::ExprNode::FieldAccess { target, field } => {
-                            self.arena.alloc_stmt(
-                                StmtNode::FieldUpdate {
-                                    target: *target,
-                                    field: *field,
-                                    value: val_expr_id,
-                                },
-                                start_span,
-                            )
-                        }
+                        causm_core::arena::ExprNode::FieldAccess {
+                            target,
+                            field,
+                        } => self.arena.alloc_stmt(
+                            StmtNode::FieldUpdate {
+                                target: *target,
+                                field: *field,
+                                value: val_expr_id,
+                            },
+                            start_span,
+                        ),
                         causm_core::arena::ExprNode::IndexAccess { .. } => {
                             self.arena.alloc_stmt(
                                 StmtNode::FieldUpdate {
@@ -3108,9 +3153,9 @@ impl<'a> ArenaParser<'a> {
                                 start_span,
                             )
                         }
-                        _ => {
-                            self.arena.alloc_stmt(StmtNode::Expr(val_expr_id), start_span)
-                        }
+                        _ => self
+                            .arena
+                            .alloc_stmt(StmtNode::Expr(val_expr_id), start_span),
                     };
                     return Ok(Some(id));
                 }
@@ -3120,7 +3165,9 @@ impl<'a> ArenaParser<'a> {
         }
     }
 
-    pub fn parse_resolution_strategy(&mut self) -> Result<causm_core::ResolutionStrategy, String> {
+    pub fn parse_resolution_strategy(
+        &mut self,
+    ) -> Result<causm_core::ResolutionStrategy, String> {
         let is_topology = match self.peek() {
             TokenKind::Ident(s) => {
                 let name = causm_core::symbol::resolve(*s);
@@ -3131,7 +3178,9 @@ impl<'a> ArenaParser<'a> {
 
         if is_topology {
             let is_union = match self.peek() {
-                TokenKind::Ident(s) => causm_core::symbol::resolve(*s) == "topology_union",
+                TokenKind::Ident(s) => {
+                    causm_core::symbol::resolve(*s) == "topology_union"
+                }
                 _ => true,
             };
             self.bump(); // topology_union or topology_intersect
@@ -3142,13 +3191,16 @@ impl<'a> ArenaParser<'a> {
             let mut default = Box::new(causm_core::ResolutionStrategy::Decay);
             let mut on_invalid = None;
 
-            while self.peek() != &TokenKind::RBrace && self.peek() != &TokenKind::Eof {
-                if matches!(self.peek(), TokenKind::Ident(s) if causm_core::symbol::resolve(*s) == "on_invalid") {
+            while self.peek() != &TokenKind::RBrace && self.peek() != &TokenKind::Eof
+            {
+                if matches!(self.peek(), TokenKind::Ident(s) if causm_core::symbol::resolve(*s) == "on_invalid")
+                {
                     self.bump();
                     if self.peek() == &TokenKind::Colon {
                         self.bump();
                     }
-                    if matches!(self.peek(), TokenKind::Ident(s) if causm_core::symbol::resolve(*s) == "rewind") {
+                    if matches!(self.peek(), TokenKind::Ident(s) if causm_core::symbol::resolve(*s) == "rewind")
+                    {
                         self.bump();
                     }
                     let branch = match self.peek() {
@@ -3168,7 +3220,8 @@ impl<'a> ArenaParser<'a> {
                     if matches!(self.peek(), TokenKind::Ident(_)) {
                         self.bump();
                     }
-                    on_invalid = Some(causm_core::CausalReversion { branch, anchor });
+                    on_invalid =
+                        Some(causm_core::CausalReversion { branch, anchor });
                     if self.peek() == &TokenKind::Comma {
                         self.bump();
                     }
@@ -3185,7 +3238,9 @@ impl<'a> ArenaParser<'a> {
                 }
 
                 if let Some(key) = key_opt {
-                    if self.peek() == &TokenKind::Colon || self.peek() == &TokenKind::Eq {
+                    if self.peek() == &TokenKind::Colon
+                        || self.peek() == &TokenKind::Eq
+                    {
                         self.bump();
                         let strat = self.parse_resolution_strategy()?;
                         if key == "_" {
@@ -3259,7 +3314,10 @@ impl<'a> ArenaParser<'a> {
             }
             _ => {
                 let tok = self.bump();
-                Ok(causm_core::ResolutionStrategy::Custom(format!("{:?}", tok.kind)))
+                Ok(causm_core::ResolutionStrategy::Custom(format!(
+                    "{:?}",
+                    tok.kind
+                )))
             }
         }
     }
@@ -3415,7 +3473,9 @@ pub fn parse_type_name_str(s: &str) -> causm_core::TypeName {
             "int" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Integer),
             "float" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Float),
             "bool" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Bool),
-            "string" => causm_core::TypeName::Builtin(causm_core::BuiltinType::String),
+            "string" => {
+                causm_core::TypeName::Builtin(causm_core::BuiltinType::String)
+            }
             "u8" => causm_core::TypeName::Builtin(causm_core::BuiltinType::U8),
             "u16" => causm_core::TypeName::Builtin(causm_core::BuiltinType::U16),
             "u32" => causm_core::TypeName::Builtin(causm_core::BuiltinType::U32),
@@ -3426,7 +3486,9 @@ pub fn parse_type_name_str(s: &str) -> causm_core::TypeName {
             "i64" => causm_core::TypeName::Builtin(causm_core::BuiltinType::I64),
             "f32" => causm_core::TypeName::Builtin(causm_core::BuiltinType::F32),
             "f64" => causm_core::TypeName::Builtin(causm_core::BuiltinType::F64),
-            "struct" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Struct),
+            "struct" => {
+                causm_core::TypeName::Builtin(causm_core::BuiltinType::Struct)
+            }
             "array" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Array),
             _ => causm_core::TypeName::Custom(s.to_string()),
         }
@@ -3446,7 +3508,9 @@ pub fn to_ast_statement(
         StmtNode::Expr(eid) => {
             let expr = super::pratt::to_ast_expression(arena, *eid);
             match expr {
-                causm_core::Expression::Call { routine, mut args } if routine == "await" && !args.is_empty() => {
+                causm_core::Expression::Call { routine, mut args }
+                    if routine == "await" && !args.is_empty() =>
+                {
                     let target_name = match args.remove(0) {
                         causm_core::Expression::Identifier(name) => name,
                         other => format!("{:?}", other),
@@ -3496,8 +3560,16 @@ pub fn to_ast_statement(
         }
         StmtNode::Assign { target, value } => {
             let expr = super::pratt::to_ast_expression(arena, *value);
-            if let causm_core::Expression::Match { target: ref match_tgt, ref arms } = expr {
-                if let causm_core::Expression::Call { ref routine, ref args } = **match_tgt {
+            if let causm_core::Expression::Match {
+                target: ref match_tgt,
+                ref arms,
+            } = expr
+            {
+                if let causm_core::Expression::Call {
+                    ref routine,
+                    ref args,
+                } = **match_tgt
+                {
                     if routine == "entropy" && !args.is_empty() {
                         let lhs_name = causm_core::symbol::resolve(*target);
                         let mut valid_branch = None;
@@ -3506,27 +3578,37 @@ pub fn to_ast_statement(
                         let mut consumed_branch = None;
                         for arm in arms {
                             let (pat_name, binding) = match &arm.pattern {
-                                causm_core::Pattern::EnumVariant { variant_name, args, .. } => {
-                                    let b = if let Some(causm_core::Pattern::Identifier(id)) = args.first() {
+                                causm_core::Pattern::EnumVariant {
+                                    variant_name,
+                                    args,
+                                    ..
+                                } => {
+                                    let b = if let Some(
+                                        causm_core::Pattern::Identifier(id),
+                                    ) = args.first()
+                                    {
                                         id.clone()
                                     } else {
                                         String::new()
                                     };
                                     (variant_name.as_str(), b)
                                 }
-                                causm_core::Pattern::Identifier(id) => (id.as_str(), String::new()),
+                                causm_core::Pattern::Identifier(id) => {
+                                    (id.as_str(), String::new())
+                                }
                                 _ => ("", String::new()),
                             };
-                            let body_stmts = vec![causm_core::SpannedStatement::new(
-                                causm_core::Statement::Assignment {
-                                    target: lhs_name.clone(),
-                                    mutable: false,
-                                    var_type: None,
-                                    lifetime: None,
-                                    expr: arm.body.clone(),
-                                },
-                                span.clone(),
-                            )];
+                            let body_stmts =
+                                vec![causm_core::SpannedStatement::new(
+                                    causm_core::Statement::Assignment {
+                                        target: lhs_name.clone(),
+                                        mutable: false,
+                                        var_type: None,
+                                        lifetime: None,
+                                        expr: arm.body.clone(),
+                                    },
+                                    span.clone(),
+                                )];
                             match pat_name {
                                 "Valid" => {
                                     valid_branch = Some((
@@ -3550,7 +3632,8 @@ pub fn to_ast_statement(
                                     ));
                                 }
                                 "Consumed" => {
-                                    consumed_branch = Some((arm.guard.clone(), body_stmts));
+                                    consumed_branch =
+                                        Some((arm.guard.clone(), body_stmts));
                                 }
                                 _ => {}
                             }
@@ -3564,7 +3647,11 @@ pub fn to_ast_statement(
                                 consumed_branch,
                             },
                             span,
-                            arena.stmt_attributes.get(&id.0).cloned().unwrap_or_default(),
+                            arena
+                                .stmt_attributes
+                                .get(&id.0)
+                                .cloned()
+                                .unwrap_or_default(),
                         );
                     }
                 }
@@ -3577,7 +3664,11 @@ pub fn to_ast_statement(
                 expr,
             }
         }
-        StmtNode::FieldUpdate { target, field, value } => {
+        StmtNode::FieldUpdate {
+            target,
+            field,
+            value,
+        } => {
             let target_expr = super::pratt::to_ast_expression(arena, *target);
             let val_expr = super::pratt::to_ast_expression(arena, *value);
             let field_str = causm_core::symbol::resolve(*field);
@@ -3647,7 +3738,10 @@ pub fn to_ast_statement(
                 causm_core::TypeName::from_str_name(&causm_core::symbol::resolve(rt))
             });
             let sc = state_constraint.map(|(v, s)| {
-                (causm_core::symbol::resolve(v), causm_core::symbol::resolve(s))
+                (
+                    causm_core::symbol::resolve(v),
+                    causm_core::symbol::resolve(s),
+                )
             });
             causm_core::Statement::RoutineDef {
                 name: causm_core::symbol::resolve(*name),
@@ -3683,7 +3777,7 @@ pub fn to_ast_statement(
                             unit,
                         } => {
                             let r_name = causm_core::symbol::resolve(*resource);
-                            let u_str = unit.map(|u| causm_core::symbol::resolve(u));
+                            let u_str = unit.map(causm_core::symbol::resolve);
                             match r_name.as_str() {
                                 "slice" => {
                                     manifest.slice_ms = Some(*amount);
@@ -4047,9 +4141,10 @@ pub fn to_ast_statement(
             }
             let raw_cond = super::pratt::to_ast_expression(arena, *cond);
             let (cond_expr, is_valid_check) = match raw_cond {
-                causm_core::Expression::Call { ref routine, ref args }
-                    if routine == "valid" && args.len() == 1 =>
-                {
+                causm_core::Expression::Call {
+                    ref routine,
+                    ref args,
+                } if routine == "valid" && args.len() == 1 => {
                     (args[0].clone(), true)
                 }
                 other => (other, false),
@@ -4224,32 +4319,32 @@ pub fn to_ast_statement(
                     &arena.expressions[start_expr.0 as usize],
                     &arena.expressions[end_expr.0 as usize],
                 ) {
-                (
-                    causm_core::arena::ExprNode::Literal(
-                        causm_core::arena::LiteralKind::Integer(s),
-                    ),
-                    causm_core::arena::ExprNode::Literal(
-                        causm_core::arena::LiteralKind::Integer(e),
-                    ),
-                ) => {
-                    let elems: Vec<causm_core::Expression> =
-                        (*s..*e).map(causm_core::Expression::Integer).collect();
-                    causm_core::Expression::ArrayLiteral(elems)
-                }
-                (
-                    causm_core::arena::ExprNode::Literal(
-                        causm_core::arena::LiteralKind::Duration(s),
-                    ),
-                    causm_core::arena::ExprNode::Literal(
-                        causm_core::arena::LiteralKind::Duration(e),
-                    ),
-                ) => {
-                    let elems: Vec<causm_core::Expression> = (*s..*e)
-                        .map(|v| causm_core::Expression::Integer(v as i64))
-                        .collect();
-                    causm_core::Expression::ArrayLiteral(elems)
-                }
-                _ => super::pratt::to_ast_expression(arena, *start_expr),
+                    (
+                        causm_core::arena::ExprNode::Literal(
+                            causm_core::arena::LiteralKind::Integer(s),
+                        ),
+                        causm_core::arena::ExprNode::Literal(
+                            causm_core::arena::LiteralKind::Integer(e),
+                        ),
+                    ) => {
+                        let elems: Vec<causm_core::Expression> =
+                            (*s..*e).map(causm_core::Expression::Integer).collect();
+                        causm_core::Expression::ArrayLiteral(elems)
+                    }
+                    (
+                        causm_core::arena::ExprNode::Literal(
+                            causm_core::arena::LiteralKind::Duration(s),
+                        ),
+                        causm_core::arena::ExprNode::Literal(
+                            causm_core::arena::LiteralKind::Duration(e),
+                        ),
+                    ) => {
+                        let elems: Vec<causm_core::Expression> = (*s..*e)
+                            .map(|v| causm_core::Expression::Integer(v as i64))
+                            .collect();
+                        causm_core::Expression::ArrayLiteral(elems)
+                    }
+                    _ => super::pratt::to_ast_expression(arena, *start_expr),
                 }
             };
             let final_step_ms = if *step_ms == 0 || *step_ms == u64::MAX {
@@ -4353,7 +4448,9 @@ pub fn to_ast_statement(
 
             for arm in &arena.match_arms_pool[arms.as_range()] {
                 let pat_str = causm_core::symbol::resolve(arm.pattern);
-                let guard_expr = arm.guard.map(|gid| super::pratt::to_ast_expression(arena, gid));
+                let guard_expr = arm
+                    .guard
+                    .map(|gid| super::pratt::to_ast_expression(arena, gid));
                 let body_stmts = arena.stmt_pool[arm.body.as_range()]
                     .iter()
                     .map(|&sid| to_ast_statement(arena, sid))
@@ -4619,10 +4716,18 @@ mod tests {
         let prog = parse_arena_program_to_ast(src)
             .expect("should parse nested call inside enum variant without arg pool corruption");
         assert!(!prog.timelines.is_empty());
-        if let causm_core::Statement::Assignment { expr, .. } = &prog.timelines[0].statements[0].stmt {
+        if let causm_core::Statement::Assignment { expr, .. } =
+            &prog.timelines[0].statements[0].stmt
+        {
             if let causm_core::Expression::If { then_branch, .. } = expr {
-                if let causm_core::Expression::EnumVariant { args, .. } = &**then_branch {
-                    assert_eq!(args.len(), 1, "Option::Some should only have 1 argument");
+                if let causm_core::Expression::EnumVariant { args, .. } =
+                    &**then_branch
+                {
+                    assert_eq!(
+                        args.len(),
+                        1,
+                        "Option::Some should only have 1 argument"
+                    );
                 } else {
                     panic!("expected EnumVariant then branch");
                 }
@@ -4650,15 +4755,32 @@ mod tests {
                 let y = x
             }
         "#;
-        let prog = parse_arena_program_to_ast(src)
-            .expect("should parse loops with distinct step, tick, and pacing modifiers");
+        let prog = parse_arena_program_to_ast(src).expect(
+            "should parse loops with distinct step, tick, and pacing modifiers",
+        );
         assert!(!prog.timelines.is_empty());
         let stmts = &prog.timelines[0].statements;
         assert_eq!(stmts.len(), 4);
-        assert!(matches!(stmts[0].stmt, causm_core::Statement::Loop { max_ms: 30, .. }));
-        assert!(matches!(stmts[1].stmt, causm_core::Statement::LoopTick { .. }));
-        assert!(matches!(stmts[2].stmt, causm_core::Statement::ForStep { step_ms: None, .. }));
-        assert!(matches!(stmts[3].stmt, causm_core::Statement::For { pacing_ms: Some(5), max_ms: Some(20), .. }));
+        assert!(matches!(
+            stmts[0].stmt,
+            causm_core::Statement::Loop { max_ms: 30, .. }
+        ));
+        assert!(matches!(
+            stmts[1].stmt,
+            causm_core::Statement::LoopTick { .. }
+        ));
+        assert!(matches!(
+            stmts[2].stmt,
+            causm_core::Statement::ForStep { step_ms: None, .. }
+        ));
+        assert!(matches!(
+            stmts[3].stmt,
+            causm_core::Statement::For {
+                pacing_ms: Some(5),
+                max_ms: Some(20),
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -4669,7 +4791,9 @@ mod tests {
         let prog = parse_arena_program_to_ast(src)
             .expect("should parse namespaced generic static call successfully");
         assert!(!prog.timelines.is_empty());
-        if let causm_core::Statement::Assignment { expr, .. } = &prog.timelines[0].statements[0].stmt {
+        if let causm_core::Statement::Assignment { expr, .. } =
+            &prog.timelines[0].statements[0].stmt
+        {
             if let causm_core::Expression::Call { routine, args } = expr {
                 assert_eq!(routine, "Collection.Buffer.new");
                 assert_eq!(args.len(), 1);
@@ -4687,12 +4811,19 @@ mod tests {
             state total_cycles: int = 0
             state persistent_buffer: [int] = [0, 0, 0, 0]
         "#;
-        let prog = parse_arena_program_to_ast(src)
-            .expect("should parse state declarations with complex types successfully");
+        let prog = parse_arena_program_to_ast(src).expect(
+            "should parse state declarations with complex types successfully",
+        );
         assert!(!prog.timelines.is_empty());
         assert_eq!(prog.timelines[0].statements.len(), 2);
-        assert!(matches!(prog.timelines[0].statements[0].stmt, causm_core::Statement::StateDecl { .. }));
-        assert!(matches!(prog.timelines[0].statements[1].stmt, causm_core::Statement::StateDecl { .. }));
+        assert!(matches!(
+            prog.timelines[0].statements[0].stmt,
+            causm_core::Statement::StateDecl { .. }
+        ));
+        assert!(matches!(
+            prog.timelines[0].statements[1].stmt,
+            causm_core::Statement::StateDecl { .. }
+        ));
     }
 
     #[test]
@@ -4704,9 +4835,13 @@ mod tests {
                 }
             } reconcile auto
         "#;
-        let prog = parse_arena_program_to_ast(src)
-            .expect("should parse select with timeout and reconcile auto successfully");
+        let prog = parse_arena_program_to_ast(src).expect(
+            "should parse select with timeout and reconcile auto successfully",
+        );
         assert!(!prog.timelines.is_empty());
-        assert!(matches!(prog.timelines[0].statements[0].stmt, causm_core::Statement::Select { max_ms: 10, .. }));
+        assert!(matches!(
+            prog.timelines[0].statements[0].stmt,
+            causm_core::Statement::Select { max_ms: 10, .. }
+        ));
     }
 }

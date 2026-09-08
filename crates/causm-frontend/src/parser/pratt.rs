@@ -284,49 +284,49 @@ impl<'a, 'b> PrattParser<'a, 'b> {
             }
             TokenKind::Ident(sym) => {
                 let tok = self.bump();
-                if self.peek() == &TokenKind::DoubleColon {
-                    if self.stream.peek_token().kind == TokenKind::Lt {
-                        self.bump(); // consume DoubleColon
-                        self.bump(); // consume Lt
-                        while self.peek() != &TokenKind::Gt
+                if self.peek() == &TokenKind::DoubleColon
+                    && self.stream.peek_token().kind == TokenKind::Lt
+                {
+                    self.bump(); // consume DoubleColon
+                    self.bump(); // consume Lt
+                    while self.peek() != &TokenKind::Gt
+                        && self.peek() != &TokenKind::Eof
+                    {
+                        self.bump();
+                    }
+                    if self.peek() == &TokenKind::Gt {
+                        self.bump();
+                    }
+                    let mut args_vec = Vec::new();
+                    if self.peek() == &TokenKind::LParen {
+                        self.bump();
+                        while self.peek() != &TokenKind::RParen
                             && self.peek() != &TokenKind::Eof
                         {
-                            self.bump();
-                        }
-                        if self.peek() == &TokenKind::Gt {
-                            self.bump();
-                        }
-                        let mut args_vec = Vec::new();
-                        if self.peek() == &TokenKind::LParen {
-                            self.bump();
-                            while self.peek() != &TokenKind::RParen
-                                && self.peek() != &TokenKind::Eof
-                            {
-                                args_vec.push(self.parse_expression(0)?);
-                                if self.peek() == &TokenKind::Comma {
-                                    self.bump();
-                                }
-                            }
-                            if self.peek() == &TokenKind::RParen {
+                            args_vec.push(self.parse_expression(0)?);
+                            if self.peek() == &TokenKind::Comma {
                                 self.bump();
                             }
                         }
-                        let a_start = self.arena.expr_pool.len();
-                        for a in args_vec {
-                            self.arena.expr_pool.push(a);
+                        if self.peek() == &TokenKind::RParen {
+                            self.bump();
                         }
-                        let a_end = self.arena.expr_pool.len();
-                        let routine = self
-                            .arena
-                            .alloc_expr(ExprNode::Identifier(sym), tok.span.clone());
-                        return Ok(self.arena.alloc_expr(
-                            ExprNode::Call {
-                                routine,
-                                args: SliceRange::new(a_start, a_end),
-                            },
-                            tok.span,
-                        ));
                     }
+                    let a_start = self.arena.expr_pool.len();
+                    for a in args_vec {
+                        self.arena.expr_pool.push(a);
+                    }
+                    let a_end = self.arena.expr_pool.len();
+                    let routine = self
+                        .arena
+                        .alloc_expr(ExprNode::Identifier(sym), tok.span.clone());
+                    return Ok(self.arena.alloc_expr(
+                        ExprNode::Call {
+                            routine,
+                            args: SliceRange::new(a_start, a_end),
+                        },
+                        tok.span,
+                    ));
                 }
                 if self.peek() == &TokenKind::Lt {
                     let mut clone = self.stream.clone();
@@ -479,7 +479,10 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                         ));
                     }
                 }
-                if !self.disallow_struct_lit && self.peek() == &TokenKind::LBrace && !self.has_newline_before_peek() {
+                if !self.disallow_struct_lit
+                    && self.peek() == &TokenKind::LBrace
+                    && !self.has_newline_before_peek()
+                {
                     let next2 = self.stream.peek_token();
                     let is_struct_field = match next2.kind {
                         TokenKind::Ident(_) | TokenKind::Str(_) => {
@@ -504,7 +507,8 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                                 key_sym_opt = Some(*f_sym);
                                 self.bump();
                             } else if let TokenKind::Str(s_str) = self.peek() {
-                                key_sym_opt = Some(causm_core::symbol::intern(s_str));
+                                key_sym_opt =
+                                    Some(causm_core::symbol::intern(s_str));
                                 self.bump();
                             } else if let Some(sym) = self.peek().as_ident_symbol() {
                                 key_sym_opt = Some(sym);
@@ -590,67 +594,65 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                     while self.peek() != &TokenKind::RBrace
                         && self.peek() != &TokenKind::Eof
                     {
-                    let mut key_sym_opt = None;
-                    if let TokenKind::Ident(f_sym) = self.peek() {
-                        key_sym_opt = Some(*f_sym);
-                        self.bump();
-                    } else if let TokenKind::Str(s) = self.peek() {
-                        key_sym_opt = Some(causm_core::symbol::intern(s));
-                        self.bump();
-                    } else if let Some(sym) = self.peek().as_ident_symbol() {
-                        key_sym_opt = Some(sym);
-                        self.bump();
-                    }
-
-                    if let Some(field) = key_sym_opt {
-                        let expr = if self.peek() == &TokenKind::Colon
-                            || self.peek() == &TokenKind::Eq
-                        {
+                        let mut key_sym_opt = None;
+                        if let TokenKind::Ident(f_sym) = self.peek() {
+                            key_sym_opt = Some(*f_sym);
                             self.bump();
-                            self.parse_expression(0)?
-                        } else {
-                            self.arena.alloc_expr(
-                                ExprNode::Identifier(field),
-                                tok.span.clone(),
-                            )
-                        };
-                        local_fields.push(
-                            causm_core::arena::FieldAssignNode {
+                        } else if let TokenKind::Str(s) = self.peek() {
+                            key_sym_opt = Some(causm_core::symbol::intern(s));
+                            self.bump();
+                        } else if let Some(sym) = self.peek().as_ident_symbol() {
+                            key_sym_opt = Some(sym);
+                            self.bump();
+                        }
+
+                        if let Some(field) = key_sym_opt {
+                            let expr = if self.peek() == &TokenKind::Colon
+                                || self.peek() == &TokenKind::Eq
+                            {
+                                self.bump();
+                                self.parse_expression(0)?
+                            } else {
+                                self.arena.alloc_expr(
+                                    ExprNode::Identifier(field),
+                                    tok.span.clone(),
+                                )
+                            };
+                            local_fields.push(causm_core::arena::FieldAssignNode {
                                 field,
                                 expr,
                                 type_name: None,
                                 is_const: false,
-                            },
-                        );
-                        if self.peek() == &TokenKind::Comma {
-                            self.bump();
+                            });
+                            if self.peek() == &TokenKind::Comma {
+                                self.bump();
+                            } else {
+                                break;
+                            }
                         } else {
                             break;
                         }
-                    } else {
-                        break;
                     }
+                    if self.peek() == &TokenKind::RBrace {
+                        self.bump();
+                    }
+                    let f_start = self.arena.field_assigns_pool.len();
+                    for field_assign in local_fields {
+                        self.arena.field_assigns_pool.push(field_assign);
+                    }
+                    let f_end = self.arena.field_assigns_pool.len();
+                    self.arena.alloc_expr(
+                        ExprNode::StructLit {
+                            type_sym: None,
+                            fields: SliceRange::new(f_start, f_end),
+                        },
+                        tok.span,
+                    )
+                } else {
+                    self.arena
+                        .alloc_expr(ExprNode::Literal(LiteralKind::Null), tok.span)
                 }
-                if self.peek() == &TokenKind::RBrace {
-                    self.bump();
-                }
-                let f_start = self.arena.field_assigns_pool.len();
-                for field_assign in local_fields {
-                    self.arena.field_assigns_pool.push(field_assign);
-                }
-                let f_end = self.arena.field_assigns_pool.len();
-                self.arena.alloc_expr(
-                    ExprNode::StructLit {
-                        type_sym: None,
-                        fields: SliceRange::new(f_start, f_end),
-                    },
-                    tok.span,
-                )
-            } else {
-                self.arena
-                    .alloc_expr(ExprNode::Literal(LiteralKind::Null), tok.span)
             }
-        }
 
             TokenKind::LBrace => {
                 let tok = self.bump();
@@ -760,11 +762,14 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                         let mut brace_depth = 0usize;
                         let mut bracket_depth = 0usize;
                         while self.peek() != &TokenKind::Eof {
-                            let at_top = paren_depth == 0 && brace_depth == 0 && bracket_depth == 0;
-                            if at_top && (self.peek() == &TokenKind::FatArrow
-                                || self.peek() == &TokenKind::Colon
-                                || self.peek() == &TokenKind::If
-                                || self.peek() == &TokenKind::RBrace)
+                            let at_top = paren_depth == 0
+                                && brace_depth == 0
+                                && bracket_depth == 0;
+                            if at_top
+                                && (self.peek() == &TokenKind::FatArrow
+                                    || self.peek() == &TokenKind::Colon
+                                    || self.peek() == &TokenKind::If
+                                    || self.peek() == &TokenKind::RBrace)
                             {
                                 break;
                             }
@@ -785,9 +790,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                                     pat_str.push('(');
                                 }
                                 TokenKind::RParen => {
-                                    if paren_depth > 0 {
-                                        paren_depth -= 1;
-                                    }
+                                    paren_depth = paren_depth.saturating_sub(1);
                                     pat_str.push(')');
                                 }
                                 TokenKind::LBrace => {
@@ -795,9 +798,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                                     pat_str.push('{');
                                 }
                                 TokenKind::RBrace => {
-                                    if brace_depth > 0 {
-                                        brace_depth -= 1;
-                                    }
+                                    brace_depth = brace_depth.saturating_sub(1);
                                     pat_str.push('}');
                                 }
                                 TokenKind::LBracket => {
@@ -805,9 +806,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                                     pat_str.push('[');
                                 }
                                 TokenKind::RBracket => {
-                                    if bracket_depth > 0 {
-                                        bracket_depth -= 1;
-                                    }
+                                    bracket_depth = bracket_depth.saturating_sub(1);
                                     pat_str.push(']');
                                 }
                                 TokenKind::Comma => {
@@ -1009,7 +1008,9 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                         self.bump();
                     }
                 }
-                if self.peek() == &TokenKind::Taking || self.peek() == &TokenKind::For {
+                if self.peek() == &TokenKind::Taking
+                    || self.peek() == &TokenKind::For
+                {
                     self.bump();
                 } else if let TokenKind::Ident(s) = self.peek() {
                     if causm_core::symbol::resolve(*s) == "deadline" {
@@ -1209,7 +1210,9 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                 {
                     start = Some(self.parse_expression(0)?);
                 }
-                if self.peek() == &TokenKind::DotDot || self.peek() == &TokenKind::DotDotEq {
+                if self.peek() == &TokenKind::DotDot
+                    || self.peek() == &TokenKind::DotDotEq
+                {
                     let is_inclusive = self.peek() == &TokenKind::DotDotEq;
                     self.bump();
                     let mut end = None;
@@ -1336,7 +1339,9 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                 }
                 if is_generic_static {
                     let lt_tok = self.bump(); // consume <
-                    while self.peek() != &TokenKind::Gt && self.peek() != &TokenKind::Eof {
+                    while self.peek() != &TokenKind::Gt
+                        && self.peek() != &TokenKind::Eof
+                    {
                         self.bump();
                     }
                     if self.peek() == &TokenKind::Gt {
@@ -1355,7 +1360,9 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                     let mut args_vec = Vec::new();
                     if self.peek() == &TokenKind::LParen {
                         self.bump();
-                        while self.peek() != &TokenKind::RParen && self.peek() != &TokenKind::Eof {
+                        while self.peek() != &TokenKind::RParen
+                            && self.peek() != &TokenKind::Eof
+                        {
                             args_vec.push(self.parse_expression(0)?);
                             if self.peek() == &TokenKind::Comma {
                                 self.bump();
@@ -1775,9 +1782,15 @@ pub fn to_ast_expression(arena: &AstArena, id: ExprId) -> causm_core::Expression
                 "int" => {
                     causm_core::TypeName::Builtin(causm_core::BuiltinType::Integer)
                 }
-                "float" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Float),
-                "string" => causm_core::TypeName::Builtin(causm_core::BuiltinType::String),
-                "bool" => causm_core::TypeName::Builtin(causm_core::BuiltinType::Bool),
+                "float" => {
+                    causm_core::TypeName::Builtin(causm_core::BuiltinType::Float)
+                }
+                "string" => {
+                    causm_core::TypeName::Builtin(causm_core::BuiltinType::String)
+                }
+                "bool" => {
+                    causm_core::TypeName::Builtin(causm_core::BuiltinType::Bool)
+                }
                 _ => causm_core::TypeName::Custom(t_str),
             };
             causm_core::Expression::TypeAssertion {
@@ -1833,14 +1846,17 @@ pub fn to_ast_expression(arena: &AstArena, id: ExprId) -> causm_core::Expression
                 index: Box::new(to_ast_expression(arena, *index)),
             }
         }
-        ExprNode::ArraySlice { target, start, end, inclusive } => {
-            causm_core::Expression::ArraySlice {
-                target: Box::new(to_ast_expression(arena, *target)),
-                start: start.map(|s| Box::new(to_ast_expression(arena, s))),
-                end: end.map(|e| Box::new(to_ast_expression(arena, e))),
-                inclusive: *inclusive,
-            }
-        }
+        ExprNode::ArraySlice {
+            target,
+            start,
+            end,
+            inclusive,
+        } => causm_core::Expression::ArraySlice {
+            target: Box::new(to_ast_expression(arena, *target)),
+            start: start.map(|s| Box::new(to_ast_expression(arena, s))),
+            end: end.map(|e| Box::new(to_ast_expression(arena, e))),
+            inclusive: *inclusive,
+        },
         ExprNode::FString(parts) => {
             let parsed_parts = arena.fstring_parts_pool[parts.as_range()]
                 .iter()
@@ -1935,7 +1951,7 @@ pub fn to_ast_expression(arena: &AstArena, id: ExprId) -> causm_core::Expression
                 .iter()
                 .map(|arm| {
                     let pat_str = causm_core::symbol::resolve(arm.pattern);
-                    let body_expr = if arm.body.len() > 0 {
+                    let body_expr = if !arm.body.is_empty() {
                         let sid = arena.stmt_pool[arm.body.start as usize];
                         match &arena.statements[sid.0 as usize] {
                             causm_core::arena::StmtNode::Expr(eid) => {
