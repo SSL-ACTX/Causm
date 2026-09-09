@@ -1,19 +1,11 @@
 use causm_core::{Program, SpannedStatement, Statement};
-use pest::Parser;
-use pest_derive::Parser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 pub mod arena_parser;
-pub mod expressions;
 pub mod lexer;
 pub mod pratt;
 pub mod registry;
-pub mod statements;
-
-#[derive(Parser)]
-#[grammar = "causm.pest"]
-pub struct CausmParser;
 
 static DISK_ARCHIVE_INIT: std::sync::Once = std::sync::Once::new();
 
@@ -54,44 +46,6 @@ fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
     arena_parser::parse_arena_program_to_ast(source).map_err(|e| anyhow::anyhow!(e))
-}
-
-#[allow(dead_code)]
-fn parse_causm_legacy(source: &str) -> anyhow::Result<Program> {
-    let mut pairs = CausmParser::parse(Rule::program, source)?;
-    let mut timelines = Vec::new();
-    let mut standalone_stmts = Vec::new();
-
-    if let Some(program_pair) = pairs.next() {
-        for pair in program_pair.into_inner() {
-            match pair.as_rule() {
-                Rule::timeline_block => {
-                    timelines.push(statements::parse_timeline_block(pair));
-                }
-                Rule::statement => {
-                    standalone_stmts.push(statements::parse_statement(pair));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    if !standalone_stmts.is_empty() {
-        timelines.insert(
-            0,
-            causm_core::TimelineBlock {
-                time: causm_core::TimeCoordinate::Global(0),
-                no_z3: false,
-                entropy_mode: None,
-                statements: standalone_stmts,
-            },
-        );
-    }
-
-    let mut prog = Program { timelines };
-    crate::macro_expand::expand_program(&mut prog);
-    crate::derive::expand_derives(&mut prog);
-    Ok(prog)
 }
 
 #[cfg(test)]

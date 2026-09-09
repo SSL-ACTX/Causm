@@ -2,6 +2,31 @@ use super::lexer::{Token, TokenKind, TokenStream};
 use causm_core::arena::{AstArena, ExprId, ExprNode, LiteralKind, SliceRange};
 use causm_core::{BinaryOperator, Span, UnaryOperator};
 
+/// Unescape standard escape sequences in a raw string literal.
+pub(crate) fn unescape_raw_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                Some('\'') => out.push('\''),
+                Some('0') => out.push('\0'),
+                Some(other) => { out.push('\\'); out.push(other); }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+
 pub struct PrattParser<'a, 'b> {
     stream: TokenStream<'a>,
     current: Token,
@@ -150,7 +175,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                     if ch == '{' {
                         if !current_lit.is_empty() {
                             let unescaped =
-                                crate::parser::expressions::unescape_raw_text(
+                                unescape_raw_text(
                                     &current_lit,
                                 );
                             self.arena.fstring_parts_pool.push(
@@ -242,7 +267,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                 }
                 if !current_lit.is_empty() {
                     let unescaped =
-                        crate::parser::expressions::unescape_raw_text(&current_lit);
+                        unescape_raw_text(&current_lit);
                     self.arena
                         .fstring_parts_pool
                         .push(causm_core::arena::FStringPartNode::Text(unescaped));

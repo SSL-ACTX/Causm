@@ -769,8 +769,8 @@ fn main() -> anyhow::Result<()> {
         }
 
         if config.emit == Some(DumpFormat::Ast) {
-            // Re-parse without import expansion so --emit ast shows only the
-            // user's own statements (~350 nodes), not the 68k-line inlined stdlib.
+            // Re-parse without import expansion so --emit ast
+            // shows only the user's own statements
             let user_ast = parser::parse_causm(&source)
                 .unwrap_or_else(|_| program.clone());
             println!(
