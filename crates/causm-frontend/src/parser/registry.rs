@@ -194,4 +194,42 @@ mod tests {
         assert!(store.resolve_export(mod_id, add_sym).is_some());
         assert!(store.resolve_export(mod_id, vec2_sym).is_some());
     }
+
+    #[test]
+    fn test_syntax_module_store_global_registers_once_and_projects_stable_ast() {
+        // Verify that get_or_parse_module is idempotent: registering the same
+        // path twice returns the same ModuleId (no duplicate arena allocation).
+        let source = r#"
+            routine greet(name: string) -> string {
+                return name
+            }
+            enum Color { Red, Green, Blue }
+        "#;
+        let path = "test/phase3_idempotent_module";
+        let mut store = ModuleStore::new();
+        let id_first = store
+            .get_or_parse_module(path, source)
+            .expect("first registration");
+        let id_second = store
+            .get_or_parse_module(path, source)
+            .expect("second registration");
+        // Same path → same ModuleId, never re-parsed.
+        assert_eq!(id_first, id_second, "duplicate registration should return same id");
+
+        // Module exports both the routine and the enum.
+        let greet_sym = causm_core::symbol::intern("greet");
+        let color_sym = causm_core::symbol::intern("Color");
+        assert!(store.resolve_export(id_first, greet_sym).is_some());
+        assert!(store.resolve_export(id_first, color_sym).is_some());
+
+        // Projected AST contains the routine definition.
+        let prog = store.get_module_ast(id_first).expect("ast projection");
+        let all_stmts: Vec<_> = prog.timelines.iter()
+            .flat_map(|tl| tl.statements.iter())
+            .collect();
+        let has_routine = all_stmts.iter().any(|s| {
+            matches!(&s.stmt, causm_core::Statement::RoutineDef { name, .. } if name == "greet")
+        });
+        assert!(has_routine, "projected ast should contain greet routine");
+    }
 }

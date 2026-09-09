@@ -1,9 +1,8 @@
 use causm_core::{Program, SpannedStatement, Statement};
 use pest::Parser;
 use pest_derive::Parser;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 pub mod arena_parser;
 pub mod expressions;
@@ -16,27 +15,41 @@ pub mod statements;
 #[grammar = "causm.pest"]
 pub struct CausmParser;
 
-static STDLIB_PROGRAM_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Program>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-
 static DISK_ARCHIVE_INIT: std::sync::Once = std::sync::Once::new();
 
-fn get_or_parse_stdlib_program(
-    path: &str,
-    embedded: &str,
-) -> anyhow::Result<Program> {
+/// Parse and register a module into the global ModuleStore exactly once.
+/// On subsequent calls with the same `path`, the already-registered arena is
+/// reused — no re-parsing, no full `Program` clone.
+/// Returns a projected `Program` built from the compact arena representation.
+fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
     DISK_ARCHIVE_INIT.call_once(|| {
         let _ = causm_stdlib::archive::CsaArchive::get_or_load_standard_archive();
     });
 
-    let mut cache = STDLIB_PROGRAM_CACHE.lock().unwrap();
-    if let Some(prog) = cache.get(path) {
-        return Ok(prog.clone());
+    // Fast path: already registered — project from shared arena without re-parsing.
+    {
+        let store = registry::global_module_store().read().unwrap();
+        if let Some(id) = store.get_by_path(path).map(|m| m.id) {
+            if let Some(prog) = store.get_module_ast(id) {
+                return Ok(prog);
+            }
+        }
     }
-    let prog = parse_causm(embedded)
-        .map_err(|e| anyhow::anyhow!("failed parsing stdlib '{}': {:?}", path, e))?;
-    cache.insert(path.to_string(), prog.clone());
-    Ok(prog)
+
+    // Slow path: first encounter — parse into arena, register, then project.
+    let mut store = registry::global_module_store().write().unwrap();
+    // Double-checked locking: another thread may have registered while we waited.
+    if let Some(id) = store.get_by_path(path).map(|m| m.id) {
+        if let Some(prog) = store.get_module_ast(id) {
+            return Ok(prog);
+        }
+    }
+    let id = store
+        .get_or_parse_module(path, source)
+        .map_err(|e| anyhow::anyhow!("failed parsing module '{}': {}", path, e))?;
+    store
+        .get_module_ast(id)
+        .ok_or_else(|| anyhow::anyhow!("module '{}' registered but ast projection failed", path))
 }
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
@@ -123,7 +136,7 @@ fn expand_spanned_statements(
                         continue;
                     }
                     loaded_files.insert(mod_key);
-                    (get_or_parse_stdlib_program(&path, embedded)?, None)
+                    (get_or_register_module(&path, embedded)?, None)
                 } else {
                     let target_path = if let Some(dir) = base_dir {
                         dir.join(&path)
@@ -134,10 +147,10 @@ fn expand_spanned_statements(
                     if loaded_files.contains(&path_str) || !target_path.exists() {
                         continue;
                     }
-                    loaded_files.insert(path_str);
+                    loaded_files.insert(path_str.clone());
                     let source = std::fs::read_to_string(&target_path)?;
                     let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
-                    (parse_causm(&source)?, sub_base_dir)
+                    (get_or_register_module(&path_str, &source)?, sub_base_dir)
                 };
 
                 let mut item_stmts = Vec::new();
@@ -296,7 +309,7 @@ fn expand_spanned_statements(
                 let (imported_prog, sub_base_dir) = if let Some(embedded) =
                     causm_stdlib::get_module(&path)
                 {
-                    (get_or_parse_stdlib_program(&path, embedded)?, None)
+                    (get_or_register_module(&path, embedded)?, None)
                 } else {
                     let target_path = if let Some(dir) = base_dir {
                         dir.join(&path)
@@ -307,10 +320,10 @@ fn expand_spanned_statements(
                     if loaded_files.contains(&path_str) || !target_path.exists() {
                         continue;
                     }
-                    loaded_files.insert(path_str);
+                    loaded_files.insert(path_str.clone());
                     let source = std::fs::read_to_string(&target_path)?;
                     let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
-                    (parse_causm(&source)?, sub_base_dir)
+                    (get_or_register_module(&path_str, &source)?, sub_base_dir)
                 };
 
                 let mut item_stmts = Vec::new();
