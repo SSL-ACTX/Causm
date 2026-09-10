@@ -2026,6 +2026,29 @@ pub fn to_ast_expression(arena: &AstArena, id: ExprId) -> causm_core::Expression
                 else_branch: Box::new(else_expr),
             }
         }
+        // Pipeline fallback: `target |> stage` → call(target, ...) desugar.
+        // The common cases (Call, Identifier, MethodCall RHS) are already
+        // resolved in the Pratt infix handler. This arm covers residual cases.
+        ExprNode::Pipeline { target, stage } => {
+            let target_expr = to_ast_expression(arena, *target);
+            let stage_expr = to_ast_expression(arena, *stage);
+            match stage_expr {
+                causm_core::Expression::Call { routine, mut args } => {
+                    args.insert(0, target_expr);
+                    causm_core::Expression::Call { routine, args }
+                }
+                causm_core::Expression::Identifier(name) => {
+                    causm_core::Expression::Call {
+                        routine: name,
+                        args: vec![target_expr],
+                    }
+                }
+                other => causm_core::Expression::Call {
+                    routine: format!("{:?}", other),
+                    args: vec![target_expr],
+                },
+            }
+        }
         _ => causm_core::Expression::Literal("void".to_string()),
     }
 }

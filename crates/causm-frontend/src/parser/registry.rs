@@ -129,7 +129,7 @@ impl ModuleStore {
                 let stmts = module.arena.stmt_pool[body.as_range()]
                     .iter()
                     .map(|&s| {
-                        super::arena_parser::to_ast_statement(&module.arena, s)
+                        super::arena_parser::lower::to_ast_statement(&module.arena, s)
                     })
                     .collect();
                 timelines.push(causm_core::TimelineBlock {
@@ -140,7 +140,7 @@ impl ModuleStore {
                 });
             } else {
                 standalone
-                    .push(super::arena_parser::to_ast_statement(&module.arena, sid));
+                    .push(super::arena_parser::lower::to_ast_statement(&module.arena, sid));
             }
         }
         if !standalone.is_empty() {

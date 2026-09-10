@@ -2,7 +2,9 @@
 members = [
     "crates/*",
     "plugins/*",
-   # "lsp"
+]
+exclude = [
+    "lsp",
 ]
 default-members = [
     "crates/causm-core",

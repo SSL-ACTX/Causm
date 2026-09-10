@@ -45,7 +45,7 @@ fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
 }
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
-    arena_parser::parse_arena_program_to_ast(source).map_err(|e| anyhow::anyhow!(e))
+    arena_parser::lower::parse_arena_program_to_ast(source).map_err(|e| anyhow::anyhow!(e))
 }
 
 #[cfg(test)]
@@ -450,6 +450,7 @@ pub fn parse_causm_with_imports(
 
     crate::macro_expand::expand_program(&mut program);
     crate::derive::expand_derives(&mut program);
+    crate::hir::desugar_program(&mut program);
     Ok(program)
 }
 

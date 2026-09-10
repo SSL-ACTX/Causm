@@ -1763,19 +1763,19 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn test_ast_serialization_bincode_roundtrip_basic() {
+    fn test_ast_serialization_postcard_roundtrip_basic() {
         let program = Program {
             timelines: vec![TimelineBlock {
                 time: TimeCoordinate::Global(0),
                 no_z3: false,
-                entropy_mode: Some(EntropyMode::Deterministic),
+                entropy_mode: None,
                 statements: vec![
                     SpannedStatement::new(
                         Statement::Assignment {
                             target: "x".to_string(),
                             mutable: false,
                             var_type: Some(TypeName::Builtin(BuiltinType::Integer)),
-                            lifetime: Some(LifetimeAnnotation::Valid),
+                            lifetime: None,
                             expr: Expression::Integer(42),
                         },
                         Span { start: 0, end: 12 },
@@ -1790,10 +1790,10 @@ mod tests {
             }],
         };
 
-        let encoded = bincode::serialize(&program)
-            .expect("bincode serialization should succeed");
-        let decoded: Program = bincode::deserialize(&encoded)
-            .expect("bincode deserialization should succeed");
+        let encoded = postcard::to_allocvec(&program)
+            .expect("postcard serialization should succeed");
+        let decoded: Program = postcard::from_bytes(&encoded)
+            .expect("postcard deserialization should succeed");
         assert_eq!(program, decoded);
     }
 
@@ -1914,11 +1914,11 @@ mod tests {
             }],
         };
 
-        let bincode_data =
-            bincode::serialize(&program).expect("bincode serialize complex AST");
-        let bincode_decoded: Program = bincode::deserialize(&bincode_data)
-            .expect("bincode deserialize complex AST");
-        assert_eq!(program, bincode_decoded);
+        let postcard_data =
+            postcard::to_allocvec(&program).expect("postcard serialize complex AST");
+        let postcard_decoded: Program = postcard::from_bytes(&postcard_data)
+            .expect("postcard deserialize complex AST");
+        assert_eq!(program, postcard_decoded);
 
         let json_data =
             serde_json::to_string(&program).expect("json serialize complex AST");

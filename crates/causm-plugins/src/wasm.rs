@@ -60,8 +60,8 @@ impl WasmPluginDriver {
             .get_typed_func::<(u32, u32), u64>(&store, "causm_plugin_transform")
             .context("WASM plugin does not export 'causm_plugin_transform(ptr: u32, len: u32) -> u64'")?;
 
-        let payload_bytes = bincode::serialize(request)
-            .context("Failed to serialize PluginRequest with Bincode for WASM")?;
+        let payload_bytes = postcard::to_allocvec(request)
+            .context("Failed to serialize PluginRequest with Postcard for WASM")?;
 
         let req_len = payload_bytes.len() as u32;
         let in_ptr = alloc_fn
@@ -97,7 +97,7 @@ impl WasmPluginDriver {
         let _ = dealloc_fn.call(&mut store, (in_ptr, req_len));
         let _ = dealloc_fn.call(&mut store, (out_ptr, out_len));
 
-        let response: PluginResponse = bincode::deserialize(&out_bytes).context(
+        let response: PluginResponse = postcard::from_bytes(&out_bytes).context(
             "Failed to deserialize PluginResponse from WASM plugin memory",
         )?;
 
