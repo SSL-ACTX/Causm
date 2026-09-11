@@ -2,7 +2,7 @@ use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::types::Type;
 use causm_core::*;
 
-pub(crate) fn infer_expression_type(
+pub fn infer_expression_type(
     analyzer: &EntropicAnalyzer,
     expr: &Expression,
 ) -> Result<Type, SemanticError> {

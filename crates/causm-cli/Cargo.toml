@@ -12,6 +12,10 @@ plugins = ["dep:causm-plugins", "dep:causm-plugin-sdk"]
 causm-core = { path = "../causm-core" }
 causm-frontend = { path = "../causm-frontend" }
 causm-analysis = { path = "../causm-analysis" }
+causm-types = { path = "../causm-types" }
+causm-smt = { path = "../causm-smt" }
+causm-entropius = { path = "../causm-entropius" }
+causm-wcet = { path = "../causm-wcet" }
 causm-runtime = { path = "../causm-runtime" }
 causm-ir = { path = "../causm-ir" }
 causm-stdlib = { path = "../causm-stdlib" }

@@ -1,17 +1,19 @@
-use crate::solver::SolverBackend;
-use z3::{ast::Bool as Z3Bool, ast::Int as Z3Int, SatResult, Solver as Z3Solver};
+use super::ast::{BoolExpr, IntCmpOp, IntExpr};
+use super::solver::OxiZSolver;
+use crate::backend::SolverBackend;
+use std::sync::Arc;
 
-pub struct Z3Backend {
-    solver: Z3Solver,
+pub struct OxiZBackend {
+    solver: OxiZSolver,
 }
 
-impl SolverBackend for Z3Backend {
-    type Bool = Z3Bool;
-    type Int = Z3Int;
+impl SolverBackend for OxiZBackend {
+    type Bool = BoolExpr;
+    type Int = IntExpr;
 
     fn new() -> Self {
         Self {
-            solver: Z3Solver::new(),
+            solver: OxiZSolver::new(),
         }
     }
 
@@ -20,7 +22,7 @@ impl SolverBackend for Z3Backend {
     }
 
     fn check(&mut self) -> bool {
-        self.solver.check() == SatResult::Sat
+        self.solver.check()
     }
 
     fn push(&mut self) {
@@ -36,23 +38,25 @@ impl SolverBackend for Z3Backend {
     }
 
     fn bool_const(&mut self, name: &str) -> Self::Bool {
-        Z3Bool::new_const(name)
+        BoolExpr::Var(name.to_string())
     }
 
     fn bool_from_bool(&mut self, val: bool) -> Self::Bool {
-        Z3Bool::from_bool(val)
+        BoolExpr::Lit(val)
     }
 
     fn bool_not(&mut self, a: &Self::Bool) -> Self::Bool {
-        a.not()
+        a.clone().not()
     }
 
     fn bool_and(&mut self, args: &[&Self::Bool]) -> Self::Bool {
-        Z3Bool::and(args)
+        let vec = args.iter().map(|&a| a.clone()).collect();
+        BoolExpr::and(vec)
     }
 
     fn bool_or(&mut self, args: &[&Self::Bool]) -> Self::Bool {
-        Z3Bool::or(args)
+        let vec = args.iter().map(|&a| a.clone()).collect();
+        BoolExpr::or(vec)
     }
 
     fn bool_ite(
@@ -61,47 +65,48 @@ impl SolverBackend for Z3Backend {
         then: &Self::Bool,
         orelse: &Self::Bool,
     ) -> Self::Bool {
-        cond.ite(then, orelse)
+        BoolExpr::ite(cond.clone(), then.clone(), orelse.clone())
     }
 
     fn bool_eq(&mut self, a: &Self::Bool, b: &Self::Bool) -> Self::Bool {
-        a.eq(b)
+        a.clone().eq(b.clone())
     }
 
     fn bool_implies(&mut self, a: &Self::Bool, b: &Self::Bool) -> Self::Bool {
-        a.implies(b)
+        a.clone().implies(b.clone())
     }
 
     fn int_const(&mut self, name: &str) -> Self::Int {
-        Z3Int::new_const(name)
+        IntExpr::Var(name.to_string())
     }
 
     fn int_from_u64(&mut self, val: u64) -> Self::Int {
-        Z3Int::from_u64(val)
+        IntExpr::Lit(val)
     }
 
     fn int_add(&mut self, args: &[&Self::Int]) -> Self::Int {
-        Z3Int::add(args)
+        let vec = args.iter().map(|&a| a.clone()).collect();
+        IntExpr::add(vec)
     }
 
     fn int_lt(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool {
-        a.lt(b)
+        BoolExpr::IntCmp(IntCmpOp::Lt, Arc::new(a.clone()), Arc::new(b.clone()))
     }
 
     fn int_le(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool {
-        a.le(b)
+        BoolExpr::IntCmp(IntCmpOp::Le, Arc::new(a.clone()), Arc::new(b.clone()))
     }
 
     fn int_gt(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool {
-        a.gt(b)
+        BoolExpr::IntCmp(IntCmpOp::Gt, Arc::new(a.clone()), Arc::new(b.clone()))
     }
 
     fn int_ge(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool {
-        a.ge(b)
+        BoolExpr::IntCmp(IntCmpOp::Ge, Arc::new(a.clone()), Arc::new(b.clone()))
     }
 
     fn int_eq(&mut self, a: &Self::Int, b: &Self::Int) -> Self::Bool {
-        a.eq(b)
+        BoolExpr::IntCmp(IntCmpOp::Eq, Arc::new(a.clone()), Arc::new(b.clone()))
     }
 
     fn int_ite(
@@ -110,13 +115,10 @@ impl SolverBackend for Z3Backend {
         then: &Self::Int,
         orelse: &Self::Int,
     ) -> Self::Int {
-        cond.ite(then, orelse)
+        IntExpr::ite(cond.clone(), then.clone(), orelse.clone())
     }
 
     fn eval_u64(&mut self, val: &Self::Int) -> Option<u64> {
-        self.solver
-            .get_model()
-            .and_then(|m| m.eval(val, true))
-            .and_then(|v| v.as_u64())
+        self.solver.eval_u64(val)
     }
 }

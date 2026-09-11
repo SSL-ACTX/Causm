@@ -1,37 +1,25 @@
-pub mod backend;
-pub mod diagnostics;
-pub mod facts;
-pub mod relational;
-pub mod wcet;
-
-pub use backend::SolverBackend;
-pub use diagnostics::EntropicDiagnostic;
-pub use facts::{
+pub use causm_entropius::diagnostics;
+pub use causm_entropius::diagnostics::EntropicDiagnostic;
+pub use causm_entropius::facts;
+pub use causm_entropius::facts::{
     extract_facts, extract_ssa_facts, EntropicFact, PointIndex, ProgramFacts,
     SsaPointIndex,
 };
-pub use relational::RelationalInvariantSolver;
-pub use wcet::WcetSolver;
+pub use causm_entropius::relational;
+pub use causm_entropius::relational::RelationalInvariantSolver;
+pub use causm_smt::backend;
+pub use causm_smt::SolverBackend;
+pub use causm_wcet::wcet;
+pub use causm_wcet::wcet::WcetSolver;
 
-use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::Program;
+use causm_types::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 
 /// Stage 2a/2c of the analysis pipeline: the Entropius Solver.
-///
-/// Split into two halves that bracket SsaStage:
-///
-/// `run_relational` — Pure relational fact extraction and Invariant 1/2/3 proofs.
-///   Runs BEFORE SsaStage so rich multi-span diagnostics fire before any
-///   legacy procedural error can mask them. No dependency on SsaStage output.
-///
-/// `run_post_ssa`   — EGC unconsumed-variable check and full symbolic WcetSolver
-///   (WCET, temporal contracts, isolate budgets). Runs AFTER SsaStage because it needs
-///   `branch_contexts.produced` and `routines` that SsaStage populates.
 pub struct SolverStage;
 
 impl SolverStage {
     /// Stage 2a: Relational pre-pass. Extract ProgramFacts and verify Invariants 1–3.
-    /// Must run before SsaStage.
     pub fn run_relational(
         analyzer: &mut EntropicAnalyzer,
         program: &Program,
@@ -44,20 +32,21 @@ impl SolverStage {
         let facts = extract_facts(program, &source, &filename);
 
         let mut relational_solver =
-            RelationalInvariantSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
-        relational_solver.solve_invariants(&facts)?;
+            RelationalInvariantSolver::<causm_smt::OxiZBackend>::new(analyzer);
+        if let Err(err) = relational_solver.solve_invariants(&facts) {
+            return Err(
+                analyzer.annotate(SemanticErrorKind::EntropiusDiagnostic(err.0))
+            );
+        }
 
         Ok(())
     }
 
-    /// Stage 2c: Post-SSA checks. EGC unconsumed-variable enforcement +
-    /// full symbolic SMT FormalVerifier (WCET path conditions, entanglement invariants,
-    /// causal horizons, lease constraint proofs). Must run after SsaStage.
+    /// Stage 2c: Post-SSA checks. EGC unconsumed-variable enforcement + WcetSolver
     pub fn run_post_ssa(
         analyzer: &mut EntropicAnalyzer,
         program: &Program,
     ) -> Result<(), SemanticError> {
-        // EGC: every produced variable must be consumed in egc mode.
         if analyzer.enforce_egc {
             for state in analyzer.branch_contexts.values() {
                 for var in &state.produced {
@@ -73,11 +62,9 @@ impl SolverStage {
             }
         }
 
-        // Full symbolic SMT verification: WCET path conditions, temporal contracts,
-        // and isolate bounds via WcetSolver.
         if analyzer.use_z3 {
             let mut wcet_solver =
-                WcetSolver::<crate::oxiz::OxiZBackend>::new(analyzer);
+                WcetSolver::<causm_smt::OxiZBackend>::new(analyzer);
             wcet_solver.verify_and_compute(program)?;
         }
 

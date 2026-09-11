@@ -1,13 +1,13 @@
-use super::backend::SolverBackend;
-use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 use causm_core::{BinaryOperator, Program, SpannedStatement, Statement};
+use causm_smt::SolverBackend;
+use causm_types::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 
 /// Worst-Case Execution Time (WCET) solver engine.
 ///
 /// Computes topological WCET path bounds over virtual clocks using the SMT backend
 /// and verifies temporal contracts (routine limits, isolate cpu budgets, assert_time, loop bounds)
 /// using symbolic path condition reasoning.
-pub struct WcetSolver<'a, S: SolverBackend = crate::oxiz::OxiZBackend> {
+pub struct WcetSolver<'a, S: SolverBackend = causm_smt::OxiZBackend> {
     solver: S,
     analyzer: &'a EntropicAnalyzer,
     current_slice_ms: Option<u64>,
@@ -126,7 +126,7 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
         in_clock: &S::Int,
     ) -> Result<S::Int, SemanticError> {
         let cost =
-            crate::statement::estimate_statement_cost(self.analyzer, &spanned.stmt);
+            causm_types::estimate_statement_cost(self.analyzer, &spanned.stmt);
         let cost_int = self.solver.int_from_u64(cost);
         let current_clock = self.solver.int_add(&[in_clock, &cost_int]);
 

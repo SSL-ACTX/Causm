@@ -1,0 +1,13 @@
+[package]
+name = "causm-smt"
+version = "0.1.0-alpha.3"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[features]
+default = ["oxiz"]
+oxiz = []
+z3 = ["dep:z3"]
+
+[dependencies]
+z3 = { version = ">=0.20", optional = true }

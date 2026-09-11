@@ -1,0 +1,11 @@
+[package]
+name = "causm-entropius"
+version = "0.1.0-alpha.3"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+causm-core = { path = "../causm-core" }
+causm-ir = { path = "../causm-ir" }
+causm-smt = { path = "../causm-smt" }
+thiserror = "2.0.18"

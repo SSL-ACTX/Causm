@@ -1,19 +1,11 @@
 [package]
-name = "causm-analysis"
+name = "causm-types"
 version = "0.1.0-alpha.3"
 edition = "2021"
 license = "AGPL-3.0-only"
 
-[features]
-default = ["oxiz"]
-oxiz = ["causm-smt/oxiz"]
-z3 = ["causm-smt/z3"]
-
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
-causm-types = { path = "../causm-types" }
-causm-smt = { path = "../causm-smt" }
 causm-entropius = { path = "../causm-entropius" }
-causm-wcet = { path = "../causm-wcet" }
 thiserror = "2.0.18"

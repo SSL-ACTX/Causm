@@ -1,7 +1,9 @@
-use super::backend::SolverBackend;
-use super::diagnostics::EntropicDiagnostic;
-use super::facts::{EntropicFact, PointIndex, ProgramFacts};
-use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
+use crate::diagnostics::EntropicDiagnostic;
+use crate::facts::{EntropicFact, PointIndex, ProgramFacts};
+use causm_smt::SolverBackend;
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct RelationalError(pub String);
 
 /// Relational Invariant Solver — Phase 4 & 5.
 ///
@@ -27,19 +29,26 @@ use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 /// Lease Safety:
 ///   Consume(source, P_consume) ∧ LeaseIssued(source, λ, t_start, t_end, P_lease)
 ///   ∧ P_consume ≥ P_lease ⟹ EmitError
-pub struct RelationalInvariantSolver<'a, S: SolverBackend = crate::oxiz::OxiZBackend>
-{
+pub struct RelationalInvariantSolver<'a, S: SolverBackend = causm_smt::OxiZBackend> {
     solver: S,
-    analyzer: &'a EntropicAnalyzer,
     pub diagnostics: Vec<EntropicDiagnostic>,
+    _marker: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, S: SolverBackend> RelationalInvariantSolver<'a, S> {
-    pub fn new(analyzer: &'a EntropicAnalyzer) -> Self {
+    pub fn new<A>(_analyzer: &'a A) -> Self {
         Self {
             solver: S::new(),
-            analyzer,
             diagnostics: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn new_standalone() -> Self {
+        Self {
+            solver: S::new(),
+            diagnostics: Vec::new(),
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -675,13 +684,11 @@ impl<'a, S: SolverBackend> RelationalInvariantSolver<'a, S> {
     pub fn solve_invariants(
         &mut self,
         facts: &ProgramFacts,
-    ) -> Result<(), SemanticError> {
+    ) -> Result<(), RelationalError> {
         let diagnostics = self.collect_diagnostics(facts);
         if let Some(first_diag) = diagnostics.first() {
             let rich_message = first_diag.format_diagnostic(true);
-            return Err(self
-                .analyzer
-                .annotate(SemanticErrorKind::EntropiusDiagnostic(rich_message)));
+            return Err(RelationalError(rich_message));
         }
         Ok(())
     }

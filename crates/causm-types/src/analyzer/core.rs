@@ -1,3 +1,20 @@
+use std::sync::atomic::{AtomicPtr, Ordering};
+
+type PipelineFn = fn(&mut EntropicAnalyzer, &Program) -> Result<(), SemanticError>;
+static DEFAULT_PIPELINE_RUNNER: AtomicPtr<()> = AtomicPtr::new(std::ptr::null_mut());
+
+pub fn set_default_pipeline_runner(runner: PipelineFn) {
+    DEFAULT_PIPELINE_RUNNER.store(runner as *mut (), Ordering::SeqCst);
+}
+
+pub fn get_default_pipeline_runner() -> Option<PipelineFn> {
+    let ptr = DEFAULT_PIPELINE_RUNNER.load(Ordering::SeqCst);
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { std::mem::transmute(ptr) })
+    }
+}
 use super::types::*;
 use causm_core::types::{StructType, Type};
 use causm_core::*;
@@ -27,6 +44,8 @@ pub struct EntropicAnalyzer {
     pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
     pub entropy_mode: causm_core::EntropyMode,
     pub analyzed_routines: HashSet<String>,
+    pub pipeline_runner:
+        Option<fn(&mut EntropicAnalyzer, &Program) -> Result<(), SemanticError>>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -63,6 +82,7 @@ impl EntropicAnalyzer {
             analyzed_wcet: std::cell::RefCell::new(HashMap::new()),
             entropy_mode: causm_core::EntropyMode::Deterministic,
             analyzed_routines: HashSet::new(),
+            pipeline_runner: get_default_pipeline_runner(),
         };
         analyzer.register_intrinsics();
         analyzer
@@ -98,7 +118,14 @@ impl EntropicAnalyzer {
         self.struct_extends.clear();
         self.analyzed_routines.clear();
 
-        crate::pipeline::AnalysisPipeline::new(self).run_hir(hir)
+        if let Some(runner) =
+            self.pipeline_runner.or_else(get_default_pipeline_runner)
+        {
+            runner(self, hir)
+        } else {
+            crate::resolve::ResolveStage::run(self, hir);
+            crate::ssa::SsaStage::run(self, hir)
+        }
     }
 
     pub fn analyze_program_with_source(
@@ -115,7 +142,7 @@ impl EntropicAnalyzer {
         result
     }
 
-    pub(crate) fn annotate(&self, kind: SemanticErrorKind) -> SemanticError {
+    pub fn annotate(&self, kind: SemanticErrorKind) -> SemanticError {
         let (line, column) =
             if let (Some(span), Some(src)) = (&self.current_span, &self.source) {
                 let before = &src[..span.start];
@@ -321,7 +348,14 @@ impl EntropicAnalyzer {
         self.struct_extends.clear();
         self.analyzed_routines.clear();
 
-        crate::pipeline::AnalysisPipeline::new(self).run(program)
+        if let Some(runner) =
+            self.pipeline_runner.or_else(get_default_pipeline_runner)
+        {
+            runner(self, program)
+        } else {
+            crate::resolve::ResolveStage::run(self, program);
+            crate::ssa::SsaStage::run(self, program)
+        }
     }
 
     pub(crate) fn check_available(&self, name: &str) -> Result<(), SemanticError> {

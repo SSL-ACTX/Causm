@@ -1,4 +1,4 @@
-use super::facts::PointIndex;
+use crate::facts::PointIndex;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

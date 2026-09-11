@@ -4,24 +4,26 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiveRange {
     pub var: String,
-    pub def_point: crate::solver::PointIndex,
-    pub use_points: Vec<crate::solver::PointIndex>,
+    pub def_point: causm_entropius::PointIndex,
+    pub use_points: Vec<causm_entropius::PointIndex>,
     pub is_consumed: bool,
-    pub consume_point: Option<crate::solver::PointIndex>,
+    pub consume_point: Option<causm_entropius::PointIndex>,
 }
 
 /// Analysis table containing computed live ranges for all bindings across all timelines.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct LiveRangeTable {
     pub ranges: HashMap<String, LiveRange>,
-    pub live_at_points: HashMap<crate::solver::PointIndex, HashSet<String>>,
+    pub live_at_points: HashMap<causm_entropius::PointIndex, HashSet<String>>,
 }
 
 impl LiveRangeTable {
-    pub fn compute_from_facts(facts: &crate::solver::ProgramFacts) -> Self {
+    pub fn compute_from_facts(facts: &causm_entropius::ProgramFacts) -> Self {
         let mut ranges = HashMap::new();
-        let mut live_at_points: HashMap<crate::solver::PointIndex, HashSet<String>> =
-            HashMap::new();
+        let mut live_at_points: HashMap<
+            causm_entropius::PointIndex,
+            HashSet<String>,
+        > = HashMap::new();
 
         for (var, origins) in &facts.var_origins {
             if let Some(def_pt) = origins.iter().next() {

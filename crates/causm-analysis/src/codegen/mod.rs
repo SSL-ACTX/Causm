@@ -1,5 +1,5 @@
-use crate::analyzer::{EntropicAnalyzer, SemanticError};
 use causm_core::Program;
+use causm_types::analyzer::{EntropicAnalyzer, SemanticError};
 
 /// Stage 4 of the analysis pipeline: Optimization & Bytecode Lowering.
 ///

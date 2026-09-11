@@ -75,9 +75,12 @@ name = "causm-analysis"
 version = "0.1.0-alpha.3"
 dependencies = [
  "causm-core",
+ "causm-entropius",
  "causm-ir",
+ "causm-smt",
+ "causm-types",
+ "causm-wcet",
  "thiserror",
- "z3",
 ]
 
 [[package]]
@@ -88,12 +91,16 @@ dependencies = [
  "causm-analysis",
  "causm-core",
  "causm-devtools",
+ "causm-entropius",
  "causm-frontend",
  "causm-ir",
  "causm-plugin-sdk",
  "causm-plugins",
  "causm-runtime",
+ "causm-smt",
  "causm-stdlib",
+ "causm-types",
+ "causm-wcet",
  "clap",
 ]
 
@@ -127,6 +134,16 @@ dependencies = [
  "colored",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "causm-entropius"
+version = "0.1.0-alpha.3"
+dependencies = [
+ "causm-core",
+ "causm-ir",
+ "causm-smt",
+ "thiserror",
 ]
 
 [[package]]
@@ -197,6 +214,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "causm-smt"
+version = "0.1.0-alpha.3"
+dependencies = [
+ "z3",
+]
+
+[[package]]
 name = "causm-stdlib"
 version = "0.1.0-alpha.3"
 dependencies = [
@@ -206,6 +230,27 @@ dependencies = [
  "causm-runtime",
  "postcard",
  "serde",
+]
+
+[[package]]
+name = "causm-types"
+version = "0.1.0-alpha.3"
+dependencies = [
+ "causm-core",
+ "causm-entropius",
+ "causm-ir",
+ "thiserror",
+]
+
+[[package]]
+name = "causm-wcet"
+version = "0.1.0-alpha.3"
+dependencies = [
+ "causm-core",
+ "causm-ir",
+ "causm-smt",
+ "causm-types",
+ "thiserror",
 ]
 
 [[package]]
