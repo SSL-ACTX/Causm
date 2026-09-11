@@ -213,6 +213,9 @@ impl<'a> ArenaParser<'a> {
                     if self.peek() == &TokenKind::RParen {
                         self.bump();
                     }
+                } else if let TokenKind::Ident(s) = self.peek() {
+                    name = *s;
+                    self.bump();
                 }
                 let id = self.arena.alloc_stmt(StmtNode::RewindTo(name), r_tok.span);
                 Ok(Some(id))

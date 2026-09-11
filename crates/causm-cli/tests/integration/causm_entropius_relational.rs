@@ -119,3 +119,90 @@ fn test_entropius_lease_safety_relational_detection() {
     let mut solver = RelationalInvariantSolver::<OxiZBackend>::new(&analyzer);
     assert!(solver.solve_invariants(&facts).is_ok());
 }
+
+#[test]
+fn test_entropius_invariant_7_double_consume_relational_detection() {
+    let source = r#"
+        @main: {
+            let item = 42
+            yield item
+            yield item
+        }
+    "#;
+
+    let program = parser::parse_causm(source).expect("Program should parse");
+    let facts = extract_facts(&program, source, "<test>");
+
+    let analyzer = EntropicAnalyzer::new();
+    let mut solver = RelationalInvariantSolver::<OxiZBackend>::new(&analyzer);
+    let diagnostics = solver.collect_diagnostics(&facts);
+
+    assert!(diagnostics.iter().any(|d| matches!(d, EntropicDiagnostic::DoubleConsumeConflict { var, .. } if var == "item")));
+    let rendered = solver.solve_invariants(&facts).unwrap_err();
+    let rendered_str = format!("{}", rendered);
+    assert!(
+        rendered_str.contains("E0007")
+            || rendered_str.contains("Double Consume Conflict")
+            || rendered_str.contains("item")
+    );
+}
+
+#[test]
+fn test_entropius_invariant_8_cross_branch_split_collision_detection() {
+    let source = r#"
+        @main: {
+            let shared_key = 123
+            split main into [branchA, branchB]
+        }
+        @branchA: {
+            yield shared_key
+        }
+        @branchB: {
+            let peek = shared_key + 1
+        }
+    "#;
+
+    let program = parser::parse_causm(source).expect("Program should parse");
+    let facts = extract_facts(&program, source, "<test>");
+
+    let analyzer = EntropicAnalyzer::new();
+    let mut solver = RelationalInvariantSolver::<OxiZBackend>::new(&analyzer);
+    let diagnostics = solver.collect_diagnostics(&facts);
+
+    assert!(diagnostics.iter().any(|d| matches!(d, EntropicDiagnostic::CrossBranchCollision { var, .. } if var == "shared_key")));
+    let rendered = solver.solve_invariants(&facts).unwrap_err();
+    let rendered_str = format!("{}", rendered);
+    assert!(
+        rendered_str.contains("E0008")
+            || rendered_str.contains("Cross-Branch Collision")
+            || rendered_str.contains("shared_key")
+    );
+}
+
+#[test]
+fn test_entropius_invariant_9_speculative_leak_relational_detection() {
+    let source = r#"
+        @main: {
+            speculate (max 50ms) {
+                let temp_secret = 777
+            }
+            let leaked = temp_secret
+        }
+    "#;
+
+    let program = parser::parse_causm(source).expect("Program should parse");
+    let facts = extract_facts(&program, source, "<test>");
+
+    let analyzer = EntropicAnalyzer::new();
+    let mut solver = RelationalInvariantSolver::<OxiZBackend>::new(&analyzer);
+    let diagnostics = solver.collect_diagnostics(&facts);
+
+    assert!(diagnostics.iter().any(|d| matches!(d, EntropicDiagnostic::SpeculativeLeak { var, .. } if var == "temp_secret")));
+    let rendered = solver.solve_invariants(&facts).unwrap_err();
+    let rendered_str = format!("{}", rendered);
+    assert!(
+        rendered_str.contains("E0009")
+            || rendered_str.contains("Speculative Leak")
+            || rendered_str.contains("temp_secret")
+    );
+}

@@ -64,14 +64,13 @@ update_files() {
         echo "  [✓] Updated $crate_toml"
     done
 
-
-    # 4. Update documentation references in docs/causm_index.md
+    # 3. Update documentation references in docs/causm_index.md
     if [ -f "$ROOT_DIR/docs/causm_index.md" ]; then
         sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?/v$target_ver/g" "$ROOT_DIR/docs/causm_index.md"
         echo "  [✓] Updated docs/causm_index.md"
     fi
 
-    # 5. Update README.md header if it references current version
+    # 4. Update README.md header if it references current version
     if [ -f "$ROOT_DIR/README.md" ]; then
         sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?/v$target_ver/g" "$ROOT_DIR/README.md"
         echo "  [✓] Updated README.md"
@@ -81,23 +80,33 @@ update_files() {
 }
 
 parse_and_bump() {
-    local bump_type="$1"
-    local raw_ver="$CURRENT_VERSION"
+    bump_type="$1"
+    raw_ver="$CURRENT_VERSION"
 
-    # Regex for SemVer with optional pre-release (e.g., 0.1.0-alpha.1)
-    local semver_regex='^([0-9]+)\.([0-9]+)\.([0-9]+)(-([a-zA-Z]+)\.([0-9]+))?$'
-    if [[ ! $raw_ver =~ $semver_regex ]]; then
+    # Validate SemVer format
+    if ! echo "$raw_ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z]+\.[0-9]+)?$'; then
         echo "Error: Current version '$raw_ver' does not match SemVer format X.Y.Z[-prerelease.N]" >&2
         exit 1
     fi
 
-    local major="${BASH_REMATCH[1]}"
-    local minor="${BASH_REMATCH[2]}"
-    local patch="${BASH_REMATCH[3]}"
-    local pre_tag="${BASH_REMATCH[5]:-}"
-    local pre_num="${BASH_REMATCH[6]:-0}"
+    core_ver="${raw_ver%%-*}"
+    pre_part=""
+    if [ "$raw_ver" != "$core_ver" ]; then
+        pre_part="${raw_ver#*-}"
+    fi
 
-    local new_ver=""
+    major=$(echo "$core_ver" | cut -d. -f1)
+    minor=$(echo "$core_ver" | cut -d. -f2)
+    patch=$(echo "$core_ver" | cut -d. -f3)
+
+    pre_tag=""
+    pre_num="0"
+    if [ -n "$pre_part" ]; then
+        pre_tag="${pre_part%%.*}"
+        pre_num="${pre_part#*.}"
+    fi
+
+    new_ver=""
 
     case "$bump_type" in
         major)

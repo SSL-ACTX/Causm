@@ -1,6 +1,6 @@
 use super::backend::SolverBackend;
 use super::diagnostics::EntropicDiagnostic;
-use super::facts::{EntropicFact, ProgramFacts};
+use super::facts::{EntropicFact, PointIndex, ProgramFacts};
 use crate::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 
 /// Relational Invariant Solver — Phase 4 & 5.
@@ -74,6 +74,27 @@ impl<'a, S: SolverBackend> RelationalInvariantSolver<'a, S> {
                     .unwrap_or(false);
 
                 if reintroduced {
+                    continue;
+                }
+
+                // If the consume and access occur across parallel child branches of a split,
+                // this is governed specifically by Invariant 8 (CrossBranchCollision).
+                let is_cross_branch_split =
+                    facts.branch_splits.iter().any(|(_, children, split_pt)| {
+                        if let (Some(b1), Some(b2)) = (
+                            facts.point_branches.get(&consume_pt),
+                            facts.point_branches.get(access_pt),
+                        ) {
+                            b1 != b2
+                                && children.contains(b1)
+                                && children.contains(b2)
+                                && &consume_pt > split_pt
+                                && access_pt > split_pt
+                        } else {
+                            false
+                        }
+                    });
+                if is_cross_branch_split {
                     continue;
                 }
 
@@ -410,6 +431,219 @@ impl<'a, S: SolverBackend> RelationalInvariantSolver<'a, S> {
                                         partner_var: partner.clone(),
                                         partner_consume_point: partner_consume_pt
                                             .clone(),
+                                        access_point: access_pt.clone(),
+                                        smt_formula,
+                                    },
+                                );
+                            }
+                            self.solver.pop(1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. Invariant 7: Double-Consume Conflict
+        for (var, consume_pts) in &facts.var_consumes {
+            if consume_pts.len() < 2 {
+                continue;
+            }
+            let mut sorted_pts: Vec<&PointIndex> = consume_pts.iter().collect();
+            sorted_pts.sort();
+
+            for i in 0..sorted_pts.len() {
+                for j in (i + 1)..sorted_pts.len() {
+                    let first_pt = sorted_pts[i];
+                    let second_pt = sorted_pts[j];
+
+                    let reintroduced = facts
+                        .var_origins
+                        .get(var)
+                        .map(|origins| {
+                            origins
+                                .iter()
+                                .any(|orig| orig > first_pt && orig <= second_pt)
+                        })
+                        .unwrap_or(false);
+
+                    if reintroduced {
+                        continue;
+                    }
+
+                    let path_true = self.solver.bool_from_bool(true);
+                    let conflict_sym = self.solver.bool_const(&format!(
+                        "{}_double_consume_conflict_{}_{}_{}_{}_{}_{}",
+                        var,
+                        first_pt.timeline_idx,
+                        first_pt.statement_idx,
+                        first_pt.sub_point,
+                        second_pt.timeline_idx,
+                        second_pt.statement_idx,
+                        second_pt.sub_point
+                    ));
+                    let impl_conflict =
+                        self.solver.bool_implies(&path_true, &conflict_sym);
+                    self.solver.assert(&impl_conflict);
+
+                    self.solver.push();
+                    let conflict =
+                        self.solver.bool_and(&[&path_true, &conflict_sym]);
+                    self.solver.assert(&conflict);
+                    if self.solver.check() {
+                        let smt_formula = format!(
+                            "DoubleConsumeConflict({}, P_{}_{}_{}) :- LinearConsume({}, P_{}_{}_{}), LinearConsume({}, P_{}_{}_{}), not Reintroduced({}, P_{}_{}_{}, P_{}_{}_{}). [UNSAT proof]",
+                            var, second_pt.timeline_idx, second_pt.statement_idx, second_pt.sub_point,
+                            var, first_pt.timeline_idx, first_pt.statement_idx, first_pt.sub_point,
+                            var, second_pt.timeline_idx, second_pt.statement_idx, second_pt.sub_point,
+                            var, first_pt.timeline_idx, first_pt.statement_idx, first_pt.sub_point,
+                            second_pt.timeline_idx, second_pt.statement_idx, second_pt.sub_point,
+                        );
+
+                        self.diagnostics.push(
+                            EntropicDiagnostic::DoubleConsumeConflict {
+                                var: var.clone(),
+                                first_consume_point: (*first_pt).clone(),
+                                second_consume_point: (*second_pt).clone(),
+                                smt_formula,
+                            },
+                        );
+                    }
+                    self.solver.pop(1);
+                }
+            }
+        }
+
+        // 8. Invariant 8: Cross-Branch State Collision (Linear Branch Split Violation)
+        for (parent, children, split_pt) in &facts.branch_splits {
+            for c1 in children {
+                for c2 in children {
+                    if c1 == c2 {
+                        continue;
+                    }
+                    for (var, consume_pts) in &facts.var_consumes {
+                        for consume_pt in consume_pts {
+                            if consume_pt <= split_pt {
+                                continue;
+                            }
+                            if facts.point_branches.get(consume_pt) != Some(c1) {
+                                continue;
+                            }
+
+                            if let Some(accesses) = facts.var_accesses.get(var) {
+                                for (access_pt, _) in accesses {
+                                    if access_pt <= split_pt {
+                                        continue;
+                                    }
+                                    if facts.point_branches.get(access_pt)
+                                        != Some(c2)
+                                    {
+                                        continue;
+                                    }
+
+                                    // Check if there is an intervening merge of c1 and c2 before access_pt
+                                    let merged = facts.branch_merges.iter().any(
+                                        |(branches, _, merge_pt)| {
+                                            merge_pt > split_pt
+                                                && merge_pt <= access_pt
+                                                && branches.contains(c1)
+                                                && branches.contains(c2)
+                                        },
+                                    );
+
+                                    if merged {
+                                        continue;
+                                    }
+
+                                    let path_true = self.solver.bool_from_bool(true);
+                                    let collision_sym =
+                                        self.solver.bool_const(&format!(
+                                        "{}_cross_branch_collision_{}_{}_{}_{}_{}",
+                                        var, c1, c2,
+                                        consume_pt.timeline_idx,
+                                        access_pt.timeline_idx,
+                                        access_pt.statement_idx
+                                    ));
+                                    let impl_collision = self
+                                        .solver
+                                        .bool_implies(&path_true, &collision_sym);
+                                    self.solver.assert(&impl_collision);
+
+                                    self.solver.push();
+                                    let collision = self
+                                        .solver
+                                        .bool_and(&[&path_true, &collision_sym]);
+                                    self.solver.assert(&collision);
+                                    if self.solver.check() {
+                                        let smt_formula = format!(
+                                            "CrossBranchCollision({}, {}, {}) :- BranchSplit({}, P_{}_{}_{}), LinearConsume({}, {}, P_{}_{}_{}), AccessAt({}, {}, P_{}_{}_{}), not Reconciled({}, {}). [UNSAT proof]",
+                                            var, c1, c2,
+                                            parent, split_pt.timeline_idx, split_pt.statement_idx, split_pt.sub_point,
+                                            var, c1, consume_pt.timeline_idx, consume_pt.statement_idx, consume_pt.sub_point,
+                                            var, c2, access_pt.timeline_idx, access_pt.statement_idx, access_pt.sub_point,
+                                            c1, c2,
+                                        );
+
+                                        self.diagnostics.push(EntropicDiagnostic::CrossBranchCollision {
+                                            var: var.clone(),
+                                            branch_consumed: c1.clone(),
+                                            consume_point: consume_pt.clone(),
+                                            branch_accessed: c2.clone(),
+                                            access_point: access_pt.clone(),
+                                            split_point: split_pt.clone(),
+                                            smt_formula,
+                                        });
+                                    }
+                                    self.solver.pop(1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 9. Invariant 9: Speculative Scope Rollback Non-Interference (Speculative Leak)
+        for (spec_pt, has_commit, spec_vars) in &facts.speculative_blocks {
+            if *has_commit {
+                continue;
+            }
+            for var in spec_vars {
+                if let Some(accesses) = facts.var_accesses.get(var) {
+                    for (access_pt, _) in accesses {
+                        if access_pt.timeline_idx != spec_pt.timeline_idx
+                            || access_pt.statement_idx != spec_pt.statement_idx
+                        {
+                            let path_true = self.solver.bool_from_bool(true);
+                            let leak_sym = self.solver.bool_const(&format!(
+                                "{}_spec_leak_{}_{}_{}_{}_{}",
+                                var,
+                                spec_pt.timeline_idx,
+                                spec_pt.statement_idx,
+                                access_pt.timeline_idx,
+                                access_pt.statement_idx,
+                                access_pt.sub_point
+                            ));
+                            let impl_leak =
+                                self.solver.bool_implies(&path_true, &leak_sym);
+                            self.solver.assert(&impl_leak);
+
+                            self.solver.push();
+                            let leak =
+                                self.solver.bool_and(&[&path_true, &leak_sym]);
+                            self.solver.assert(&leak);
+                            if self.solver.check() {
+                                let smt_formula = format!(
+                                    "SpeculativeLeak({}, P_{}_{}_{}) :- SpeculateIntro({}, P_{}_{}_{}), AccessAt({}, P_{}_{}_{}), not Committed({}). [UNSAT proof]",
+                                    var, access_pt.timeline_idx, access_pt.statement_idx, access_pt.sub_point,
+                                    var, spec_pt.timeline_idx, spec_pt.statement_idx, spec_pt.sub_point,
+                                    var, access_pt.timeline_idx, access_pt.statement_idx, access_pt.sub_point,
+                                    var,
+                                );
+
+                                self.diagnostics.push(
+                                    EntropicDiagnostic::SpeculativeLeak {
+                                        var: var.clone(),
+                                        spec_point: spec_pt.clone(),
                                         access_point: access_pt.clone(),
                                         smt_formula,
                                     },

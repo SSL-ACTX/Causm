@@ -12,7 +12,7 @@ pub struct EntropicAnalyzer {
     pub(crate) inspection_depth: usize,
     pub(crate) current_slice_ms: Option<u64>,
     pub source: Option<String>,
-    pub(crate) filename: Option<String>,
+    pub filename: Option<String>,
     pub(crate) capability_stack: Vec<HashMap<String, causm_core::Capability>>,
     pub routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
