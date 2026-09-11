@@ -1,10 +1,10 @@
 // src/ast.rs
 
-use crate::types::AutoDropSpec;
 use serde::{Deserialize, Serialize};
 pub mod arena;
 pub mod symbol;
 pub mod types;
+pub use types::AutoDropSpec;
 pub mod value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
