@@ -23,7 +23,8 @@ fn test_vfs_in_memory_ramdisk_lifecycle() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;
@@ -90,7 +91,8 @@ fn test_vfs_isolate_sandboxed_zero_ffi_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;

@@ -80,6 +80,14 @@ impl EntropicAnalyzer {
         self.mark_consumed(value_id)
     }
 
+    pub(crate) fn AutoDrop(&mut self, _target: &str) -> Result<(), SemanticError> {
+        Ok(())
+    }
+
+    pub(crate) fn Consume(&mut self, target: &str) -> Result<(), SemanticError> {
+        self.mark_consumed(target)
+    }
+
     pub(crate) fn Capability(
         &mut self,
         cap: &Capability,

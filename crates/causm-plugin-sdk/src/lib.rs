@@ -31,7 +31,7 @@ pub mod abi {
         F: FnOnce(Program, &PluginContext) -> Result<Program, PluginError>,
     {
         let in_slice = std::slice::from_raw_parts(ptr, len as usize);
-        let req: Result<PluginRequest, _> = bincode::deserialize(in_slice);
+        let req: Result<PluginRequest, _> = postcard::from_bytes(in_slice);
 
         let response = match req {
             Ok(request) => {
@@ -63,7 +63,7 @@ pub mod abi {
             ),
         };
 
-        let out_bytes = bincode::serialize(&response).unwrap_or_default();
+        let out_bytes = postcard::to_allocvec(&response).unwrap_or_default();
         let out_len = out_bytes.len() as u32;
         let out_ptr = alloc(out_len);
         unsafe {

@@ -36,7 +36,7 @@
 
     routine addr(&ip: string, &port: i32) -> SocketAddr taking _ => struct { ip = ip, port = port }
 
-    routine make_sockaddr(&port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> i64 taking _ {
+    routine make_sockaddr(&port: i32, &b0: i32, &b1: i32, &b2: i32, &b3: i32) -> array taking _ {
         let port_hi = (port / 256) % 256
         let port_lo = port % 256
         let mut sa = [2, 0, port_hi, port_lo, b0, b1, b2, b3, 0, 0, 0, 0, 0, 0, 0, 0]

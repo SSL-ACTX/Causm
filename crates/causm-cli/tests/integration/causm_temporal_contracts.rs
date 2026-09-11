@@ -211,7 +211,8 @@ mod tests {
         let mut analyzer = EntropicAnalyzer::new();
         analyzer.analyze_program(&program)?;
 
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.execute_program(&ir)?;
 
@@ -250,7 +251,8 @@ mod tests {
         let mut analyzer = EntropicAnalyzer::new();
         analyzer.analyze_program(&program)?;
 
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.execute_program(&ir)?;
 
@@ -297,7 +299,8 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.execute_program(&ir)?;
 

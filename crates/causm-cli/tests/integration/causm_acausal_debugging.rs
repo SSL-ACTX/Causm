@@ -14,7 +14,8 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.debug_mode = true;
 
@@ -74,7 +75,8 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.execute_program(&ir)?;
 
@@ -105,7 +107,8 @@ mod tests {
 }
 "#;
         let program = parser::parse_causm(code)?;
-        let ir = causm_frontend::lower::lower_program(&program);
+        let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+        let ir = causm_frontend::lower::lower_hir_program(&hir);
         let mut vm = Vm::new();
         vm.debug_mode = true;
         vm.current_span = Some(causm_core::Span { start: 10, end: 20 });

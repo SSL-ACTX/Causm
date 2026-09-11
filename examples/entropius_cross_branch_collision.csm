@@ -1,0 +1,28 @@
+// Causm Example: Entropius Invariant 8 (Cross-Branch State Collision)
+// Error: E0008 CrossBranchCollision
+//
+// When a timeline splits into concurrent branches (e.g. split main into [alpha, beta]),
+// linear variables originating in the parent timeline cannot be simultaneously
+// consumed in one branch and accessed in a sibling branch without an intervening merge.
+
+type SharedState = struct {
+    counter: int,
+    session_key: int
+}
+
+@main: {
+    let state = SharedState { counter: 1, session_key: 9999 }
+    split main into [alpha, beta]
+}
+
+@alpha: {
+    // Branch alpha consumes the linear state by yielding it to an actor
+    yield state
+}
+
+@beta: {
+    // ILLEGAL: Branch beta concurrently reads state.counter without a reconciliation
+    // merge joining alpha and beta, triggering an E0008 Cross-Branch Collision.
+    let peek = state.counter + 1
+    print("observed peek:", peek)
+}

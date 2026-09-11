@@ -1,0 +1,21 @@
+// Causm Example: Entropius Invariant 9 (Speculative Scope Rollback Non-Interference)
+// Error: E0009 SpeculativeLeak
+//
+// In Causm, variables instantiated inside speculative blocks (speculate (max <ms>) { ... })
+// are uncommitted and subject to automatic rollback upon timeout or branch abandonment.
+// Referencing a speculative variable outside its block without a formal causal commit
+// violates relational non-interference.
+
+@main: {
+    speculate (max 50ms) {
+        // Ephemeral entropy introduced during speculative execution
+        let ephemeral_secret = 777
+        let processed = ephemeral_secret * 2
+        // Note: No commit statement was executed here!
+    }
+
+    // ILLEGAL: Attempting to access ephemeral_secret outside the speculative epoch
+    // without a prior commit triggers an E0009 Speculative Leak diagnostic.
+    let leaked = ephemeral_secret + 1
+    print("leaked value:", leaked)
+}

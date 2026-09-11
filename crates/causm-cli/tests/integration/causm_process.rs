@@ -13,7 +13,8 @@ fn test_stdlib_process_pid_and_parent_pid() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -54,7 +55,8 @@ fn test_stdlib_process_info_struct() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -91,7 +93,8 @@ fn test_stdlib_process_is_alive_and_signal() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -120,7 +123,8 @@ fn test_stdlib_process_create_pipe() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -164,7 +168,8 @@ fn test_stdlib_process_run_command_exit_status() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -214,7 +219,8 @@ fn test_stdlib_process_pipe_endpoints_and_child_handle_auto_drop(
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;

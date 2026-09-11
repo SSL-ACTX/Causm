@@ -1,0 +1,25 @@
+// Causm Example: Entropius Invariant 7 (Double-Consume Conflict Violation)
+// Error: E0007 DoubleConsumeConflict
+//
+// In Causm, linear resources cannot be consumed more than once without
+// explicit reintroduction. Attempting multiple linear yields or moves
+// creates an entropic contradiction proved UNSAT by the SMT solver.
+
+type TokenVault = struct {
+    auth_token: int,
+    entropy_balance: int
+}
+
+@0ms: {
+    let vault = TokenVault {
+        auth_token: 98765,
+        entropy_balance: 1000
+    }
+
+    // First linear consumption yields the vault to an external worker.
+    yield vault
+
+    // ILLEGAL: Attempting to linearly consume the same vault a second time
+    // triggers an E0007 Double-Consume Conflict during formal verification.
+    yield vault
+}

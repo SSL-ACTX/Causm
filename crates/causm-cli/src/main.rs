@@ -208,6 +208,7 @@ enum PluginSubcommands {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum DumpFormat {
     Ast,
+    Hir,
     Ir,
     Cfg,
     CfgDot,
@@ -769,10 +770,24 @@ fn main() -> anyhow::Result<()> {
         }
 
         if config.emit == Some(DumpFormat::Ast) {
+            // Re-parse without import expansion so --emit ast
+            // shows only the user's own statements
+            let user_ast =
+                parser::parse_causm(&source).unwrap_or_else(|_| program.clone());
             println!(
                 "\x1b[1;35mAST for {}:\x1b[0m\n{:#?}",
                 path.display(),
-                program
+                user_ast
+            );
+        }
+
+        let hir_program = causm_frontend::hir::lower_ast_to_hir(&program);
+
+        if config.emit == Some(DumpFormat::Hir) {
+            println!(
+                "\x1b[1;35mHIR for {}:\x1b[0m\n{:#?}",
+                path.display(),
+                hir_program
             );
         }
 
@@ -780,8 +795,8 @@ fn main() -> anyhow::Result<()> {
         if config.no_z3 {
             analyzer.use_z3 = false;
         }
-        if let Err(err) = analyzer.analyze_program_with_source(
-            &program,
+        if let Err(err) = analyzer.analyze_hir_with_source(
+            &hir_program,
             &source,
             &path.display().to_string(),
         ) {
@@ -888,11 +903,11 @@ fn main() -> anyhow::Result<()> {
         }
 
         if let Some(fmt) = config.emit {
-            emit_format(fmt, &program, path)?;
+            emit_format(fmt, &program, &hir_program, path)?;
         }
 
         if !config.check_only {
-            let mut ir_program = lower::lower_program(&program);
+            let mut ir_program = lower::lower_hir_program(&hir_program);
             causm_ir::optimize::prune_unreachable_routines(&mut ir_program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             let mut vm = Vm::new();
@@ -1002,13 +1017,14 @@ fn main() -> anyhow::Result<()> {
 
 fn emit_format(
     fmt: DumpFormat,
-    program: &causm_core::Program,
+    _program: &causm_core::Program,
+    hir_program: &causm_core::hir::HirProgram,
     path: &std::path::Path,
 ) -> anyhow::Result<()> {
     match fmt {
-        DumpFormat::Ast => {}
+        DumpFormat::Ast | DumpFormat::Hir => {}
         DumpFormat::Ir => {
-            let mut ir_program = lower::lower_program(program);
+            let mut ir_program = lower::lower_hir_program(hir_program);
             causm_ir::optimize::prune_import_duplicates(&mut ir_program);
             println!(
                 "\x1b[1;35mIR for {}:\x1b[0m\n{}",
@@ -1017,7 +1033,7 @@ fn emit_format(
             );
         }
         DumpFormat::Cfg => {
-            let ir_program = lower::lower_program(program);
+            let ir_program = lower::lower_hir_program(hir_program);
             println!("\x1b[1;35mCFG for {}:\x1b[0m", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
@@ -1034,7 +1050,7 @@ fn emit_format(
             }
         }
         DumpFormat::CfgDot => {
-            let ir_program = lower::lower_program(program);
+            let ir_program = lower::lower_hir_program(hir_program);
             println!("\x1b[1;35mCFG DOT for {}:\x1b[0m", path.display());
             for (name, routine) in &ir_program.routines {
                 let cfg = causm_ir::cfg::CFG::from_flat_instructions(
@@ -1051,7 +1067,7 @@ fn emit_format(
             }
         }
         DumpFormat::Ssa => {
-            let mut ir_program = lower::lower_program(program);
+            let mut ir_program = lower::lower_hir_program(hir_program);
             causm_ir::optimize::prune_import_duplicates(&mut ir_program);
             println!("\x1b[1;35mSSA CFG for {}:\x1b[0m", path.display());
             let mut sorted_routines: Vec<_> = ir_program.routines.iter().collect();
@@ -1075,7 +1091,7 @@ fn emit_format(
             }
         }
         DumpFormat::SsaOpt => {
-            let mut ir_program = lower::lower_program(program);
+            let mut ir_program = lower::lower_hir_program(hir_program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             causm_ir::optimize::prune_import_duplicates(&mut ir_program);
             println!("\x1b[1;35mOptimized SSA CFG for {}:\x1b[0m", path.display());
@@ -1100,7 +1116,7 @@ fn emit_format(
             }
         }
         DumpFormat::SsaDot => {
-            let mut ir_program = lower::lower_program(program);
+            let mut ir_program = lower::lower_hir_program(hir_program);
             causm_ir::optimize::prune_import_duplicates(&mut ir_program);
             println!("\x1b[1;35mSSA CFG DOT for {}:\x1b[0m", path.display());
             let mut sorted_routines: Vec<_> = ir_program.routines.iter().collect();
@@ -1124,7 +1140,7 @@ fn emit_format(
             }
         }
         DumpFormat::SsaDotOpt => {
-            let mut ir_program = lower::lower_program(program);
+            let mut ir_program = lower::lower_hir_program(hir_program);
             ir_program = causm_ir::optimize::optimize_program(ir_program);
             causm_ir::optimize::prune_import_duplicates(&mut ir_program);
             println!(

@@ -29,7 +29,8 @@ fn test_collection_array_operations() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     // Dump SSA for debugging if needed
@@ -136,7 +137,8 @@ fn test_collection_dynamic_buffer() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     for (i, block) in opt_ir.blocks.iter().enumerate() {
@@ -204,7 +206,8 @@ fn test_collection_stack_operations() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();
@@ -279,7 +282,8 @@ fn test_collection_queue_fifo() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();
@@ -340,7 +344,8 @@ fn test_collection_ring_buffer_circular() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();
@@ -410,7 +415,8 @@ fn test_collection_bitset_operations() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();

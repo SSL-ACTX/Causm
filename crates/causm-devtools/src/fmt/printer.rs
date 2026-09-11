@@ -1169,6 +1169,12 @@ fn format_spanned_statement(
                 body_template.trim()
             ));
         }
+        Statement::AutoDrop { target } => {
+            out.push_str(&format!("{}autodrop {}\n", indent, target));
+        }
+        Statement::Consume { target } => {
+            out.push_str(&format!("{}consume {}\n", indent, target));
+        }
     }
 }
 
@@ -1266,6 +1272,9 @@ fn format_param(param: &ParamDecl) -> String {
         ParamMode::Decay => "decay ",
         ParamMode::Lease => "lease ",
     };
+    if param.name == "self" {
+        return format!("{}{}", mode, param.name);
+    }
     let type_str = if let Some(ref t) = param.typ {
         format!(": {}", format_type(t))
     } else {

@@ -114,7 +114,7 @@ json.dump(out, sys.stdout)
             }],
         );
         let resp_bytes =
-            bincode::serialize(&sample_resp).expect("serialize sample_resp");
+            postcard::to_allocvec(&sample_resp).expect("serialize sample_resp");
         let resp_len = resp_bytes.len();
 
         // Generate WAT data segment with exact resp_bytes at offset 2048

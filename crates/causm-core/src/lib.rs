@@ -1,8 +1,12 @@
 // src/ast.rs
 
-use crate::types::AutoDropSpec;
 use serde::{Deserialize, Serialize};
+pub mod arena;
+pub mod hir;
+pub use hir::{HirExpression, HirProgram, HirSpannedStatement, HirStatement};
+pub mod symbol;
 pub mod types;
+pub use types::AutoDropSpec;
 pub mod value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -374,6 +378,12 @@ macro_rules! statements {
                 name: String,
                 params: Vec<MacroParam>,
                 body_template: String
+            },
+            AutoDrop {
+                target: String
+            },
+            Consume {
+                target: String
             }
         }
     };
@@ -526,6 +536,8 @@ impl Statement {
             | Statement::FromImport { .. }
             | Statement::ForeignBlock { .. }
             | Statement::MacroDef { .. }
+            | Statement::AutoDrop { .. }
+            | Statement::Consume { .. }
             | Statement::Return(_) => 0,
         };
         base.saturating_add(extra)
@@ -1015,6 +1027,31 @@ pub enum TypeName {
     Generic(String, Vec<TypeParam>),
     Optional(Box<TypeName>),
     Union(Vec<TypeName>),
+}
+
+impl TypeName {
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "int" | "integer" => TypeName::Builtin(BuiltinType::Integer),
+            "i32" => TypeName::Builtin(BuiltinType::I32),
+            "i64" => TypeName::Builtin(BuiltinType::I64),
+            "i16" => TypeName::Builtin(BuiltinType::I16),
+            "i8" => TypeName::Builtin(BuiltinType::I8),
+            "u8" => TypeName::Builtin(BuiltinType::U8),
+            "u16" => TypeName::Builtin(BuiltinType::U16),
+            "u32" => TypeName::Builtin(BuiltinType::U32),
+            "u64" => TypeName::Builtin(BuiltinType::U64),
+            "bool" | "boolean" => TypeName::Builtin(BuiltinType::Bool),
+            "float" => TypeName::Builtin(BuiltinType::Float),
+            "f32" => TypeName::Builtin(BuiltinType::F32),
+            "f64" => TypeName::Builtin(BuiltinType::F64),
+            "string" => TypeName::Builtin(BuiltinType::String),
+            "array" => TypeName::Builtin(BuiltinType::Array),
+            "struct" => TypeName::Builtin(BuiltinType::Struct),
+            "topology" => TypeName::Builtin(BuiltinType::Topology),
+            other => TypeName::Custom(other.to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1736,19 +1773,19 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn test_ast_serialization_bincode_roundtrip_basic() {
+    fn test_ast_serialization_postcard_roundtrip_basic() {
         let program = Program {
             timelines: vec![TimelineBlock {
                 time: TimeCoordinate::Global(0),
                 no_z3: false,
-                entropy_mode: Some(EntropyMode::Deterministic),
+                entropy_mode: None,
                 statements: vec![
                     SpannedStatement::new(
                         Statement::Assignment {
                             target: "x".to_string(),
                             mutable: false,
                             var_type: Some(TypeName::Builtin(BuiltinType::Integer)),
-                            lifetime: Some(LifetimeAnnotation::Valid),
+                            lifetime: None,
                             expr: Expression::Integer(42),
                         },
                         Span { start: 0, end: 12 },
@@ -1763,10 +1800,10 @@ mod tests {
             }],
         };
 
-        let encoded = bincode::serialize(&program)
-            .expect("bincode serialization should succeed");
-        let decoded: Program = bincode::deserialize(&encoded)
-            .expect("bincode deserialization should succeed");
+        let encoded = postcard::to_allocvec(&program)
+            .expect("postcard serialization should succeed");
+        let decoded: Program = postcard::from_bytes(&encoded)
+            .expect("postcard deserialization should succeed");
         assert_eq!(program, decoded);
     }
 
@@ -1887,11 +1924,11 @@ mod tests {
             }],
         };
 
-        let bincode_data =
-            bincode::serialize(&program).expect("bincode serialize complex AST");
-        let bincode_decoded: Program = bincode::deserialize(&bincode_data)
-            .expect("bincode deserialize complex AST");
-        assert_eq!(program, bincode_decoded);
+        let postcard_data =
+            postcard::to_allocvec(&program).expect("postcard serialize complex AST");
+        let postcard_decoded: Program = postcard::from_bytes(&postcard_data)
+            .expect("postcard deserialize complex AST");
+        assert_eq!(program, postcard_decoded);
 
         let json_data =
             serde_json::to_string(&program).expect("json serialize complex AST");

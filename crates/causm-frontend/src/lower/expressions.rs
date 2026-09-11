@@ -7,16 +7,19 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
     match expr {
         Expression::Integer(v) => {
             let dest = ctx.alloc_reg();
+            ctx.copy_regs.insert(dest.0);
             ctx.push(causm_ir::Instruction::LoadInt { dest, value: *v });
             dest
         }
         Expression::Float(v) => {
             let dest = ctx.alloc_reg();
+            ctx.copy_regs.insert(dest.0);
             ctx.push(causm_ir::Instruction::LoadFloat { dest, value: *v });
             dest
         }
         Expression::Boolean(v) => {
             let dest = ctx.alloc_reg();
+            ctx.copy_regs.insert(dest.0);
             ctx.push(causm_ir::Instruction::LoadBool { dest, value: *v });
             dest
         }
@@ -35,11 +38,13 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         }
         Expression::ArenaIntrospect(kind) => {
             let dest = ctx.alloc_reg();
+            ctx.copy_regs.insert(dest.0);
             ctx.push(causm_ir::Instruction::ArenaIntrospect { dest, kind: *kind });
             dest
         }
         Expression::CapabilityCheck(capability) => {
             let dest = ctx.alloc_reg();
+            ctx.copy_regs.insert(dest.0);
             ctx.push(causm_ir::Instruction::CapabilityCheck {
                 dest,
                 capability: capability.clone(),
@@ -61,6 +66,11 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
             let l = lower_expression(ctx, left);
             let r = lower_expression(ctx, right);
             let dest = ctx.alloc_reg();
+            if *op != causm_core::BinaryOperator::Add
+                || (ctx.copy_regs.contains(&l.0) && ctx.copy_regs.contains(&r.0))
+            {
+                ctx.copy_regs.insert(dest.0);
+            }
             ctx.push(causm_ir::Instruction::BinaryOp {
                 dest,
                 op: *op,
@@ -72,6 +82,9 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
         Expression::UnaryOp { op, expr } => {
             let src = lower_expression(ctx, expr);
             let dest = ctx.alloc_reg();
+            if ctx.copy_regs.contains(&src.0) {
+                ctx.copy_regs.insert(dest.0);
+            }
             ctx.push(causm_ir::Instruction::UnaryOp { dest, op: *op, src });
             dest
         }
@@ -148,7 +161,7 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                     budget,
                 });
             } else {
-                if let Some(r) = ctx.routines.get(&actual_routine_name) {
+                if let Some(r) = ctx.routines.get(&actual_routine_name).cloned() {
                     match &r.return_type {
                         causm_core::types::Type::Custom(t) => {
                             ctx.reg_types.insert(dest.0, t.clone());
@@ -165,10 +178,43 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                     }
                 }
                 ctx.push(causm_ir::Instruction::Call {
-                    routine: actual_routine_name,
+                    routine: actual_routine_name.clone(),
                     args: arg_regs,
                     dest,
                 });
+                if let Some(r) = ctx.routines.get(&actual_routine_name).cloned() {
+                    if !is_static {
+                        if let Some(first) = r.params.first() {
+                            if first.0 == causm_core::ParamMode::Consume {
+                                if let Expression::Identifier(var_name) =
+                                    target.as_ref()
+                                {
+                                    let src = ctx.get_reg(var_name);
+                                    ctx.push(causm_ir::Instruction::Consume { src });
+                                }
+                            }
+                        }
+                        for (param, arg_expr) in
+                            r.params.iter().skip(1).zip(args.iter())
+                        {
+                            if param.0 == causm_core::ParamMode::Consume {
+                                if let Expression::Identifier(var_name) = arg_expr {
+                                    let src = ctx.get_reg(var_name);
+                                    ctx.push(causm_ir::Instruction::Consume { src });
+                                }
+                            }
+                        }
+                    } else {
+                        for (param, arg_expr) in r.params.iter().zip(args.iter()) {
+                            if param.0 == causm_core::ParamMode::Consume {
+                                if let Expression::Identifier(var_name) = arg_expr {
+                                    let src = ctx.get_reg(var_name);
+                                    ctx.push(causm_ir::Instruction::Consume { src });
+                                }
+                            }
+                        }
+                    }
+                }
             }
             dest
         }
@@ -179,7 +225,7 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 arg_regs.push(lower_expression(ctx, arg));
             }
             let dest = ctx.alloc_reg();
-            if let Some(r) = ctx.routines.get(routine) {
+            if let Some(r) = ctx.routines.get(routine).cloned() {
                 match &r.return_type {
                     causm_core::types::Type::Custom(t) => {
                         ctx.reg_types.insert(dest.0, t.clone());
@@ -198,6 +244,16 @@ pub fn lower_expression(ctx: &mut LoweringContext, expr: &Expression) -> Reg {
                 args: arg_regs,
                 dest,
             });
+            if let Some(r) = ctx.routines.get(routine).cloned() {
+                for (param, arg_expr) in r.params.iter().zip(args.iter()) {
+                    if param.0 == causm_core::ParamMode::Consume {
+                        if let Expression::Identifier(var_name) = arg_expr {
+                            let src = ctx.get_reg(var_name);
+                            ctx.push(causm_ir::Instruction::Consume { src });
+                        }
+                    }
+                }
+            }
             dest
         }
         Expression::CloneOp(name) => {

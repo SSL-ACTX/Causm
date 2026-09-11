@@ -18,6 +18,7 @@ pub struct LoweringContext {
     pub current_span: Option<Span>,
     pub entropy_modes: Vec<causm_core::EntropyMode>,
     pub current_branch: Option<String>,
+    pub copy_regs: std::collections::HashSet<u32>,
 }
 
 impl Default for LoweringContext {
@@ -44,6 +45,7 @@ impl LoweringContext {
             current_span: None,
             entropy_modes: vec![causm_core::EntropyMode::Deterministic],
             current_branch: None,
+            copy_regs: std::collections::HashSet::new(),
         }
     }
 

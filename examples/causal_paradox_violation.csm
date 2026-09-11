@@ -1,0 +1,23 @@
+// Causm Example: Entropius Invariant 5 (Causal Horizon Paradox)
+// Error: E0005 CausalParadox
+//
+// In Causm, anchors establish rewindable timeline snapshots. However, once an irreversible
+// causal commitment occurs (such as a public yield or network transmission), a causal
+// horizon is established. Attempting to rewind past a commit horizon violates causality
+// and is mathematically proved UNSAT by the SMT solver.
+
+@0ms: {
+    // Record timeline state at anchor CheckpointAlpha
+    anchor CheckpointAlpha
+}
+
+@10ms: {
+    // Irreversible causal commitment: yields data across the external causal horizon
+    yield 42
+}
+
+@20ms: {
+    // ILLEGAL: Attempting to rewind back to CheckpointAlpha (recorded at t=0ms)
+    // after a causal commitment at t=10ms produces an E0005 Causal Paradox.
+    rewind_to CheckpointAlpha
+}

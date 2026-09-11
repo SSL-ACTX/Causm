@@ -111,17 +111,14 @@ impl CsaArchive {
             .map(|m| m.bytecode_routines.as_slice())
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(self)
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        let archive: Self = bincode::deserialize(bytes)?;
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        let archive: Self = postcard::from_bytes(bytes)?;
         if archive.magic != CSA_MAGIC {
-            return Err(bincode::ErrorKind::Custom(
-                "Invalid CSA magic header bytes".to_string(),
-            )
-            .into());
+            return Err(postcard::Error::DeserializeBadEncoding);
         }
         Ok(archive)
     }

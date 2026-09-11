@@ -1,6 +1,6 @@
 [package]
 name = "causm-analysis"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 license = "AGPL-3.0-only"
 
@@ -14,4 +14,3 @@ causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
 z3 = { version = ">=0.20", optional = true }
 thiserror = "2.0.18"
-anyhow = "1.0"

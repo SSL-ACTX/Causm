@@ -95,9 +95,13 @@ impl EntropicAnalyzer {
             }
         }
 
-        for key in collisions {
-            if !resolutions.rules.contains_key(&key) {
-                return Err(self.annotate(SemanticErrorKind::UnresolvedMerge(key)));
+        if !resolutions.auto {
+            for key in collisions {
+                if !resolutions.rules.contains_key(&key) {
+                    return Err(
+                        self.annotate(SemanticErrorKind::UnresolvedMerge(key))
+                    );
+                }
             }
         }
 

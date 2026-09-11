@@ -15,7 +15,8 @@ fn test_bounded_while_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -49,7 +50,8 @@ fn test_while_valid_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -78,7 +80,8 @@ fn test_for_step_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -109,7 +112,8 @@ fn test_loop_tick() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -157,7 +161,8 @@ fn test_advanced_loop_syntax_and_execution() -> anyhow::Result<()> {
     }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -170,6 +175,88 @@ fn test_advanced_loop_syntax_and_execution() -> anyhow::Result<()> {
     let peak_reg = ir.symbols.get("peak").expect("peak not found").0;
     assert_eq!(main.arena.peek(sum_reg), Some(Payload::Integer(191)));
     assert_eq!(main.arena.peek(peak_reg), Some(Payload::Integer(88)));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_max_duration_without_parentheses() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut x = 0
+        while (x < 3) max 10ms {
+            x = x + 1
+        }
+
+        let mut count = 0
+        loop max 15ms {
+            count = count + 1
+            if (count >= 2) {
+                break
+            }
+        }
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
+
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let main = &vm.root_timeline;
+    let x_reg = ir.symbols.get("x").expect("x not found").0;
+    let count_reg = ir.symbols.get("count").expect("count not found").0;
+    assert_eq!(main.arena.peek(x_reg), Some(Payload::Integer(3)));
+    assert_eq!(main.arena.peek(count_reg), Some(Payload::Integer(2)));
+
+    Ok(())
+}
+
+#[test]
+fn test_syntax_loop_uniform_step_and_max_modifiers() -> anyhow::Result<()> {
+    let source = r#"
+    @0ms: {
+        let mut x = 0
+        while (x < 3) step 5ms max 20ms {
+            x = x + 1
+        }
+
+        let mut count = 0
+        loop step 10ms max 30ms {
+            count = count + 1
+            if (count >= 2) {
+                break
+            }
+        }
+
+        let arr = [10, 20]
+        let mut sum = 0
+        for val in arr max 50ms step 5ms {
+            sum = sum + val
+        }
+    }
+    "#;
+    let program = parser::parse_causm(source)?;
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
+
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let mut vm = Vm::new();
+    vm.execute_program(&ir)?;
+
+    let main = &vm.root_timeline;
+    let x_reg = ir.symbols.get("x").expect("x not found").0;
+    let count_reg = ir.symbols.get("count").expect("count not found").0;
+    let sum_reg = ir.symbols.get("sum").expect("sum not found").0;
+    assert_eq!(main.arena.peek(x_reg), Some(Payload::Integer(3)));
+    assert_eq!(main.arena.peek(count_reg), Some(Payload::Integer(2)));
+    assert_eq!(main.arena.peek(sum_reg), Some(Payload::Integer(30)));
 
     Ok(())
 }

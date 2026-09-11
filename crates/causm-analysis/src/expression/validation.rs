@@ -467,11 +467,36 @@ pub(crate) fn analyze_expression(
                     .unwrap();
                 let is_borrowed_or_mutable =
                     state.yields.contains(name) || state.mutables.contains(name);
-                if !is_borrowed_or_mutable && state.consumed.contains(&field_path) {
+                let is_primitive_copy =
+                    if let Ok(field_type) = infer_expression_type(analyzer, expr) {
+                        matches!(
+                            field_type,
+                            Type::Integer
+                                | Type::I8
+                                | Type::I16
+                                | Type::I32
+                                | Type::I64
+                                | Type::U8
+                                | Type::U16
+                                | Type::U32
+                                | Type::U64
+                                | Type::Float
+                                | Type::Bool
+                        )
+                    } else {
+                        false
+                    };
+                if !is_borrowed_or_mutable
+                    && !is_primitive_copy
+                    && state.consumed.contains(&field_path)
+                {
                     return Err(analyzer
                         .annotate(SemanticErrorKind::UseAfterConsume(field_path)));
                 }
-                if !is_borrowed_or_mutable && analyzer.inspection_depth == 0 {
+                if !is_borrowed_or_mutable
+                    && !is_primitive_copy
+                    && analyzer.inspection_depth == 0
+                {
                     analyzer.mark_decayed(name)?;
                     analyzer.mark_consumed(&field_path)?;
                 }

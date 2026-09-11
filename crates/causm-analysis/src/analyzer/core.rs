@@ -12,7 +12,7 @@ pub struct EntropicAnalyzer {
     pub(crate) inspection_depth: usize,
     pub(crate) current_slice_ms: Option<u64>,
     pub source: Option<String>,
-    pub(crate) filename: Option<String>,
+    pub filename: Option<String>,
     pub(crate) capability_stack: Vec<HashMap<String, causm_core::Capability>>,
     pub routines: HashMap<String, RoutineInfo>,
     pub span_states: HashMap<Span, BranchState>,
@@ -66,6 +66,39 @@ impl EntropicAnalyzer {
         };
         analyzer.register_intrinsics();
         analyzer
+    }
+
+    pub fn analyze_hir_with_source(
+        &mut self,
+        hir: &causm_core::HirProgram,
+        source: &str,
+        filename: &str,
+    ) -> Result<(), SemanticError> {
+        self.source = Some(source.to_string());
+        self.filename = Some(filename.to_string());
+        let result = self.analyze_hir(hir);
+        self.source = None;
+        self.filename = None;
+        result
+    }
+
+    pub fn analyze_hir(
+        &mut self,
+        hir: &causm_core::HirProgram,
+    ) -> Result<(), SemanticError> {
+        self.branch_contexts.clear();
+        self.branch_contexts
+            .insert("main".to_string(), BranchState::default());
+        self.current_branch = "main".to_string();
+        self.current_statement = None;
+        self.current_span = None;
+        self.inspection_depth = 0;
+        self.capability_stack.clear();
+        self.routines.clear();
+        self.struct_extends.clear();
+        self.analyzed_routines.clear();
+
+        crate::pipeline::AnalysisPipeline::new(self).run_hir(hir)
     }
 
     pub fn analyze_program_with_source(
@@ -636,6 +669,11 @@ impl EntropicAnalyzer {
         if let (Type::Custom(exp_name), Type::Custom(act_name)) = (expected, actual)
         {
             if exp_name == act_name || exp_name == "any" || act_name == "any" {
+                return true;
+            }
+            if act_name.ends_with(&format!(".{}", exp_name))
+                || exp_name.ends_with(&format!(".{}", act_name))
+            {
                 return true;
             }
             if exp_name.contains('<')

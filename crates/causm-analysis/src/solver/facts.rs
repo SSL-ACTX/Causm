@@ -177,6 +177,10 @@ pub struct ProgramFacts {
     pub anchors: HashMap<String, (u64, PointIndex)>,
     pub rewinds: Vec<(String, u64, PointIndex)>,
     pub commits: Vec<(u64, PointIndex)>,
+    pub point_branches: HashMap<PointIndex, String>,
+    pub branch_splits: Vec<(String, Vec<String>, PointIndex)>,
+    pub branch_merges: Vec<(Vec<String>, String, PointIndex)>,
+    pub speculative_blocks: Vec<(PointIndex, bool, Vec<String>)>,
 }
 
 impl ProgramFacts {
@@ -297,6 +301,7 @@ struct FactExtractor {
     current_stmt_col: usize,
     /// Verbatim source text of the current statement.
     current_stmt_source: String,
+    current_branch: Option<String>,
 }
 
 impl FactExtractor {
@@ -312,6 +317,7 @@ impl FactExtractor {
             current_stmt_line: 0,
             current_stmt_col: 0,
             current_stmt_source: String::new(),
+            current_branch: None,
         }
     }
 
@@ -326,6 +332,11 @@ impl FactExtractor {
             self.current_stmt_source.clone(),
         );
         self.sub_point += 1;
+        if let Some(branch) = &self.current_branch {
+            self.program_facts
+                .point_branches
+                .insert(pt.clone(), branch.clone());
+        }
         pt
     }
 
@@ -354,6 +365,11 @@ impl FactExtractor {
                     let pt = self.next_point();
                     self.push_fact(EntropicFact::AccessAt {
                         var: format!("{}.{}", target_name, field),
+                        point: pt.clone(),
+                        t_current: self.current_clock,
+                    });
+                    self.push_fact(EntropicFact::AccessAt {
+                        var: target_name.clone(),
                         point: pt.clone(),
                         t_current: self.current_clock,
                     });
@@ -571,6 +587,14 @@ impl FactExtractor {
                     point: drop_pt,
                 });
             }
+            Statement::Consume { target } => {
+                let drop_pt = self.next_point();
+                self.push_fact(EntropicFact::LinearConsume {
+                    var: target.clone(),
+                    point: drop_pt,
+                });
+            }
+            Statement::AutoDrop { .. } => {}
             Statement::Lease {
                 binding,
                 source,
@@ -602,8 +626,13 @@ impl FactExtractor {
                 self.push_fact(EntropicFact::BranchSplit {
                     parent: parent.clone(),
                     children: branches.clone(),
-                    point: pt,
+                    point: pt.clone(),
                 });
+                self.program_facts.branch_splits.push((
+                    parent.clone(),
+                    branches.clone(),
+                    pt,
+                ));
             }
             Statement::Merge {
                 branches, target, ..
@@ -612,8 +641,13 @@ impl FactExtractor {
                 self.push_fact(EntropicFact::BranchMerge {
                     branches: branches.clone(),
                     target: target.clone(),
-                    point: pt,
+                    point: pt.clone(),
                 });
+                self.program_facts.branch_merges.push((
+                    branches.clone(),
+                    target.clone(),
+                    pt,
+                ));
             }
             Statement::If {
                 condition,
@@ -754,12 +788,46 @@ impl FactExtractor {
                     point: pt,
                 });
             }
-            Statement::RelativisticBlock { body, .. }
-            | Statement::DirectiveBlock { body, .. }
+            Statement::RelativisticBlock { time, body } => {
+                let old_branch = self.current_branch.clone();
+                if let TimeCoordinate::Branch(b) = time {
+                    self.current_branch = Some(b.clone());
+                }
+                for s in body {
+                    self.extract_from_statement(&s.stmt);
+                }
+                self.current_branch = old_branch;
+            }
+            Statement::DirectiveBlock { body, .. }
             | Statement::DecayHandler { body, .. }
             | Statement::Isolate(causm_core::IsolateBlock { body, .. }) => {
                 for s in body {
                     self.extract_from_statement(&s.stmt);
+                }
+            }
+            Statement::Speculate { body, fallback, .. } => {
+                let spec_pt = self.next_point();
+                let mut has_commit = false;
+                for s in body {
+                    if matches!(s.stmt, Statement::Commit(_)) {
+                        has_commit = true;
+                    }
+                    self.extract_from_statement(&s.stmt);
+                }
+                let mut spec_vars = Vec::new();
+                for (v, origins) in &self.program_facts.var_origins {
+                    if origins.iter().any(|orig| orig >= &spec_pt) {
+                        spec_vars.push(v.clone());
+                    }
+                }
+                self.program_facts
+                    .speculative_blocks
+                    .push((spec_pt, has_commit, spec_vars));
+
+                if let Some(fb) = fallback {
+                    for s in fb {
+                        self.extract_from_statement(&s.stmt);
+                    }
                 }
             }
             Statement::Commit(body) => {
@@ -781,16 +849,20 @@ impl FactExtractor {
             self.timeline_idx = t_idx;
             self.statement_idx = 0;
             self.sub_point = 0;
+            self.current_branch = match &timeline.time {
+                TimeCoordinate::Branch(b) => Some(b.clone()),
+                _ => None,
+            };
 
-            match timeline.time {
+            match &timeline.time {
                 TimeCoordinate::Global(t) => {
-                    self.current_clock = t;
+                    self.current_clock = *t;
                 }
                 TimeCoordinate::Relative(dt) => {
-                    self.current_clock = self.current_clock.saturating_add(dt);
+                    self.current_clock = self.current_clock.saturating_add(*dt);
                 }
                 TimeCoordinate::Periodic(period) => {
-                    self.current_clock = self.current_clock.saturating_add(period);
+                    self.current_clock = self.current_clock.saturating_add(*period);
                 }
                 TimeCoordinate::Branch(_) => {}
             }

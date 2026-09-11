@@ -188,6 +188,26 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
 
             for (i, param) in params.iter().enumerate() {
                 let p_reg = Reg(i as u32);
+                if matches!(
+                    param.typ,
+                    Some(causm_core::TypeName::Builtin(
+                        causm_core::BuiltinType::Integer
+                            | causm_core::BuiltinType::Float
+                            | causm_core::BuiltinType::Bool
+                            | causm_core::BuiltinType::I8
+                            | causm_core::BuiltinType::I16
+                            | causm_core::BuiltinType::I32
+                            | causm_core::BuiltinType::I64
+                            | causm_core::BuiltinType::U8
+                            | causm_core::BuiltinType::U16
+                            | causm_core::BuiltinType::U32
+                            | causm_core::BuiltinType::U64
+                            | causm_core::BuiltinType::F32
+                            | causm_core::BuiltinType::F64
+                    ))
+                ) {
+                    sub_ctx.copy_regs.insert(p_reg.0);
+                }
                 sub_ctx.symbols.insert(param.name.clone(), p_reg);
             }
             sub_ctx.next_reg = params.len() as u32;
@@ -762,6 +782,36 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             ctx.push(Instruction::Consume { src: dest });
         }
+        Statement::AutoDrop { target } => {
+            let dest = ctx.get_reg(target);
+            if let Some(src_type) = ctx.reg_types.get(&dest.0).cloned() {
+                if let Some(spec) = ctx.auto_drop_specs.get(&src_type).cloned() {
+                    ctx.push(Instruction::AutoDrop { target: dest, spec });
+                }
+            } else if let Some(spec) = ctx
+                .auto_drop_specs
+                .get(&format!("_reg_{}", dest.0))
+                .cloned()
+            {
+                ctx.push(Instruction::AutoDrop { target: dest, spec });
+            } else {
+                for (type_name, spec) in ctx.auto_drop_specs.clone() {
+                    if target.to_lowercase().contains(&type_name.to_lowercase())
+                        || type_name.to_lowercase().contains(&target.to_lowercase())
+                    {
+                        ctx.push(Instruction::AutoDrop {
+                            target: dest,
+                            spec: spec.clone(),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        Statement::Consume { target } => {
+            let dest = ctx.get_reg(target);
+            ctx.push(Instruction::Consume { src: dest });
+        }
         Statement::Assignment {
             target,
             expr,
@@ -771,6 +821,9 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             let src = lower_expression(ctx, expr);
             let dest = ctx.get_reg(target);
             ctx.symbols.insert(target.clone(), dest);
+            if ctx.copy_regs.contains(&src.0) {
+                ctx.copy_regs.insert(dest.0);
+            }
             ctx.push(Instruction::Move { dest, src });
             if let Some(causm_core::LifetimeAnnotation::Decayed(ms)) = lifetime {
                 ctx.push(Instruction::Lease {
@@ -781,7 +834,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
 
             if let Expression::Identifier(_) = expr {
-                if src != dest {
+                if src != dest && !ctx.copy_regs.contains(&src.0) {
                     ctx.push(Instruction::Consume { src });
                 }
             }

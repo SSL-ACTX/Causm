@@ -89,7 +89,8 @@ fn test_cli_chaos_mode_prevents_rewind_at_runtime() -> anyhow::Result<()> {
     }
     assert!(result.is_ok()); // Normal analysis passes since block doesn't declare @chaos
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     // Simulate --chaos CLI flag by setting VM timeline entropy mode directly
     vm.root_timeline.entropy_mode = causm_core::EntropyMode::Chaos;
