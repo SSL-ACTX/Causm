@@ -77,6 +77,17 @@ impl<'a, S: SolverBackend> RelationalInvariantSolver<'a, S> {
                     continue;
                 }
 
+                // If the access point itself is also a linear consume point of the same variable,
+                // this is a Double Consume Conflict (E0007) rather than a simple read access.
+                let is_double_consume = facts
+                    .var_consumes
+                    .get(var)
+                    .map(|pts| pts.contains(access_pt))
+                    .unwrap_or(false);
+                if is_double_consume {
+                    continue;
+                }
+
                 // If the consume and access occur across parallel child branches of a split,
                 // this is governed specifically by Invariant 8 (CrossBranchCollision).
                 let is_cross_branch_split =
