@@ -4,7 +4,18 @@ use causm_core::Program;
 use causm_ir::{IrBlock, IrProgram, IrRoutine, Reg};
 use std::collections::HashMap;
 
+/// Lowers a canonical HIR program to Bytecode IR
+pub fn lower_hir_program(hir: &causm_core::HirProgram) -> IrProgram {
+    lower_program_inner(hir)
+}
+
+/// Lowers AST to IR via canonical HIR
 pub fn lower_program(program: &Program) -> IrProgram {
+    let hir = crate::hir::lower_ast_to_hir(program);
+    lower_hir_program(&hir)
+}
+
+fn lower_program_inner(program: &Program) -> IrProgram {
     let mut blocks = Vec::new();
     let mut ctx = LoweringContext::new();
 

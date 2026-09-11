@@ -129,7 +129,10 @@ impl ModuleStore {
                 let stmts = module.arena.stmt_pool[body.as_range()]
                     .iter()
                     .map(|&s| {
-                        super::arena_parser::lower::to_ast_statement(&module.arena, s)
+                        super::arena_parser::lower::to_ast_statement(
+                            &module.arena,
+                            s,
+                        )
                     })
                     .collect();
                 timelines.push(causm_core::TimelineBlock {
@@ -139,8 +142,10 @@ impl ModuleStore {
                     statements: stmts,
                 });
             } else {
-                standalone
-                    .push(super::arena_parser::lower::to_ast_statement(&module.arena, sid));
+                standalone.push(super::arena_parser::lower::to_ast_statement(
+                    &module.arena,
+                    sid,
+                ));
             }
         }
         if !standalone.is_empty() {
@@ -214,7 +219,10 @@ mod tests {
             .get_or_parse_module(path, source)
             .expect("second registration");
         // Same path → same ModuleId, never re-parsed.
-        assert_eq!(id_first, id_second, "duplicate registration should return same id");
+        assert_eq!(
+            id_first, id_second,
+            "duplicate registration should return same id"
+        );
 
         // Module exports both the routine and the enum.
         let greet_sym = causm_core::symbol::intern("greet");
@@ -224,7 +232,9 @@ mod tests {
 
         // Projected AST contains the routine definition.
         let prog = store.get_module_ast(id_first).expect("ast projection");
-        let all_stmts: Vec<_> = prog.timelines.iter()
+        let all_stmts: Vec<_> = prog
+            .timelines
+            .iter()
             .flat_map(|tl| tl.statements.iter())
             .collect();
         let has_routine = all_stmts.iter().any(|s| {

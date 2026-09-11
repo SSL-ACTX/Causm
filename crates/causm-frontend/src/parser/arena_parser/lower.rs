@@ -1,7 +1,5 @@
-use crate::parser::arena_parser::{ArenaParser, parse_type_name_str};
-use causm_core::arena::{AstArena, StmtNode, StmtId};
-
-
+use crate::parser::arena_parser::{parse_type_name_str, ArenaParser};
+use causm_core::arena::{AstArena, StmtId, StmtNode};
 
 pub fn to_ast_statement(
     arena: &AstArena,
@@ -177,7 +175,8 @@ pub fn to_ast_statement(
             field,
             value,
         } => {
-            let target_expr = crate::parser::pratt::to_ast_expression(arena, *target);
+            let target_expr =
+                crate::parser::pratt::to_ast_expression(arena, *target);
             let val_expr = crate::parser::pratt::to_ast_expression(arena, *value);
             let field_str = causm_core::symbol::resolve(*field);
             causm_core::Statement::FieldUpdate {
@@ -187,7 +186,8 @@ pub fn to_ast_statement(
             }
         }
         StmtNode::Return(val) => {
-            let expr = val.map(|eid| crate::parser::pratt::to_ast_expression(arena, eid));
+            let expr =
+                val.map(|eid| crate::parser::pratt::to_ast_expression(arena, eid));
             causm_core::Statement::Return(expr)
         }
         StmtNode::Yield(eid) => causm_core::Statement::Yield(Some(
@@ -573,7 +573,9 @@ pub fn to_ast_statement(
                     }
                 } else {
                     causm_core::Statement::IfLet {
-                        pattern: crate::parser::pratt::parse_pattern_from_str(&pat_str),
+                        pattern: crate::parser::pratt::parse_pattern_from_str(
+                            &pat_str,
+                        ),
                         expr: ast_expr,
                         then_branch: then_stmts,
                         else_branch: else_stmts,
@@ -934,7 +936,9 @@ pub fn to_ast_statement(
                 {
                     select_cases.push(causm_core::SelectCase {
                         binding: causm_core::symbol::resolve(*target),
-                        source: crate::parser::pratt::to_ast_expression(arena, *value),
+                        source: crate::parser::pratt::to_ast_expression(
+                            arena, *value,
+                        ),
                         body: Vec::new(),
                     });
                 }
@@ -1043,7 +1047,9 @@ pub fn to_ast_statement(
                     }
                     _ => {
                         std_arms.push(causm_core::MatchArm {
-                            pattern: crate::parser::pratt::parse_pattern_from_str(&pat_str),
+                            pattern: crate::parser::pratt::parse_pattern_from_str(
+                                &pat_str,
+                            ),
                             guard: guard_expr,
                             body: body_stmts,
                         });
@@ -1052,7 +1058,8 @@ pub fn to_ast_statement(
             }
 
             if is_entropy {
-                let tgt_expr = crate::parser::pratt::to_ast_expression(arena, *target);
+                let tgt_expr =
+                    crate::parser::pratt::to_ast_expression(arena, *target);
                 let unwrapped_tgt = match tgt_expr {
                     causm_core::Expression::Call { routine, mut args }
                         if routine == "entropy" && !args.is_empty() =>
@@ -1146,9 +1153,30 @@ pub fn parse_arena_program_to_ast(
     Ok(prog)
 }
 
+pub fn parse_arena_program_to_hir(
+    source: &str,
+) -> Result<causm_core::HirProgram, String> {
+    let prog = parse_arena_program_to_ast(source)?;
+    Ok(crate::hir::lower_ast_to_hir(&prog))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_syntax_arena_parser_parse_to_hir() {
+        let src = r#"
+            routine double(x: int) -> int {
+                return x * 2
+            }
+            let val = double(21)
+        "#;
+        let hir = parse_arena_program_to_hir(src)
+            .expect("should parse directly to hir successfully");
+        assert!(!hir.timelines.is_empty());
+        assert_eq!(hir.timelines[0].statements.len(), 2);
+    }
 
     #[test]
     fn test_syntax_arena_parser_expressions_and_routines() {
@@ -1353,5 +1381,3 @@ mod tests {
         ));
     }
 }
-
-

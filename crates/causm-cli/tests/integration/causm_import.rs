@@ -31,7 +31,8 @@ fn test_import_file_level_and_named_symbols() -> anyhow::Result<()> {
     std::fs::write(&main_path, main_source)?;
 
     let program = parser::parse_causm_with_imports(main_source, Some(&temp_dir))?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
     let mut vm = Vm::new();
@@ -81,7 +82,8 @@ fn test_import_wildcard_symbol_import() -> anyhow::Result<()> {
     std::fs::write(&main_path, main_source)?;
 
     let program = parser::parse_causm_with_imports(main_source, Some(&temp_dir))?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
     let mut vm = Vm::new();
@@ -110,7 +112,8 @@ fn test_import_std_time_monotonic_telemetry() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -150,7 +153,8 @@ fn test_import_std_net_tcp_bind_and_sockaddr() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -180,7 +184,8 @@ fn test_import_std_net_socket_creation() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -224,7 +229,8 @@ fn test_import_std_net_udp_datagram_transmission() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -270,7 +276,8 @@ fn test_import_std_net_nonblocking_socket_configuration() -> anyhow::Result<()> 
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;
@@ -322,7 +329,8 @@ fn test_import_std_net_connect_ip_and_timeouts() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm_with_imports(source, None)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.use_z3 = false;
     analyzer.analyze_program(&program)?;

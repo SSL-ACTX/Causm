@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 pub mod arena;
+pub mod hir;
+pub use hir::{HirExpression, HirProgram, HirSpannedStatement, HirStatement};
 pub mod symbol;
 pub mod types;
 pub use types::AutoDropSpec;
@@ -376,6 +378,12 @@ macro_rules! statements {
                 name: String,
                 params: Vec<MacroParam>,
                 body_template: String
+            },
+            AutoDrop {
+                target: String
+            },
+            Consume {
+                target: String
             }
         }
     };
@@ -528,6 +536,8 @@ impl Statement {
             | Statement::FromImport { .. }
             | Statement::ForeignBlock { .. }
             | Statement::MacroDef { .. }
+            | Statement::AutoDrop { .. }
+            | Statement::Consume { .. }
             | Statement::Return(_) => 0,
         };
         base.saturating_add(extra)

@@ -15,7 +15,8 @@ fn test_bounded_while_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -49,7 +50,8 @@ fn test_while_valid_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -78,7 +80,8 @@ fn test_for_step_loop() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -109,7 +112,8 @@ fn test_loop_tick() -> anyhow::Result<()> {
     "#;
 
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -157,7 +161,8 @@ fn test_advanced_loop_syntax_and_execution() -> anyhow::Result<()> {
     }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -193,7 +198,8 @@ fn test_syntax_max_duration_without_parentheses() -> anyhow::Result<()> {
     }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
@@ -235,7 +241,8 @@ fn test_syntax_loop_uniform_step_and_max_modifiers() -> anyhow::Result<()> {
     }
     "#;
     let program = parser::parse_causm(source)?;
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;

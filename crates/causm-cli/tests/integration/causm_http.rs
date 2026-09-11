@@ -22,7 +22,8 @@ fn test_http_format_get_and_post() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();
@@ -105,7 +106,8 @@ fn test_http_client_get_request_mock_server() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let opt_ir = causm_ir::optimize::optimize_program(ir.clone());
 
     let mut vm = Vm::new();

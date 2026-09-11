@@ -1169,6 +1169,12 @@ fn format_spanned_statement(
                 body_template.trim()
             ));
         }
+        Statement::AutoDrop { target } => {
+            out.push_str(&format!("{}autodrop {}\n", indent, target));
+        }
+        Statement::Consume { target } => {
+            out.push_str(&format!("{}consume {}\n", indent, target));
+        }
     }
 }
 

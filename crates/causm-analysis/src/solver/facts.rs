@@ -571,6 +571,14 @@ impl FactExtractor {
                     point: drop_pt,
                 });
             }
+            Statement::Consume { target } => {
+                let drop_pt = self.next_point();
+                self.push_fact(EntropicFact::LinearConsume {
+                    var: target.clone(),
+                    point: drop_pt,
+                });
+            }
+            Statement::AutoDrop { .. } => {}
             Statement::Lease {
                 binding,
                 source,

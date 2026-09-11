@@ -39,13 +39,19 @@ fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
     let id = store
         .get_or_parse_module(path, source)
         .map_err(|e| anyhow::anyhow!("failed parsing module '{}': {}", path, e))?;
-    store
-        .get_module_ast(id)
-        .ok_or_else(|| anyhow::anyhow!("module '{}' registered but ast projection failed", path))
+    store.get_module_ast(id).ok_or_else(|| {
+        anyhow::anyhow!("module '{}' registered but ast projection failed", path)
+    })
 }
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
-    arena_parser::lower::parse_arena_program_to_ast(source).map_err(|e| anyhow::anyhow!(e))
+    arena_parser::lower::parse_arena_program_to_ast(source)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+pub fn parse_causm_to_hir(source: &str) -> anyhow::Result<causm_core::HirProgram> {
+    arena_parser::lower::parse_arena_program_to_hir(source)
+        .map_err(|e| anyhow::anyhow!(e))
 }
 
 #[cfg(test)]
@@ -452,6 +458,14 @@ pub fn parse_causm_with_imports(
     crate::derive::expand_derives(&mut program);
     crate::hir::desugar_program(&mut program);
     Ok(program)
+}
+
+pub fn parse_causm_to_hir_with_imports(
+    source: &str,
+    base_dir: Option<&Path>,
+) -> anyhow::Result<causm_core::HirProgram> {
+    let program = parse_causm_with_imports(source, base_dir)?;
+    Ok(crate::hir::lower_ast_to_hir(&program))
 }
 
 fn flatten_container_statements(

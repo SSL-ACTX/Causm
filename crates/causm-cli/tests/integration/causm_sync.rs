@@ -28,7 +28,8 @@ fn test_sync_atomic_int_operations() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;
@@ -98,7 +99,8 @@ fn test_sync_atomic_bool_cas() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;
@@ -157,7 +159,8 @@ fn test_sync_mutex_lock_and_unlock() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;
@@ -236,7 +239,8 @@ fn test_sync_channel_bounded_fifo() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;
@@ -330,7 +334,8 @@ fn test_sync_channel_cross_branch_merge_and_field_access() -> anyhow::Result<()>
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     causm_stdlib::register_all(&mut vm);
     vm.execute_program(&ir)?;

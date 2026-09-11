@@ -782,6 +782,36 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             }
             ctx.push(Instruction::Consume { src: dest });
         }
+        Statement::AutoDrop { target } => {
+            let dest = ctx.get_reg(target);
+            if let Some(src_type) = ctx.reg_types.get(&dest.0).cloned() {
+                if let Some(spec) = ctx.auto_drop_specs.get(&src_type).cloned() {
+                    ctx.push(Instruction::AutoDrop { target: dest, spec });
+                }
+            } else if let Some(spec) = ctx
+                .auto_drop_specs
+                .get(&format!("_reg_{}", dest.0))
+                .cloned()
+            {
+                ctx.push(Instruction::AutoDrop { target: dest, spec });
+            } else {
+                for (type_name, spec) in ctx.auto_drop_specs.clone() {
+                    if target.to_lowercase().contains(&type_name.to_lowercase())
+                        || type_name.to_lowercase().contains(&target.to_lowercase())
+                    {
+                        ctx.push(Instruction::AutoDrop {
+                            target: dest,
+                            spec: spec.clone(),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        Statement::Consume { target } => {
+            let dest = ctx.get_reg(target);
+            ctx.push(Instruction::Consume { src: dest });
+        }
         Statement::Assignment {
             target,
             expr,

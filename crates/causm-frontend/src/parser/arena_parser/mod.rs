@@ -1,5 +1,5 @@
-pub mod statements;
 pub mod lower;
+pub mod statements;
 
 use super::lexer::{Token, TokenKind, TokenStream};
 use super::pratt::PrattParser;
@@ -96,7 +96,7 @@ impl<'a> ArenaParser<'a> {
             self.bump();
         }
 
-                match self.peek() {
+        match self.peek() {
             TokenKind::Eof | TokenKind::RBrace | TokenKind::Else => Ok(None),
             TokenKind::At => self.parse_at_stmt(),
             TokenKind::Let => self.parse_let_stmt(),
@@ -112,13 +112,13 @@ impl<'a> ArenaParser<'a> {
                 };
                 let id = self.arena.alloc_stmt(StmtNode::Return(expr), ret_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::Yield => {
                 let y_tok = self.bump();
                 let expr = self.parse_expression(0)?;
                 let id = self.arena.alloc_stmt(StmtNode::Yield(expr), y_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::Pub | TokenKind::Routine => self.parse_pub_stmt(),
             TokenKind::Import => self.parse_import_stmt(),
             TokenKind::Require => self.parse_require_stmt(),
@@ -142,21 +142,21 @@ impl<'a> ArenaParser<'a> {
                 }
                 let id = self.arena.alloc_stmt(StmtNode::Debug(expr), d_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::OnDecay => self.parse_ondecay_stmt(),
             TokenKind::Using => self.parse_using_stmt(),
             TokenKind::Break => {
                 let tok = self.bump();
                 Ok(Some(self.arena.alloc_stmt(StmtNode::Break, tok.span)))
-            },
+            }
             TokenKind::Continue => {
                 let tok = self.bump();
                 Ok(Some(self.arena.alloc_stmt(StmtNode::Continue, tok.span)))
-            },
+            }
             TokenKind::Collapse => {
                 let tok = self.bump();
                 Ok(Some(self.arena.alloc_stmt(StmtNode::Collapse, tok.span)))
-            },
+            }
             TokenKind::Loop => self.parse_loop_stmt(),
             TokenKind::While => {
                 let while_tok = self.bump();
@@ -173,15 +173,16 @@ impl<'a> ArenaParser<'a> {
                     while_tok.span,
                 );
                 Ok(Some(id))
-            },
+            }
             TokenKind::Struct
-                if self.stream.peek_token().kind == TokenKind::LBrace => {
+                if self.stream.peek_token().kind == TokenKind::LBrace =>
+            {
                 let expr = self.parse_expression(0)?;
                 let id = self
                     .arena
                     .alloc_stmt(StmtNode::Expr(expr), self.current.span.clone());
                 Ok(Some(id))
-            },
+            }
             TokenKind::Interface => self.parse_interface_stmt(),
             TokenKind::Type | TokenKind::Struct => self.parse_type_stmt(),
             TokenKind::Enum => self.parse_enum_stmt(),
@@ -199,7 +200,7 @@ impl<'a> ArenaParser<'a> {
                 self.bump();
                 let id = self.arena.alloc_stmt(StmtNode::Anchor(name), a_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::RewindTo => {
                 let r_tok = self.bump();
                 let mut name = causm_core::symbol::intern("");
@@ -215,7 +216,7 @@ impl<'a> ArenaParser<'a> {
                 }
                 let id = self.arena.alloc_stmt(StmtNode::RewindTo(name), r_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::State => self.parse_state_stmt(),
             TokenKind::Policy => self.parse_policy_stmt(),
             TokenKind::Select => self.parse_select_stmt(),
@@ -226,20 +227,21 @@ impl<'a> ArenaParser<'a> {
                 let body = self.parse_block()?;
                 let id = self.arena.alloc_stmt(StmtNode::Commit(body), com_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::Slice => {
                 let s_tok = self.bump();
                 let expr = self.parse_expression(0)?;
                 let id = self.arena.alloc_stmt(StmtNode::Slice(expr), s_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::Ident(sym)
-                if sym.0 == causm_core::symbol::intern("slice").0 => {
+                if sym.0 == causm_core::symbol::intern("slice").0 =>
+            {
                 let s_tok = self.bump();
                 let expr = self.parse_expression(0)?;
                 let id = self.arena.alloc_stmt(StmtNode::Slice(expr), s_tok.span);
                 Ok(Some(id))
-            },
+            }
             TokenKind::AssertTime => self.parse_asserttime_stmt(),
             _ => self.parse_default_stmt(),
         }
@@ -574,5 +576,3 @@ pub fn parse_type_name_str(s: &str) -> causm_core::TypeName {
         }
     }
 }
-
-

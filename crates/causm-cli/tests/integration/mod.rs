@@ -15,6 +15,7 @@ pub mod causm_json;
 pub mod causm_lease;
 pub mod causm_match;
 pub mod causm_oop;
+pub mod causm_pipeline_stages;
 #[cfg(feature = "plugins")]
 pub mod causm_plugins_test;
 pub mod causm_process;

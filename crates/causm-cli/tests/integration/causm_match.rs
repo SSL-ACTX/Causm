@@ -37,7 +37,8 @@ fn test_enum_variant_pattern_matching_statement() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -70,7 +71,8 @@ fn test_enum_variant_pattern_matching_expression() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -110,7 +112,8 @@ fn test_enum_variant_pattern_matching_with_guards() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -145,7 +148,8 @@ fn test_if_let_enum_variant_destructuring() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -174,7 +178,8 @@ fn test_match_literal_and_wildcard_patterns() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -203,7 +208,8 @@ fn test_pattern_matching_tuple_decomposition() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -237,7 +243,8 @@ fn test_pattern_matching_nested_tuple_and_enum() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 

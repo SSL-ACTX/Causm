@@ -17,7 +17,8 @@ fn test_syntax_byte_string_literals_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -49,7 +50,8 @@ fn test_syntax_hex_byte_string_literals_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -81,7 +83,8 @@ fn test_syntax_hex_integer_literal_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -113,7 +116,8 @@ fn test_syntax_direct_function_call_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -138,7 +142,8 @@ fn test_syntax_concise_arrow_routine_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -167,7 +172,8 @@ fn test_syntax_struct_destructuring_assignment() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -209,7 +215,8 @@ fn test_syntax_using_scoped_resource_lifecycle() -> anyhow::Result<()> {
     let main_branch = analyzer.branch_contexts.get("main").unwrap();
     assert!(main_branch.consumed.contains("res"));
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -234,7 +241,8 @@ fn test_syntax_universal_method_call_namespaced() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -260,7 +268,8 @@ fn test_syntax_pipeline_operator_execution() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -287,7 +296,8 @@ fn test_syntax_if_statement_omitted_reconcile_clause() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -314,7 +324,8 @@ fn test_syntax_if_else_expression_evaluation() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -339,7 +350,8 @@ fn test_syntax_nested_if_else_expression() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -411,7 +423,8 @@ fn test_branchless_conditional_select_emitted_from_source_syntax(
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
 
     // Verify emitted IR block contains ConditionalSelect and NO Jump instructions
     assert!(!ir.blocks.is_empty(), "Expected blocks in IrProgram");
@@ -467,7 +480,8 @@ fn test_syntax_collection_and_string_primitives_execution() -> anyhow::Result<()
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -527,7 +541,8 @@ fn test_syntax_compound_assignment_operators() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -569,7 +584,8 @@ fn test_syntax_bitwise_operators_and_shift() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -601,7 +617,8 @@ fn test_syntax_bitwise_not_operator() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -624,7 +641,8 @@ fn test_syntax_null_coalescing_operator() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -649,7 +667,8 @@ fn test_syntax_tuple_literal_creation() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -679,7 +698,8 @@ fn test_syntax_tuple_pair_literal() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -710,7 +730,8 @@ fn test_syntax_tuple_nested_expression_elements() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -744,7 +765,8 @@ fn test_syntax_declarative_macro_definition_and_expansion() -> anyhow::Result<()
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -771,7 +793,8 @@ fn test_syntax_declarative_macro_multiple_expansions() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -801,7 +824,8 @@ fn test_syntax_compiler_attribute_derive_struct() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -837,7 +861,8 @@ fn test_syntax_compiler_attribute_derive_enum() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -869,7 +894,8 @@ fn test_syntax_distinct_newtype_declaration() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -922,7 +948,8 @@ fn test_syntax_const_generic_struct_declaration() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -953,7 +980,8 @@ fn test_syntax_const_generic_multiple_instantiations() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -986,7 +1014,8 @@ fn test_syntax_distinct_newtype_methods_and_type_boundaries() -> anyhow::Result<
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 
@@ -1023,7 +1052,8 @@ fn test_syntax_const_generic_deep_nested_matrix_stress() -> anyhow::Result<()> {
     let mut analyzer = EntropicAnalyzer::new();
     analyzer.analyze_program(&program)?;
 
-    let ir = causm_frontend::lower::lower_program(&program);
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
     let mut vm = Vm::new();
     vm.execute_program(&ir)?;
 

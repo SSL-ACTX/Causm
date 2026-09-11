@@ -49,4 +49,8 @@ impl<'a> AnalysisPipeline<'a> {
 
         Ok(())
     }
+
+    pub fn run_hir(self, hir: &causm_core::HirProgram) -> Result<(), SemanticError> {
+        self.run(hir)
+    }
 }

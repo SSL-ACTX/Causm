@@ -16,7 +16,10 @@ pub(crate) fn unescape_raw_text(s: &str) -> String {
                 Some('"') => out.push('"'),
                 Some('\'') => out.push('\''),
                 Some('0') => out.push('\0'),
-                Some(other) => { out.push('\\'); out.push(other); }
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
                 None => out.push('\\'),
             }
         } else {
@@ -25,7 +28,6 @@ pub(crate) fn unescape_raw_text(s: &str) -> String {
     }
     out
 }
-
 
 pub struct PrattParser<'a, 'b> {
     stream: TokenStream<'a>,
@@ -174,10 +176,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                 while let Some(ch) = chars.next() {
                     if ch == '{' {
                         if !current_lit.is_empty() {
-                            let unescaped =
-                                unescape_raw_text(
-                                    &current_lit,
-                                );
+                            let unescaped = unescape_raw_text(&current_lit);
                             self.arena.fstring_parts_pool.push(
                                 causm_core::arena::FStringPartNode::Text(unescaped),
                             );
@@ -266,8 +265,7 @@ impl<'a, 'b> PrattParser<'a, 'b> {
                     }
                 }
                 if !current_lit.is_empty() {
-                    let unescaped =
-                        unescape_raw_text(&current_lit);
+                    let unescaped = unescape_raw_text(&current_lit);
                     self.arena
                         .fstring_parts_pool
                         .push(causm_core::arena::FStringPartNode::Text(unescaped));

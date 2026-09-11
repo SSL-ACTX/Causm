@@ -33,7 +33,10 @@ pub fn lower_spanned_stmts(stmts: &[SpannedStatement]) -> Vec<HirSpannedStatemen
     out
 }
 
-fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatement>) {
+fn lower_spanned_stmt(
+    spanned: &SpannedStatement,
+    out: &mut Vec<HirSpannedStatement>,
+) {
     let span = spanned.span.clone();
     let attrs = spanned.attributes.clone();
 
@@ -151,10 +154,8 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
             out.push(s);
         }
         Statement::Debug(e) => {
-            let mut s = HirSpannedStatement::new(
-                HirStatement::Debug(lower_expr(e)),
-                span,
-            );
+            let mut s =
+                HirSpannedStatement::new(HirStatement::Debug(lower_expr(e)), span);
             s.attributes = attrs;
             out.push(s);
         }
@@ -196,7 +197,9 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
                     binding: binding.clone(),
                     condition: lower_expr(condition),
                     then_branch: lower_spanned_stmts(then_branch),
-                    else_branch: else_branch.as_ref().map(|b| lower_spanned_stmts(b)),
+                    else_branch: else_branch
+                        .as_ref()
+                        .map(|b| lower_spanned_stmts(b)),
                     reconcile: reconcile.clone(),
                 },
                 span,
@@ -216,7 +219,9 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
                     pattern: pattern.clone(),
                     expr: lower_expr(expr),
                     then_branch: lower_spanned_stmts(then_branch),
-                    else_branch: else_branch.as_ref().map(|b| lower_spanned_stmts(b)),
+                    else_branch: else_branch
+                        .as_ref()
+                        .map(|b| lower_spanned_stmts(b)),
                     reconcile: reconcile.clone(),
                 },
                 span,
@@ -250,16 +255,25 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
             pending_branch,
             consumed_branch,
         } => {
-            let map_branch = |b: &Option<(causm_core::DecayedPattern, Option<Expression>, Vec<SpannedStatement>)>| {
+            let map_branch = |b: &Option<(
+                causm_core::DecayedPattern,
+                Option<Expression>,
+                Vec<SpannedStatement>,
+            )>| {
                 b.as_ref().map(|(pat, opt_e, stmts)| {
-                    (pat.clone(), opt_e.as_ref().map(lower_expr), lower_spanned_stmts(stmts))
+                    (
+                        pat.clone(),
+                        opt_e.as_ref().map(lower_expr),
+                        lower_spanned_stmts(stmts),
+                    )
                 })
             };
-            let map_consumed = |b: &Option<(Option<Expression>, Vec<SpannedStatement>)>| {
-                b.as_ref().map(|(opt_e, stmts)| {
-                    (opt_e.as_ref().map(lower_expr), lower_spanned_stmts(stmts))
-                })
-            };
+            let map_consumed =
+                |b: &Option<(Option<Expression>, Vec<SpannedStatement>)>| {
+                    b.as_ref().map(|(opt_e, stmts)| {
+                        (opt_e.as_ref().map(lower_expr), lower_spanned_stmts(stmts))
+                    })
+                };
             let mut s = HirSpannedStatement::new(
                 HirStatement::MatchEntropy {
                     target: lower_expr(target),
@@ -456,12 +470,14 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
             out.push(s);
         }
         Statement::Anchor(a) => {
-            let mut s = HirSpannedStatement::new(HirStatement::Anchor(a.clone()), span);
+            let mut s =
+                HirSpannedStatement::new(HirStatement::Anchor(a.clone()), span);
             s.attributes = attrs;
             out.push(s);
         }
         Statement::Rewind(r) => {
-            let mut s = HirSpannedStatement::new(HirStatement::Rewind(r.clone()), span);
+            let mut s =
+                HirSpannedStatement::new(HirStatement::Rewind(r.clone()), span);
             s.attributes = attrs;
             out.push(s);
         }
@@ -540,7 +556,8 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
             out.push(s);
         }
         Statement::SpeculationMode(m) => {
-            let mut s = HirSpannedStatement::new(HirStatement::SpeculationMode(*m), span);
+            let mut s =
+                HirSpannedStatement::new(HirStatement::SpeculationMode(*m), span);
             s.attributes = attrs;
             out.push(s);
         }
@@ -659,18 +676,85 @@ fn lower_spanned_stmt(spanned: &SpannedStatement, out: &mut Vec<HirSpannedStatem
             out.push(s);
         }
         Statement::Isolate(iso) => {
-            for inner in &iso.body {
-                lower_spanned_stmt(inner, out);
-            }
+            let mut s =
+                HirSpannedStatement::new(HirStatement::Isolate(iso.clone()), span);
+            s.attributes = attrs;
+            out.push(s);
         }
-        Statement::Import { .. }
-        | Statement::FromImport { .. }
-        | Statement::ForeignBlock { .. }
-        | Statement::RelativisticBlock { .. }
-        | Statement::DirectiveBlock { .. }
-        | Statement::Capability(_)
-        | Statement::Await(_) => {
-            // Evaluated/flattened in frontend preprocessing passes
+        Statement::ForeignBlock {
+            lib_name,
+            abi,
+            routines,
+        } => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::ForeignBlock {
+                    lib_name: lib_name.clone(),
+                    abi: abi.clone(),
+                    routines: lower_spanned_stmts(routines),
+                },
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::Capability(cap) => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::Capability(cap.clone()),
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::Await(name) => {
+            let mut s =
+                HirSpannedStatement::new(HirStatement::Await(name.clone()), span);
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::RelativisticBlock { time, body } => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::RelativisticBlock {
+                    time: time.clone(),
+                    body: lower_spanned_stmts(body),
+                },
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::DirectiveBlock { directives, body } => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::DirectiveBlock {
+                    directives: directives.clone(),
+                    body: lower_spanned_stmts(body),
+                },
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::Import { .. } | Statement::FromImport { .. } => {
+            // Evaluated during import expansion
+        }
+        Statement::AutoDrop { target } => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::AutoDrop {
+                    target: target.clone(),
+                },
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
+        }
+        Statement::Consume { target } => {
+            let mut s = HirSpannedStatement::new(
+                HirStatement::Consume {
+                    target: target.clone(),
+                },
+                span,
+            );
+            s.attributes = attrs;
+            out.push(s);
         }
     }
 }
@@ -700,11 +784,16 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
             target,
             method,
             args,
-            ..
+            resolved_routine,
+            resolved_budget,
         } => HirExpression::MethodCall {
             target: Box::new(lower_expr(target)),
             method: method.clone(),
             args: args.iter().map(lower_expr).collect(),
+            resolved_routine: std::cell::RefCell::new(
+                resolved_routine.borrow().clone(),
+            ),
+            resolved_budget: std::cell::RefCell::new(*resolved_budget.borrow()),
         },
         Expression::GenericStaticCall {
             type_name,
@@ -751,7 +840,10 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
             for (k, v) in fields {
                 field_map.insert(k.clone(), lower_expr(v));
             }
-            HirExpression::StructLit(tag.borrow().clone(), field_map)
+            HirExpression::StructLit(
+                std::cell::RefCell::new(tag.borrow().clone()),
+                field_map,
+            )
         }
         Expression::TopologyLit(fields) => {
             let mut field_map = HashMap::with_capacity(fields.len());
@@ -784,7 +876,7 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
                 .map(|a| HirExprMatchArm {
                     pattern: a.pattern.clone(),
                     guard: a.guard.as_ref().map(lower_expr),
-                    body: Box::new(lower_expr(&a.body)),
+                    body: lower_expr(&a.body),
                 })
                 .collect();
             HirExpression::Match {
@@ -797,16 +889,22 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
         Expression::Len(e) => HirExpression::Len(Box::new(lower_expr(e))),
         Expression::RefOp(e) => HirExpression::RefOp(Box::new(lower_expr(e))),
         Expression::CloneOp(name) => HirExpression::CloneOp(name.clone()),
-        Expression::ChannelReceive(name) => HirExpression::ChannelReceive(name.clone()),
-        Expression::TypeAssertion { target, cast_type } => HirExpression::TypeAssertion {
-            target: Box::new(lower_expr(target)),
-            cast_type: cast_type.clone(),
-        },
+        Expression::ChannelReceive(name) => {
+            HirExpression::ChannelReceive(name.clone())
+        }
+        Expression::TypeAssertion { target, cast_type } => {
+            HirExpression::TypeAssertion {
+                target: Box::new(lower_expr(target)),
+                cast_type: cast_type.clone(),
+            }
+        }
         Expression::TypeCast { expr, target_type } => HirExpression::TypeCast {
             expr: Box::new(lower_expr(expr)),
             target_type: target_type.clone(),
         },
-        Expression::TryUnwrap(e) => HirExpression::TryUnwrap(Box::new(lower_expr(e))),
+        Expression::TryUnwrap(e) => {
+            HirExpression::TryUnwrap(Box::new(lower_expr(e)))
+        }
         Expression::Syscall {
             target,
             args,
@@ -817,7 +915,9 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
             duration_ms: *duration_ms,
         },
         Expression::ArenaIntrospect(kind) => HirExpression::ArenaIntrospect(*kind),
-        Expression::CapabilityCheck(cap) => HirExpression::CapabilityCheck(cap.clone()),
+        Expression::CapabilityCheck(cap) => {
+            HirExpression::CapabilityCheck(cap.clone())
+        }
         Expression::Turbofish { expr, .. } => {
             // Desugar turbofish to inner expr in HIR
             lower_expr(expr)
@@ -830,7 +930,9 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
             let part_to_expr = |p: &FStringPart| -> HirExpression {
                 match p {
                     FStringPart::Text(t) => HirExpression::Literal(t.clone()),
-                    FStringPart::Expr(e) => HirExpression::ToStr(Box::new(lower_expr(e))),
+                    FStringPart::Expr(e) => {
+                        HirExpression::ToStr(Box::new(lower_expr(e)))
+                    }
                 }
             };
             let mut acc = part_to_expr(&parts[0]);
@@ -843,6 +945,14 @@ pub fn lower_expr(expr: &Expression) -> HirExpression {
             }
             acc
         }
-        Expression::Deferred { .. } => HirExpression::Null,
+        Expression::Deferred {
+            capability,
+            params,
+            deadline_ms,
+        } => HirExpression::Deferred {
+            capability: capability.clone(),
+            params: params.clone(),
+            deadline_ms: *deadline_ms,
+        },
     }
 }

@@ -45,14 +45,18 @@ fn desugar_stmt(stmt: &mut Statement) {
             else_branch,
             ..
         } => {
-            *condition = desugar_expr(std::mem::replace(condition, Expression::Null));
+            *condition =
+                desugar_expr(std::mem::replace(condition, Expression::Null));
             desugar_stmts(then_branch);
             if let Some(b) = else_branch {
                 desugar_stmts(b);
             }
         }
-        Statement::While { condition, body, .. } => {
-            *condition = desugar_expr(std::mem::replace(condition, Expression::Null));
+        Statement::While {
+            condition, body, ..
+        } => {
+            *condition =
+                desugar_expr(std::mem::replace(condition, Expression::Null));
             desugar_stmts(body);
         }
         Statement::Loop { body, .. }
@@ -161,10 +165,12 @@ fn desugar_expr(expr: Expression) -> Expression {
                 .map(|(k, v)| (k, desugar_expr(v)))
                 .collect(),
         ),
-        Expression::TypeAssertion { target, cast_type } => Expression::TypeAssertion {
-            target: Box::new(desugar_expr(*target)),
-            cast_type,
-        },
+        Expression::TypeAssertion { target, cast_type } => {
+            Expression::TypeAssertion {
+                target: Box::new(desugar_expr(*target)),
+                cast_type,
+            }
+        }
         Expression::TypeCast { expr, target_type } => Expression::TypeCast {
             expr: Box::new(desugar_expr(*expr)),
             target_type,
@@ -177,7 +183,9 @@ fn desugar_expr(expr: Expression) -> Expression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use causm_core::{Expression, Program, Span, SpannedStatement, TimeCoordinate, TimelineBlock};
+    use causm_core::{
+        Expression, Program, Span, SpannedStatement, TimeCoordinate, TimelineBlock,
+    };
 
     fn make_prog(expr: Expression) -> Program {
         Program {
