@@ -85,6 +85,7 @@ pub enum TokenKind {
     Log,
     OnDecay,
     Where,
+    YieldPad,
 
     // Symbols & Punctuation
     At,
@@ -758,6 +759,7 @@ impl<'a> TokenStream<'a> {
                     "log" => TokenKind::Log,
                     "on_decay" => TokenKind::OnDecay,
                     "where" => TokenKind::Where,
+                    "yield_pad" => TokenKind::YieldPad,
                     "true" => TokenKind::Bool(true),
                     "false" => TokenKind::Bool(false),
                     "null" => TokenKind::Null,

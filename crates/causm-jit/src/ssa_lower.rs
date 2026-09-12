@@ -511,6 +511,22 @@ fn lower_ssa_instruction<M: Module>(
             let ret_val = ctx.builder.inst_results(call)[0];
             ctx.values.insert(*dest, ret_val);
         }
+        SsaInstruction::YieldPad => {
+            let mut sig = ctx.module.make_signature();
+            sig.params.push(AbiParam::new(types::I64));
+            let func_id = ctx
+                .module
+                .declare_function(
+                    "causm_spin_pad",
+                    cranelift_module::Linkage::Import,
+                    &sig,
+                )
+                .unwrap();
+            let local_func =
+                ctx.module.declare_func_in_func(func_id, ctx.builder.func);
+            let pad_cycles = ctx.builder.ins().iconst(types::I64, 100);
+            ctx.builder.ins().call(local_func, &[pad_cycles]);
+        }
         _ => {}
     }
 }

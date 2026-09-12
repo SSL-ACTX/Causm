@@ -36,6 +36,7 @@ impl<'a> ArenaParser<'a> {
                 params: SliceRange::new(0, 0),
                 return_type: None,
                 taking_ms,
+                taking_cycles: None,
                 state_constraint: None,
                 required_capabilities: Vec::new(),
                 body,

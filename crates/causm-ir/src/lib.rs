@@ -360,6 +360,7 @@ macro_rules! instructions {
             Slice {
                 ms: u64
             },
+            YieldPad,
             Break,
             LoopTick,
             EndLoopTick,
@@ -457,6 +458,7 @@ pub struct IrRoutine {
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub taking_cycles: Option<u64>,
     pub foreign_binding: Option<ForeignBinding>,
     pub instructions: Vec<Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,

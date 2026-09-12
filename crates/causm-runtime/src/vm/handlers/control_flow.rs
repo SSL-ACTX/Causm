@@ -216,6 +216,9 @@ impl Vm {
                 let branch = self.get_branch_mut(branch_id)?;
                 branch.local_clock = branch.local_clock.saturating_add(cost);
                 branch.consume_budget(cost)?;
+            } else if let Some(cycles) = routine_def.taking_cycles {
+                let branch = self.get_branch_mut(branch_id)?;
+                branch.local_clock = branch.local_clock.saturating_add(cycles);
             }
 
             return self.insert_reg(
@@ -270,6 +273,8 @@ impl Vm {
             saved_manifest_stack: branch.manifest_stack.clone(),
             caller_start_clock: branch.local_clock,
             budget,
+            taking_ms: routine_def.taking_ms,
+            taking_cycles: routine_def.taking_cycles,
             routine_name: routine,
             params: params.clone(),
             args: args.clone(),
@@ -389,6 +394,10 @@ impl Vm {
                         frame.routine_name, elapsed, limit
                     )));
                 }
+            }
+
+            if let Some(cycles) = frame.taking_cycles {
+                branch.local_clock = branch.local_clock.saturating_add(cycles);
             }
 
             // Write back any modified lease, struct, array, or FFI pointer buffer argument payloads from child to caller registers
@@ -609,6 +618,7 @@ impl Vm {
             params: routine_def.params.clone(),
             return_type: routine_def.return_type.clone(),
             taking_ms: routine_def.taking_ms,
+            taking_cycles: routine_def.taking_cycles,
             foreign_binding: None,
             instructions: routine_def.instructions.clone(),
             spans: routine_def.spans.clone(),
@@ -624,6 +634,7 @@ impl Vm {
             Err(_) => return Ok(None),
         };
 
+        let tsc_start = causm_jit::timing::read_tsc();
         let raw_res: i64 = match raw_args.len() {
             0 => {
                 let f: extern "C" fn() -> i64 =
@@ -653,6 +664,13 @@ impl Vm {
             _ => return Ok(None),
         };
 
+        if let Some(target_cycles) = routine_def.taking_cycles {
+            let elapsed = causm_jit::timing::read_tsc().saturating_sub(tsc_start);
+            if elapsed < target_cycles {
+                causm_jit::timing::spin_pad(target_cycles - elapsed);
+            }
+        }
+
         let res_payload = match routine_def.return_type {
             causm_core::types::Type::Bool => {
                 causm_core::value::Payload::Bool(raw_res != 0)
@@ -671,6 +689,9 @@ impl Vm {
             let branch = self.get_branch_mut(branch_id)?;
             branch.local_clock = branch.local_clock.saturating_add(cost);
             branch.consume_budget(cost)?;
+        } else if let Some(cycles) = routine_def.taking_cycles {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock = branch.local_clock.saturating_add(cycles);
         }
 
         self.insert_reg(

@@ -120,6 +120,7 @@ fn lower_program_inner(program: &Program) -> IrProgram {
                                     .map(causm_core::types::Type::from_typename)
                                     .unwrap_or(causm_core::types::Type::Unknown),
                                 taking_ms: im.taking_ms,
+                                taking_cycles: None,
                                 foreign_binding: None,
                                 instructions: sub_ctx.instructions,
                                 spans: sub_ctx.spans,

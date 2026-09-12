@@ -166,6 +166,7 @@ fn format_spanned_statement(
             params,
             return_type,
             taking_ms,
+            taking_cycles,
             state_constraint,
             required_capabilities,
             body,
@@ -204,9 +205,12 @@ fn format_spanned_statement(
             } else {
                 String::new()
             };
-            let contract_str = match taking_ms {
-                Some(ms) => format!(" taking {}ms", ms),
-                None => " taking _".to_string(),
+            let contract_str = if let Some(cycles) = taking_cycles {
+                format!(" taking {} cycles", cycles)
+            } else if let Some(ms) = taking_ms {
+                format!(" taking {}ms", ms)
+            } else {
+                " taking _".to_string()
             };
             let state_str = if let Some((var, state)) = state_constraint {
                 format!(" where {}.state == {}", var, state)
@@ -541,6 +545,9 @@ fn format_spanned_statement(
             } else {
                 out.push_str(&format!("{}yield\n", indent));
             }
+        }
+        Statement::YieldPad => {
+            out.push_str(&format!("{}yield_pad\n", indent));
         }
         Statement::Print(args) => {
             let formatted = args

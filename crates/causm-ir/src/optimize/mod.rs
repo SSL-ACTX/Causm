@@ -547,7 +547,8 @@ ssa_to_flat_match!(
     ArenaIntrospect { dest, kind },
     CapabilityCheck { dest, capability },
     TupleLit { dest, elems },
-    TupleAccess { dest, tuple, index }
+    TupleAccess { dest, tuple, index },
+    YieldPad
 );
 
 pub fn destruct_ssa(ssa_cfg: SsaCFG) -> CFG {

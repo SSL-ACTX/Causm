@@ -206,11 +206,13 @@ pub enum StmtNode {
     Block(SliceRange<StmtId>),
     Return(Option<ExprId>),
     Yield(ExprId),
+    YieldPad,
     RoutineDef {
         name: Symbol,
         params: SliceRange<Symbol>,
         return_type: Option<Symbol>,
         taking_ms: Option<u64>,
+        taking_cycles: Option<u64>,
         state_constraint: Option<(Symbol, Symbol)>,
         required_capabilities: Vec<Symbol>,
         body: SliceRange<StmtId>,

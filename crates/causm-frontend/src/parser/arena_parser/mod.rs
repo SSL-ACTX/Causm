@@ -119,6 +119,11 @@ impl<'a> ArenaParser<'a> {
                 let id = self.arena.alloc_stmt(StmtNode::Yield(expr), y_tok.span);
                 Ok(Some(id))
             }
+            TokenKind::YieldPad => {
+                let y_tok = self.bump();
+                let id = self.arena.alloc_stmt(StmtNode::YieldPad, y_tok.span);
+                Ok(Some(id))
+            }
             TokenKind::Pub | TokenKind::Routine => self.parse_pub_stmt(),
             TokenKind::Import => self.parse_import_stmt(),
             TokenKind::Require => self.parse_require_stmt(),

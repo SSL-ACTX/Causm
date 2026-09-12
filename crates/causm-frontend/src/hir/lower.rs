@@ -145,6 +145,11 @@ fn lower_spanned_stmt(
             s.attributes = attrs;
             out.push(s);
         }
+        Statement::YieldPad => {
+            let mut s = HirSpannedStatement::new(HirStatement::YieldPad, span);
+            s.attributes = attrs;
+            out.push(s);
+        }
         Statement::Print(exprs) => {
             let mut s = HirSpannedStatement::new(
                 HirStatement::Print(exprs.iter().map(lower_expr).collect()),
@@ -382,6 +387,7 @@ fn lower_spanned_stmt(
             params,
             return_type,
             taking_ms,
+            taking_cycles,
             state_constraint,
             required_capabilities,
             body,
@@ -392,6 +398,7 @@ fn lower_spanned_stmt(
                     params: params.clone(),
                     return_type: return_type.clone(),
                     taking_ms: *taking_ms,
+                    taking_cycles: *taking_cycles,
                     state_constraint: state_constraint.clone(),
                     required_capabilities: required_capabilities.clone(),
                     body: lower_spanned_stmts(body),

@@ -831,6 +831,7 @@ impl EntropicAnalyzer {
                         &params,
                         &im.return_type,
                         &im.taking_ms,
+                        &None,
                         &im.state_constraint,
                         &im.required_capabilities,
                         default_body,

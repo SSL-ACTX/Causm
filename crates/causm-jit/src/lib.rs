@@ -1,5 +1,6 @@
 pub mod cache;
 pub mod context;
+pub mod hft;
 pub mod intrinsics;
 pub mod lower;
 pub mod memory;
@@ -30,6 +31,7 @@ mod tests {
             ],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::BinaryOp {
@@ -73,6 +75,7 @@ mod tests {
             params: vec![],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::ConstInt {
@@ -119,6 +122,7 @@ mod tests {
             params: vec![],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::ConstInt {
@@ -176,6 +180,7 @@ mod tests {
             params: vec![(ParamMode::Consume, "cond".to_string(), Type::Integer)],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::JumpIf {
@@ -226,6 +231,7 @@ mod tests {
             params: vec![(ParamMode::Consume, "n".to_string(), Type::Integer)],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::ConstInt {
@@ -298,6 +304,7 @@ mod tests {
             params: vec![],
             return_type: Type::String,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::ConstString {
@@ -412,6 +419,7 @@ mod tests {
             params: vec![(ParamMode::Consume, "x".to_string(), Type::Integer)],
             return_type: Type::Integer,
             taking_ms: None,
+            taking_cycles: None,
             foreign_binding: None,
             instructions: vec![
                 Instruction::ConstInt {
@@ -431,5 +439,43 @@ mod tests {
 
         let func: extern "C" fn(i64) -> i64 = unsafe { std::mem::transmute(ptr2) };
         assert_eq!(func(0), 777);
+    }
+
+    #[test]
+    fn test_speedmicro_hft_memory_prefault_and_pinning() {
+        let mut buffer = vec![0u8; 16384];
+        let res = hft::pin_and_prefault_memory(&mut buffer);
+        assert!(res.is_ok());
+        hft::unpin_memory(&buffer);
+    }
+
+    #[test]
+    fn test_speedmicro_l1_cache_warming() {
+        let buffer = vec![42u8; 4096];
+        hft::warm_l1_cache(&buffer);
+        assert_eq!(buffer[0], 42);
+        assert_eq!(buffer[4095], 42);
+    }
+
+    #[test]
+    fn test_speedmicro_elastic_determinism_jitter_detection() {
+        hft::reset_total_lost_cycles();
+
+        // Scenario 1: Within budget
+        let status = hft::evaluate_elastic_determinism(5000, 5200, 10000);
+        assert_eq!(status, hft::JitterStatus::WithinBudget);
+        assert_eq!(hft::get_total_lost_cycles(), 0);
+
+        // Scenario 2: External OS preemption detected (500,000 cycles elapsed vs 5,000 expected)
+        let status = hft::evaluate_elastic_determinism(500_000, 5000, 150_000);
+        assert!(matches!(
+            status,
+            hft::JitterStatus::ElasticJitterDetected {
+                elapsed_cycles: 500_000,
+                expected_cycles: 5000,
+                lost_to_void: 495_000,
+            }
+        ));
+        assert_eq!(hft::get_total_lost_cycles(), 495_000);
     }
 }

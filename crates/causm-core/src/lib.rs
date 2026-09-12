@@ -335,11 +335,13 @@ macro_rules! statements {
                 params: Vec<ParamDecl>,
                 return_type: Option<TypeName>,
                 taking_ms: Option<u64>,
+                taking_cycles: Option<u64>,
                 state_constraint: Option<(String, String)>,
                 required_capabilities: Vec<Capability>,
                 body: Vec<SpannedStatement>
             },
             Return(Option<Expression>),
+            YieldPad,
             Entangle {
                 variables: Vec<String>
             },
@@ -424,6 +426,7 @@ impl Statement {
             | Statement::StateDecl { .. }
             | Statement::PolicyStmt { .. }
             | Statement::Expression(_)
+            | Statement::YieldPad
             | Statement::Print(_) => 0,
             Statement::Using { body, .. } => estimate_block(body),
             Statement::DecayHandler { body, .. } => estimate_block(body),
@@ -1194,6 +1197,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p1,
                 return_type: rt1,
                 taking_ms: t1,
+                taking_cycles: tc1,
                 state_constraint: sc1,
                 required_capabilities: rc1,
                 body: bd1,
@@ -1203,6 +1207,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 params: p2,
                 return_type: rt2,
                 taking_ms: t2,
+                taking_cycles: tc2,
                 state_constraint: sc2,
                 required_capabilities: rc2,
                 body: bd2,
@@ -1212,6 +1217,7 @@ pub fn ast_statement_eq(a: &Statement, b: &Statement) -> bool {
                 && p1 == p2
                 && rt1 == rt2
                 && t1 == t2
+                && tc1 == tc2
                 && sc1 == sc2
                 && rc1 == rc2
                 && ast_statements_eq(bd1, bd2)
@@ -1824,6 +1830,7 @@ mod tests {
                         }],
                         return_type: Some(TypeName::Builtin(BuiltinType::I32)),
                         taking_ms: Some(10),
+                        taking_cycles: None,
                         state_constraint: None,
                         required_capabilities: vec![],
                         body: vec![SpannedStatement::new(

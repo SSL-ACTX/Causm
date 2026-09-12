@@ -363,6 +363,7 @@ impl<'a> ArenaParser<'a> {
         }
         let mut required_capabilities = Vec::new();
         let mut taking_ms = None;
+        let mut taking_cycles = None;
         let mut return_type = None;
         let mut state_constraint = None;
         while self.peek() != &TokenKind::LBrace
@@ -460,24 +461,67 @@ impl<'a> ArenaParser<'a> {
             };
             if self.peek() == &TokenKind::Taking {
                 self.bump();
-                match self.peek() {
-                    TokenKind::Int(ms) => {
-                        taking_ms = Some(*ms as u64);
+                let is_cycles_fn = if let TokenKind::Ident(s) = self.peek() {
+                    causm_core::symbol::resolve(*s) == "cycles"
+                } else {
+                    false
+                };
+                if is_cycles_fn {
+                    self.bump();
+                    if self.peek() == &TokenKind::LParen {
                         self.bump();
-                        if let TokenKind::Ident(s) = self.peek() {
-                            if causm_core::symbol::resolve(*s) == "ms" {
+                        if let TokenKind::Int(c) = self.peek() {
+                            taking_cycles = Some(*c as u64);
+                            self.bump();
+                        }
+                        if self.peek() == &TokenKind::RParen {
+                            self.bump();
+                        }
+                    }
+                } else {
+                    match self.peek() {
+                        TokenKind::Int(num) => {
+                            let val = *num as u64;
+                            self.bump();
+                            if let TokenKind::Ident(s) = self.peek() {
+                                let unit = causm_core::symbol::resolve(*s);
+                                if unit == "cycles" {
+                                    taking_cycles = Some(val);
+                                    self.bump();
+                                } else if unit == "ms" {
+                                    taking_ms = Some(val);
+                                    self.bump();
+                                } else {
+                                    taking_ms = Some(val);
+                                }
+                            } else {
+                                taking_ms = Some(val);
+                            }
+                        }
+                        TokenKind::Duration(ms) => {
+                            taking_ms = Some(*ms);
+                            self.bump();
+                        }
+                        TokenKind::Ident(s) => {
+                            let name = causm_core::symbol::resolve(*s);
+                            if name == "cycles" {
+                                self.bump();
+                                if self.peek() == &TokenKind::LParen {
+                                    self.bump();
+                                    if let TokenKind::Int(c) = self.peek() {
+                                        taking_cycles = Some(*c as u64);
+                                        self.bump();
+                                    }
+                                    if self.peek() == &TokenKind::RParen {
+                                        self.bump();
+                                    }
+                                }
+                            } else {
                                 self.bump();
                             }
                         }
+                        _ => {}
                     }
-                    TokenKind::Duration(ms) => {
-                        taking_ms = Some(*ms);
-                        self.bump();
-                    }
-                    TokenKind::Ident(_) => {
-                        self.bump();
-                    }
-                    _ => {}
                 }
                 if has_taking_paren && self.peek() == &TokenKind::RParen {
                     self.bump();
@@ -571,6 +615,7 @@ impl<'a> ArenaParser<'a> {
                 params: SliceRange::new(p_start, p_end),
                 return_type,
                 taking_ms,
+                taking_cycles,
                 state_constraint,
                 required_capabilities,
                 body,
@@ -635,6 +680,7 @@ impl<'a> ArenaParser<'a> {
                                 params: SliceRange::new(0, 0),
                                 return_type: None,
                                 taking_ms,
+                                taking_cycles: None,
                                 state_constraint: None,
                                 required_capabilities: Vec::new(),
                                 body: handler_body,

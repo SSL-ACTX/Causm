@@ -89,6 +89,7 @@ fn generate_struct_clone(
         }],
         return_type: Some(TypeName::Custom(type_name.to_string())),
         taking_ms: None,
+        taking_cycles: None,
         state_constraint: None,
         required_capabilities: Vec::new(),
         body: vec![SpannedStatement::new(
@@ -131,6 +132,7 @@ fn generate_struct_debug(
         }],
         return_type: Some(TypeName::Builtin(BuiltinType::String)),
         taking_ms: None,
+        taking_cycles: None,
         state_constraint: None,
         required_capabilities: Vec::new(),
         body: vec![SpannedStatement::new(
@@ -189,6 +191,7 @@ fn generate_struct_equals(
         ],
         return_type: Some(TypeName::Builtin(BuiltinType::Bool)),
         taking_ms: None,
+        taking_cycles: None,
         state_constraint: None,
         required_capabilities: Vec::new(),
         body: vec![SpannedStatement::new(
@@ -214,6 +217,7 @@ fn generate_enum_clone(
         }],
         return_type: Some(TypeName::Custom(type_name.to_string())),
         taking_ms: None,
+        taking_cycles: None,
         state_constraint: None,
         required_capabilities: Vec::new(),
         body: vec![SpannedStatement::new(
@@ -275,6 +279,7 @@ fn generate_enum_debug(
         }],
         return_type: Some(TypeName::Builtin(BuiltinType::String)),
         taking_ms: None,
+        taking_cycles: None,
         state_constraint: None,
         required_capabilities: Vec::new(),
         body: vec![SpannedStatement::new(

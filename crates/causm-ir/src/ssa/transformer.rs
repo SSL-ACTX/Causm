@@ -1255,6 +1255,7 @@ impl SsaTransformer {
             Instruction::EndLoop { max_ms } => {
                 SsaInstruction::EndLoop { max_ms: *max_ms }
             }
+            Instruction::YieldPad => SsaInstruction::YieldPad,
             Instruction::Break => SsaInstruction::Break,
             Instruction::LoopTick => SsaInstruction::LoopTick,
             Instruction::EndLoopTick => SsaInstruction::EndLoopTick,

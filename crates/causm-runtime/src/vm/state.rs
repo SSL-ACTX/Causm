@@ -64,6 +64,7 @@ pub struct Routine {
     #[allow(dead_code)]
     pub return_type: causm_core::types::Type,
     pub taking_ms: Option<u64>,
+    pub taking_cycles: Option<u64>,
     pub foreign_binding: Option<causm_ir::ForeignBinding>,
     pub instructions: Vec<causm_ir::Instruction>,
     pub spans: Vec<Option<causm_core::Span>>,
@@ -122,6 +123,8 @@ pub struct CallFrame {
     pub saved_manifest_stack: Vec<Manifest>,
     pub caller_start_clock: u64,
     pub budget: Option<u64>,
+    pub taking_ms: Option<u64>,
+    pub taking_cycles: Option<u64>,
     pub routine_name: String,
     pub params: Vec<(causm_core::ParamMode, String, causm_core::types::Type)>,
     pub args: Vec<causm_ir::Reg>,

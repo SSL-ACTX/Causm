@@ -30,6 +30,7 @@ fn test_csa_archive_roundtrip_serialization() -> anyhow::Result<()> {
         params: vec![],
         return_type: causm_core::types::Type::Integer,
         taking_ms: Some(10),
+        taking_cycles: None,
         foreign_binding: None,
         instructions: vec![
             causm_ir::Instruction::ConstInt {

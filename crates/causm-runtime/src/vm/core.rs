@@ -303,6 +303,7 @@ impl Vm {
                 params: ir_routine.params.clone(),
                 return_type: ir_routine.return_type.clone(),
                 taking_ms: ir_routine.taking_ms,
+                taking_cycles: ir_routine.taking_cycles,
                 foreign_binding: ir_routine.foreign_binding.clone(),
                 instructions: ir_routine.instructions.clone(),
                 spans: ir_routine.spans.clone(),

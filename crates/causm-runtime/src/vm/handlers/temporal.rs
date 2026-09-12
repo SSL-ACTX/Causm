@@ -600,4 +600,15 @@ impl Vm {
         )?;
         Ok(())
     }
+
+    pub(crate) fn YieldPad(
+        &mut self,
+        _branch_id: &str,
+    ) -> Result<(), TemporalError> {
+        #[cfg(feature = "jit")]
+        {
+            causm_jit::timing::spin_pad(100);
+        }
+        Ok(())
+    }
 }

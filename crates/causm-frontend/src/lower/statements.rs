@@ -177,6 +177,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             params,
             return_type,
             taking_ms,
+            taking_cycles,
             state_constraint,
             required_capabilities,
             body,
@@ -241,25 +242,33 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                     .as_ref()
                     .map(causm_core::types::Type::from_typename)
                     .unwrap_or(causm_core::types::Type::Unknown),
-                taking_ms: taking_ms.or_else(|| {
-                    let cost = causm_core::Statement::RoutineDef {
-                        name: name.clone(),
-                        params: params.clone(),
-                        return_type: return_type.clone(),
-                        taking_ms: None,
-                        state_constraint: state_constraint.clone(),
-                        required_capabilities: required_capabilities.clone(),
-                        body: body.clone(),
-                    }
-                    .estimate_cost(|b| {
-                        b.iter()
-                            .map(|s| {
-                                s.stmt.estimate_cost(|inner_b| inner_b.len() as u64)
-                            })
-                            .sum::<u64>()
-                    });
-                    Some(cost.max(1))
-                }),
+                taking_ms: if taking_cycles.is_some() {
+                    None
+                } else {
+                    taking_ms.or_else(|| {
+                        let cost = causm_core::Statement::RoutineDef {
+                            name: name.clone(),
+                            params: params.clone(),
+                            return_type: return_type.clone(),
+                            taking_ms: None,
+                            taking_cycles: None,
+                            state_constraint: state_constraint.clone(),
+                            required_capabilities: required_capabilities.clone(),
+                            body: body.clone(),
+                        }
+                        .estimate_cost(|b| {
+                            b.iter()
+                                .map(|s| {
+                                    s.stmt.estimate_cost(|inner_b| {
+                                        inner_b.len() as u64
+                                    })
+                                })
+                                .sum::<u64>()
+                        });
+                        Some(cost.max(1))
+                    })
+                },
+                taking_cycles: *taking_cycles,
                 foreign_binding: None,
                 instructions: sub_ctx.instructions,
                 spans: sub_ctx.spans,
@@ -275,11 +284,13 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
             } else {
                 name.clone()
             };
-
             ctx.routines.insert(name.clone(), routine.clone());
             if base_name != *name {
                 ctx.routines.insert(base_name, routine);
             }
+        }
+        Statement::YieldPad => {
+            ctx.push(Instruction::YieldPad);
         }
         Statement::Yield(expr_opt) | Statement::Return(expr_opt) => {
             if let Some(expr) = expr_opt {
@@ -1047,6 +1058,7 @@ pub fn lower_statement(ctx: &mut LoweringContext, stmt: &Statement) {
                             .map(causm_core::types::Type::from_typename)
                             .unwrap_or(causm_core::types::Type::Unknown),
                         taking_ms: *taking_ms,
+                        taking_cycles: None,
                         foreign_binding: Some(causm_ir::ForeignBinding {
                             lib_name: lib_name.clone(),
                             abi: abi.clone(),

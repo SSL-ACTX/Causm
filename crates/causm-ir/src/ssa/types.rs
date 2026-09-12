@@ -378,6 +378,7 @@ pub enum SsaInstruction {
     EndLoop {
         max_ms: u64,
     },
+    YieldPad,
     Break,
     LoopTick,
     EndLoopTick,

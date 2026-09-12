@@ -583,6 +583,7 @@ impl EntropicAnalyzer {
         params: &[ParamDecl],
         return_type: &Option<TypeName>,
         taking_ms: &Option<u64>,
+        taking_cycles: &Option<u64>,
         state_constraint: &Option<(String, String)>,
         required_capabilities: &[Capability],
         body: &[SpannedStatement],
@@ -925,6 +926,10 @@ impl EntropicAnalyzer {
         if let Some(expr) = expr_opt {
             crate::expression::analyze_expression(self, expr)?;
         }
+        Ok(())
+    }
+
+    pub(crate) fn YieldPad(&mut self) -> Result<(), SemanticError> {
         Ok(())
     }
 

@@ -400,6 +400,9 @@ impl std::fmt::Display for SsaInstruction {
             SsaInstruction::EndLoop { max_ms } => {
                 write!(f, "EndLoop {}ms", max_ms)
             }
+            SsaInstruction::YieldPad => {
+                write!(f, "YieldPad")
+            }
             SsaInstruction::Break => {
                 write!(f, "Break")
             }

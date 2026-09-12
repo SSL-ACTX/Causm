@@ -169,6 +169,7 @@ fn expand_spanned_statements(
                                 params,
                                 return_type,
                                 taking_ms,
+                                taking_cycles,
                                 state_constraint,
                                 required_capabilities,
                                 body,
@@ -181,6 +182,7 @@ fn expand_spanned_statements(
                                             params: params.clone(),
                                             return_type: return_type.clone(),
                                             taking_ms: *taking_ms,
+                                            taking_cycles: *taking_cycles,
                                             state_constraint: state_constraint
                                                 .clone(),
                                             required_capabilities:
@@ -209,6 +211,7 @@ fn expand_spanned_statements(
                                                 params,
                                                 return_type,
                                                 taking_ms,
+                                                taking_cycles,
                                                 state_constraint,
                                                 required_capabilities,
                                                 body,
@@ -228,6 +231,8 @@ fn expand_spanned_statements(
                                                         return_type: return_type
                                                             .clone(),
                                                         taking_ms: *taking_ms,
+                                                        taking_cycles:
+                                                            *taking_cycles,
                                                         state_constraint:
                                                             state_constraint.clone(),
                                                         required_capabilities:
@@ -357,6 +362,7 @@ fn expand_spanned_statements(
                                     params,
                                     return_type,
                                     taking_ms,
+                                    taking_cycles,
                                     state_constraint,
                                     required_capabilities,
                                     body,
@@ -384,6 +390,7 @@ fn expand_spanned_statements(
                                             params: params.clone(),
                                             return_type: return_type.clone(),
                                             taking_ms: *taking_ms,
+                                            taking_cycles: *taking_cycles,
                                             state_constraint: state_constraint
                                                 .clone(),
                                             required_capabilities:

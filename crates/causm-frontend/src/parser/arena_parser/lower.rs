@@ -193,11 +193,13 @@ pub fn to_ast_statement(
         StmtNode::Yield(eid) => causm_core::Statement::Yield(Some(
             crate::parser::pratt::to_ast_expression(arena, *eid),
         )),
+        StmtNode::YieldPad => causm_core::Statement::YieldPad,
         StmtNode::RoutineDef {
             name,
             params,
             return_type,
             taking_ms,
+            taking_cycles,
             state_constraint,
             required_capabilities,
             body,
@@ -256,6 +258,7 @@ pub fn to_ast_statement(
                 params: param_decls,
                 return_type: ret_type,
                 taking_ms: *taking_ms,
+                taking_cycles: *taking_cycles,
                 state_constraint: sc,
                 required_capabilities: required_capabilities
                     .iter()
@@ -461,6 +464,7 @@ pub fn to_ast_statement(
                     params,
                     return_type,
                     taking_ms,
+                    taking_cycles: _,
                     state_constraint,
                     required_capabilities,
                     body,
