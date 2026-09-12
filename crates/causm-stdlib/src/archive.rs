@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 pub const CSA_MAGIC: [u8; 4] = *b"CSMA";
-pub const CSA_VERSION: u32 = 2;
+pub const CSA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CsaBytecodeRoutine {
@@ -18,6 +18,8 @@ pub struct CsaModuleEntry {
     pub bytecode: Vec<u8>,
     pub bytecode_routines: Vec<CsaBytecodeRoutine>,
     pub checksum: u64,
+    #[serde(default)]
+    pub ast_bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,8 +80,25 @@ impl CsaArchive {
                 bytecode,
                 bytecode_routines: Vec::new(),
                 checksum,
+                ast_bytes: Vec::new(),
             },
         );
+    }
+
+    pub fn insert_ast(&mut self, path: &str, ast_bytes: Vec<u8>) {
+        if let Some(entry) = self.modules.get_mut(path) {
+            entry.ast_bytes = ast_bytes;
+        }
+    }
+
+    pub fn get_ast(&self, path: &str) -> Option<&[u8]> {
+        self.modules.get(path).and_then(|m| {
+            if m.ast_bytes.is_empty() {
+                None
+            } else {
+                Some(m.ast_bytes.as_slice())
+            }
+        })
     }
 
     pub fn insert_bytecode_routine(
@@ -117,7 +136,7 @@ impl CsaArchive {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
         let archive: Self = postcard::from_bytes(bytes)?;
-        if archive.magic != CSA_MAGIC {
+        if archive.magic != CSA_MAGIC || archive.version != CSA_VERSION {
             return Err(postcard::Error::DeserializeBadEncoding);
         }
         Ok(archive)

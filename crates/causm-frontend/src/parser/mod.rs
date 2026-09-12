@@ -7,18 +7,15 @@ pub mod lexer;
 pub mod pratt;
 pub mod registry;
 
-static DISK_ARCHIVE_INIT: std::sync::Once = std::sync::Once::new();
+static GLOBAL_ARCHIVE: std::sync::LazyLock<
+    std::sync::Mutex<causm_stdlib::archive::CsaArchive>,
+> = std::sync::LazyLock::new(|| {
+    std::sync::Mutex::new(
+        causm_stdlib::archive::CsaArchive::get_or_load_standard_archive(),
+    )
+});
 
-/// Parse and register a module into the global ModuleStore exactly once.
-/// On subsequent calls with the same `path`, the already-registered arena is
-/// reused — no re-parsing, no full `Program` clone.
-/// Returns a projected `Program` built from the compact arena representation.
 fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
-    DISK_ARCHIVE_INIT.call_once(|| {
-        let _ = causm_stdlib::archive::CsaArchive::get_or_load_standard_archive();
-    });
-
-    // Fast path: already registered — project from shared arena without re-parsing.
     {
         let store = registry::global_module_store().read().unwrap();
         if let Some(id) = store.get_by_path(path).map(|m| m.id) {
@@ -28,9 +25,16 @@ fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
         }
     }
 
-    // Slow path: first encounter — parse into arena, register, then project.
+    {
+        let archive = GLOBAL_ARCHIVE.lock().unwrap();
+        if let Some(ast_bytes) = archive.get_ast(path) {
+            if let Ok(prog) = postcard::from_bytes::<Program>(ast_bytes) {
+                return Ok(prog);
+            }
+        }
+    }
+
     let mut store = registry::global_module_store().write().unwrap();
-    // Double-checked locking: another thread may have registered while we waited.
     if let Some(id) = store.get_by_path(path).map(|m| m.id) {
         if let Some(prog) = store.get_module_ast(id) {
             return Ok(prog);
@@ -39,9 +43,17 @@ fn get_or_register_module(path: &str, source: &str) -> anyhow::Result<Program> {
     let id = store
         .get_or_parse_module(path, source)
         .map_err(|e| anyhow::anyhow!("failed parsing module '{}': {}", path, e))?;
-    store.get_module_ast(id).ok_or_else(|| {
+    let prog = store.get_module_ast(id).ok_or_else(|| {
         anyhow::anyhow!("module '{}' registered but ast projection failed", path)
-    })
+    })?;
+
+    if let Ok(ast_bytes) = postcard::to_allocvec(&prog) {
+        let mut archive = GLOBAL_ARCHIVE.lock().unwrap();
+        archive.insert_ast(path, ast_bytes);
+        let _ = archive.save_to_disk(None);
+    }
+
+    Ok(prog)
 }
 
 pub fn parse_causm(source: &str) -> anyhow::Result<Program> {
@@ -79,39 +91,62 @@ mod tests {
     }
 }
 
+fn tag_stdlib(mut s: SpannedStatement) -> SpannedStatement {
+    use causm_core::{Attribute, AttributeKind, Span};
+    let already_tagged = s.attributes.iter().any(|a| {
+        matches!(&a.kind, AttributeKind::Custom { name, .. } if name == "stdlib_internal")
+    });
+    if !already_tagged {
+        s.attributes.push(Attribute {
+            kind: AttributeKind::Custom {
+                name: "stdlib_internal".to_string(),
+                args: Vec::new(),
+            },
+            span: Span { start: 0, end: 0 },
+        });
+    }
+    s
+}
+
 fn expand_spanned_statements(
     stmts: Vec<SpannedStatement>,
     base_dir: Option<&Path>,
     loaded_files: &mut HashSet<String>,
+    is_stdlib: bool,
 ) -> anyhow::Result<Vec<SpannedStatement>> {
     let mut result = Vec::new();
     for spanned in stmts {
         match spanned.stmt {
             Statement::Import { path, alias } => {
-                let (imported_prog, sub_base_dir) = if let Some(embedded) =
-                    causm_stdlib::get_module(&path)
-                {
-                    let mod_key = format!("embedded::{}::as::{:?}", path, alias);
-                    if loaded_files.contains(&mod_key) {
-                        continue;
-                    }
-                    loaded_files.insert(mod_key);
-                    (get_or_register_module(&path, embedded)?, None)
-                } else {
-                    let target_path = if let Some(dir) = base_dir {
-                        dir.join(&path)
+                let (imported_prog, sub_base_dir, sub_is_stdlib) =
+                    if let Some(embedded) = causm_stdlib::get_module(&path) {
+                        let mod_key = format!("embedded::{}::as::{:?}", path, alias);
+                        if loaded_files.contains(&mod_key) {
+                            continue;
+                        }
+                        loaded_files.insert(mod_key);
+                        (get_or_register_module(&path, embedded)?, None, true)
                     } else {
-                        PathBuf::from(&path)
+                        let target_path = if let Some(dir) = base_dir {
+                            dir.join(&path)
+                        } else {
+                            PathBuf::from(&path)
+                        };
+                        let path_str = target_path.to_string_lossy().to_string();
+                        if loaded_files.contains(&path_str) || !target_path.exists()
+                        {
+                            continue;
+                        }
+                        loaded_files.insert(path_str.clone());
+                        let source = std::fs::read_to_string(&target_path)?;
+                        let sub_base_dir =
+                            target_path.parent().map(|p| p.to_path_buf());
+                        (
+                            get_or_register_module(&path_str, &source)?,
+                            sub_base_dir,
+                            false,
+                        )
                     };
-                    let path_str = target_path.to_string_lossy().to_string();
-                    if loaded_files.contains(&path_str) || !target_path.exists() {
-                        continue;
-                    }
-                    loaded_files.insert(path_str.clone());
-                    let source = std::fs::read_to_string(&target_path)?;
-                    let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
-                    (get_or_register_module(&path_str, &source)?, sub_base_dir)
-                };
 
                 let mut item_stmts = Vec::new();
                 for imp_tl in imported_prog.timelines {
@@ -119,11 +154,13 @@ fn expand_spanned_statements(
                         imp_tl.statements,
                         sub_base_dir.as_deref(),
                         loaded_files,
+                        sub_is_stdlib,
                     )?;
                     item_stmts.extend(flatten_container_statements(expanded));
                 }
 
                 for s in item_stmts {
+                    let s = if sub_is_stdlib { tag_stdlib(s) } else { s };
                     result.push(s.clone());
                     if let Some(ref ns) = alias {
                         match &s.stmt {
@@ -138,7 +175,7 @@ fn expand_spanned_statements(
                             } => {
                                 if !name.starts_with(&format!("{}.", ns)) {
                                     let qualified_name = format!("{}.{}", ns, name);
-                                    result.push(SpannedStatement::new(
+                                    let mut ns_stmt = SpannedStatement::new(
                                         Statement::RoutineDef {
                                             name: qualified_name,
                                             params: params.clone(),
@@ -151,7 +188,11 @@ fn expand_spanned_statements(
                                             body: body.clone(),
                                         },
                                         s.span.clone(),
-                                    ));
+                                    );
+                                    if sub_is_stdlib {
+                                        ns_stmt = tag_stdlib(ns_stmt);
+                                    }
+                                    result.push(ns_stmt);
                                 }
                             }
                             Statement::ForeignBlock {
@@ -266,25 +307,30 @@ fn expand_spanned_statements(
                 }
             }
             Statement::FromImport { path, symbols } => {
-                let (imported_prog, sub_base_dir) = if let Some(embedded) =
-                    causm_stdlib::get_module(&path)
-                {
-                    (get_or_register_module(&path, embedded)?, None)
-                } else {
-                    let target_path = if let Some(dir) = base_dir {
-                        dir.join(&path)
+                let (imported_prog, sub_base_dir, sub_is_stdlib) =
+                    if let Some(embedded) = causm_stdlib::get_module(&path) {
+                        (get_or_register_module(&path, embedded)?, None, true)
                     } else {
-                        PathBuf::from(&path)
+                        let target_path = if let Some(dir) = base_dir {
+                            dir.join(&path)
+                        } else {
+                            PathBuf::from(&path)
+                        };
+                        let path_str = target_path.to_string_lossy().to_string();
+                        if loaded_files.contains(&path_str) || !target_path.exists()
+                        {
+                            continue;
+                        }
+                        loaded_files.insert(path_str.clone());
+                        let source = std::fs::read_to_string(&target_path)?;
+                        let sub_base_dir =
+                            target_path.parent().map(|p| p.to_path_buf());
+                        (
+                            get_or_register_module(&path_str, &source)?,
+                            sub_base_dir,
+                            false,
+                        )
                     };
-                    let path_str = target_path.to_string_lossy().to_string();
-                    if loaded_files.contains(&path_str) || !target_path.exists() {
-                        continue;
-                    }
-                    loaded_files.insert(path_str.clone());
-                    let source = std::fs::read_to_string(&target_path)?;
-                    let sub_base_dir = target_path.parent().map(|p| p.to_path_buf());
-                    (get_or_register_module(&path_str, &source)?, sub_base_dir)
-                };
 
                 let mut item_stmts = Vec::new();
                 let mut sub_loaded_files = HashSet::new();
@@ -293,12 +339,14 @@ fn expand_spanned_statements(
                         imp_tl.statements,
                         sub_base_dir.as_deref(),
                         &mut sub_loaded_files,
+                        sub_is_stdlib,
                     )?;
                     item_stmts.extend(flatten_container_statements(expanded));
                 }
 
                 let is_wildcard = symbols.iter().any(|(s, _)| s == "*");
                 for s in item_stmts {
+                    let s = if sub_is_stdlib { tag_stdlib(s) } else { s };
                     if is_wildcard {
                         result.push(s.clone());
                     } else {
@@ -330,7 +378,7 @@ fn expand_spanned_statements(
                                     } else {
                                         name.clone()
                                     };
-                                    result.push(SpannedStatement::new(
+                                    let mut out_stmt = SpannedStatement::new(
                                         Statement::RoutineDef {
                                             name: target_name,
                                             params: params.clone(),
@@ -343,7 +391,11 @@ fn expand_spanned_statements(
                                             body: body.clone(),
                                         },
                                         s.span.clone(),
-                                    ));
+                                    );
+                                    if sub_is_stdlib {
+                                        out_stmt = tag_stdlib(out_stmt);
+                                    }
+                                    result.push(out_stmt);
                                 }
                                 Statement::TypeDecl {
                                     name,
@@ -416,8 +468,12 @@ fn expand_spanned_statements(
                 }
             }
             Statement::Isolate(mut iso) => {
-                iso.body =
-                    expand_spanned_statements(iso.body, base_dir, loaded_files)?;
+                iso.body = expand_spanned_statements(
+                    iso.body,
+                    base_dir,
+                    loaded_files,
+                    is_stdlib,
+                )?;
                 result.push(SpannedStatement::with_attributes(
                     Statement::Isolate(iso),
                     spanned.span.clone(),
@@ -425,8 +481,12 @@ fn expand_spanned_statements(
                 ));
             }
             Statement::RelativisticBlock { time, body } => {
-                let expanded_body =
-                    expand_spanned_statements(body, base_dir, loaded_files)?;
+                let expanded_body = expand_spanned_statements(
+                    body,
+                    base_dir,
+                    loaded_files,
+                    is_stdlib,
+                )?;
                 result.push(SpannedStatement::new(
                     Statement::RelativisticBlock {
                         time,
@@ -435,7 +495,14 @@ fn expand_spanned_statements(
                     spanned.span,
                 ));
             }
-            _ => result.push(spanned),
+            _ => {
+                let spanned = if is_stdlib {
+                    tag_stdlib(spanned)
+                } else {
+                    spanned
+                };
+                result.push(spanned);
+            }
         }
     }
     Ok(result)
@@ -450,8 +517,12 @@ pub fn parse_causm_with_imports(
 
     for timeline in &mut program.timelines {
         let original_stmts = std::mem::take(&mut timeline.statements);
-        timeline.statements =
-            expand_spanned_statements(original_stmts, base_dir, &mut loaded_files)?;
+        timeline.statements = expand_spanned_statements(
+            original_stmts,
+            base_dir,
+            &mut loaded_files,
+            false,
+        )?;
     }
 
     crate::macro_expand::expand_program(&mut program);

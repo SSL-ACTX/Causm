@@ -148,6 +148,7 @@ dependencies = [
  "causm-core",
  "causm-ir",
  "causm-stdlib",
+ "postcard",
  "serde",
 ]
 

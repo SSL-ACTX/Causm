@@ -2,7 +2,7 @@ use causm_core::arena::AstArena;
 use causm_core::symbol::Symbol;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(
     Copy, Clone, PartialEq, Eq, Hash, Debug, Default, Serialize, Deserialize,
@@ -17,12 +17,13 @@ pub struct DefId {
     pub index: u32,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ParsedModule {
     pub id: ModuleId,
     pub path: String,
     pub arena: Arc<AstArena>,
     pub exports: HashMap<Symbol, DefId>,
+    projected: Mutex<Option<causm_core::Program>>,
 }
 
 #[derive(Default)]
@@ -79,6 +80,7 @@ impl ModuleStore {
             path: path.to_string(),
             arena: Arc::new(arena),
             exports,
+            projected: Mutex::new(None),
         };
         self.modules.insert(id, parsed);
         self.path_to_id.insert(path.to_string(), id);
@@ -119,6 +121,10 @@ impl ModuleStore {
 
     pub fn get_module_ast(&self, id: ModuleId) -> Option<causm_core::Program> {
         let module = self.get_module(id)?;
+        let mut guard = module.projected.lock().unwrap();
+        if let Some(ref prog) = *guard {
+            return Some(prog.clone());
+        }
         let mut timelines = Vec::new();
         let mut standalone = Vec::new();
         for &sid in &module.arena.root_statements {
@@ -162,6 +168,7 @@ impl ModuleStore {
         let mut prog = causm_core::Program { timelines };
         crate::macro_expand::expand_program(&mut prog);
         crate::derive::expand_derives(&mut prog);
+        *guard = Some(prog.clone());
         Some(prog)
     }
 }

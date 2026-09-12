@@ -22,6 +22,17 @@ impl EntropicAnalyzer {
             }
         }
 
+        if matches!(&stmt.stmt, Statement::RoutineDef { .. }) {
+            let is_stdlib = stmt.attributes.iter().any(|a| {
+                matches!(&a.kind,
+                    causm_core::AttributeKind::Custom { name, .. }
+                    if name == "stdlib_internal")
+            });
+            if is_stdlib {
+                return Ok(());
+            }
+        }
+
         macro_rules! dispatch_one {
             ($name:ident { $($field:ident: $type:ty),* }) => {
                 if let Statement::$name { $($field),* } = &stmt.stmt {

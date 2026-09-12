@@ -18,7 +18,7 @@ fn test_csa_archive_roundtrip_serialization() -> anyhow::Result<()> {
 
     let deserialized = CsaArchive::from_bytes(&serialized)?;
     assert_eq!(deserialized.magic, *b"CSMA");
-    assert_eq!(deserialized.version, 2);
+    assert_eq!(deserialized.version, 3);
     assert_eq!(
         deserialized.get_module("std/core/types"),
         archive.get_module("std/core/types")
