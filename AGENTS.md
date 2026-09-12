@@ -25,21 +25,11 @@ This document outlines the core architectural constraints, design patterns, deve
 
 ## 2. Rust Codebase Rules
 
-### 2.1 Fast Feedback Loop & Build Pipelines
-*   **Default Workspace Members (Exclude Plugins from Default Builds):** The root `Cargo.toml` sets `default-members = ["crates/*"]`. Standard `cargo check` and `cargo build` will ONLY build core crates and will NOT build plugins to preserve CPU and build time.
-*   **Specialized Cargo Aliases (in `.cargo/config.toml`):**
-    *   `cargo check-core` / `cargo build-core`: Fast check/build of compiler crates only (`-j 3`).
-    *   `cargo build-plugins`: Builds WASM plugins (`wasm32-unknown-unknown`).
-    *   `cargo check-all` / `cargo build-all`: Builds entire workspace including plugins (`--workspace -j 3`).
-    *   `cargo test-fast` / `cargo test-all`: Runs test suites with `-j 3` parallel limits.
-*   **Parallel Compilation Limit:** If executing on Termux or other resource-constrained host environments, limit cargo processes to 3 jobs (`-j 3`) to prevent CPU exhaustion. On standard developer environments, do NOT use `-j` limits.
-*   **Dev Mode Speed:** Utilize `cargo check-core` (or `cargo check`) for fast feedback during iteration. Only invoke the full `cargo test-all` suite when modifications are stable and ready for validation.
-
-### 2.2 Zero Warnings Policy
+### 2.1 Zero Warnings Policy
 *   **Clean Builds:** We maintain a strict zero-warning policy. All unused imports, variables, and dead code must be resolved or removed before committing.
 *   **Lints:** Run `cargo clippy -- -D warnings` before finalized commits.
 
-### 2.3 Adding New Features & Instructions
+### 2.2 Adding New Features & Instructions
 When adding new syntax, instructions, or VM capabilities:
 1.  Extend the grammar in `crates/causm-frontend/src/causm.pest`.
 2.  Implement AST types in `crates/causm-core/src/lib.rs` and parser visitors in `crates/causm-frontend/src/parser/`.
@@ -49,7 +39,7 @@ When adding new syntax, instructions, or VM capabilities:
 6.  Wire VM execution logic in `crates/causm-runtime/src/vm/`.
 7.  Add isolated, modular test cases in `crates/causm-cli/tests/integration/` (or relevant crate unit tests) adhering to strict naming, category, and target precision guidelines.
 
-### 2.4 Strict Test Case Mandates
+### 2.3 Strict Test Case Mandates
 *   **Target Precision:** Every new feature, syntax addition, or bug fix MUST have dedicated, isolated test functions targeting that specific feature individually. Never bundle multiple distinct features into a single generic test suite function.
 *   **Clear Category & Naming Conventions:** Test functions must follow descriptive, structured naming conventions that declare the feature category and test target: `test_<category>_<feature>_<scenario>` (e.g., `test_syntax_uninitialized_let_definite_assignment`, `test_entropy_lifetime_annotation_decayed_lease`, `test_enum_variant_pattern_matching`, `test_temporal_paced_range_step_loop`).
 *   **Assertion Precision:** Each test must assert exact expected behaviors, values, and error states directly without relying on side-effect approximations.

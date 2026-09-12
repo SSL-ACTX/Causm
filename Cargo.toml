@@ -28,7 +28,7 @@ version = "0.1.0-alpha.3"
 edition = "2021"
 authors = [
     "Seuriin (SSL-ACTX) <seuriin@gmail.com>",
-    "Iris-Seravelle (Iris's GPG) <iris.seravelle@gmail.com>",
+    "Iris-Seravelle <iris.seravelle@gmail.com>",
 ]
 license = "AGPL-3.0-only"
 repository = "https://github.com/SSL-ACTX/Causm"
@@ -39,6 +39,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+incremental = true 
 
 [profile.dev]
 opt-level = 0
@@ -47,6 +48,7 @@ strip = true
 panic = "unwind"
 lto = false
 codegen-units = 256
+incremental = true
 
 [profile.test]
 opt-level = 0

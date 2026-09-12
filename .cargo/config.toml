@@ -1,18 +1,9 @@
 [target.aarch64-linux-android]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [alias]
-# Fast compilation of compiler and CLI only (excludes WASM plugins)
-check-core = "check"
-build-core = "build -j 4"
-
-# WASM Plugin compilation
 build-plugins = "build --package seccomp_guard --target wasm32-unknown-unknown -j 4"
+build-all = "build --workspace"
 
-# Full workspace build including plugins
-build-all = "build --workspace -j 4"
-check-all = "check --workspace"
-
-# Fast integration testing (limits jobs to 3 on constrained hosts)
-test-fast = "test -j 4"
-test-all = "test --workspace -j 4"
+test-slow = "test -j 4"
+test-all = "test --workspace"
