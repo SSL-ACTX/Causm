@@ -668,6 +668,15 @@ impl Vm {
             let elapsed = causm_jit::timing::read_tsc().saturating_sub(tsc_start);
             if elapsed < target_cycles {
                 causm_jit::timing::spin_pad(target_cycles - elapsed);
+            } else {
+                let status = causm_jit::hft::evaluate_elastic_determinism(
+                    elapsed,
+                    target_cycles,
+                    causm_jit::hft::DEFAULT_ELASTIC_JITTER_THRESHOLD_CYCLES,
+                );
+                if let causm_jit::hft::JitterStatus::ElasticJitterDetected { lost_to_void, .. } = status {
+                    self.temporal_freeze(lost_to_void);
+                }
             }
         }
 

@@ -305,3 +305,82 @@ fn test_temporal_speedmicro_isochronous_cycle_padding() {
     );
     assert!(vm.root_timeline.local_clock >= 10000);
 }
+
+#[test]
+fn test_temporal_speedmicro_elastic_determinism_jitter_freeze() {
+    causm_jit::hft::reset_total_lost_cycles();
+
+    // 1. Evaluate within-budget execution
+    let expected_cycles = 10_000;
+    let normal_elapsed = 12_000;
+    let status_normal = causm_jit::hft::evaluate_elastic_determinism(
+        normal_elapsed,
+        expected_cycles,
+        causm_jit::hft::DEFAULT_ELASTIC_JITTER_THRESHOLD_CYCLES,
+    );
+    assert_eq!(status_normal, causm_jit::hft::JitterStatus::WithinBudget);
+    assert_eq!(causm_jit::hft::get_total_lost_cycles(), 0);
+
+    // 2. Simulate external OS context switch / hardware interrupt exceeding threshold
+    let jitter_elapsed = 300_000;
+    let status_jitter = causm_jit::hft::evaluate_elastic_determinism(
+        jitter_elapsed,
+        expected_cycles,
+        causm_jit::hft::DEFAULT_ELASTIC_JITTER_THRESHOLD_CYCLES,
+    );
+    match status_jitter {
+        causm_jit::hft::JitterStatus::ElasticJitterDetected {
+            elapsed_cycles,
+            expected_cycles: exp,
+            lost_to_void,
+        } => {
+            assert_eq!(elapsed_cycles, 300_000);
+            assert_eq!(exp, 10_000);
+            assert_eq!(lost_to_void, 290_000);
+        }
+        _ => panic!("Expected ElasticJitterDetected"),
+    }
+    assert_eq!(causm_jit::hft::get_total_lost_cycles(), 290_000);
+
+    // 3. Verify Vm temporal_freeze shifts timeline baselines while preserving causal invariants
+    let mut vm = Vm::new();
+    let initial_global = vm.global_clock;
+    vm.temporal_freeze(6_000_000);
+    assert_eq!(vm.global_clock, initial_global + 2);
+
+    // 4. End-to-end program execution under JIT with cycle contract
+    let source = r#"
+@0ms: {
+    routine elastic_compute(val: int) -> int taking 500 cycles {
+        yield val * 10
+    }
+
+    let out = elastic_compute(42)
+    debug(out)
+}
+"#;
+
+    let program = parser::parse_causm(source).expect("Parse failed");
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.use_z3 = false;
+    analyzer
+        .analyze_program_with_source(&program, source, "test_elastic_compute")
+        .expect("Semantic analysis failed");
+
+    let hir_program = hir::lower_ast_to_hir(&program);
+    let mut ir = lower::lower_hir_program(&hir_program);
+    causm_ir::optimize::prune_unreachable_routines(&mut ir);
+    ir = causm_ir::optimize::optimize_program(ir);
+
+    let mut vm2 = Vm::new();
+    vm2.jit_enabled = true;
+    vm2.execute_program(&ir).expect("Execution failed");
+
+    let out_reg = vm2.symbols.get("out").expect("Symbol 'out' not found");
+    assert_eq!(
+        vm2.root_timeline.arena.peek(out_reg.0).unwrap(),
+        Payload::Integer(420)
+    );
+    assert!(vm2.root_timeline.local_clock >= 500);
+}
+

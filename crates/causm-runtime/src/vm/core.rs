@@ -602,6 +602,17 @@ impl Vm {
         }
     }
 
+    /// Elastic Determinism: when an external OS context switch or hardware interrupt occurs,
+    /// Causm pauses the logical progression for all timelines and shifts relative baselines.
+    /// The lost cycles are treated as acausal void, preserving exact causal entanglement.
+    pub fn temporal_freeze(&mut self, lost_cycles: u64) {
+        let ms = (lost_cycles / 3_000_000).max(1);
+        self.global_clock = self.global_clock.saturating_add(ms);
+        for branch in self.active_branches.values_mut() {
+            branch.birth_global_time = branch.birth_global_time.saturating_add(ms);
+        }
+    }
+
     pub(crate) fn get_branch(&self, id: &str) -> Result<&Timeline, TemporalError> {
         if id == "main" {
             Ok(&self.root_timeline)
