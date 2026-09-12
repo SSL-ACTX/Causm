@@ -8,9 +8,14 @@ license = "AGPL-3.0-only"
 causm-concurrency = { path = "../causm-concurrency" }
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
+causm-jit = { path = "../causm-jit", optional = true }
 thiserror = "2.0.18"
 anyhow = "1.0"
 indexmap = "2"
+
+[features]
+default = []
+jit = ["dep:causm-jit"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

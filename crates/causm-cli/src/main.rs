@@ -62,6 +62,10 @@ struct Cli {
     /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
     #[arg(long = "plugin", value_name = "SPEC")]
     plugins: Vec<String>,
+
+    /// Execute via Cranelift native JIT compilation backend
+    #[arg(long)]
+    jit: bool,
 }
 
 #[derive(Subcommand)]
@@ -107,6 +111,10 @@ enum Commands {
         /// Custom compiler plugins (path to .wasm file or shell command for Stdio IPC)
         #[arg(long = "plugin", value_name = "SPEC")]
         plugins: Vec<String>,
+
+        /// Execute via Cranelift native JIT compilation backend
+        #[arg(long)]
+        jit: bool,
     },
 
     /// Perform semantic & entropic analysis without execution
@@ -290,6 +298,7 @@ struct RunConfig {
     explain_merge: bool,
     no_plugins: bool,
     plugins: Vec<String>,
+    jit: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -307,6 +316,7 @@ fn main() -> anyhow::Result<()> {
             explain_merge,
             no_plugins,
             plugins,
+            jit,
         }) => RunConfig {
             files,
             check_only: false,
@@ -319,6 +329,7 @@ fn main() -> anyhow::Result<()> {
             explain_merge,
             no_plugins: no_plugins || cli.no_plugins,
             plugins,
+            jit: jit || cli.jit,
         },
         Some(Commands::Check {
             files,
@@ -338,6 +349,7 @@ fn main() -> anyhow::Result<()> {
             explain_merge: false,
             no_plugins: no_plugins || cli.no_plugins,
             plugins,
+            jit: false,
         },
         Some(Commands::Emit { format, files }) => RunConfig {
             files,
@@ -351,6 +363,7 @@ fn main() -> anyhow::Result<()> {
             explain_merge: false,
             no_plugins: true,
             plugins: Vec::new(),
+            jit: false,
         },
         Some(Commands::Tune {
             files,
@@ -638,6 +651,7 @@ fn main() -> anyhow::Result<()> {
                 explain_merge: cli.explain_merge,
                 no_plugins: cli.no_plugins,
                 plugins: cli.plugins,
+                jit: cli.jit,
             }
         }
     };
@@ -916,6 +930,7 @@ fn main() -> anyhow::Result<()> {
                 vm.root_timeline.entropy_mode = causm_core::EntropyMode::Chaos;
             }
             vm.trace_entropy = config.trace_entropy;
+            vm.jit_enabled = config.jit;
 
             let tracer =
                 causm_devtools::Tracer::new(config.verbose || config.trace_entropy);

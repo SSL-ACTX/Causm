@@ -225,6 +225,23 @@ impl Vm {
             );
         }
 
+        #[cfg(feature = "jit")]
+        if self.jit_enabled
+            && self
+                .try_execute_jit_call(
+                    branch_id,
+                    &routine,
+                    &routine_def,
+                    &arg_values,
+                    dest,
+                    &params,
+                    &args,
+                )?
+                .is_some()
+        {
+            return Ok(());
+        }
+
         let max_depth = self.max_call_depth as usize;
         let branch = self.get_branch_mut(branch_id)?;
         if branch.call_stack.len() >= max_depth {
@@ -558,5 +575,110 @@ impl Vm {
             branch.pc = target_pc;
         }
         Ok(())
+    }
+
+    #[cfg(feature = "jit")]
+    #[allow(clippy::too_many_arguments)]
+    fn try_execute_jit_call(
+        &mut self,
+        branch_id: &str,
+        routine_name: &str,
+        routine_def: &crate::vm::state::Routine,
+        arg_values: &[causm_core::value::Payload],
+        dest: Reg,
+        params: &[(causm_core::ParamMode, String, causm_core::types::Type)],
+        args: &[Reg],
+    ) -> Result<Option<()>, TemporalError> {
+        if routine_def.foreign_binding.is_some() {
+            return Ok(None);
+        }
+
+        let mut raw_args = Vec::new();
+        for val in arg_values {
+            match val {
+                causm_core::value::Payload::Integer(i) => raw_args.push(*i),
+                causm_core::value::Payload::Bool(b) => {
+                    raw_args.push(if *b { 1 } else { 0 })
+                }
+                causm_core::value::Payload::Null => raw_args.push(0),
+                _ => return Ok(None),
+            }
+        }
+
+        let ir_routine = causm_ir::IrRoutine {
+            params: routine_def.params.clone(),
+            return_type: routine_def.return_type.clone(),
+            taking_ms: routine_def.taking_ms,
+            foreign_binding: None,
+            instructions: routine_def.instructions.clone(),
+            spans: routine_def.spans.clone(),
+        };
+
+        let mut jit = match causm_jit::CausmJit::new() {
+            Ok(j) => j,
+            Err(_) => return Ok(None),
+        };
+
+        let func_ptr = match jit.compile_routine(routine_name, &ir_routine) {
+            Ok(ptr) => ptr,
+            Err(_) => return Ok(None),
+        };
+
+        let raw_res: i64 = match raw_args.len() {
+            0 => {
+                let f: extern "C" fn() -> i64 =
+                    unsafe { std::mem::transmute(func_ptr) };
+                f()
+            }
+            1 => {
+                let f: extern "C" fn(i64) -> i64 =
+                    unsafe { std::mem::transmute(func_ptr) };
+                f(raw_args[0])
+            }
+            2 => {
+                let f: extern "C" fn(i64, i64) -> i64 =
+                    unsafe { std::mem::transmute(func_ptr) };
+                f(raw_args[0], raw_args[1])
+            }
+            3 => {
+                let f: extern "C" fn(i64, i64, i64) -> i64 =
+                    unsafe { std::mem::transmute(func_ptr) };
+                f(raw_args[0], raw_args[1], raw_args[2])
+            }
+            4 => {
+                let f: extern "C" fn(i64, i64, i64, i64) -> i64 =
+                    unsafe { std::mem::transmute(func_ptr) };
+                f(raw_args[0], raw_args[1], raw_args[2], raw_args[3])
+            }
+            _ => return Ok(None),
+        };
+
+        let res_payload = match routine_def.return_type {
+            causm_core::types::Type::Bool => {
+                causm_core::value::Payload::Bool(raw_res != 0)
+            }
+            _ => causm_core::value::Payload::Integer(raw_res),
+        };
+
+        for (i, reg) in args.iter().enumerate() {
+            let (mode, _, _) = &params[i];
+            if let causm_core::ParamMode::Consume = mode {
+                self.consume_reg(branch_id, reg.0)?;
+            }
+        }
+
+        if let Some(cost) = routine_def.taking_ms {
+            let branch = self.get_branch_mut(branch_id)?;
+            branch.local_clock = branch.local_clock.saturating_add(cost);
+            branch.consume_budget(cost)?;
+        }
+
+        self.insert_reg(
+            branch_id,
+            dest.0,
+            causm_core::value::EntropicState::Valid(res_payload),
+        )?;
+
+        Ok(Some(()))
     }
 }

@@ -7,6 +7,7 @@ license = "AGPL-3.0-only"
 [features]
 default = []
 plugins = ["dep:causm-plugins", "dep:causm-plugin-sdk"]
+jit = ["causm-runtime/jit", "dep:causm-jit"]
 
 [dependencies]
 causm-core = { path = "../causm-core" }
@@ -18,5 +19,6 @@ causm-stdlib = { path = "../causm-stdlib" }
 causm-devtools = { path = "../causm-devtools" }
 causm-plugins = { path = "../causm-plugins", optional = true }
 causm-plugin-sdk = { path = "../causm-plugin-sdk", optional = true }
+causm-jit = { path = "../causm-jit", optional = true }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }

@@ -104,6 +104,7 @@ pub struct Vm {
     pub next_call_id: u64,
     pub trace_entropy: bool,
     pub trace_causal: bool,
+    pub jit_enabled: bool,
     pub(crate) _is_decaying: bool,
     pub current_span: Option<causm_core::Span>,
     pub call_depth: u32,

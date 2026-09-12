@@ -43,6 +43,7 @@ impl Vm {
             next_call_id: 0,
             trace_entropy: false,
             trace_causal: false,
+            jit_enabled: false,
             _is_decaying: false,
             current_span: None,
             call_depth: 0,
