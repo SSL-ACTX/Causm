@@ -35,11 +35,16 @@ repository = "https://github.com/SSL-ACTX/Causm"
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 panic = "abort"
 strip = true
-incremental = true 
+incremental = false
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
 
 [profile.dev]
 opt-level = 0
