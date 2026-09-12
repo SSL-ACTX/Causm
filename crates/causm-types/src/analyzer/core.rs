@@ -12,7 +12,7 @@ pub fn get_default_pipeline_runner() -> Option<PipelineFn> {
     if ptr.is_null() {
         None
     } else {
-        Some(unsafe { std::mem::transmute(ptr) })
+        Some(unsafe { std::mem::transmute::<*mut (), PipelineFn>(ptr) })
     }
 }
 use super::types::*;
@@ -44,8 +44,7 @@ pub struct EntropicAnalyzer {
     pub analyzed_wcet: std::cell::RefCell<HashMap<String, u64>>,
     pub entropy_mode: causm_core::EntropyMode,
     pub analyzed_routines: HashSet<String>,
-    pub pipeline_runner:
-        Option<fn(&mut EntropicAnalyzer, &Program) -> Result<(), SemanticError>>,
+    pub pipeline_runner: Option<PipelineFn>,
 }
 
 impl Default for EntropicAnalyzer {
@@ -262,6 +261,86 @@ impl EntropicAnalyzer {
             ),
             ("json_parse", vec![Type::String], Type::Unknown),
             ("json_stringify", vec![Type::Unknown], Type::String),
+            (
+                "base64_encode",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::String,
+            ),
+            (
+                "base64_decode",
+                vec![Type::String],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "base64_encode_chunk",
+                vec![Type::Integer, Type::Integer, Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "base64_decode_chunk",
+                vec![Type::Integer, Type::Integer, Type::Integer, Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u16_be",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u16_le",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u32_be",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u32_le",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u64_be",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_write_u64_le",
+                vec![Type::Integer],
+                Type::Array(Box::new(Type::Integer)),
+            ),
+            (
+                "binary_read_u16_be",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
+            (
+                "binary_read_u16_le",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
+            (
+                "binary_read_u32_be",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
+            (
+                "binary_read_u32_le",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
+            (
+                "binary_read_u64_be",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
+            (
+                "binary_read_u64_le",
+                vec![Type::Array(Box::new(Type::Integer))],
+                Type::Integer,
+            ),
             // sync intrinsics — private names, delegated from std/sync CSM routines
             ("__sync_atomic_new_int", vec![Type::Integer], Type::Unknown),
             ("__sync_atomic_load_int", vec![Type::Unknown], Type::Integer),

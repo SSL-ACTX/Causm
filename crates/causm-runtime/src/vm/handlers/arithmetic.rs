@@ -199,6 +199,22 @@ impl Vm {
                 | "str_slice"
                 | "json_parse"
                 | "json_stringify"
+                | "base64_encode"
+                | "base64_decode"
+                | "base64_encode_chunk"
+                | "base64_decode_chunk"
+                | "binary_write_u16_be"
+                | "binary_write_u16_le"
+                | "binary_write_u32_be"
+                | "binary_write_u32_le"
+                | "binary_write_u64_be"
+                | "binary_write_u64_le"
+                | "binary_read_u16_be"
+                | "binary_read_u16_le"
+                | "binary_read_u32_be"
+                | "binary_read_u32_le"
+                | "binary_read_u64_be"
+                | "binary_read_u64_le"
                 | "__sync_atomic_new_int"
                 | "__sync_atomic_load_int"
                 | "__sync_atomic_store_int"
@@ -434,6 +450,185 @@ impl Vm {
                 let s = crate::vm::intrinsics::json::stringify_json(&args[0]);
                 Ok(Payload::String(s))
             }
+            "base64_encode" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "base64_encode expects (array_of_bytes)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Payload::Array(arr) => {
+                        let encoded =
+                            crate::vm::intrinsics::base64::encode_payload_array(arr);
+                        Ok(Payload::String(encoded))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "base64_encode expects array".to_string(),
+                    )),
+                }
+            }
+            "base64_decode" => {
+                if args.len() != 1 {
+                    return Err(TemporalError::EvalError(
+                        "base64_decode expects (string)".to_string(),
+                    ));
+                }
+                match &args[0] {
+                    Payload::String(s) => {
+                        let decoded =
+                            crate::vm::intrinsics::base64::decode_to_payload_array(
+                                s,
+                            )
+                            .map_err(TemporalError::EvalError)?;
+                        Ok(Payload::Array(decoded))
+                    }
+                    _ => Err(TemporalError::TypeMismatch(
+                        "base64_decode expects string".to_string(),
+                    )),
+                }
+            }
+            "base64_encode_chunk" => {
+                if args.len() != 3 {
+                    return Err(TemporalError::EvalError(
+                        "base64_encode_chunk expects (b0, b1, b2)".to_string(),
+                    ));
+                }
+                let b0 = match args[0] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let b1 = match args[1] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let b2 = match args[2] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let chunk = crate::vm::intrinsics::base64::encode_chunk(b0, b1, b2);
+                Ok(Payload::Array(
+                    chunk.iter().map(|b| Payload::Integer(*b as i64)).collect(),
+                ))
+            }
+            "base64_decode_chunk" => {
+                if args.len() != 4 {
+                    return Err(TemporalError::EvalError(
+                        "base64_decode_chunk expects (c0, c1, c2, c3)".to_string(),
+                    ));
+                }
+                let c0 = match args[0] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let c1 = match args[1] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let c2 = match args[2] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let c3 = match args[3] {
+                    Payload::Integer(i) => i as u8,
+                    _ => 0,
+                };
+                let chunk =
+                    crate::vm::intrinsics::base64::decode_chunk(c0, c1, c2, c3)
+                        .map_err(TemporalError::EvalError)?;
+                Ok(Payload::Array(
+                    chunk.iter().map(|b| Payload::Integer(*b as i64)).collect(),
+                ))
+            }
+            "binary_write_u16_be" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u16_be(
+                    val,
+                )))
+            }
+            "binary_write_u16_le" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u16_le(
+                    val,
+                )))
+            }
+            "binary_write_u32_be" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u32_be(
+                    val,
+                )))
+            }
+            "binary_write_u32_le" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u32_le(
+                    val,
+                )))
+            }
+            "binary_write_u64_be" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u64_be(
+                    val,
+                )))
+            }
+            "binary_write_u64_le" => {
+                let val = match args.first() {
+                    Some(Payload::Integer(i)) => *i,
+                    _ => 0,
+                };
+                Ok(Payload::Array(crate::vm::intrinsics::binary::write_u64_le(
+                    val,
+                )))
+            }
+            "binary_read_u16_be" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u16_be(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
+            "binary_read_u16_le" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u16_le(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
+            "binary_read_u32_be" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u32_be(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
+            "binary_read_u32_le" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u32_le(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
+            "binary_read_u64_be" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u64_be(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
+            "binary_read_u64_le" => match args.first() {
+                Some(Payload::Array(arr)) => Ok(Payload::Integer(
+                    crate::vm::intrinsics::binary::read_u64_le(arr),
+                )),
+                _ => Ok(Payload::Integer(0)),
+            },
             "__sync_atomic_new_int" => {
                 let initial = match args.first() {
                     Some(Payload::Integer(i)) => *i,

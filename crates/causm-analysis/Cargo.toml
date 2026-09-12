@@ -11,9 +11,7 @@ z3 = ["causm-smt/z3"]
 
 [dependencies]
 causm-core = { path = "../causm-core" }
-causm-ir = { path = "../causm-ir" }
 causm-types = { path = "../causm-types" }
 causm-smt = { path = "../causm-smt" }
 causm-entropius = { path = "../causm-entropius" }
 causm-wcet = { path = "../causm-wcet" }
-thiserror = "2.0.18"

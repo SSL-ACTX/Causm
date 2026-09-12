@@ -127,6 +127,45 @@ fn test_encoding_base64_chunk_transform() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_encoding_base64_full_encode_decode() -> anyhow::Result<()> {
+    let source = r#"
+    import "std/encoding/base64" as Base64
+    import "std/encoding/utf8" as Utf8
+
+    @0ms: {
+        let input_bytes = Utf8.encode("Antigravity Causm")
+        let encoded = Base64.encode(input_bytes)
+        let decoded_bytes = Base64.decode(encoded)
+        let roundtrip = Utf8.decode(decoded_bytes)
+    }
+    "#;
+
+    let program = parser::parse_causm_with_imports(source, None)?;
+    let mut analyzer = EntropicAnalyzer::new();
+    analyzer.analyze_program(&program)?;
+
+    let hir = causm_frontend::hir::lower_ast_to_hir(&program);
+    let ir = causm_frontend::lower::lower_hir_program(&hir);
+    let mut vm = Vm::new();
+    causm_stdlib::register_all(&mut vm);
+    vm.execute_program(&ir)?;
+
+    let encoded_reg = ir.symbols.get("encoded").expect("encoded not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(encoded_reg),
+        Some(Payload::String("QW50aWdyYXZpdHkgQ2F1c20=".to_string()))
+    );
+
+    let roundtrip_reg = ir.symbols.get("roundtrip").expect("roundtrip not found").0;
+    assert_eq!(
+        vm.root_timeline.arena.peek(roundtrip_reg),
+        Some(Payload::String("Antigravity Causm".to_string()))
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_syntax_for_in_step_wildcard() -> anyhow::Result<()> {
     let source = r#"
     @0ms: {

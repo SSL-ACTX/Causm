@@ -6,7 +6,5 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 causm-core = { path = "../causm-core" }
-causm-ir = { path = "../causm-ir" }
 causm-smt = { path = "../causm-smt" }
 causm-types = { path = "../causm-types" }
-thiserror = "2.0.18"
