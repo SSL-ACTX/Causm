@@ -15,11 +15,13 @@ extern "C" {
     pub fn Pulse_Causm_Arena_lease_cell(c: *mut CellT, current_clk: u64, duration: u64);
     pub fn Pulse_Causm_Arena_init_valid_cell(c: *mut CellT, v: u64);
 
-    pub fn Pulse_Causm_Arena_arena_read(a: *const CellT, idx: usize) -> u64;
+    pub fn Pulse_Causm_Arena_arena_read(a: *const CellT, idx: usize, current_clk: u64) -> u64;
     pub fn Pulse_Causm_Arena_arena_consume(a: *mut CellT, idx: usize);
     pub fn Pulse_Causm_Arena_arena_lease(a: *mut CellT, idx: usize, current_clk: u64, duration: u64);
     pub fn Pulse_Causm_Arena_arena_init_valid(a: *mut CellT, idx: usize, v: u64);
     pub fn Pulse_Causm_Arena_arena_tick_decay(a: *mut CellT, idx: usize, current_clk: u64);
+    pub fn Pulse_Causm_Arena_tag_meet_u32(t1: u32, t2: u32) -> u32;
+    pub fn Pulse_Causm_Arena_arena_merge_meet(dst: *mut CellT, idx: usize, pred_tag: u32, pred_expire: u64);
 }
 
 impl CellT {
@@ -78,9 +80,14 @@ impl Arena {
 
     #[inline]
     pub fn read(&self, idx: usize) -> Option<u64> {
+        self.read_at(idx, 0)
+    }
+
+    #[inline]
+    pub fn read_at(&self, idx: usize, current_clk: u64) -> Option<u64> {
         let cell = self.cells.get(idx)?;
-        if cell.tag == 0 {
-            Some(unsafe { Pulse_Causm_Arena_arena_read(self.cells.as_ptr(), idx) })
+        if cell.tag == 0 || (cell.tag == 1 && current_clk < cell.expire) {
+            Some(unsafe { Pulse_Causm_Arena_arena_read(self.cells.as_ptr(), idx, current_clk) })
         } else {
             None
         }
@@ -134,6 +141,22 @@ impl Arena {
         for idx in 0..self.cells.len() {
             if self.cells[idx].tag == 1 && current_clk >= self.cells[idx].expire {
                 unsafe { Pulse_Causm_Arena_arena_tick_decay(self.cells.as_mut_ptr(), idx, current_clk) };
+            }
+        }
+    }
+
+    /// Merge incoming predecessor branch states at a CFG join block.
+    /// Converges to the lattice meet (infimum) guaranteeing conservative decay/consumption.
+    pub fn merge_from(&mut self, other: &Arena) {
+        let min_len = self.cells.len().min(other.cells.len());
+        for idx in 0..min_len {
+            unsafe {
+                Pulse_Causm_Arena_arena_merge_meet(
+                    self.cells.as_mut_ptr(),
+                    idx,
+                    other.cells[idx].tag,
+                    other.cells[idx].expire,
+                );
             }
         }
     }

@@ -82,12 +82,15 @@ fn init_valid_cell
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 
-/// Array Invariant 1: Safe indexed read requiring valid cell at index
+/// Array Invariant 1: Safe indexed read requiring valid cell or active non-expired lease
 fn arena_read
   (a: array cell_t)
   (idx: SZ.t)
+  (current_clk: u64)
   (#s: Ghost.erased (Seq.seq cell_t))
-  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\ (Seq.index s (SZ.v idx)).tag == 0ul)
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\
+                               ((Seq.index s (SZ.v idx)).tag == 0ul \/
+                                ((Seq.index s (SZ.v idx)).tag == 1ul /\ U64.lt current_clk (Seq.index s (SZ.v idx)).expire)))
   returns  res: u64
   ensures  pts_to a s ** pure (SZ.v idx < Seq.length s /\ res == (Seq.index s (SZ.v idx)).payload)
 {
@@ -169,5 +172,67 @@ fn arena_tick_decay
   let cell = a.(idx);
   a.(idx) <- { payload = 0uL; tag = 2ul; expire = cell.expire };
 }
+
+/// Lattice Meet Primitives for CFG Branch Convergence:
+/// Tags: 0ul = Valid, 1ul = Leased, 2ul = Decayed, 3ul = Consumed
+fn tag_meet_u32 (t1: u32) (t2: u32)
+  returns res: u32
+  ensures pure (
+    (t1 == 3ul \/ t2 == 3ul ==> res == 3ul) /\
+    (t1 <> 3ul /\ t2 <> 3ul /\ (t1 == 2ul \/ t2 == 2ul) ==> res == 2ul) /\
+    (t1 <> 3ul /\ t2 <> 3ul /\ t1 <> 2ul /\ t2 <> 2ul /\ (t1 == 1ul \/ t2 == 1ul) ==> res == 1ul) /\
+    (t1 == 0ul /\ t2 == 0ul ==> res == 0ul)
+  )
+{
+  if (t1 = 3ul || t2 = 3ul) {
+    3ul
+  } else if (t1 = 2ul || t2 = 2ul) {
+    2ul
+  } else if (t1 = 1ul || t2 = 1ul) {
+    1ul
+  } else {
+    0ul
+  }
+}
+
+/// Array Invariant 6: Merge a register cell across two CFG branch predecessor outcomes
+/// Statically converges to the lattice infimum (meet), ensuring sound conservative decay/consumption.
+fn arena_merge_meet
+  (dst: array cell_t)
+  (idx: SZ.t)
+  (pred_tag: u32)
+  (pred_expire: u64)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to dst s ** pure (SZ.v idx < Seq.length s)
+  ensures  exists* (s': Seq.seq cell_t).
+             pts_to dst s' **
+             pure (Seq.length s' == Seq.length s /\
+                   SZ.v idx < Seq.length s' /\
+                   (let cur = Seq.index s (SZ.v idx) in
+                    let m = (Seq.index s' (SZ.v idx)).tag in
+                    (cur.tag == 3ul \/ pred_tag == 3ul ==> m == 3ul) /\
+                    (cur.tag == 2ul \/ pred_tag == 2ul ==> (m == 2ul \/ m == 3ul)) /\
+                    (m == 3ul \/ m == 2ul ==> (Seq.index s' (SZ.v idx)).payload == 0uL)))
+{
+  pts_to_len dst;
+  let cur = dst.(idx);
+  let m = tag_meet_u32 cur.tag pred_tag;
+  if (m = 3ul || m = 2ul) {
+    let zero: u64 = 0uL;
+    dst.(idx) <- { payload = zero; tag = m; expire = 0uL };
+  } else {
+    // If either was leased, pick the tighter (or incoming) expiration
+    let final_expire =
+      if (cur.tag = 1ul && pred_tag = 1ul) {
+        if (U64.lte cur.expire pred_expire) { cur.expire } else { pred_expire }
+      } else if (pred_tag = 1ul) {
+        pred_expire
+      } else {
+        cur.expire
+      };
+    dst.(idx) <- { payload = cur.payload; tag = m; expire = final_expire };
+  };
+}
+
 
 
