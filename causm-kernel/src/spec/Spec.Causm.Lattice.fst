@@ -111,3 +111,76 @@ val lemma_meet_monotonic : a:entropic_tag -> b:entropic_tag -> c:entropic_tag ->
         (ensures (tag_leq (tag_meet a c) (tag_meet b d) == true))
 let lemma_meet_monotonic a b c d = ()
 
+/// Bounded Lattice Primitives:
+/// Top is TagValid, Bottom is TagConsumed
+val tag_top : entropic_tag
+let tag_top = TagValid
+
+val tag_bottom : entropic_tag
+let tag_bottom = TagConsumed
+
+/// Universal Bottom Law: bottom <= t for all t
+val lemma_bottom_is_min : t:entropic_tag ->
+  Lemma (tag_leq tag_bottom t == true)
+let lemma_bottom_is_min t = ()
+
+/// Universal Top Law: t <= top for all t
+val lemma_top_is_max : t:entropic_tag ->
+  Lemma (tag_leq t tag_top == true)
+let lemma_top_is_max t = ()
+
+/// Meet Annihilator: meet(t, bottom) = bottom
+val lemma_meet_bottom_annihilates : t:entropic_tag ->
+  Lemma (tag_meet t tag_bottom == tag_bottom)
+let lemma_meet_bottom_annihilates t = ()
+
+/// Meet Identity: meet(t, top) = t
+val lemma_meet_top_identity : t:entropic_tag ->
+  Lemma (tag_meet t tag_top == t)
+let lemma_meet_top_identity t = ()
+
+/// Lattice Join Operator (Supremum / Least Upper Bound):
+val tag_join : entropic_tag -> entropic_tag -> entropic_tag
+let tag_join t1 t2 =
+  match t1, t2 with
+  | TagValid, _ | _, TagValid -> TagValid
+  | TagLeased, _ | _, TagLeased -> TagLeased
+  | TagDecayed, _ | _, TagDecayed -> TagDecayed
+  | TagConsumed, TagConsumed -> TagConsumed
+
+/// Join Commutativity
+val lemma_join_comm : t1:entropic_tag -> t2:entropic_tag ->
+  Lemma (tag_join t1 t2 == tag_join t2 t1)
+let lemma_join_comm t1 t2 = ()
+
+/// Join Idempotence
+val lemma_join_idem : t:entropic_tag ->
+  Lemma (tag_join t t == t)
+let lemma_join_idem t = ()
+
+/// Join Associativity
+val lemma_join_assoc : t1:entropic_tag -> t2:entropic_tag -> t3:entropic_tag ->
+  Lemma (tag_join (tag_join t1 t2) t3 == tag_join t1 (tag_join t2 t3))
+let lemma_join_assoc t1 t2 t3 = ()
+
+/// Join Upper Bound: t1 <= join(t1, t2) /\ t2 <= join(t1, t2)
+val lemma_join_ub : t1:entropic_tag -> t2:entropic_tag ->
+  Lemma (tag_leq t1 (tag_join t1 t2) == true /\ tag_leq t2 (tag_join t1 t2) == true)
+let lemma_join_ub t1 t2 = ()
+
+/// Least Upper Bound (LUB Property):
+val lemma_join_lub : k:entropic_tag -> t1:entropic_tag -> t2:entropic_tag ->
+  Lemma (requires (tag_leq t1 k == true /\ tag_leq t2 k == true))
+        (ensures (tag_leq (tag_join t1 t2) k == true))
+let lemma_join_lub k t1 t2 = ()
+
+/// Absorption Law 1: meet(a, join(a, b)) = a
+val lemma_lattice_absorb_meet : a:entropic_tag -> b:entropic_tag ->
+  Lemma (tag_meet a (tag_join a b) == a)
+let lemma_lattice_absorb_meet a b = ()
+
+/// Absorption Law 2: join(a, meet(a, b)) = a
+val lemma_lattice_absorb_join : a:entropic_tag -> b:entropic_tag ->
+  Lemma (tag_join a (tag_meet a b) == a)
+let lemma_lattice_absorb_join a b = ()
+

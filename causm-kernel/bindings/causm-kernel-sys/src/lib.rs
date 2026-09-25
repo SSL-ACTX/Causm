@@ -22,6 +22,7 @@ extern "C" {
     pub fn Pulse_Causm_Arena_arena_tick_decay(a: *mut CellT, idx: usize, current_clk: u64);
     pub fn Pulse_Causm_Arena_tag_meet_u32(t1: u32, t2: u32) -> u32;
     pub fn Pulse_Causm_Arena_arena_merge_meet(dst: *mut CellT, idx: usize, pred_tag: u32, pred_expire: u64);
+    pub fn Pulse_Causm_Arena_wcet_budget_step(consumed: *mut u64, cost: u64, max_limit: u64) -> bool;
 }
 
 impl CellT {
@@ -158,6 +159,46 @@ impl Arena {
                     other.cells[idx].expire,
                 );
             }
+        }
+    }
+}
+
+/// A formally verified isochronous WCET budget tracker backed by the Pulse microkernel.
+#[derive(Debug, Clone)]
+pub struct IsochronousTracker {
+    consumed: u64,
+    max_limit: u64,
+}
+
+impl IsochronousTracker {
+    pub fn new(max_limit: u64) -> Self {
+        Self {
+            consumed: 0,
+            max_limit,
+        }
+    }
+
+    #[inline]
+    pub fn consumed(&self) -> u64 {
+        self.consumed
+    }
+
+    #[inline]
+    pub fn max_limit(&self) -> u64 {
+        self.max_limit
+    }
+
+    #[inline]
+    pub fn remaining(&self) -> u64 {
+        self.max_limit.saturating_sub(self.consumed)
+    }
+
+    /// Try to consume a specified cycle budget.
+    /// Returns true if within limits, or false if the step would exceed the WCET budget.
+    #[inline]
+    pub fn try_step(&mut self, cost: u64) -> bool {
+        unsafe {
+            Pulse_Causm_Arena_wcet_budget_step(&mut self.consumed, cost, self.max_limit)
         }
     }
 }

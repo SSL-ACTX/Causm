@@ -46,15 +46,22 @@ let env_meet e1 e2 =
   fun r -> reg_type_meet (e1 r) (e2 r)
 
 
+/// A concrete register conforms to an abstract type if the register provides at least that type's guarantees
+let reg_conforms (ty: reg_type) (st: entropic_state int) : prop =
+  match ty, st with
+  | TyConsumed, _ -> True
+  | TyDecayed, StDecayed -> True
+  | TyDecayed, StConsumed -> False
+  | TyDecayed, _ -> True
+  | TyLeased exp, StLeased _ e -> exp <= e
+  | TyLeased exp, StValid _ -> True
+  | TyLeased exp, _ -> False
+  | TyValid, StValid _ -> True
+  | TyValid, _ -> False
+
 /// Typing judgement: when does a concrete runtime state conform to the static type environment?
 let state_well_typed (env: type_env) (s: vm_state) : prop =
-  forall (r: reg_id).
-    match env r, s.regs r with
-    | TyValid, StValid _ -> True
-    | TyLeased exp, StLeased _ e -> exp == e
-    | TyDecayed, StDecayed -> True
-    | TyConsumed, StConsumed -> True
-    | _, _ -> False
+  forall (r: reg_id). reg_conforms (env r) (s.regs r)
 
 /// Static check: when is a register readable according to the static type at a given clock?
 let is_ty_readable (ty: reg_type) (clk: nat) : bool =

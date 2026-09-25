@@ -60,3 +60,16 @@ let theorem_preservation env s i s' =
   | ILease target duration -> ()
   | ITick delta -> ()
   | IEntangle r1 r2 -> ()
+
+/// Subtyping Soundness: If state s is well typed under env1, and env2 is a subtype/subsumption of env1 (env2 <= env1),
+/// then s is also well typed under env2.
+val lemma_subtyping_sound : env1:type_env -> env2:type_env -> s:vm_state ->
+  Lemma (requires (state_well_typed env1 s /\ (forall r. reg_type_leq (env2 r) (env1 r) == true)))
+        (ensures (state_well_typed env2 s))
+let lemma_subtyping_sound env1 env2 s = ()
+
+/// Env Meet Soundness: The greatest lower bound of incoming branch environments safely types incoming state
+val lemma_env_meet_sound : env1:type_env -> env2:type_env -> s:vm_state ->
+  Lemma (requires (state_well_typed env1 s \/ state_well_typed env2 s))
+        (ensures (state_well_typed (env_meet env1 env2) s))
+let lemma_env_meet_sound env1 env2 s = ()

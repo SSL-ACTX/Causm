@@ -234,5 +234,40 @@ fn arena_merge_meet
   };
 }
 
+/// Invariant 7: Isochronous WCET Budget Tracker
+/// Verifies dynamic step cost against WCET bound, returning false if budget would overflow.
+fn wcet_budget_step
+  (consumed: ref u64)
+  (cost: u64)
+  (max_limit: u64)
+  (#cur: Ghost.erased u64)
+  requires pts_to consumed cur
+  returns  ok: bool
+  ensures  exists* (new_cur: u64).
+             pts_to consumed new_cur **
+             pure (
+               if (U64.v cur + U64.v cost <= U64.v max_limit /\
+                   FStar.UInt.size (U64.v cur + U64.v cost) 64) then
+                 ok == true /\ U64.v new_cur == U64.v cur + U64.v cost
+               else
+                 ok == false /\ new_cur == cur
+             )
+{
+  let current_val = !consumed;
+  if (U64.lte current_val max_limit) {
+    let rem = U64.sub max_limit current_val;
+    if (U64.lte cost rem) {
+      let next_val = U64.add current_val cost;
+      consumed := next_val;
+      true
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
+
 
 
