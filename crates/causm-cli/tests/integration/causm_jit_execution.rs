@@ -383,4 +383,3 @@ fn test_temporal_speedmicro_elastic_determinism_jitter_freeze() {
     );
     assert!(vm2.root_timeline.local_clock >= 500);
 }
-

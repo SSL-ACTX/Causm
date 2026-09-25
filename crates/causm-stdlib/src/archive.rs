@@ -167,11 +167,22 @@ impl CsaArchive {
     }
 
     pub fn verify_checksums(&self) -> bool {
-        for entry in self.modules.values() {
-            let decoded = decode_from_binary_bytecode(&entry.bytecode);
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            decoded.hash(&mut hasher);
-            if hasher.finish() != entry.checksum {
+        let current_embedded = crate::all_embedded_modules();
+        if self.modules.len() < current_embedded.len() {
+            return false;
+        }
+        for (path, src) in current_embedded {
+            if let Some(entry) = self.modules.get(path) {
+                let decoded = decode_from_binary_bytecode(&entry.bytecode);
+                if decoded != src {
+                    return false;
+                }
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                decoded.hash(&mut hasher);
+                if hasher.finish() != entry.checksum {
+                    return false;
+                }
+            } else {
                 return false;
             }
         }

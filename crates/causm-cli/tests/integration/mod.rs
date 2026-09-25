@@ -13,8 +13,6 @@ pub mod causm_import;
 pub mod causm_isochronous;
 #[cfg(feature = "jit")]
 pub mod causm_jit_execution;
-#[cfg(feature = "jit")]
-pub mod causm_speedmicro_bench;
 pub mod causm_json;
 pub mod causm_lease;
 pub mod causm_match;
@@ -25,6 +23,8 @@ pub mod causm_plugins_test;
 pub mod causm_process;
 pub mod causm_reconciliation;
 pub mod causm_semantic;
+#[cfg(feature = "jit")]
+pub mod causm_speedmicro_bench;
 pub mod causm_std_core;
 pub mod causm_stdlib_cache;
 pub mod causm_sync;

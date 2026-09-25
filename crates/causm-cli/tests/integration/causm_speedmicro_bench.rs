@@ -71,7 +71,8 @@ fn test_speedmicro_bench_isochronous_cycle_padding_accuracy() {
     }
     unpadded_samples.sort_unstable();
 
-    let unpadded_mean = unpadded_samples.iter().sum::<u64>() as f64 / sample_count as f64;
+    let unpadded_mean =
+        unpadded_samples.iter().sum::<u64>() as f64 / sample_count as f64;
     let unpadded_p50 = percentile(&unpadded_samples, 0.50);
     let unpadded_p90 = percentile(&unpadded_samples, 0.90);
     let unpadded_p99 = percentile(&unpadded_samples, 0.99);
@@ -109,7 +110,8 @@ fn test_speedmicro_bench_isochronous_cycle_padding_accuracy() {
             target
         );
 
-        let ir_padded = compile_ir(&source_padded, &format!("bench_padded_{}", target));
+        let ir_padded =
+            compile_ir(&source_padded, &format!("bench_padded_{}", target));
         let mut samples = Vec::with_capacity(sample_count);
 
         for _ in 0..sample_count {
@@ -198,7 +200,12 @@ fn test_speedmicro_bench_workloads_and_throughput() {
 
     let workloads = [
         ("Bitwise Hashing", source_hash, "hash_op", 2),
-        ("Branchless Trade Signal", source_decision, "trade_signal", 2),
+        (
+            "Branchless Trade Signal",
+            source_decision,
+            "trade_signal",
+            2,
+        ),
         ("Loop Accumulation (50 iters)", source_loop, "loop_accum", 1),
     ];
 
@@ -226,18 +233,22 @@ fn test_speedmicro_bench_workloads_and_throughput() {
         // 2. Measure Direct Cranelift JIT Bare-Metal Execution
         let mut jit = causm_jit::CausmJit::new().expect("JIT init failed");
         let routine_def = ir.routines.get(routine_name).expect("Routine missing");
-        let func_ptr = jit.compile_routine(routine_name, routine_def).expect("Compile failed");
+        let func_ptr = jit
+            .compile_routine(routine_name, routine_def)
+            .expect("Compile failed");
 
         let mut checksum: i64 = 0;
         let t_jit_start = Instant::now();
         let calls = if arity == 1 { 2_000_000 } else { 5_000_000 };
         if arity == 1 {
-            let f: extern "C" fn(i64) -> i64 = unsafe { std::mem::transmute(func_ptr) };
+            let f: extern "C" fn(i64) -> i64 =
+                unsafe { std::mem::transmute(func_ptr) };
             for _ in 0..calls {
                 checksum = checksum.wrapping_add(f(50));
             }
         } else {
-            let f: extern "C" fn(i64, i64) -> i64 = unsafe { std::mem::transmute(func_ptr) };
+            let f: extern "C" fn(i64, i64) -> i64 =
+                unsafe { std::mem::transmute(func_ptr) };
             for i in 0..calls {
                 checksum = checksum.wrapping_add(f(i as i64, (i ^ 42) as i64));
             }
@@ -263,7 +274,9 @@ fn test_speedmicro_bench_workloads_and_throughput() {
 
 #[test]
 fn test_speedmicro_bench_elastic_determinism_overhead() {
-    println!("\n[Benchmark: SpeedMicro Elastic Determinism & Memory Pinning Primitives]");
+    println!(
+        "\n[Benchmark: SpeedMicro Elastic Determinism & Memory Pinning Primitives]"
+    );
 
     causm_jit::hft::reset_total_lost_cycles();
 
@@ -285,7 +298,10 @@ fn test_speedmicro_bench_elastic_determinism_overhead() {
     let ns_per_eval = elapsed.as_nanos() as f64 / eval_iters as f64;
     let evals_sec = (eval_iters as f64 / elapsed.as_secs_f64()) as u64;
 
-    println!("  Elastic Determinism Jitter Evaluation ({} iterations):", eval_iters);
+    println!(
+        "  Elastic Determinism Jitter Evaluation ({} iterations):",
+        eval_iters
+    );
     println!(
         "    Latency: {:.2} ns/eval | Throughput: {} checks/sec | Jitter spikes: {}",
         ns_per_eval, evals_sec, dummy_count

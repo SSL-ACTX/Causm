@@ -186,7 +186,6 @@ dependencies = [
 name = "causm-jit"
 version = "0.1.0-alpha.3"
 dependencies = [
- "anyhow",
  "causm-core",
  "causm-ir",
  "cranelift",
@@ -194,9 +193,7 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "libc",
- "target-lexicon",
  "thiserror",
- "windows-sys 0.59.0",
 ]
 
 [[package]]

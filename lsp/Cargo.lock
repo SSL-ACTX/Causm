@@ -54,11 +54,9 @@ version = "0.1.0-alpha.3"
 dependencies = [
  "causm-core",
  "causm-entropius",
- "causm-ir",
  "causm-smt",
  "causm-types",
  "causm-wcet",
- "thiserror",
 ]
 
 [[package]]
@@ -96,6 +94,7 @@ dependencies = [
  "causm-core",
  "causm-ir",
  "causm-stdlib",
+ "postcard",
  "serde",
 ]
 
@@ -154,7 +153,6 @@ version = "0.1.0-alpha.3"
 dependencies = [
  "causm-core",
  "causm-entropius",
- "causm-ir",
  "thiserror",
 ]
 
@@ -163,10 +161,8 @@ name = "causm-wcet"
 version = "0.1.0-alpha.3"
 dependencies = [
  "causm-core",
- "causm-ir",
  "causm-smt",
  "causm-types",
- "thiserror",
 ]
 
 [[package]]

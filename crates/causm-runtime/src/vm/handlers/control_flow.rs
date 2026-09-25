@@ -674,7 +674,11 @@ impl Vm {
                     target_cycles,
                     causm_jit::hft::DEFAULT_ELASTIC_JITTER_THRESHOLD_CYCLES,
                 );
-                if let causm_jit::hft::JitterStatus::ElasticJitterDetected { lost_to_void, .. } = status {
+                if let causm_jit::hft::JitterStatus::ElasticJitterDetected {
+                    lost_to_void,
+                    ..
+                } = status
+                {
                     self.temporal_freeze(lost_to_void);
                 }
             }
