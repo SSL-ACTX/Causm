@@ -5,6 +5,7 @@ members = [
 ]
 exclude = [
     "lsp",
+    "causm-kernel",
 ]
 default-members = [
     "crates/causm-core",

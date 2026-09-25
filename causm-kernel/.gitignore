@@ -1,0 +1,6 @@
+.cache/
+dist/
+target/
+*.o
+*.a
+*.d

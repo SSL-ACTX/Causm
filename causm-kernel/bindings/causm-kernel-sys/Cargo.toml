@@ -1,0 +1,8 @@
+[package]
+name = "causm-kernel-sys"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-cost Rust FFI bindings for the verified Causm Pulse microkernel"
+license = "AGPL-3.0-only"
+
+[dependencies]

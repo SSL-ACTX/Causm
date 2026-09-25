@@ -1,0 +1,6 @@
+# config.krml
+-bundle Pulse.Causm.Arena=Spec.Causm.*,Proof.Causm.*
+-skip-compilation
+-fbuiltin-uint128
+-fparentheses
+-tmpdir dist/
