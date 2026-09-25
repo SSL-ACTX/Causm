@@ -22,6 +22,7 @@ let lemma_consumed_persists_under_eval s i s' r =
   | ILoadInt dest _ -> ()
   | IAdd dest s1 s2 -> ()
   | IConsume target -> ()
+  | IEntangle r1 r2 -> ()
   | ILease target duration -> ()
   | ITick delta -> ()
 
@@ -53,3 +54,14 @@ val lemma_double_consume_rejected :
   Lemma (requires tag_of (s.regs r) == TagConsumed \/ tag_of (s.regs r) == TagDecayed)
         (ensures eval_step s (IConsume r) == None)
 let lemma_double_consume_rejected s r = ()
+
+/// Theorem 5: Entanglement Consumption Invariant
+/// Consuming target register r1 strictly forces all entangled registers r2 into StConsumed state,
+/// rendering them immediately unreadable.
+val lemma_entangled_consume_propagates :
+  s:vm_state -> r1:reg_id -> r2:reg_id -> s':vm_state ->
+  Lemma (requires (s.entangled r1 r2 == true /\
+                   eval_step s (IConsume r1) == Some s'))
+        (ensures (s'.regs r2 == StConsumed /\ is_readable (s'.regs r2) s'.clock == false))
+let lemma_entangled_consume_propagates s r1 r2 s' = ()
+

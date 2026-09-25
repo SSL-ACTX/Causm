@@ -79,3 +79,95 @@ fn init_valid_cell
   c := { payload = v; tag = 0ul; expire = 0uL };
 }
 
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+
+/// Array Invariant 1: Safe indexed read requiring valid cell at index
+fn arena_read
+  (a: array cell_t)
+  (idx: SZ.t)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\ (Seq.index s (SZ.v idx)).tag == 0ul)
+  returns  res: u64
+  ensures  pts_to a s ** pure (SZ.v idx < Seq.length s /\ res == (Seq.index s (SZ.v idx)).payload)
+{
+  pts_to_len a;
+  let cell = a.(idx);
+  cell.payload
+}
+
+/// Array Invariant 2: Safe indexed consume transitioning element to tag 3 (Consumed)
+fn arena_consume
+  (a: array cell_t)
+  (idx: SZ.t)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\ (Seq.index s (SZ.v idx)).tag == 0ul)
+  ensures  exists* (s': Seq.seq cell_t).
+             pts_to a s' **
+             pure (SZ.v idx < Seq.length s /\ s' == Seq.upd s (SZ.v idx) { payload = 0uL; tag = 3ul; expire = 0uL })
+{
+  pts_to_len a;
+  a.(idx) <- { payload = 0uL; tag = 3ul; expire = 0uL };
+}
+
+/// Array Invariant 3: Safe indexed lease establishing expiration timestamp
+fn arena_lease
+  (a: array cell_t)
+  (idx: SZ.t)
+  (current_clk: u64)
+  (duration: u64)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\
+                               (Seq.index s (SZ.v idx)).tag == 0ul /\
+                               FStar.UInt.size (U64.v current_clk + U64.v duration) 64)
+  ensures  exists* (s': Seq.seq cell_t).
+             pts_to a s' **
+             pure (Seq.length s' == Seq.length s /\
+                   SZ.v idx < Seq.length s' /\
+                   (Seq.index s' (SZ.v idx)).tag == 1ul /\
+                   U64.v (Seq.index s' (SZ.v idx)).expire == U64.v current_clk + U64.v duration /\
+                   (Seq.index s' (SZ.v idx)).payload == (Seq.index s (SZ.v idx)).payload)
+{
+  pts_to_len a;
+  let cell = a.(idx);
+  let new_expire = U64.add current_clk duration;
+  a.(idx) <- { payload = cell.payload; tag = 1ul; expire = new_expire };
+}
+
+/// Array Invariant 4: Initialize a slot in the arena with a valid payload
+fn arena_init_valid
+  (a: array cell_t)
+  (idx: SZ.t)
+  (v: u64)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s)
+  ensures  exists* (s': Seq.seq cell_t).
+             pts_to a s' **
+             pure (SZ.v idx < Seq.length s /\ s' == Seq.upd s (SZ.v idx) { payload = v; tag = 0ul; expire = 0uL })
+{
+  pts_to_len a;
+  a.(idx) <- { payload = v; tag = 0ul; expire = 0uL };
+}
+
+/// Array Invariant 5: Decay an expired leased cell at a specific index
+fn arena_tick_decay
+  (a: array cell_t)
+  (idx: SZ.t)
+  (current_clk: u64)
+  (#s: Ghost.erased (Seq.seq cell_t))
+  requires pts_to a s ** pure (SZ.v idx < Seq.length s /\
+                               (Seq.index s (SZ.v idx)).tag == 1ul /\
+                               U64.gte current_clk (Seq.index s (SZ.v idx)).expire)
+  ensures  exists* (s': Seq.seq cell_t).
+             pts_to a s' **
+             pure (SZ.v idx < Seq.length s /\
+                   s' == Seq.upd s (SZ.v idx) { payload = 0uL;
+                                                tag = 2ul;
+                                                expire = (Seq.index s (SZ.v idx)).expire })
+{
+  pts_to_len a;
+  let cell = a.(idx);
+  a.(idx) <- { payload = 0uL; tag = 2ul; expire = cell.expire };
+}
+
+

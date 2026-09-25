@@ -7,25 +7,35 @@ open Spec.Causm.Timeline
 type reg_id = nat
 
 type instr =
-  | ILoadInt : dest:reg_id -> value:int -> instr
-  | IAdd     : dest:reg_id -> src1:reg_id -> src2:reg_id -> instr
-  | IConsume : target:reg_id -> instr
-  | ILease   : target:reg_id -> duration:nat -> instr
-  | ITick    : delta:nat -> instr
+  | ILoadInt  : dest:reg_id -> value:int -> instr
+  | IAdd      : dest:reg_id -> src1:reg_id -> src2:reg_id -> instr
+  | IConsume  : target:reg_id -> instr
+  | ILease    : target:reg_id -> duration:nat -> instr
+  | ITick     : delta:nat -> instr
+  | IEntangle : r1:reg_id -> r2:reg_id -> instr
 
 type reg_file = reg_id -> entropic_state int
+type entangle_rel = reg_id -> reg_id -> bool
 
 noeq type vm_state = {
-  regs  : reg_file;
-  clock : nat;
+  regs      : reg_file;
+  clock     : nat;
+  entangled : entangle_rel;
 }
 
 val empty_regs : reg_file
 let empty_regs = fun _ -> StConsumed
 
+val empty_entangle : entangle_rel
+let empty_entangle = fun _ _ -> false
+
 val update_reg : reg_file -> reg_id -> entropic_state int -> reg_file
 let update_reg r id st =
   fun (x: reg_id) -> if x = id then st else r x
+
+val update_entangle : entangle_rel -> reg_id -> reg_id -> entangle_rel
+let update_entangle rel r1 r2 =
+  fun x y -> (x = r1 && y = r2) || (x = r2 && y = r1) || rel x y
 
 val eval_step : vm_state -> instr -> option vm_state
 let eval_step s i =
@@ -53,8 +63,19 @@ let eval_step s i =
 
   | IConsume target ->
       if is_consumable (s.regs target) then
-        let new_regs = update_reg s.regs target StConsumed in
-        Some ({ s with regs = new_regs })
+        // Consuming target also consumes any entangled register
+        let updated_regs = fun (x: reg_id) ->
+          if x = target || s.entangled target x then StConsumed
+          else s.regs x
+        in
+        Some ({ s with regs = updated_regs })
+      else
+        None
+
+  | IEntangle r1 r2 ->
+      if r1 <> r2 && is_consumable (s.regs r1) && is_consumable (s.regs r2) then
+        let new_rel = update_entangle s.entangled r1 r2 in
+        Some ({ s with entangled = new_rel })
       else
         None
 
@@ -78,4 +99,4 @@ let eval_step s i =
             if new_clk >= exp then StDecayed else StLeased v exp
         | other -> other
       in
-      Some ({ regs = updated_regs; clock = new_clk })
+      Some ({ s with regs = updated_regs; clock = new_clk })
