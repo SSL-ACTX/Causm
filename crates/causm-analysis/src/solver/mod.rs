@@ -6,10 +6,14 @@ pub use causm_entropius::facts::{
     SsaPointIndex,
 };
 pub use causm_entropius::relational;
+#[cfg(feature = "kernel")]
+pub use causm_entropius::relational::KernelInvariantSolver;
 pub use causm_entropius::relational::RelationalInvariantSolver;
 pub use causm_smt::backend;
 pub use causm_smt::SolverBackend;
 pub use causm_wcet::wcet;
+#[cfg(feature = "kernel")]
+pub use causm_wcet::wcet::KernelWcetSolver;
 pub use causm_wcet::wcet::WcetSolver;
 
 use causm_core::Program;
@@ -19,7 +23,7 @@ use causm_types::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 pub struct SolverStage;
 
 impl SolverStage {
-    /// Stage 2a: Relational pre-pass. Extract ProgramFacts and verify Invariants 1–3.
+    /// Stage 2a: Relational pre-pass. Extract ProgramFacts and verify Invariants.
     pub fn run_relational(
         analyzer: &mut EntropicAnalyzer,
         program: &Program,
@@ -31,12 +35,25 @@ impl SolverStage {
             .unwrap_or_else(|| "<unknown>".to_string());
         let facts = extract_facts(program, &source, &filename);
 
-        let mut relational_solver =
-            RelationalInvariantSolver::<causm_smt::OxiZBackend>::new(analyzer);
-        if let Err(err) = relational_solver.solve_invariants(&facts) {
-            return Err(
-                analyzer.annotate(SemanticErrorKind::EntropiusDiagnostic(err.0))
-            );
+        #[cfg(feature = "kernel")]
+        {
+            let mut kernel_solver = KernelInvariantSolver::new();
+            if let Err(err) = kernel_solver.solve_invariants(&facts) {
+                return Err(
+                    analyzer.annotate(SemanticErrorKind::EntropiusDiagnostic(err.0))
+                );
+            }
+        }
+
+        #[cfg(not(feature = "kernel"))]
+        {
+            let mut relational_solver =
+                RelationalInvariantSolver::<causm_smt::OxiZBackend>::new(analyzer);
+            if let Err(err) = relational_solver.solve_invariants(&facts) {
+                return Err(
+                    analyzer.annotate(SemanticErrorKind::EntropiusDiagnostic(err.0))
+                );
+            }
         }
 
         Ok(())
@@ -63,9 +80,18 @@ impl SolverStage {
         }
 
         if analyzer.use_z3 {
-            let mut wcet_solver =
-                WcetSolver::<causm_smt::OxiZBackend>::new(analyzer);
-            wcet_solver.verify_and_compute(program)?;
+            #[cfg(feature = "kernel")]
+            {
+                let mut wcet_solver = KernelWcetSolver::new(analyzer);
+                wcet_solver.verify_and_compute(program)?;
+            }
+
+            #[cfg(not(feature = "kernel"))]
+            {
+                let mut wcet_solver =
+                    WcetSolver::<causm_smt::OxiZBackend>::new(analyzer);
+                wcet_solver.verify_and_compute(program)?;
+            }
         }
 
         Ok(())

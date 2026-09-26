@@ -184,3 +184,14 @@ val lemma_lattice_absorb_join : a:entropic_tag -> b:entropic_tag ->
   Lemma (tag_join a (tag_meet a b) == a)
 let lemma_lattice_absorb_join a b = ()
 
+/// Invariant: Exact 4-way Partition of Entropic States
+/// Every slot in memory arena is in exactly one of the 4 mutually exclusive states.
+val lemma_tag_exact_partition : t:entropic_tag ->
+  Lemma (
+    (t == TagValid /\ t <> TagLeased /\ t <> TagDecayed /\ t <> TagConsumed) \/
+    (t == TagLeased /\ t <> TagValid /\ t <> TagDecayed /\ t <> TagConsumed) \/
+    (t == TagDecayed /\ t <> TagValid /\ t <> TagLeased /\ t <> TagConsumed) \/
+    (t == TagConsumed /\ t <> TagValid /\ t <> TagLeased /\ t <> TagDecayed)
+  )
+let lemma_tag_exact_partition t = ()
+

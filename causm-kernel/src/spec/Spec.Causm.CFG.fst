@@ -95,6 +95,16 @@ let rec cfg_steps g s fuel =
     | None -> None
     | Some s' -> cfg_steps g s' (fuel - 1)
 
+/// Sequential evaluation of an entire instruction list (basic block body)
+val eval_body : s:vm_state -> body:list instr -> Tot (option vm_state) (decreases body)
+let rec eval_body s body =
+  match body with
+  | [] -> Some s
+  | i :: rest ->
+      match eval_step s i with
+      | None -> None
+      | Some s' -> eval_body s' rest
+
 
 
 

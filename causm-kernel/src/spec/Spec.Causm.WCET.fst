@@ -83,3 +83,29 @@ let wcet_step g s =
             })
       else
         None
+
+/// Headroom Invariant: Cycles remaining in current isochronous budget
+val wcet_headroom : wcet_tracked_state -> nat
+let wcet_headroom s =
+  if s.consumed <= s.max_limit then s.max_limit - s.consumed else 0
+
+/// Hard Real-Time Isochronous Pace Invariant:
+/// Pads step consumption to target fixed pace tau, eliminating execution jitter.
+val isochronous_pace_step :
+  g:cfg -> s:wcet_tracked_state -> target_pace:pos ->
+  option wcet_tracked_state
+let isochronous_pace_step g s target_pace =
+  match cfg_step_cost g s.state with
+  | None -> None
+  | Some cost ->
+      if cost <= target_pace && s.consumed + target_pace <= s.max_limit then
+        match cfg_step g s.state with
+        | None -> None
+        | Some new_st ->
+            Some ({
+              state = new_st;
+              consumed = s.consumed + target_pace;
+              max_limit = s.max_limit;
+            })
+      else
+        None

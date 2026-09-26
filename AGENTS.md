@@ -21,6 +21,17 @@ This document outlines the core architectural constraints, design patterns, deve
 *   **Entropic States:** Variable values reside in the memory arena and transition between states: `Valid`, `Leased`, `Decayed`, `Pending`, and `Consumed`.
 *   **No Unsafe Aliasing:** The VM must prevent dereferencing or mutating variables that have been consumed or have passed their temporal lease without formal reconciliation.
 
+### 1.5 Formal Verification & Kernel Modularity Mandate (`causm-kernel`)
+*   **Strict Module & Proof Separation:** Specifications and proofs MUST maintain complete separation of mathematical concerns:
+    *   **Pure Lattice Theory (`Spec.Causm.Lattice` / `Proof.Causm.Lattice`):** Exclusively algebraic lattice theory ($\top$, $\bot$, $\sqcap$, $\sqcup$, GLB, LUB, absorption laws, and state invariants). Must NEVER be polluted by language-level static types.
+    *   **Static Type System & Subtyping (`Spec.Causm.TypeSystem` / `Proof.Causm.Subtyping`):** Dedicated to abstract compiler types (`reg_type`, `type_env`), subtyping partial order (`reg_type_leq`), environment meet (`env_meet`), and subtyping soundness lemmas.
+    *   **Discrete WCET & Timeline (`Spec.Causm.WCET` / `Spec.Causm.Timeline` / `Proof.Causm.WCET`):** Isolated cycle cost models, block and loop WCET calculations, and dynamic isochronous execution bounds.
+    *   **Operational Semantics & Reachability (`Spec.Causm.Semantics` / `Proof.Causm.Soundness`):** Small-step transition rules, double-consume safety, and inductive multi-hop entanglement reachability.
+    *   **Control Flow Graph & Block Induction (`Spec.Causm.CFG` / `Proof.Causm.CFGSoundness`):** Basic blocks, terminator transitions, single-step preservation, and full inductive body preservation (`theorem_body_preservation`).
+*   **Zero Admits Policy:** Every lemma, theorem, and inductive preservation invariant MUST be machine-checked with zero `admit()` or shortcuts wherever mathematically possible.
+*   **Explicit Termination & Induction:** All recursive functions and inductive proof lemmas across lists and fuel MUST declare explicit `(decreases <param>)` clauses and undergo full structural induction.
+*   **KaRaMeL Extraction Integrity:** Pulse implementations (`Pulse.Causm.*`) must verify cleanly, extract to idiomatic C with zero compiler warnings, and be empirically verified via safe FFI Rust bindings (`causm-kernel-sys`).
+
 ---
 
 ## 2. Rust Codebase Rules

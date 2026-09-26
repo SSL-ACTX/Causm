@@ -17,6 +17,18 @@ type instr =
 type reg_file = reg_id -> entropic_state int
 type entangle_rel = reg_id -> reg_id -> bool
 
+/// Inductive reachability path under an entanglement graph (reflexive-transitive closure)
+type entangle_path (rel: entangle_rel) : reg_id -> reg_id -> nat -> Type0 =
+  | PathRefl : r:reg_id -> entangle_path rel r r 0
+  | PathStep : #n:nat -> r1:reg_id -> r2:reg_id -> r3:reg_id ->
+               h_step:(squash (rel r1 r2 == true)) ->
+               entangle_path rel r2 r3 n ->
+               entangle_path rel r1 r3 (n + 1)
+
+/// Entanglement reachability relation
+let entangled_connected (rel: entangle_rel) (r1: reg_id) (r2: reg_id) : Type0 =
+  dtuple2 nat (fun steps -> entangle_path rel r1 r2 steps)
+
 noeq type vm_state = {
   regs      : reg_file;
   clock     : nat;

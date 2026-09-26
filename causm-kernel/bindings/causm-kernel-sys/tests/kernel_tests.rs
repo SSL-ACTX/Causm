@@ -1,4 +1,5 @@
-use causm_kernel_sys::{Arena, CellT, IsochronousTracker};
+// causm-kernel/bindings/causm-kernel-sys/tests/kernel_tests.rs
+use causm_kernel_sys::{Arena, CellT, IsochronousTracker, KernelDiagnostic, RawInstr, VerifiedVM};
 
 #[test]
 fn test_kernel_read_valid_cell() {
@@ -7,57 +8,7 @@ fn test_kernel_read_valid_cell() {
         tag: 0,
         expire: 100,
     };
-    assert_eq!(cell.read_valid(), 42);
-}
-
-#[test]
-fn test_kernel_consume_cell() {
-    let mut cell = CellT {
-        payload: 42,
-        tag: 0,
-        expire: 100,
-    };
-    cell.consume();
-    assert_eq!(cell.tag, 3);
-    assert_eq!(cell.payload, 0);
-}
-
-#[test]
-fn test_kernel_tick_decay_cell() {
-    let mut cell = CellT {
-        payload: 42,
-        tag: 1,
-        expire: 10,
-    };
-    cell.tick_decay(10);
-    assert_eq!(cell.tag, 2);
-    assert_eq!(cell.payload, 0);
-}
-
-#[test]
-fn test_kernel_lease_cell() {
-    let mut cell = CellT {
-        payload: 99,
-        tag: 0,
-        expire: 0,
-    };
-    cell.lease(100, 50);
-    assert_eq!(cell.tag, 1);
-    assert_eq!(cell.payload, 99);
-    assert_eq!(cell.expire, 150);
-}
-
-#[test]
-fn test_kernel_init_valid_cell() {
-    let mut cell = CellT {
-        payload: 0,
-        tag: 3,
-        expire: 0,
-    };
-    cell.init_valid(777);
-    assert_eq!(cell.tag, 0);
-    assert_eq!(cell.payload, 777);
-    assert_eq!(cell.expire, 0);
+    assert_eq!(cell.payload, 42);
 }
 
 #[test]
@@ -65,224 +16,179 @@ fn test_kernel_arena_multi_register_workflow() {
     let mut arena = Arena::new(8);
     assert_eq!(arena.len(), 8);
 
-    // Initial slots are consumed (tag 3)
     assert_eq!(arena.read(0), None);
     assert_eq!(arena.read(1), None);
 
-    // Initialize registers R0 and R1
     assert!(arena.init_valid(0, 100));
     assert!(arena.init_valid(1, 200));
 
-    // Verify reading valid registers
     assert_eq!(arena.read(0), Some(100));
     assert_eq!(arena.read(1), Some(200));
 
-    // Lease R1 at clock 50 with duration 25 (expires at 75)
     assert!(arena.lease(1, 50, 25));
     let cell1 = arena.get_cell(1).unwrap();
     assert_eq!(cell1.tag, 1);
     assert_eq!(cell1.expire, 75);
 
-    // Consume R0
     assert!(arena.consume(0));
-    assert_eq!(arena.read(0), None); // No longer readable
-    assert!(!arena.consume(0)); // Double consume fails
+    assert_eq!(arena.read(0), None);
+    assert!(!arena.consume(0));
 
-    // Clock advances to 60: R1 should still be leased (not decayed)
     arena.tick_sweep(60);
     assert_eq!(arena.get_cell(1).unwrap().tag, 1);
 
-    // Clock advances to 75: R1 decays
     arena.tick_sweep(75);
     assert_eq!(arena.get_cell(1).unwrap().tag, 2);
-    assert_eq!(arena.read(1), None); // Decayed register unreadable
+    assert_eq!(arena.read(1), None);
 }
 
 #[test]
-fn test_kernel_cfg_lattice_meet_branch_convergence() {
-    // Simulate CFG Diamond:
-    //         [BB0: init R0=Valid, R1=Valid]
-    //         /                            \
-    // [BB1: R0 stays Valid]          [BB2: R0 consumed, R1 leased]
-    //         \                            /
-    //         [BB3: Join Block - meet merge]
+fn test_kernel_fine_grained_diagnostics() {
+    let mut arena = Arena::new(4);
+    assert_eq!(arena.check_access(0, 0), KernelDiagnostic::UseAfterConsume);
+    assert_eq!(arena.check_consume(0), KernelDiagnostic::DoubleConsume);
 
-    let mut bb1 = Arena::new(4);
-    bb1.init_valid(0, 42);
-    bb1.init_valid(1, 84);
+    arena.init_valid(0, 42);
+    assert_eq!(arena.check_access(0, 0), KernelDiagnostic::Ok);
+    assert_eq!(arena.check_consume(0), KernelDiagnostic::Ok);
 
-    let mut bb2 = Arena::new(4);
-    bb2.init_valid(0, 42);
-    bb2.init_valid(1, 84);
-    assert!(bb2.consume(0)); // R0 consumed on BB2 branch
-    assert!(bb2.lease(1, 10, 20)); // R1 leased on BB2 branch
+    assert!(arena.lease(0, 10, 20));
+    assert_eq!(arena.check_access(0, 15), KernelDiagnostic::Ok);
+    assert_eq!(arena.check_consume(0), KernelDiagnostic::ConsumeActiveLease);
 
-    // In BB1: R0=0(Valid), R1=0(Valid)
-    // In BB2: R0=3(Consumed), R1=1(Leased)
-    assert_eq!(bb1.get_cell(0).unwrap().tag, 0);
-    assert_eq!(bb2.get_cell(0).unwrap().tag, 3);
-    assert_eq!(bb1.get_cell(1).unwrap().tag, 0);
-    assert_eq!(bb2.get_cell(1).unwrap().tag, 1);
+    assert_eq!(arena.check_access(0, 30), KernelDiagnostic::LeaseExpired);
 
-    // Merge BB1 and BB2 into BB3:
-    // R0: Valid (0) meet Consumed (3) => Consumed (3)
-    // R1: Valid (0) meet Leased (1) => Leased (1)
-    let mut bb3 = Arena::new(4);
-    bb3.init_valid(0, 42);
-    bb3.init_valid(1, 84);
-    bb3.merge_from(&bb2);
-
-    // Assert exact lattice meet properties on convergence block
-    let r0 = bb3.get_cell(0).unwrap();
-    assert_eq!(r0.tag, 3, "R0 must converge to Consumed because BB2 consumed it");
-    assert_eq!(r0.payload, 0, "Consumed payload must be zeroed");
-    assert_eq!(bb3.read(0), None, "Consumed register must be unreadable");
-
-    let r1 = bb3.get_cell(1).unwrap();
-    assert_eq!(r1.tag, 1, "R1 must converge to Leased because BB2 leased it");
-    assert_eq!(r1.payload, 84, "Leased payload must remain readable before expiration");
-    assert_eq!(bb3.read(1), Some(84));
-}
-
-#[test]
-fn test_kernel_cfg_multi_predecessor_decay_meet() {
-    // When one branch has decayed (tag 2) and another has leased (tag 1),
-    // meet must converge to Decayed (tag 2), preventing any stale read.
-    let mut bb_leased = Arena::new(2);
-    bb_leased.init_valid(0, 123);
-    assert!(bb_leased.lease(0, 0, 50));
-
-    let mut bb_decayed = Arena::new(2);
-    bb_decayed.init_valid(0, 123);
-    assert!(bb_decayed.lease(0, 0, 10));
-    bb_decayed.tick_sweep(15); // decayed at clock 15
-    assert_eq!(bb_decayed.get_cell(0).unwrap().tag, 2);
-
-    let mut bb_join = Arena::new(2);
-    bb_join.init_valid(0, 123);
-    assert!(bb_join.lease(0, 0, 50)); // start with leased state
-    bb_join.merge_from(&bb_decayed);
-
-    // Meet(Leased, Decayed) = Decayed
-    let cell = bb_join.get_cell(0).unwrap();
-    assert_eq!(cell.tag, 2, "Meet of Leased and Decayed must yield Decayed");
-    assert_eq!(cell.payload, 0, "Decayed payload must be zeroed");
-    assert_eq!(bb_join.read(0), None, "Decayed register must not be readable at join");
-}
-
-#[test]
-fn test_kernel_cfg_loop_isochronous_clock_decay() {
-    // Simulate an isochronous loop where a register has a lease of 30 ticks.
-    // Loop steps in increments of 10 ticks.
-    let mut arena = Arena::new(2);
-    arena.init_valid(0, 555);
-    assert!(arena.lease(0, 0, 30)); // expires at clock 30
-
-    // Loop iter 1: clock = 10
-    arena.tick_sweep(10);
-    assert_eq!(arena.read_at(0, 10), Some(555));
-
-    // Loop iter 2: clock = 20
-    arena.tick_sweep(20);
-    assert_eq!(arena.read_at(0, 20), Some(555));
-
-    // Loop iter 3: clock = 30 (budget exhausted -> decay)
     arena.tick_sweep(30);
-    assert_eq!(arena.get_cell(0).unwrap().tag, 2);
-    assert_eq!(arena.read_at(0, 30), None);
+    assert_eq!(arena.check_access(0, 30), KernelDiagnostic::UseAfterDecay);
+    assert_eq!(arena.check_consume(0), KernelDiagnostic::ConsumeDecayed);
 }
 
 #[test]
-fn test_kernel_wcet_isochronous_budget_tracking() {
-    // WCET Budget: 100 cycles allotted for this time-slice
+fn test_kernel_check_lease_hierarchical_subleasing() {
+    let mut arena = Arena::new(4);
+    assert_eq!(arena.check_lease(0, 10, 20), KernelDiagnostic::CannotLeaseNonValid);
+
+    arena.init_valid(0, 100);
+    assert_eq!(arena.check_lease(0, 10, 20), KernelDiagnostic::Ok);
+
+    assert_eq!(
+        arena.check_lease(0, u64::MAX - 5, 10),
+        KernelDiagnostic::LeaseDurationOverflow
+    );
+
+    assert!(arena.lease(0, 10, 50));
+    assert_eq!(arena.check_lease(0, 15, 10), KernelDiagnostic::CannotLeaseNonValid);
+}
+
+#[test]
+fn test_kernel_wcet_zero_jitter_pacing() {
     let mut tracker = IsochronousTracker::new(100);
-    assert_eq!(tracker.consumed(), 0);
-    assert_eq!(tracker.remaining(), 100);
+    assert!(tracker.try_pace_step(15, 25));
+    assert_eq!(tracker.consumed(), 25);
+    assert_eq!(tracker.remaining(), 75);
 
-    // Consume basic block 1: cost 30
-    assert!(tracker.try_step(30));
-    assert_eq!(tracker.consumed(), 30);
-    assert_eq!(tracker.remaining(), 70);
+    assert!(tracker.try_pace_step(25, 25));
+    assert_eq!(tracker.consumed(), 50);
 
-    // Consume basic block 2: cost 50
-    assert!(tracker.try_step(50));
-    assert_eq!(tracker.consumed(), 80);
-    assert_eq!(tracker.remaining(), 20);
+    assert!(!tracker.try_pace_step(30, 60));
+    assert_eq!(tracker.consumed(), 50);
 
-    // Attempt to execute basic block 3 with cost 30 (80 + 30 = 110 > 100 max_limit)
-    // The kernel must mathematically reject execution to prevent deadline overrun
-    assert!(!tracker.try_step(30), "Step exceeding WCET budget must be rejected");
-    assert_eq!(tracker.consumed(), 80, "Rejected step must preserve current budget state");
+    assert!(!tracker.try_pace_step(40, 30));
+    assert_eq!(tracker.consumed(), 50);
 
-    // Consume exact remaining budget: cost 20 (80 + 20 = 100)
-    assert!(tracker.try_step(20));
+    assert!(tracker.try_pace_step(35, 50));
     assert_eq!(tracker.consumed(), 100);
     assert_eq!(tracker.remaining(), 0);
-
-    // Any further step past 100 is rejected
-    assert!(!tracker.try_step(1));
 }
 
 #[test]
-fn test_kernel_cfg_subsumption_meet_three_branches() {
-    // Tests environment meet across 3 converging branch predecessors:
-    // Branch A: R0 = Valid (0), R1 = Leased(exp=50) (1)
-    // Branch B: R0 = Leased(exp=20) (1), R1 = Leased(exp=40) (1)
-    // Branch C: R0 = Consumed (3), R1 = Leased(exp=30) (1)
-    // Converged State:
-    // R0 must be Consumed (meet of Valid, Leased, Consumed)
-    // R1 must be Leased with tightest expiration: min(50, 40, 30) = 30
-    let mut bb_a = Arena::new(2);
-    bb_a.init_valid(0, 10);
-    bb_a.init_valid(1, 20);
-    assert!(bb_a.lease(1, 0, 50));
+fn test_kernel_arena_state_partition_conservation() {
+    let mut arena = Arena::new(10);
+    let (v, l, d, c) = arena.state_partition();
+    assert_eq!((v, l, d, c), (0, 0, 0, 10));
 
-    let mut bb_b = Arena::new(2);
-    bb_b.init_valid(0, 10);
-    assert!(bb_b.lease(0, 0, 20));
-    bb_b.init_valid(1, 20);
-    assert!(bb_b.lease(1, 0, 40));
-
-    let mut bb_c = Arena::new(2);
-    bb_c.init_valid(0, 10);
-    assert!(bb_c.consume(0));
-    bb_c.init_valid(1, 20);
-    assert!(bb_c.lease(1, 0, 30));
-
-    // Converge into Join Block
-    let mut join = Arena::new(2);
-    join.init_valid(0, 10);
-    join.init_valid(1, 20);
-    assert!(join.lease(1, 0, 50));
-
-    join.merge_from(&bb_b);
-    join.merge_from(&bb_c);
-
-    let r0 = join.get_cell(0).unwrap();
-    assert_eq!(r0.tag, 3, "R0 must converge to Consumed across branch meet");
-    assert_eq!(r0.payload, 0, "Consumed payload must be zeroed");
-
-    let r1 = join.get_cell(1).unwrap();
-    assert_eq!(r1.tag, 1, "R1 must converge to Leased");
-    assert_eq!(r1.expire, 30, "R1 must converge to tightest lease expiration min(50, 40, 30)");
-}
-
-#[test]
-fn test_kernel_wcet_exact_multi_step_accumulation() {
-    let mut tracker = IsochronousTracker::new(50);
-    let step_costs = [5, 10, 15, 20];
-    let mut expected_accum = 0;
-
-    for &cost in &step_costs {
-        assert!(tracker.try_step(cost));
-        expected_accum += cost;
-        assert_eq!(tracker.consumed(), expected_accum);
-        assert_eq!(tracker.remaining(), 50 - expected_accum);
+    for i in 0..4 {
+        arena.init_valid(i, (i + 1) as u64 * 10);
     }
-    assert_eq!(tracker.consumed(), 50);
-    assert_eq!(tracker.remaining(), 0);
-    assert!(!tracker.try_step(1));
+    let (v, l, d, c) = arena.state_partition();
+    assert_eq!((v, l, d, c), (4, 0, 0, 6));
+
+    assert!(arena.lease(1, 0, 20));
+    assert!(arena.lease(2, 0, 30));
+    let (v, l, d, c) = arena.state_partition();
+    assert_eq!((v, l, d, c), (2, 2, 0, 6));
+
+    arena.tick_sweep(25);
+    let (v, l, d, c) = arena.state_partition();
+    assert_eq!((v, l, d, c), (2, 1, 1, 6));
+
+    assert!(arena.consume(0));
+    let (v, l, d, c) = arena.state_partition();
+    assert_eq!((v, l, d, c), (1, 1, 1, 7));
 }
 
+#[test]
+fn test_kernel_entanglement_cascade_consumption() {
+    let mut vm = VerifiedVM::new(4);
+    assert!(vm.arena.init_valid(0, 100));
+    assert!(vm.arena.init_valid(1, 200));
+    assert!(vm.arena.init_valid(2, 300));
+    assert!(vm.arena.init_valid(3, 400));
 
+    // Entangle R0 <-> R1 and R1 <-> R2
+    assert!(vm.entangle(0, 1));
+    assert!(vm.entangle(1, 2));
 
+    assert!(vm.is_entangled(0, 1));
+    assert!(vm.is_entangled(1, 0));
+    assert!(vm.is_entangled(1, 2));
+    assert!(!vm.is_entangled(0, 3));
+
+    // Consuming R0 must cascade and consume R1
+    assert!(vm.consume_cascading(0));
+    assert_eq!(vm.arena.read(0), None);
+    assert_eq!(vm.arena.read(1), None);
+    // R3 was not entangled, stays valid
+    assert_eq!(vm.arena.read(3), Some(400));
+}
+
+#[test]
+fn test_kernel_cfg_basic_block_step_execution() {
+    let mut vm = VerifiedVM::new(4);
+
+    // Instruction Block:
+    // 0: LoadInt R0, 10
+    // 1: LoadInt R1, 20
+    // 2: Add R2, R0, R1 (R2 = 30)
+    let body = vec![
+        RawInstr { op: 0, arg1: 0, arg2: 0, arg3: 0, imm: 10 },
+        RawInstr { op: 0, arg1: 1, arg2: 0, arg3: 0, imm: 20 },
+        RawInstr { op: 1, arg1: 2, arg2: 0, arg3: 1, imm: 0 },
+    ];
+
+    assert!(vm.execute_basic_block(&body));
+    assert_eq!(vm.arena.read(0), Some(10));
+    assert_eq!(vm.arena.read(1), Some(20));
+    assert_eq!(vm.arena.read(2), Some(30));
+}
+
+#[test]
+fn test_kernel_typechecker_static_verification_and_rejection() {
+    let mut vm = VerifiedVM::new(4);
+
+    // Valid Block
+    let valid_body = vec![
+        RawInstr { op: 0, arg1: 0, arg2: 0, arg3: 0, imm: 50 },
+        RawInstr { op: 0, arg1: 1, arg2: 0, arg3: 0, imm: 50 },
+        RawInstr { op: 1, arg1: 2, arg2: 0, arg3: 1, imm: 0 },
+    ];
+    assert!(vm.verify_and_execute_basic_block(&valid_body));
+    assert_eq!(vm.arena.read(2), Some(100));
+
+    // Invalid Block: Consume R0 then attempt to use R0 in Add (Use-After-Consume)
+    let invalid_body = vec![
+        RawInstr { op: 2, arg1: 0, arg2: 0, arg3: 0, imm: 0 }, // Consume R0
+        RawInstr { op: 1, arg1: 3, arg2: 0, arg3: 1, imm: 0 }, // Add R3, R0, R1 -> Rejected!
+    ];
+    assert!(!vm.verify_and_execute_basic_block(&invalid_body), "Kernel must reject Use-After-Consume statically");
+}

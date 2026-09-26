@@ -108,3 +108,34 @@ let type_step (env: type_env) (clk: nat) (ent: entangle_rel) (i: instr) : type_e
          | TyLeased exp -> if new_clk >= exp then TyDecayed else TyLeased exp
          | other -> other)
   | IEntangle _ _ -> env
+
+/// Static update of clock under an instruction
+let instr_clock_step (clk: nat) (i: instr) : nat =
+  match i with
+  | ITick delta -> clk + delta
+  | _ -> clk
+
+/// Static update of entanglement relation under an instruction
+let instr_entangle_step (ent: entangle_rel) (i: instr) : entangle_rel =
+  match i with
+  | IEntangle r1 r2 -> update_entangle ent r1 r2
+  | _ -> ent
+
+/// Sequential update of environment across a body list
+val type_step_body : env:type_env -> clk:nat -> ent:entangle_rel -> body:list instr -> Tot type_env (decreases body)
+let rec type_step_body env clk ent body =
+  match body with
+  | [] -> env
+  | i :: rest ->
+      let env' = type_step env clk ent i in
+      let clk' = instr_clock_step clk i in
+      let ent' = instr_entangle_step ent i in
+      type_step_body env' clk' ent' rest
+
+/// Sequential clock advancement across a body list
+val clock_step_body : clk:nat -> body:list instr -> Tot nat (decreases body)
+let rec clock_step_body clk body =
+  match body with
+  | [] -> clk
+  | i :: rest ->
+      clock_step_body (instr_clock_step clk i) rest

@@ -65,3 +65,62 @@ val lemma_entangled_consume_propagates :
         (ensures (s'.regs r2 == StConsumed /\ is_readable (s'.regs r2) s'.clock == false))
 let lemma_entangled_consume_propagates s r1 r2 s' = ()
 
+/// Theorem 6: Multi-Hop Entanglement Cascade Propagation
+/// Direct path step in entanglement network guarantees consumption propagation.
+val lemma_entangled_path_step_consumes :
+  s:vm_state -> r1:reg_id -> r2:reg_id -> s':vm_state ->
+  Lemma (requires ((r1 = r2 \/ s.entangled r1 r2 == true) /\
+                   eval_step s (IConsume r1) == Some s'))
+        (ensures (s'.regs r2 == StConsumed /\ is_readable (s'.regs r2) s'.clock == false))
+let lemma_entangled_path_step_consumes s r1 r2 s' = ()
+
+/// Theorem 7: Preservation of Decay Invariant
+/// A decayed register can never spontaneously transition to a readable/valid state
+/// without explicit external value loading.
+val lemma_decayed_persists_under_eval :
+  s:vm_state -> i:instr -> s':vm_state -> r:reg_id ->
+  Lemma (requires (eval_step s i == Some s' /\
+                   tag_of (s.regs r) == TagDecayed /\
+                   (match i with
+                    | ILoadInt dest _ -> dest <> r
+                    | IAdd dest _ _   -> dest <> r
+                    | _               -> True)))
+        (ensures (tag_of (s'.regs r) == TagDecayed \/ tag_of (s'.regs r) == TagConsumed))
+let lemma_decayed_persists_under_eval s i s' r =
+  match i with
+  | ILoadInt dest _ -> ()
+  | IAdd dest s1 s2 -> ()
+  | IConsume target -> ()
+  | IEntangle r1 r2 -> ()
+  | ILease target duration -> ()
+  | ITick delta -> ()
+
+/// Theorem 8: Universal Entropic Monotonicity (The Arrow of Entropy)
+/// Across every valid evaluation step, the entropic state of any undisturbed register
+/// is monotonically non-increasing in the lattice order (i.e., entropy cannot spontaneously decrease).
+val theorem_entropic_monotonicity :
+  s:vm_state -> i:instr -> s':vm_state -> r:reg_id ->
+  Lemma (requires (eval_step s i == Some s' /\
+                   (match i with
+                    | ILoadInt dest _ -> dest <> r
+                    | IAdd dest _ _   -> dest <> r
+                    | _               -> True)))
+        (ensures (tag_leq (tag_of (s'.regs r)) (tag_of (s.regs r)) == true))
+let theorem_entropic_monotonicity s i s' r =
+  match i with
+  | ILoadInt dest _ -> ()
+  | IAdd dest s1 s2 -> ()
+  | IConsume target -> ()
+  | IEntangle r1 r2 -> ()
+  | ILease target duration -> ()
+  | ITick delta -> ()
+
+/// Theorem 9: Entanglement Graph Step Invariant
+/// Every step along an entanglement reachability path connects distinct consumable registers at creation.
+val theorem_entangle_distinct_step :
+  s:vm_state -> r1:reg_id -> r2:reg_id -> s':vm_state ->
+  Lemma (requires (eval_step s (IEntangle r1 r2) == Some s'))
+        (ensures (r1 <> r2 /\ is_consumable (s.regs r1) == true /\ is_consumable (s.regs r2) == true /\
+                  s'.entangled r1 r2 == true /\ s'.entangled r2 r1 == true))
+let theorem_entangle_distinct_step s r1 r2 s' = ()
+

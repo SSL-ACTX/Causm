@@ -2,7 +2,8 @@
 name = "causm-kernel-sys"
 version = "0.1.0"
 edition = "2021"
-description = "Zero-cost Rust FFI bindings for the verified Causm Pulse microkernel"
+authors = ["Jameel U. Tutungan (SSL-ACTX) <tutunganjameelu1@gmail.com>"]
+description = "Zero-cost safe Rust FFI bindings for the verified Causm microkernel"
 license = "AGPL-3.0-only"
 
 [dependencies]

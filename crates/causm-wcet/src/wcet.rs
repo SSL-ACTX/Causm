@@ -2,7 +2,7 @@ use causm_core::{BinaryOperator, Program, SpannedStatement, Statement};
 use causm_smt::SolverBackend;
 use causm_types::analyzer::{EntropicAnalyzer, SemanticError, SemanticErrorKind};
 
-/// Worst-Case Execution Time (WCET) solver engine.
+/// Worst-Case Execution Time (WCET) solver engine — SMT-driven.
 ///
 /// Computes topological WCET path bounds over virtual clocks using the SMT backend
 /// and verifies temporal contracts (routine limits, isolate cpu budgets, assert_time, loop bounds)
@@ -23,7 +23,7 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
     }
 
     /// Primary entry point: verifies all temporal budgets, isolate limits, routine WCET contracts,
-    /// and populates analyzer.analyzed_wcet.
+    /// and populates analyzer.analyzed_wcet via SMT backend.
     pub fn verify_and_compute(
         &mut self,
         program: &Program,
@@ -388,6 +388,252 @@ impl<'a, S: SolverBackend> WcetSolver<'a, S> {
                 for s in body {
                     block_clock =
                         self.verify_statement_wcet(s, path_condition, &block_clock)?;
+                }
+                Ok(block_clock)
+            }
+            _ => Ok(current_clock),
+        }
+    }
+}
+
+/// Formally verified WCET and isochronous pacing solver powered by `causm-kernel`.
+#[cfg(feature = "kernel")]
+pub struct KernelWcetSolver<'a> {
+    analyzer: &'a EntropicAnalyzer,
+    current_slice_ms: Option<u64>,
+}
+
+#[cfg(feature = "kernel")]
+impl<'a> KernelWcetSolver<'a> {
+    pub fn new(analyzer: &'a EntropicAnalyzer) -> Self {
+        Self {
+            analyzer,
+            current_slice_ms: None,
+        }
+    }
+
+    pub fn verify_and_compute(&mut self, program: &Program) -> Result<(), SemanticError> {
+        for (idx, timeline) in program.timelines.iter().enumerate() {
+            if timeline.no_z3 {
+                self.analyzer
+                    .analyzed_wcet
+                    .borrow_mut()
+                    .insert(format!("Timeline {}", idx), 0);
+                continue;
+            }
+
+            let mut clock: u64 = 0;
+            for spanned in &timeline.statements {
+                clock = self.verify_statement_wcet(spanned, clock)?;
+            }
+
+            self.analyzer
+                .analyzed_wcet
+                .borrow_mut()
+                .insert(format!("Timeline {}", idx), clock);
+        }
+
+        Ok(())
+    }
+
+    pub fn compute_wcet(&mut self, program: &Program) {
+        let _ = self.verify_and_compute(program);
+    }
+
+    fn verify_statement_wcet(
+        &mut self,
+        spanned: &SpannedStatement,
+        in_clock: u64,
+    ) -> Result<u64, SemanticError> {
+        let cost = causm_types::estimate_statement_cost(self.analyzer, &spanned.stmt);
+        let current_clock = in_clock.saturating_add(cost);
+
+        match &spanned.stmt {
+            Statement::AssertTime {
+                operator,
+                limit_ms,
+                fallback,
+            } => {
+                let violation = match operator {
+                    BinaryOperator::Gt => in_clock <= *limit_ms,
+                    BinaryOperator::Lt => in_clock >= *limit_ms,
+                    BinaryOperator::Ge => in_clock < *limit_ms,
+                    BinaryOperator::Le => in_clock > *limit_ms,
+                    BinaryOperator::Eq => in_clock != *limit_ms,
+                    BinaryOperator::Neq => in_clock == *limit_ms,
+                    _ => false,
+                };
+
+                if violation {
+                    return Err(self.analyzer.annotate(
+                        SemanticErrorKind::TemporalAssertionViolation(
+                            in_clock,
+                            *limit_ms,
+                        ),
+                    ));
+                }
+
+                if let Some(fb) = fallback {
+                    let mut fb_clock = current_clock;
+                    for s in fb {
+                        fb_clock = self.verify_statement_wcet(s, fb_clock)?;
+                    }
+                    Ok(fb_clock)
+                } else {
+                    Ok(current_clock)
+                }
+            }
+            Statement::Isolate(block) => {
+                let budget = block.manifest.cpu_budget_ms.unwrap_or(u64::MAX);
+                let mut iso_clock: u64 = 0;
+                for s in &block.body {
+                    iso_clock = self.verify_statement_wcet(s, iso_clock)?;
+                }
+
+                // Formally verify with microkernel IsochronousTracker
+                let mut tracker = causm_kernel_sys::IsochronousTracker::new(budget);
+                if !tracker.try_step(iso_clock) {
+                    return Err(self.analyzer.annotate(
+                        SemanticErrorKind::TemporalAssertionViolation(iso_clock, budget),
+                    ));
+                }
+
+                Ok(in_clock)
+            }
+            Statement::RoutineDef {
+                name,
+                taking_ms,
+                body,
+                ..
+            } => {
+                let mut routine_solver = KernelWcetSolver::new(self.analyzer);
+                let mut body_clock: u64 = 0;
+                for s in body {
+                    body_clock = routine_solver.verify_statement_wcet(s, body_clock)?;
+                }
+
+                self.analyzer
+                    .analyzed_wcet
+                    .borrow_mut()
+                    .insert(name.clone(), body_clock);
+
+                if let Some(limit) = *taking_ms {
+                    let mut tracker = causm_kernel_sys::IsochronousTracker::new(limit);
+                    if !tracker.try_step(body_clock) {
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                body_clock,
+                                limit,
+                            ),
+                        ));
+                    }
+                }
+                Ok(in_clock)
+            }
+            Statement::For {
+                body,
+                pacing_ms,
+                max_ms,
+                ..
+            } => {
+                let mut loop_clock: u64 = 0;
+                for s in body {
+                    loop_clock = self.verify_statement_wcet(s, loop_clock)?;
+                }
+
+                if let Some(max) = max_ms {
+                    let iteration_cost = if let Some(pacing) = pacing_ms {
+                        loop_clock.max(*pacing)
+                    } else {
+                        loop_clock
+                    };
+
+                    let mut tracker = causm_kernel_sys::IsochronousTracker::new(*max);
+                    if !tracker.try_step(iteration_cost) {
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::TemporalAssertionViolation(
+                                iteration_cost,
+                                *max,
+                            ),
+                        ));
+                    }
+                    Ok(in_clock.saturating_add(*max))
+                } else if let Some(pacing) = pacing_ms {
+                    Ok(in_clock.saturating_add(*pacing))
+                } else {
+                    Ok(in_clock.saturating_add(loop_clock))
+                }
+            }
+            Statement::ForStep { body, step_ms, .. } => {
+                let mut loop_clock: u64 = 0;
+                for s in body {
+                    loop_clock = self.verify_statement_wcet(s, loop_clock)?;
+                }
+
+                if let Some(ms) = step_ms {
+                    let mut tracker = causm_kernel_sys::IsochronousTracker::new(*ms);
+                    if !tracker.try_step(loop_clock) {
+                        return Err(self.analyzer.annotate(
+                            SemanticErrorKind::PacingViolation,
+                        ));
+                    }
+                    Ok(in_clock.saturating_add(*ms))
+                } else {
+                    Ok(in_clock.saturating_add(loop_clock))
+                }
+            }
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                let mut then_clock = current_clock;
+                for s in then_branch {
+                    then_clock = self.verify_statement_wcet(s, then_clock)?;
+                }
+
+                let mut else_clock = current_clock;
+                if let Some(else_stmts) = else_branch {
+                    for s in else_stmts {
+                        else_clock = self.verify_statement_wcet(s, else_clock)?;
+                    }
+                }
+
+                Ok(then_clock.max(else_clock))
+            }
+            Statement::DirectiveBlock { directives, body } => {
+                let bypass = directives
+                    .iter()
+                    .any(|d| matches!(d, causm_core::BlockDirective::NoZ3));
+                if bypass {
+                    Ok(current_clock)
+                } else {
+                    let mut block_clock = in_clock;
+                    for s in body {
+                        block_clock = self.verify_statement_wcet(s, block_clock)?;
+                    }
+                    Ok(block_clock)
+                }
+            }
+            Statement::Slice { milliseconds } => {
+                self.current_slice_ms = Some(*milliseconds);
+                Ok(in_clock)
+            }
+            Statement::LoopTick { body } => {
+                let slice = self.current_slice_ms.unwrap_or(1);
+                let mut body_clock: u64 = 0;
+                for s in body {
+                    body_clock = self.verify_statement_wcet(s, body_clock)?;
+                }
+                let final_tick_cost = body_clock.max(slice);
+                Ok(in_clock.saturating_add(final_tick_cost))
+            }
+            Statement::RelativisticBlock { body, .. }
+            | Statement::Commit(body)
+            | Statement::DecayHandler { body, .. } => {
+                let mut block_clock = in_clock;
+                for s in body {
+                    block_clock = self.verify_statement_wcet(s, block_clock)?;
                 }
                 Ok(block_clock)
             }

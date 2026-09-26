@@ -1,11 +1,11 @@
 [workspace]
 members = [
     "crates/*",
-    "plugins/*",
 ]
 exclude = [
     "lsp",
     "causm-kernel",
+    "plugins/*",
 ]
 default-members = [
     "crates/causm-core",

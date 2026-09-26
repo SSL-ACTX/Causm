@@ -33,13 +33,16 @@ let lemma_terminator_progress env s t =
       lemma_ty_readable_sound env s.vm cond_reg
 
 /// Inductive definition: A sequence of instructions is well-formed under an environment
-let rec wf_body (env: type_env) (clk: nat) (ent: entangle_rel) (body: list instr) : bool =
+val wf_body : env:type_env -> clk:nat -> ent:entangle_rel -> body:list instr -> Tot bool (decreases body)
+let rec wf_body env clk ent body =
   match body with
   | [] -> true
   | i :: rest ->
       wf_instruction env clk i &&
       (let env' = type_step env clk ent i in
-       wf_body env' clk ent rest)
+       let clk' = instr_clock_step clk i in
+       let ent' = instr_entangle_step ent i in
+       wf_body env' clk' ent' rest)
 
 /// Block typing: A block is well-typed if its body and terminator are valid under incoming env
 let wf_block (in_env: type_env) (clk: nat) (ent: entangle_rel) (bb: basic_block) : bool =
@@ -83,4 +86,24 @@ val theorem_cfg_step_preservation :
 let theorem_cfg_step_preservation g s bb env s' =
   let i = List.Tot.index bb.body s.pc in
   theorem_preservation env s.vm i s'.vm
+
+/// Inductive Body Preservation: Evaluating an entire basic block body
+/// preserves type conformance from incoming environment to outgoing environment.
+val theorem_body_preservation :
+  env:type_env -> s:vm_state -> body:list instr -> s':vm_state ->
+  Lemma (requires (state_well_typed env s /\
+                   wf_body env s.clock s.entangled body == true /\
+                   eval_body s body == Some s'))
+        (ensures (state_well_typed (type_step_body env s.clock s.entangled body) s'))
+        (decreases body)
+let rec theorem_body_preservation env s body s' =
+  match body with
+  | [] -> ()
+  | i :: rest ->
+      (match eval_step s i with
+       | Some s_next ->
+           theorem_preservation env s i s_next;
+           let env' = type_step env s.clock s.entangled i in
+           theorem_body_preservation env' s_next rest s'
+       | None -> ())
 

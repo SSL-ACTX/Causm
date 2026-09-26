@@ -58,3 +58,13 @@ val lemma_wcet_step_accumulates :
                    wcet_step g s == Some s'))
         (ensures (s'.consumed == s.consumed + cost))
 let lemma_wcet_step_accumulates g s s' cost = ()
+
+/// Theorem 8: Hard Real-Time Zero-Jitter Invariant
+/// Every successful isochronous_pace_step advances the consumed cycles by EXACTLY target_pace,
+/// completely eliminating runtime execution timing jitter.
+val theorem_isochronous_zero_jitter :
+  g:cfg -> s:wcet_tracked_state -> target_pace:pos -> s':wcet_tracked_state ->
+  Lemma (requires (isochronous_pace_step g s target_pace == Some s'))
+        (ensures (s'.consumed == s.consumed + target_pace /\
+                  is_within_limit s' == true))
+let theorem_isochronous_zero_jitter g s target_pace s' = ()

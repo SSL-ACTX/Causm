@@ -4,8 +4,15 @@ version = "0.1.0-alpha.3"
 edition = "2021"
 license = "AGPL-3.0-only"
 
+[features]
+default = ["kernel", "oxiz"]
+kernel = ["dep:causm-kernel-sys"]
+oxiz = ["causm-smt/oxiz"]
+z3 = ["causm-smt/z3"]
+
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-ir = { path = "../causm-ir" }
 causm-smt = { path = "../causm-smt" }
+causm-kernel-sys = { path = "../../causm-kernel/bindings/causm-kernel-sys", optional = true }
 thiserror = "2.0.18"

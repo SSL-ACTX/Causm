@@ -74,12 +74,18 @@ help:
 	@echo "Testing:"
 	@echo "  make test                  - Run C integration tests and Rust FFI tests"
 
-$(DIST_DIR)/Pulse_Causm_Arena.o: $(DIST_DIR)/Pulse_Causm_Arena.c
+$(DIST_DIR)/%.o: $(DIST_DIR)/%.c
 	@mkdir -p $(DIST_DIR)
 	@echo "[CC]  $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(DIST_DIR)/libcausm_kernel.a: $(DIST_DIR)/Pulse_Causm_Arena.o
+KERNEL_OBJS := $(DIST_DIR)/Pulse_Causm_Arena.o \
+               $(DIST_DIR)/Pulse_Causm_Semantics.o \
+               $(DIST_DIR)/Pulse_Causm_CFG.o \
+               $(DIST_DIR)/Pulse_Causm_TypeChecker.o \
+               $(DIST_DIR)/Spec_Causm_Lattice.o
+
+$(DIST_DIR)/libcausm_kernel.a: $(KERNEL_OBJS)
 	@echo "[AR]  $@"
 	@if [ -f $(DIST_DIR)/krmlinit.o ]; then \
 		$(AR) rcs $@ $^ $(DIST_DIR)/krmlinit.o; \
@@ -87,7 +93,7 @@ $(DIST_DIR)/libcausm_kernel.a: $(DIST_DIR)/Pulse_Causm_Arena.o
 		$(AR) rcs $@ $^; \
 	fi
 
-compile: $(DIST_DIR)/libcausm_kernel.a
+compile: extract $(DIST_DIR)/libcausm_kernel.a
 build: compile
 
 tests/test_arena_decay: tests/test_arena_decay.c $(DIST_DIR)/libcausm_kernel.a
@@ -192,17 +198,36 @@ $(DIST_DIR)/Pulse_Causm_Arena.krml: src/pulse/Pulse.Causm.Arena.fst $(CACHE_DIR)
 	@echo "[EXTRACT-KRML] $<"
 	@$(FSTAR) --codegen krml --extract_module Pulse.Causm.Arena $<
 
-$(DIST_DIR)/Pulse_Causm_Arena.c $(DIST_DIR)/krmlinit.c: $(DIST_DIR)/Pulse_Causm_Arena.krml $(DIST_DIR)/Spec_Causm_Lattice.krml
+$(DIST_DIR)/Pulse_Causm_Semantics.krml: src/pulse/Pulse.Causm.Semantics.fst $(CACHE_DIR)/Pulse.Causm.Semantics.fst.checked
+	@mkdir -p $(DIST_DIR)
+	@echo "[EXTRACT-KRML] $<"
+	@$(FSTAR) --codegen krml --extract_module Pulse.Causm.Semantics $<
+
+$(DIST_DIR)/Pulse_Causm_CFG.krml: src/pulse/Pulse.Causm.CFG.fst $(CACHE_DIR)/Pulse.Causm.CFG.fst.checked
+	@mkdir -p $(DIST_DIR)
+	@echo "[EXTRACT-KRML] $<"
+	@$(FSTAR) --codegen krml --extract_module Pulse.Causm.CFG $<
+
+$(DIST_DIR)/Pulse_Causm_TypeChecker.krml: src/pulse/Pulse.Causm.TypeChecker.fst $(CACHE_DIR)/Pulse.Causm.TypeChecker.fst.checked
+	@mkdir -p $(DIST_DIR)
+	@echo "[EXTRACT-KRML] $<"
+	@$(FSTAR) --codegen krml --extract_module Pulse.Causm.TypeChecker $<
+
+$(DIST_DIR)/Pulse_Causm_Arena.c $(DIST_DIR)/Pulse_Causm_Semantics.c $(DIST_DIR)/Pulse_Causm_CFG.c $(DIST_DIR)/Pulse_Causm_TypeChecker.c $(DIST_DIR)/Spec_Causm_Lattice.c $(DIST_DIR)/krmlinit.c: $(DIST_DIR)/Pulse_Causm_Arena.krml $(DIST_DIR)/Pulse_Causm_Semantics.krml $(DIST_DIR)/Pulse_Causm_CFG.krml $(DIST_DIR)/Pulse_Causm_TypeChecker.krml $(DIST_DIR)/Spec_Causm_Lattice.krml
 	@mkdir -p $(DIST_DIR)
 	@cp -f include/causm_base.h $(DIST_DIR)/
 	@echo "[EXTRACT] Running KaRaMeL extraction..."
 	@$(KRML_EXE) $(KRML_COMMON_FLAGS) \
-		-bundle 'Pulse_Causm_Arena=Pulse.Causm.Arena,Spec.Causm.Lattice[rename=Pulse_Causm_Arena]' \
+		-bundle 'Pulse_Causm_Arena=Pulse.Causm.Arena[rename=Pulse_Causm_Arena]' \
+		-bundle 'Pulse_Causm_Semantics=Pulse.Causm.Semantics[rename=Pulse_Causm_Semantics]' \
+		-bundle 'Pulse_Causm_CFG=Pulse.Causm.CFG[rename=Pulse_Causm_CFG]' \
+		-bundle 'Pulse_Causm_TypeChecker=Pulse.Causm.TypeChecker[rename=Pulse_Causm_TypeChecker]' \
+		-bundle 'Spec_Causm_Lattice=Spec.Causm.Lattice[rename=Spec_Causm_Lattice]' \
 		-add-include '"causm_base.h"' \
-		$(DIST_DIR)/Pulse_Causm_Arena.krml $(DIST_DIR)/Spec_Causm_Lattice.krml
+		$(DIST_DIR)/Pulse_Causm_Arena.krml $(DIST_DIR)/Pulse_Causm_Semantics.krml $(DIST_DIR)/Pulse_Causm_CFG.krml $(DIST_DIR)/Pulse_Causm_TypeChecker.krml $(DIST_DIR)/Spec_Causm_Lattice.krml
 	@echo "[DONE] C artifacts ready in $(DIST_DIR)/"
 
-extract: $(DIST_DIR)/Pulse_Causm_Arena.c $(DIST_DIR)/krmlinit.c
+extract: $(DIST_DIR)/Pulse_Causm_Arena.c $(DIST_DIR)/Pulse_Causm_Semantics.c $(DIST_DIR)/Pulse_Causm_CFG.c $(DIST_DIR)/Pulse_Causm_TypeChecker.c $(DIST_DIR)/Spec_Causm_Lattice.c $(DIST_DIR)/krmlinit.c
 
 clean-c:
 	@echo "==> Cleaning C compilation artifacts"

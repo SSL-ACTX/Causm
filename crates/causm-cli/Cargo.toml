@@ -5,7 +5,10 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [features]
-default = []
+default = ["kernel", "oxiz"]
+kernel = ["causm-analysis/kernel"]
+oxiz = ["causm-analysis/oxiz"]
+z3 = ["causm-analysis/z3"]
 plugins = ["dep:causm-plugins", "dep:causm-plugin-sdk"]
 jit = ["causm-runtime/jit", "dep:causm-jit"]
 

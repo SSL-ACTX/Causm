@@ -5,13 +5,14 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [features]
-default = ["oxiz"]
-oxiz = ["causm-smt/oxiz"]
-z3 = ["causm-smt/z3"]
+default = ["kernel", "oxiz"]
+kernel = ["causm-entropius/kernel", "causm-wcet/kernel"]
+oxiz = ["causm-smt/oxiz", "causm-entropius/oxiz", "causm-wcet/oxiz"]
+z3 = ["causm-smt/z3", "causm-entropius/z3", "causm-wcet/z3"]
 
 [dependencies]
 causm-core = { path = "../causm-core" }
 causm-types = { path = "../causm-types" }
 causm-smt = { path = "../causm-smt" }
-causm-entropius = { path = "../causm-entropius" }
-causm-wcet = { path = "../causm-wcet" }
+causm-entropius = { path = "../causm-entropius", default-features = false }
+causm-wcet = { path = "../causm-wcet", default-features = false }
